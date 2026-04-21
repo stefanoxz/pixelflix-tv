@@ -147,14 +147,16 @@ export const getSeries = (c: IptvCredentials) =>
 export const getSeriesInfo = (c: IptvCredentials, seriesId: number) =>
   iptvFetch<SeriesInfo>(c, "get_series_info", { series_id: seriesId });
 
+function serverBase(creds: IptvCredentials): string {
+  return (creds.server || "").replace(/\/+$/, "");
+}
+
 export function buildLiveStreamUrl(creds: IptvCredentials, streamId: number): string {
-  const base = creds.server.replace(/\/+$/, "");
-  return `${base}/live/${creds.username}/${creds.password}/${streamId}.m3u8`;
+  return `${serverBase(creds)}/live/${creds.username}/${creds.password}/${streamId}.m3u8`;
 }
 
 export function buildVodStreamUrl(creds: IptvCredentials, streamId: number, ext: string): string {
-  const base = creds.server.replace(/\/+$/, "");
-  return `${base}/movie/${creds.username}/${creds.password}/${streamId}.${ext}`;
+  return `${serverBase(creds)}/movie/${creds.username}/${creds.password}/${streamId}.${ext}`;
 }
 
 export function buildSeriesEpisodeUrl(
@@ -162,8 +164,7 @@ export function buildSeriesEpisodeUrl(
   episodeId: string | number,
   ext: string,
 ): string {
-  const base = creds.server.replace(/\/+$/, "");
-  return `${base}/series/${creds.username}/${creds.password}/${episodeId}.${ext || "mp4"}`;
+  return `${serverBase(creds)}/series/${creds.username}/${creds.password}/${episodeId}.${ext || "mp4"}`;
 }
 
 export function proxyUrl(url: string): string {
