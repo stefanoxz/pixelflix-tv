@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { IptvProvider } from "@/context/IptvContext";
 import { Header } from "@/components/Header";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import Index from "./pages/Index.tsx";
 import Login from "./pages/Login";
 import Live from "./pages/Live";
@@ -39,7 +40,14 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin" element={<Admin />} />
+            <Route
+              path="/admin"
+              element={
+                <AdminProtectedRoute>
+                  <Admin />
+                </AdminProtectedRoute>
+              }
+            />
 
             <Route
               path="/"

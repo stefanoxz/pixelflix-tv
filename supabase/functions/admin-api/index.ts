@@ -2,13 +2,13 @@ import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-// Token simples para o painel admin (mesmo do AdminLogin.tsx)
-const ADMIN_TOKEN = Deno.env.get("ADMIN_PASSWORD") ?? "admin-panel-2024";
+
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-function unauthorized() {
-  return new Response(JSON.stringify({ error: "Não autorizado" }), {
+function unauthorized(msg = "Não autorizado") {
+  return new Response(JSON.stringify({ error: msg }), {
     status: 401,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
@@ -38,23 +38,31 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const body = await req.json().catch(() => ({}));
-    const { token, action, payload } = body as {
-      token?: string;
-      action?: string;
-      payload?: any;
-    };
+    // 1. Validate JWT from Authorization header
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!jwt) return unauthorized("Token ausente");
 
-    // Accept current admin token OR legacy base64 "admin:<timestamp>" tokens
-    // from older AdminLogin versions still cached in users' localStorage.
-    let isValid = !!token && token === ADMIN_TOKEN;
-    if (!isValid && token) {
-      try {
-        const decoded = atob(token);
-        if (/^admin:\d+$/.test(decoded)) isValid = true;
-      } catch (_) { /* not base64, ignore */ }
-    }
-    if (!isValid) return unauthorized();
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      auth: { persistSession: false },
+    });
+
+    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userData?.user) return unauthorized("Sessão inválida");
+    const user = userData.user;
+
+    // 2. Check admin role server-side
+    const { data: isAdmin, error: roleErr } = await admin.rpc("has_role", {
+      _user_id: user.id,
+      _role: "admin",
+    });
+    if (roleErr) return bad(roleErr.message, 500);
+    if (!isAdmin) return unauthorized("Acesso restrito a administradores");
+
+    // 3. Process action
+    const body = await req.json().catch(() => ({}));
+    const { action, payload } = body as { action?: string; payload?: any };
 
     if (action === "stats") {
       const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -135,7 +143,6 @@ Deno.serve(async (req) => {
         admin.from("allowed_servers").select("id, server_url, label, notes, created_at"),
       ]);
 
-      // Aggregate stats by server from events
       const stats = new Map<string, any>();
       for (const row of events ?? []) {
         const key = row.server_url;
@@ -155,7 +162,6 @@ Deno.serve(async (req) => {
         item.users.add(row.username);
       }
 
-      // Build allowed list with stats
       const allowedList = (allowed ?? []).map((a: any) => {
         const s = stats.get(a.server_url);
         return {
@@ -172,7 +178,6 @@ Deno.serve(async (req) => {
         };
       });
 
-      // Pending = servers seen in events that are NOT in allowlist (rejected attempts)
       const allowedSet = new Set((allowed ?? []).map((a: any) => a.server_url));
       const pending = Array.from(stats.entries())
         .filter(([url]) => !allowedSet.has(url))

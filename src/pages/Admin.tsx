@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +34,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-const TOKEN_KEY = "admin_token";
+// Auth handled by AdminProtectedRoute + Supabase session
 
 interface Stats {
   totalEvents: number;
@@ -85,9 +85,9 @@ interface AdminEvent {
   created_at: string;
 }
 
-async function callAdmin<T>(token: string, action: string, payload?: any): Promise<T> {
+async function callAdmin<T>(action: string, payload?: any): Promise<T> {
   const { data, error } = await supabase.functions.invoke("admin-api", {
-    body: { token, action, payload },
+    body: { action, payload },
   });
   if (error) throw new Error(error.message);
   if ((data as any)?.error) throw new Error((data as any).error);
@@ -107,7 +107,6 @@ function formatRelative(iso: string): string {
 
 const Admin = () => {
   const navigate = useNavigate();
-  const token = localStorage.getItem(TOKEN_KEY);
 
   const [tab, setTab] = useState("dashboard");
   const [stats, setStats] = useState<Stats | null>(null);
@@ -124,14 +123,13 @@ const Admin = () => {
   const [newNotes, setNewNotes] = useState("");
 
   const refresh = async () => {
-    if (!token) return;
     setLoading(true);
     try {
       const [s, u, sv, e] = await Promise.all([
-        callAdmin<Stats>(token, "stats"),
-        callAdmin<{ users: AdminUser[] }>(token, "list_users"),
-        callAdmin<{ allowed: AllowedServer[]; pending: PendingServer[] }>(token, "list_servers"),
-        callAdmin<{ events: AdminEvent[] }>(token, "recent_events", { limit: 50 }),
+        callAdmin<Stats>("stats"),
+        callAdmin<{ users: AdminUser[] }>("list_users"),
+        callAdmin<{ allowed: AllowedServer[]; pending: PendingServer[] }>("list_servers"),
+        callAdmin<{ events: AdminEvent[] }>("recent_events", { limit: 50 }),
       ]);
       setStats(s);
       setUsers(u.users);
@@ -140,8 +138,8 @@ const Admin = () => {
       setEvents(e.events);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Falha ao carregar dados";
-      if (/não autorizado|unauthorized|401/i.test(msg)) {
-        localStorage.removeItem(TOKEN_KEY);
+      if (/não autorizado|unauthorized|401|sessão/i.test(msg)) {
+        await supabase.auth.signOut();
         toast.error("Sessão expirada. Faça login novamente.");
         navigate("/admin/login");
         return;
@@ -153,17 +151,15 @@ const Admin = () => {
   };
 
   useEffect(() => {
-    if (!token) return;
     refresh();
     const t = setInterval(refresh, 30_000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, []);
 
   const allowServer = async (server_url: string, label?: string, notes?: string) => {
-    if (!token) return;
     try {
-      await callAdmin(token, "allow_server", { server_url, label, notes });
+      await callAdmin("allow_server", { server_url, label, notes });
       toast.success("DNS autorizada");
       setAddOpen(false);
       setNewUrl("");
@@ -176,10 +172,9 @@ const Admin = () => {
   };
 
   const removeServer = async (server_url: string) => {
-    if (!token) return;
     if (!confirm(`Remover acesso ao servidor "${server_url}"?\nUsuários não conseguirão mais logar nele.`)) return;
     try {
-      await callAdmin(token, "remove_server", { server_url });
+      await callAdmin("remove_server", { server_url });
       toast.success("DNS removida");
       refresh();
     } catch (err) {
@@ -214,7 +209,7 @@ const Admin = () => {
     [pending, search],
   );
 
-  if (!token) return <Navigate to="/admin/login" replace />;
+  // Route is wrapped by AdminProtectedRoute — no client-side token check needed
 
   const statCards = [
     {
@@ -295,8 +290,8 @@ const Admin = () => {
             variant="ghost"
             size="sm"
             className="w-full justify-start gap-2 text-destructive hover:text-destructive"
-            onClick={() => {
-              localStorage.removeItem(TOKEN_KEY);
+            onClick={async () => {
+              await supabase.auth.signOut();
               navigate("/admin/login");
             }}
           >
