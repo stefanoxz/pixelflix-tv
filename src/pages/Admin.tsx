@@ -107,7 +107,6 @@ function formatRelative(iso: string): string {
 
 const Admin = () => {
   const navigate = useNavigate();
-  const token = localStorage.getItem(TOKEN_KEY);
 
   const [tab, setTab] = useState("dashboard");
   const [stats, setStats] = useState<Stats | null>(null);
@@ -124,14 +123,13 @@ const Admin = () => {
   const [newNotes, setNewNotes] = useState("");
 
   const refresh = async () => {
-    if (!token) return;
     setLoading(true);
     try {
       const [s, u, sv, e] = await Promise.all([
-        callAdmin<Stats>(token, "stats"),
-        callAdmin<{ users: AdminUser[] }>(token, "list_users"),
-        callAdmin<{ allowed: AllowedServer[]; pending: PendingServer[] }>(token, "list_servers"),
-        callAdmin<{ events: AdminEvent[] }>(token, "recent_events", { limit: 50 }),
+        callAdmin<Stats>("stats"),
+        callAdmin<{ users: AdminUser[] }>("list_users"),
+        callAdmin<{ allowed: AllowedServer[]; pending: PendingServer[] }>("list_servers"),
+        callAdmin<{ events: AdminEvent[] }>("recent_events", { limit: 50 }),
       ]);
       setStats(s);
       setUsers(u.users);
@@ -140,8 +138,8 @@ const Admin = () => {
       setEvents(e.events);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Falha ao carregar dados";
-      if (/não autorizado|unauthorized|401/i.test(msg)) {
-        localStorage.removeItem(TOKEN_KEY);
+      if (/não autorizado|unauthorized|401|sessão/i.test(msg)) {
+        await supabase.auth.signOut();
         toast.error("Sessão expirada. Faça login novamente.");
         navigate("/admin/login");
         return;
@@ -153,12 +151,11 @@ const Admin = () => {
   };
 
   useEffect(() => {
-    if (!token) return;
     refresh();
     const t = setInterval(refresh, 30_000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, []);
 
   const allowServer = async (server_url: string, label?: string, notes?: string) => {
     if (!token) return;
