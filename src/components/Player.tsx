@@ -7,13 +7,17 @@ import {
   getPlaybackStrategy,
   isValidStreamUrl,
   normalizeExt,
+  proxyUrl,
   type PlaybackStrategy,
 } from "@/services/iptv";
 
 interface PlayerProps {
-  /** URL final que será passada pro player (geralmente já com proxy aplicado). */
+  /**
+   * URL do stream. Pode vir crua ou já proxiada — o Player garante
+   * internamente que SEMPRE passe pelo proxy antes de tocar.
+   */
   src?: string | null;
-  /** URL "crua" do stream — usada pra copiar pro VLC. */
+  /** URL "crua" do stream — usada pra copiar pro VLC / abrir externo. */
   rawUrl?: string;
   /** Extensão do container (mp4, m3u8, mkv, etc). */
   containerExt?: string;
@@ -58,7 +62,14 @@ export function Player({
 
   const copyTarget = rawUrl || src || "";
 
-  // Decide a estratégia de reprodução com base na extensão + URL
+  // Garante que TODA reprodução passe pelo proxy da VPS.
+  // Se já vier proxiada (contém "/stream-proxy/"), reaproveita pra evitar duplo-proxy.
+  const safeSrc = useMemo(() => {
+    if (!src) return null;
+    return src.includes("/stream-proxy/") ? src : proxyUrl(src);
+  }, [src]);
+
+  // Decide a estratégia de reprodução com base na extensão + URL crua
   const strategy = useMemo<PlaybackStrategy>(() => {
     if (!src) return { mode: "error", reason: "Nenhum stream selecionado" };
     return getPlaybackStrategy(containerExt, rawUrl || src);
@@ -175,7 +186,7 @@ export function Player({
         });
 
         try {
-          hls.loadSource(src);
+          hls.loadSource(safeSrc!);
           hls.attachMedia(video);
         } catch {
           setLoading(false);
@@ -190,7 +201,7 @@ export function Player({
 
       // Safari / iOS: HLS nativo
       if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        video.src = src;
+        video.src = safeSrc!;
         if (autoPlay) video.play().catch(() => {});
         return;
       }
@@ -205,13 +216,13 @@ export function Player({
     }
 
     // Player nativo (mp4/webm/desconhecido)
-    video.src = src;
+    video.src = safeSrc!;
     if (autoPlay) {
       video.play().catch(() => {
         // Erro de play será capturado pelo listener 'error' abaixo
       });
     }
-  }, [src, strategy, containerExt, autoPlay, copyTarget]);
+  }, [src, safeSrc, strategy, containerExt, autoPlay, copyTarget]);
 
   // Listeners do <video> pra loading + erro nativo
   useEffect(() => {
@@ -276,7 +287,7 @@ export function Player({
   };
 
   const handleRetry = () => {
-    if (!src) return;
+    if (!safeSrc) return;
     setError(null);
     setLoading(true);
     // Força reload mantendo a mesma estratégia
@@ -292,10 +303,10 @@ export function Player({
           setLoading(false);
           video.play().catch(() => {});
         });
-        hls.loadSource(src);
+        hls.loadSource(safeSrc);
         hls.attachMedia(video);
       } else {
-        video.src = src;
+        video.src = safeSrc;
         video.play().catch(() => {});
       }
     }, 100);
