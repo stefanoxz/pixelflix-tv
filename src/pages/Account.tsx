@@ -16,7 +16,13 @@ const Account = () => {
   const fmt = (d: Date | null) =>
     d ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" }) : "—";
 
-  const cards = [
+  const cards: Array<{
+    icon: typeof User;
+    label: string;
+    value: string;
+    sub: string;
+    accent?: "success" | "destructive";
+  }> = [
     {
       icon: User,
       label: "Usuário",
@@ -42,7 +48,7 @@ const Account = () => {
       value: `${u.active_cons} / ${u.max_connections}`,
       sub: "Ativas / máximo",
     },
-  ] as const;
+  ];
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 md:px-8 py-8 space-y-8">
