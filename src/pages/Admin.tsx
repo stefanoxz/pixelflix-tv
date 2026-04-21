@@ -154,6 +154,7 @@ const Admin = () => {
   };
 
   const unblockServer = async (url: string) => {
+    if (!token) return;
     try {
       await callAdmin(token, "unblock_server", { server_url: url });
       toast.success("Servidor desbloqueado");
