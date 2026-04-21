@@ -1,6 +1,6 @@
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Tv, Loader2, KeyRound, UserIcon } from "lucide-react";
+import { Loader2, KeyRound, UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { useIptv } from "@/context/IptvContext";
 import { iptvLogin } from "@/services/iptv";
 import { toast } from "sonner";
+import logoSuperTech from "@/assets/logo-supertech.png";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -47,11 +48,13 @@ const Login = () => {
 
       <Card className="relative w-full max-w-md p-8 bg-gradient-card border-border/50 shadow-card animate-scale-in">
         <div className="text-center mb-8">
-          <div className="mx-auto h-14 w-14 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-glow mb-4">
-            <Tv className="h-7 w-7 text-primary-foreground" />
-          </div>
+          <img
+            src={logoSuperTech}
+            alt="SuperTech"
+            className="mx-auto h-24 w-24 object-contain mb-4 drop-shadow-[0_0_24px_hsl(var(--primary)/0.45)]"
+          />
           <h1 className="text-3xl font-bold tracking-tight">
-            Flix<span className="text-gradient">Play</span>
+            Super<span className="text-gradient">Tech</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-2">
             Entre com seu usuário e senha
