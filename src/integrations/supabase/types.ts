@@ -14,13 +14,66 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      blocked_servers: {
+        Row: {
+          created_at: string
+          id: string
+          reason: string | null
+          server_url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reason?: string | null
+          server_url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reason?: string | null
+          server_url?: string
+        }
+        Relationships: []
+      }
+      login_events: {
+        Row: {
+          created_at: string
+          id: string
+          ip_address: string | null
+          reason: string | null
+          server_url: string
+          success: boolean
+          user_agent: string | null
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          reason?: string | null
+          server_url: string
+          success?: boolean
+          user_agent?: string | null
+          username: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          reason?: string | null
+          server_url?: string
+          success?: boolean
+          user_agent?: string | null
+          username?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      normalize_server_url: { Args: { url: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
