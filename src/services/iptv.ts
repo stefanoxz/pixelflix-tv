@@ -167,7 +167,7 @@ export function buildSeriesEpisodeUrl(
 }
 
 export function proxyUrl(url: string): string {
-  return `${FUNCTIONS_BASE}/stream-proxy?url=${encodeURIComponent(url)}`;
+  return `${FUNCTIONS_BASE}/stream-proxy?url=${encodeURIComponent(url)}&cache=1`;
 }
 
 export function normalizeExt(ext?: string): string {
@@ -182,6 +182,65 @@ export function isBrowserPlayable(ext?: string): boolean {
 export function isExternalOnly(ext?: string): boolean {
   const e = normalizeExt(ext);
   return ["mkv", "avi", "mov"].includes(e);
+}
+
+export type StreamType = "hls" | "video" | "external" | "unknown";
+
+/**
+ * Detecta o tipo de stream a partir da extensão e/ou URL.
+ * - hls: m3u8 (precisa de hls.js ou suporte nativo Safari)
+ * - video: mp4/webm (player nativo do navegador)
+ * - external: mkv/avi/mov (não tocam no browser, precisam de player externo)
+ */
+export function getStreamType(ext?: string, url?: string): StreamType {
+  const e = normalizeExt(ext);
+  const u = (url || "").toLowerCase().split("?")[0];
+
+  if (e === "m3u8" || u.includes(".m3u8") || u.includes("mpegurl")) return "hls";
+  if (["mp4", "webm"].includes(e) || u.endsWith(".mp4") || u.endsWith(".webm")) return "video";
+  if (["mkv", "avi", "mov"].includes(e) || /\.(mkv|avi|mov)$/.test(u)) return "external";
+
+  return "unknown";
+}
+
+export type PlaybackStrategy =
+  | { mode: "internal"; type: "hls" | "native" }
+  | { mode: "external" }
+  | { mode: "error"; reason: string };
+
+/**
+ * Decide como reproduzir um stream:
+ * - internal/hls: usa hls.js (ou fallback nativo Safari)
+ * - internal/native: tag <video> direto
+ * - external: mostra botão pra abrir em VLC/MX Player
+ * - error: URL inválida ou tipo desconhecido
+ */
+export function getPlaybackStrategy(ext?: string, url?: string): PlaybackStrategy {
+  if (!isValidStreamUrl(url)) return { mode: "error", reason: "URL de stream inválida" };
+
+  const type = getStreamType(ext, url);
+  if (type === "hls") return { mode: "internal", type: "hls" };
+  if (type === "video") return { mode: "internal", type: "native" };
+  if (type === "external") return { mode: "external" };
+
+  // unknown: tenta player nativo via proxy como último recurso
+  return { mode: "internal", type: "native" };
+}
+
+/**
+ * Valida se a URL é minimamente segura pra ser passada ao player.
+ * Aceita apenas http(s) absoluto ou a URL do nosso proxy.
+ */
+export function isValidStreamUrl(url?: string | null): url is string {
+  if (!url || typeof url !== "string") return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed, FUNCTIONS_BASE);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 export type FormatBadgeInfo = {

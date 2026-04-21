@@ -43,9 +43,8 @@ const Live = () => {
     if (!activeChannel && filtered.length > 0) setActiveChannel(filtered[0]);
   }, [filtered, activeChannel]);
 
-  const playerSrc = activeChannel
-    ? proxyUrl(buildLiveStreamUrl(creds, activeChannel.stream_id))
-    : null;
+  const rawLiveUrl = activeChannel ? buildLiveStreamUrl(creds, activeChannel.stream_id) : null;
+  const playerSrc = rawLiveUrl ? proxyUrl(rawLiveUrl) : null;
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 md:px-8 py-6 space-y-6">
@@ -79,7 +78,13 @@ const Live = () => {
       ) : (
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1 min-w-0">
-            <Player src={playerSrc} title={activeChannel?.name} poster={activeChannel?.stream_icon} />
+            <Player
+              src={playerSrc}
+              rawUrl={rawLiveUrl ?? undefined}
+              containerExt="m3u8"
+              title={activeChannel?.name}
+              poster={activeChannel?.stream_icon}
+            />
           </div>
           <ChannelSidebar
             channels={filtered}

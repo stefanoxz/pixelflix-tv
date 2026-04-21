@@ -96,6 +96,12 @@ const Movies = () => {
               src={proxyUrl(
                 buildVodStreamUrl(creds, playing.stream_id, playing.container_extension || "mp4")
               )}
+              rawUrl={buildVodStreamUrl(
+                creds,
+                playing.stream_id,
+                playing.container_extension || "mp4"
+              )}
+              containerExt={playing.container_extension || "mp4"}
               title={playing.name}
               poster={playing.stream_icon}
             />
