@@ -4,7 +4,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { server, username, password, action } = await req.json();
+    const body = await req.json();
+    const { server, username, password, action, ...extra } = body ?? {};
     if (!server || !username || !password || !action) {
       return new Response(JSON.stringify({ error: "Missing parameters" }), {
         status: 400,
@@ -12,8 +13,16 @@ Deno.serve(async (req) => {
       });
     }
 
-    const baseUrl = server.replace(/\/+$/, "");
-    const url = `${baseUrl}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=${encodeURIComponent(action)}`;
+    const baseUrl = String(server).replace(/\/+$/, "");
+    const params = new URLSearchParams({
+      username: String(username),
+      password: String(password),
+      action: String(action),
+    });
+    for (const [k, v] of Object.entries(extra)) {
+      if (v !== undefined && v !== null) params.append(k, String(v));
+    }
+    const url = `${baseUrl}/player_api.php?${params.toString()}`;
 
     const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
     if (!res.ok) {
