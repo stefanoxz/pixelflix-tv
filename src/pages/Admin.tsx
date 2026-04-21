@@ -111,6 +111,7 @@ const Admin = () => {
   const [blockReason, setBlockReason] = useState("");
 
   const refresh = async () => {
+    if (!token) return;
     setLoading(true);
     try {
       const [s, u, sv, e] = await Promise.all([
