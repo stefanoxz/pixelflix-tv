@@ -1,6 +1,6 @@
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Tv, Loader2, ServerIcon, KeyRound, UserIcon } from "lucide-react";
+import { Tv, Loader2, KeyRound, UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,29 +12,29 @@ import { toast } from "sonner";
 const Login = () => {
   const navigate = useNavigate();
   const { setSession } = useIptv();
-  const [server, setServer] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!server || !username || !password) {
-      toast.error("Preencha todos os campos");
+    if (!username || !password) {
+      toast.error("Preencha usuário e senha");
       return;
     }
     setLoading(true);
     try {
-      const data = await iptvLogin({ server: server.trim(), username: username.trim(), password });
+      const data = await iptvLogin({ username: username.trim(), password });
+      const resolvedServer = data.server_url ?? "";
       setSession({
-        creds: { server: server.trim(), username: username.trim(), password },
+        creds: { server: resolvedServer, username: username.trim(), password },
         userInfo: data.user_info,
       });
       toast.success(`Bem-vindo, ${data.user_info.username}!`);
       navigate("/");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      toast.error(`Falha no login: ${msg}`);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -54,26 +54,11 @@ const Login = () => {
             Flix<span className="text-gradient">Play</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-2">
-            Entre com suas credenciais Xtream Codes
+            Entre com seu usuário e senha
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="server" className="text-xs">Servidor (URL)</Label>
-            <div className="relative">
-              <ServerIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="server"
-                placeholder="http://servidor.com:8080"
-                value={server}
-                onChange={(e) => setServer(e.target.value)}
-                className="pl-10 bg-secondary/50 border-border/50 h-11"
-                autoComplete="url"
-              />
-            </div>
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="username" className="text-xs">Usuário</Label>
             <div className="relative">

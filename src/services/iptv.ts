@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export interface IptvCredentials {
-  server: string;
+  server?: string;
   username: string;
   password: string;
 }
@@ -82,11 +82,13 @@ export interface Series {
 
 const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
-export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> {
+export async function iptvLogin(
+  creds: IptvCredentials
+): Promise<LoginResponse & { server_url?: string }> {
   const { data, error } = await supabase.functions.invoke("iptv-login", { body: creds });
   if (error) throw new Error(error.message || "Falha no login");
   if ((data as any)?.error) throw new Error((data as any).error);
-  return data as LoginResponse;
+  return data as LoginResponse & { server_url?: string };
 }
 
 export interface Episode {
