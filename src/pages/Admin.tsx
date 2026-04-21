@@ -132,13 +132,15 @@ const Admin = () => {
   };
 
   useEffect(() => {
+    if (!token) return;
     refresh();
     const t = setInterval(refresh, 30_000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [token]);
 
   const blockServer = async (url: string, reason?: string) => {
+    if (!token) return;
     try {
       await callAdmin(token, "block_server", { server_url: url, reason });
       toast.success("Servidor bloqueado");
