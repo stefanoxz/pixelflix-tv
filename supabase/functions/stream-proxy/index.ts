@@ -18,15 +18,19 @@ Deno.serve(async (req) => {
       return new Response("Invalid url", { status: 400, headers: corsHeaders });
     }
 
-    // Follow redirects manually so we can rewrite based on the final URL.
+    // Forward Range header so MP4/video seek + progressive playback works.
+    const fwdHeaders: Record<string, string> = {
+      "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
+      Referer: `${decoded.protocol}//${decoded.host}/`,
+      Accept: "*/*",
+    };
+    const range = req.headers.get("range");
+    if (range) fwdHeaders["Range"] = range;
+
     const upstream = await fetch(decoded.toString(), {
       method: req.method === "HEAD" ? "HEAD" : "GET",
       redirect: "follow",
-      headers: {
-        "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
-        Referer: `${decoded.protocol}//${decoded.host}/`,
-        Accept: "*/*",
-      },
+      headers: fwdHeaders,
     });
 
     // The URL after redirects — needed to resolve relative segment paths correctly.
