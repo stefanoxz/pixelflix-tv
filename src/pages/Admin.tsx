@@ -85,9 +85,9 @@ interface AdminEvent {
   created_at: string;
 }
 
-async function callAdmin<T>(token: string, action: string, payload?: any): Promise<T> {
+async function callAdmin<T>(action: string, payload?: any): Promise<T> {
   const { data, error } = await supabase.functions.invoke("admin-api", {
-    body: { token, action, payload },
+    body: { action, payload },
   });
   if (error) throw new Error(error.message);
   if ((data as any)?.error) throw new Error((data as any).error);
