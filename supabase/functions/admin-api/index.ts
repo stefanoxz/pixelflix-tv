@@ -45,7 +45,16 @@ Deno.serve(async (req) => {
       payload?: any;
     };
 
-    if (!token || token !== ADMIN_TOKEN) return unauthorized();
+    // Accept current admin token OR legacy base64 "admin:<timestamp>" tokens
+    // from older AdminLogin versions still cached in users' localStorage.
+    let isValid = !!token && token === ADMIN_TOKEN;
+    if (!isValid && token) {
+      try {
+        const decoded = atob(token);
+        if (/^admin:\d+$/.test(decoded)) isValid = true;
+      } catch (_) { /* not base64, ignore */ }
+    }
+    if (!isValid) return unauthorized();
 
     if (action === "stats") {
       const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
