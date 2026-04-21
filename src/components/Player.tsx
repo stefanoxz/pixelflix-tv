@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
-import mpegts from "mpegts.js";
-import { Tv, AlertTriangle, Copy, Check } from "lucide-react";
+import { Tv, AlertTriangle, Copy, Check, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -12,143 +11,146 @@ interface PlayerProps {
   autoPlay?: boolean;
 }
 
+type PlayerMode = "idle" | "hls" | "native" | "proxy";
+
 type PlayerError = {
   message: string;
   url: string;
 };
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const PROXY_BASE = `${SUPABASE_URL}/functions/v1/stream-proxy?url=`;
+
+function detectType(url = "") {
+  const clean = url.split("?")[0].toLowerCase();
+  if (clean.endsWith(".m3u8") || clean.includes("mpegurl")) return "hls";
+  if (clean.endsWith(".mp4")) return "mp4";
+  if (clean.endsWith(".webm")) return "webm";
+  if (
+    clean.endsWith(".mkv") ||
+    clean.endsWith(".avi") ||
+    clean.endsWith(".mov") ||
+    clean.endsWith(".ts")
+  ) {
+    return "unsupported-container";
+  }
+  return "unknown";
+}
+
+const buildProxyUrl = (u: string) => `${PROXY_BASE}${encodeURIComponent(u)}`;
+
 export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
-  const mpegtsRef = useRef<mpegts.Player | null>(null);
+  const [mode, setMode] = useState<PlayerMode>("idle");
+  const [finalUrl, setFinalUrl] = useState<string>("");
   const [error, setError] = useState<PlayerError | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Step 1: decide mode + finalUrl based on source URL
   useEffect(() => {
+    if (!src) {
+      setMode("idle");
+      setFinalUrl("");
+      return;
+    }
+
     setError(null);
     setCopied(false);
 
+    const type = detectType(src);
+    console.log("🎬 URL:", src);
+    console.log("📦 Tipo detectado:", type);
+
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    if (type === "hls") {
+      console.log("✅ Usando HLS (hls.js) via proxy");
+      setMode("hls");
+      setFinalUrl(buildProxyUrl(src));
+    } else if (type === "mp4" || type === "webm") {
+      console.log("✅ Usando player nativo via proxy");
+      setMode("native");
+      setFinalUrl(buildProxyUrl(src));
+    } else {
+      console.log("⚠️ Container possivelmente não suportado → tentando via proxy");
+      setMode("proxy");
+      setFinalUrl(buildProxyUrl(src));
+    }
+  }, [src]);
+
+  // Step 2: attach the source to the <video> when finalUrl/mode change
+  useEffect(() => {
     const video = videoRef.current;
-    if (!video || !src) return;
+    if (!video || !finalUrl) return;
 
-    // Cleanup previous players
-    const cleanup = () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-      if (mpegtsRef.current) {
-        try {
-          mpegtsRef.current.destroy();
-        } catch {
-          /* noop */
-        }
-        mpegtsRef.current = null;
-      }
-    };
-    cleanup();
-
-    const lower = src.toLowerCase();
-    const isM3u8 = lower.includes(".m3u8") || lower.includes("mpegurl");
-    const isTs = !isM3u8 && (lower.endsWith(".ts") || lower.includes("mpeg-ts"));
-    const isMkv = lower.endsWith(".mkv") || lower.includes(".mkv?");
-    const isAvi = lower.endsWith(".avi") || lower.includes(".avi?");
-    const isMp4 = lower.endsWith(".mp4") || lower.includes(".mp4?");
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
 
     const showUnsupported = (reason: string) => {
-      setError({ message: reason, url: src });
+      setError({ message: reason, url: src ?? finalUrl });
     };
 
-    // === HLS (live + VOD em m3u8) ===
-    if (isM3u8 && Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
-      hlsRef.current = hls;
-      hls.loadSource(src);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (autoPlay) video.play().catch(() => {});
-      });
-      hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (data.fatal) {
-          console.error("HLS fatal error", data);
-          showUnsupported("Falha ao carregar o stream HLS.");
-        }
-      });
-      return cleanup;
-    }
-
-    // === MPEG-TS / MKV / AVI: tenta mpegts.js (suporta MPEG-TS e em alguns casos containers H.264) ===
-    if ((isTs || isMkv || isAvi) && mpegts.getFeatureList().mseLivePlayback) {
-      try {
-        const player = mpegts.createPlayer(
-          {
-            type: isTs ? "mpegts" : "mse",
-            isLive: false,
-            url: src,
-          },
-          {
-            enableWorker: true,
-            lazyLoad: false,
-            stashInitialSize: 384,
-          },
-        );
-        mpegtsRef.current = player;
-        player.attachMediaElement(video);
-        player.load();
-        if (autoPlay) {
-          const p = player.play() as void | Promise<void>;
-          if (p && typeof (p as Promise<void>).catch === "function") {
-            (p as Promise<void>).catch(() => {});
-          }
-        }
-        let mpegtsFailed = false;
-        player.on(mpegts.Events.ERROR, (errType, errDetail) => {
-          console.error("mpegts.js error", errType, errDetail);
-          if (mpegtsFailed) return;
-          mpegtsFailed = true;
-          // Fallback: tenta o player nativo
-          try {
-            player.destroy();
-          } catch {
-            /* noop */
-          }
-          mpegtsRef.current = null;
-          video.src = src;
-          video.play().catch(() => {
-            showUnsupported(
-              isMkv || isAvi
-                ? "Este formato (MKV/AVI) não é suportado pelo navegador."
-                : "Não foi possível reproduzir este conteúdo no navegador.",
-            );
-          });
+    if (mode === "hls") {
+      if (Hls.isSupported()) {
+        const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+        hlsRef.current = hls;
+        hls.loadSource(finalUrl);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (autoPlay) video.play().catch(() => {});
         });
-        return cleanup;
-      } catch (e) {
-        console.error("mpegts init failed", e);
+        hls.on(Hls.Events.ERROR, (_e, data) => {
+          if (data.fatal) {
+            console.error("HLS fatal error", data);
+            showUnsupported("Falha ao carregar o stream HLS.");
+          }
+        });
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = finalUrl;
+        if (autoPlay) video.play().catch(() => {});
+      } else {
+        showUnsupported("Seu navegador não suporta HLS.");
       }
+      return;
     }
 
-    // === Player nativo (MP4/WebM ou Safari com HLS nativo) ===
-    video.src = src;
+    // native / proxy: just set src and let the browser try
+    video.src = finalUrl;
     const onErr = () => {
+      const isUnsupported = mode === "proxy";
       showUnsupported(
-        isMkv || isAvi
-          ? "Este formato (MKV/AVI) não é suportado pelo navegador."
-          : "Não foi possível reproduzir este conteúdo. Tente abrir em um player externo.",
+        isUnsupported
+          ? "Este formato (MKV/AVI/MOV) não é suportado pelo navegador. Abra em um player externo."
+          : "Não foi possível reproduzir este conteúdo.",
       );
     };
     video.addEventListener("error", onErr);
     if (autoPlay) {
       video.play().catch(() => {
-        if (!isMp4) onErr();
+        // ignore — error event will fire if truly unsupported
       });
     }
 
     return () => {
       video.removeEventListener("error", onErr);
-      cleanup();
     };
-  }, [src, autoPlay]);
+  }, [finalUrl, mode, autoPlay, src]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, []);
 
   const handleCopy = async () => {
     if (!error) return;
@@ -160,6 +162,14 @@ export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
     } catch {
       toast.error("Não foi possível copiar o link");
     }
+  };
+
+  const handleRetry = () => {
+    if (!src) return;
+    console.log("🔁 Tentando novamente via proxy");
+    setError(null);
+    setMode("proxy");
+    setFinalUrl(buildProxyUrl(src) + `&_t=${Date.now()}`);
   };
 
   if (!src) {
@@ -206,10 +216,16 @@ export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
                 Copie o link e abra no VLC, MX Player ou outro player externo.
               </p>
             </div>
-            <Button onClick={handleCopy} variant="secondary" size="sm" className="gap-2">
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copied ? "Copiado" : "Copiar link"}
-            </Button>
+            <div className="flex items-center justify-center gap-2">
+              <Button onClick={handleRetry} variant="outline" size="sm" className="gap-2">
+                <RefreshCw className="h-4 w-4" />
+                Tentar novamente
+              </Button>
+              <Button onClick={handleCopy} variant="secondary" size="sm" className="gap-2">
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied ? "Copiado" : "Copiar link"}
+              </Button>
+            </div>
           </div>
         </div>
       )}
