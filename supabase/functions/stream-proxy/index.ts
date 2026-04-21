@@ -93,14 +93,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Stream binary/ts/image directly
+    // Stream binary/ts/image directly. Pass through Range/Content-Range for video seeking.
     const passthroughHeaders: Record<string, string> = {
       ...corsHeaders,
       "Content-Type": contentType || "application/octet-stream",
       "Cache-Control": upstream.headers.get("cache-control") || "no-cache",
+      "Accept-Ranges": upstream.headers.get("accept-ranges") || "bytes",
     };
     const len = upstream.headers.get("content-length");
     if (len) passthroughHeaders["Content-Length"] = len;
+    const cr = upstream.headers.get("content-range");
+    if (cr) passthroughHeaders["Content-Range"] = cr;
 
     return new Response(upstream.body, {
       status: upstream.status,
