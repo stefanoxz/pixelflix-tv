@@ -1,4 +1,47 @@
-import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
+
+const ALLOWED_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") || "*";
+function corsFor(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") || "";
+  const allow =
+    ALLOWED_ORIGIN === "*"
+      ? "*"
+      : ALLOWED_ORIGIN.split(",").map((s) => s.trim()).includes(origin)
+      ? origin
+      : ALLOWED_ORIGIN.split(",")[0].trim();
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "Vary": "Origin",
+  };
+}
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+const NO_ACCESS_MSG =
+  "Você não tem acesso a esta plataforma. Entre em contato com a sua revenda para liberar o seu servidor (DNS).";
+
+function normalizeServer(url: string) {
+  let u = url.trim().toLowerCase();
+  if (!/^https?:\/\//.test(u)) u = `http://${u}`;
+  return u.replace(/\/+$/, "");
+}
+function hostKey(url: string) {
+  return normalizeServer(url).replace(/^https?:\/\//, "");
+}
+
+// Cache allowlist for 60s to reduce DB hits.
+let cache: { at: number; list: string[] } | null = null;
+async function getAllowedServers(): Promise<string[]> {
+  if (cache && Date.now() - cache.at < 60_000) return cache.list;
+  const { data } = await admin.from("allowed_servers").select("server_url");
+  const list = (data ?? []).map((r: any) => normalizeServer(r.server_url));
+  cache = { at: Date.now(), list };
+  return list;
+}
 
 const USER_AGENTS = [
   "VLC/3.0.20 LibVLC/3.0.20",
@@ -7,7 +50,6 @@ const USER_AGENTS = [
   "Lavf/58.76.100",
 ];
 
-// Status codes worth retrying with a different UA / another attempt.
 const TRANSIENT_STATUSES = new Set([408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 530, 444]);
 
 async function fetchWithRetries(url: string, attemptsPerUa = 2): Promise<{ ok: true; data: unknown } | { ok: false; status: number; reason: string }> {
@@ -18,24 +60,18 @@ async function fetchWithRetries(url: string, attemptsPerUa = 2): Promise<{ ok: t
     for (let attempt = 0; attempt < attemptsPerUa; attempt++) {
       try {
         const res = await fetch(url, {
-          headers: {
-            "User-Agent": ua,
-            Accept: "application/json, */*",
-          },
+          headers: { "User-Agent": ua, Accept: "application/json, */*" },
           redirect: "follow",
         });
 
         if (TRANSIENT_STATUSES.has(res.status)) {
           lastStatus = res.status;
           lastReason = `HTTP ${res.status}`;
-          // small backoff
           await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
           continue;
         }
 
-        if (!res.ok) {
-          return { ok: false, status: res.status, reason: `HTTP ${res.status}` };
-        }
+        if (!res.ok) return { ok: false, status: res.status, reason: `HTTP ${res.status}` };
 
         const text = await res.text();
         try {
@@ -49,11 +85,11 @@ async function fetchWithRetries(url: string, attemptsPerUa = 2): Promise<{ ok: t
       }
     }
   }
-
   return { ok: false, status: lastStatus || 502, reason: lastReason };
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -66,7 +102,20 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Validate server against allowlist (prevent open-proxy abuse).
+    const allowed = await getAllowedServers();
     const baseUrl = String(server).replace(/\/+$/, "");
+    const fullBase = /^https?:\/\//i.test(baseUrl) ? baseUrl : `http://${baseUrl}`;
+    const normalized = normalizeServer(fullBase);
+    const inputHost = hostKey(fullBase);
+    const match = allowed.find((a) => a === normalized || hostKey(a) === inputHost);
+    if (!match) {
+      return new Response(JSON.stringify({ error: NO_ACCESS_MSG }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const params = new URLSearchParams({
       username: String(username),
       password: String(password),
@@ -75,17 +124,14 @@ Deno.serve(async (req) => {
     for (const [k, v] of Object.entries(extra)) {
       if (v !== undefined && v !== null) params.append(k, String(v));
     }
-    const url = `${baseUrl}/player_api.php?${params.toString()}`;
+    const url = `${match}/player_api.php?${params.toString()}`;
 
     const result = await fetchWithRetries(url);
     if (!result.ok) {
-      return new Response(
-        JSON.stringify({ error: `IPTV server error: ${result.reason}` }),
-        {
-          status: 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return new Response(JSON.stringify({ error: `IPTV server error: ${result.reason}` }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify(result.data), {
