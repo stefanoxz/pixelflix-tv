@@ -14,23 +14,26 @@ export type Database = {
   }
   public: {
     Tables: {
-      blocked_servers: {
+      allowed_servers: {
         Row: {
           created_at: string
           id: string
-          reason: string | null
+          label: string | null
+          notes: string | null
           server_url: string
         }
         Insert: {
           created_at?: string
           id?: string
-          reason?: string | null
+          label?: string | null
+          notes?: string | null
           server_url: string
         }
         Update: {
           created_at?: string
           id?: string
-          reason?: string | null
+          label?: string | null
+          notes?: string | null
           server_url?: string
         }
         Relationships: []
