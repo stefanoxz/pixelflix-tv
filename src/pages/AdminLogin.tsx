@@ -10,6 +10,8 @@ import { toast } from "sonner";
 const ADMIN_USER = "admin";
 const ADMIN_PASS = "admin";
 const TOKEN_KEY = "admin_token";
+// Must match ADMIN_PASSWORD env in admin-api edge function (default fallback)
+const ADMIN_API_TOKEN = "admin-panel-2024";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -22,7 +24,7 @@ const AdminLogin = () => {
     setLoading(true);
     setTimeout(() => {
       if (user === ADMIN_USER && pass === ADMIN_PASS) {
-        localStorage.setItem(TOKEN_KEY, btoa(`${user}:${Date.now()}`));
+        localStorage.setItem(TOKEN_KEY, ADMIN_API_TOKEN);
         toast.success("Bem-vindo ao painel admin");
         navigate("/admin");
       } else {
