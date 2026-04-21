@@ -12,13 +12,15 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
+const NO_ACCESS_MSG =
+  "Você não tem acesso a esta plataforma. Entre em contato com a sua revenda para liberar o seu servidor (DNS).";
+
 function normalizeServer(url: string) {
   let u = url.trim().toLowerCase();
   if (!/^https?:\/\//.test(u)) u = `http://${u}`;
   return u.replace(/\/+$/, "");
 }
 
-// Strip protocol and trailing slash to match user input flexibly (e.g. "host.com:80")
 function hostKey(url: string) {
   return normalizeServer(url).replace(/^https?:\/\//, "");
 }
@@ -71,6 +73,30 @@ async function tryFetch(url: string): Promise<{ res: Response; ua: string } | { 
   return { error: lastErr, body: lastBody };
 }
 
+async function attemptLogin(serverBase: string, username: string, password: string) {
+  const url = `${serverBase}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+  const result = await tryFetch(url);
+  if ("error" in result) {
+    return { ok: false as const, status: 502, reason: result.error, body: result.body ?? "" };
+  }
+  const { res } = result;
+  if (!res.ok) {
+    const text = await res.text();
+    return { ok: false as const, status: res.status, reason: `HTTP ${res.status}`, body: text };
+  }
+  const raw = await res.text();
+  let data: any;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return { ok: false as const, status: 502, reason: "resposta não JSON", body: raw };
+  }
+  if (!data?.user_info || data.user_info.auth === 0) {
+    return { ok: false as const, status: 401, reason: "credenciais inválidas", body: raw };
+  }
+  return { ok: true as const, data };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -82,92 +108,64 @@ Deno.serve(async (req) => {
 
   try {
     const { server, username, password } = await req.json();
-    if (!server || !username || !password) {
-      return new Response(JSON.stringify({ error: "Informe servidor, usuário e senha" }), {
+    if (!username || !password) {
+      return new Response(JSON.stringify({ error: "Informe usuário e senha" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const baseUrl = String(server).trim().replace(/\/+$/, "");
-    const fullBase = /^https?:\/\//i.test(baseUrl) ? baseUrl : `http://${baseUrl}`;
-    const normalized = normalizeServer(fullBase);
-    const inputHost = hostKey(fullBase);
+    // Load allowlist
+    const { data: allowedRows } = await admin.from("allowed_servers").select("server_url");
+    const allowedList = (allowedRows ?? []).map((r: any) => normalizeServer(r.server_url));
 
-    // ALLOWLIST: server must be pre-registered by admin
-    const { data: allowed } = await admin.from("allowed_servers").select("server_url");
-    const isAllowed = (allowed ?? []).some((row: any) => {
-      const a = normalizeServer(row.server_url);
-      return a === normalized || hostKey(a) === inputHost;
-    });
-
-    if (!isAllowed) {
-      const msg =
-        "Você não tem acesso a esta plataforma. Entre em contato com a sua revenda para liberar o seu servidor (DNS).";
-      await logEvent({ server: fullBase, username, success: false, reason: "DNS não autorizada", ua, ip });
-      return new Response(JSON.stringify({ error: msg }), {
+    if (allowedList.length === 0) {
+      await logEvent({ server: server ?? "-", username, success: false, reason: "nenhuma DNS cadastrada", ua, ip });
+      return new Response(JSON.stringify({ error: NO_ACCESS_MSG }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const url = `${fullBase}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-
-    const result = await tryFetch(url);
-    if ("error" in result) {
-      const body = (result.body || "").trim();
-      let msg = `O servidor IPTV recusou a conexão (${result.error}).`;
-      if (/suspend/i.test(body)) {
-        msg = "Sua conta no servidor IPTV foi suspensa. Entre em contato com o provedor.";
-      } else if (/expir|vencid/i.test(body)) {
-        msg = "Sua assinatura no servidor IPTV expirou.";
-      } else if (body) {
-        msg = `Servidor IPTV: "${body.slice(0, 120)}"`;
-      } else {
-        msg += " Verifique o endereço/DNS ou tente outro servidor.";
+    // If client sent a server, validate it's in allowlist; otherwise try all allowed servers
+    let candidates: string[] = [];
+    if (server) {
+      const baseUrl = String(server).trim().replace(/\/+$/, "");
+      const fullBase = /^https?:\/\//i.test(baseUrl) ? baseUrl : `http://${baseUrl}`;
+      const normalized = normalizeServer(fullBase);
+      const inputHost = hostKey(fullBase);
+      const match = allowedList.find((a) => a === normalized || hostKey(a) === inputHost);
+      if (!match) {
+        await logEvent({ server: fullBase, username, success: false, reason: "DNS não autorizada", ua, ip });
+        return new Response(JSON.stringify({ error: NO_ACCESS_MSG }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      await logEvent({ server: fullBase, username, success: false, reason: msg, ua, ip });
-      return new Response(JSON.stringify({ error: msg }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      candidates = [match];
+    } else {
+      candidates = allowedList;
     }
 
-    const { res } = result;
-    if (!res.ok) {
-      const text = await res.text();
-      const msg = `Servidor IPTV retornou ${res.status}: ${text.slice(0, 200) || "sem corpo"}`;
-      await logEvent({ server: fullBase, username, success: false, reason: msg, ua, ip });
-      return new Response(JSON.stringify({ error: msg }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // Try each candidate server until one authenticates
+    let lastReason = "credenciais inválidas";
+    for (const base of candidates) {
+      const r = await attemptLogin(base, username, password);
+      if (r.ok) {
+        await logEvent({ server: base, username, success: true, ua, ip });
+        return new Response(JSON.stringify({ ...r.data, server_url: base }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      lastReason = r.reason;
+      // Log each failed attempt for admin visibility
+      await logEvent({ server: base, username, success: false, reason: r.reason, ua, ip });
     }
 
-    let data: any;
-    const raw = await res.text();
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      const msg = `Resposta inválida do servidor (não é JSON): ${raw.slice(0, 200)}`;
-      await logEvent({ server: fullBase, username, success: false, reason: msg, ua, ip });
-      return new Response(JSON.stringify({ error: msg }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (!data?.user_info || data.user_info.auth === 0) {
-      await logEvent({ server: fullBase, username, success: false, reason: "credenciais inválidas", ua, ip });
-      return new Response(JSON.stringify({ error: "Usuário ou senha inválidos" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    await logEvent({ server: fullBase, username, success: true, ua, ip });
-    return new Response(JSON.stringify(data), {
-      status: 200,
+    // Nothing worked
+    return new Response(JSON.stringify({ error: `Usuário ou senha inválidos (${lastReason})` }), {
+      status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
