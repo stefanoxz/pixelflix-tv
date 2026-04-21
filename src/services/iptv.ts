@@ -167,8 +167,13 @@ export function buildSeriesEpisodeUrl(
   return `${serverBase(creds)}/series/${creds.username}/${creds.password}/${episodeId}.${ext || "mp4"}`;
 }
 
+/**
+ * Proxy externo de streaming (VPS).
+ * Todos os streams (HLS, MP4, IPTV) passam por aqui pra evitar bloqueios de CDN
+ * e melhorar performance/estabilidade.
+ */
 export function proxyUrl(url: string): string {
-  return `${FUNCTIONS_BASE}/stream-proxy?url=${encodeURIComponent(url)}&cache=1`;
+  return `http://82.197.65.169/stream-proxy/?url=${encodeURIComponent(url)}`;
 }
 
 export function normalizeExt(ext?: string): string {
