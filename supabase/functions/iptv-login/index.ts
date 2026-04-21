@@ -1,7 +1,6 @@
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
 
-// Try multiple User-Agents — different IPTV panels accept different ones.
 const USER_AGENTS = [
   "VLC/3.0.20 LibVLC/3.0.20",
   "IPTVSmarters/1.0",
@@ -14,7 +13,14 @@ const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
 function normalizeServer(url: string) {
-  return url.trim().replace(/\/+$/, "").toLowerCase();
+  let u = url.trim().toLowerCase();
+  if (!/^https?:\/\//.test(u)) u = `http://${u}`;
+  return u.replace(/\/+$/, "");
+}
+
+// Strip protocol and trailing slash to match user input flexibly (e.g. "host.com:80")
+function hostKey(url: string) {
+  return normalizeServer(url).replace(/^https?:\/\//, "");
 }
 
 async function logEvent(opts: {
@@ -86,18 +92,20 @@ Deno.serve(async (req) => {
     const baseUrl = String(server).trim().replace(/\/+$/, "");
     const fullBase = /^https?:\/\//i.test(baseUrl) ? baseUrl : `http://${baseUrl}`;
     const normalized = normalizeServer(fullBase);
+    const inputHost = hostKey(fullBase);
 
-    // Check blocklist
-    const { data: blocked } = await admin
-      .from("blocked_servers")
-      .select("server_url, reason")
-      .eq("server_url", normalized)
-      .maybeSingle();
+    // ALLOWLIST: server must be pre-registered by admin
+    const { data: allowed } = await admin.from("allowed_servers").select("server_url");
+    const isAllowed = (allowed ?? []).some((row: any) => {
+      const a = normalizeServer(row.server_url);
+      return a === normalized || hostKey(a) === inputHost;
+    });
 
-    if (blocked) {
-      const reason = blocked.reason || "Servidor bloqueado pelo administrador";
-      await logEvent({ server: fullBase, username, success: false, reason: `bloqueado: ${reason}`, ua, ip });
-      return new Response(JSON.stringify({ error: `Acesso negado: ${reason}` }), {
+    if (!isAllowed) {
+      const msg =
+        "Você não tem acesso a esta plataforma. Entre em contato com a sua revenda para liberar o seu servidor (DNS).";
+      await logEvent({ server: fullBase, username, success: false, reason: "DNS não autorizada", ua, ip });
+      return new Response(JSON.stringify({ error: msg }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
