@@ -139,7 +139,14 @@ const Admin = () => {
       setPending(sv.pending);
       setEvents(e.events);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha ao carregar dados");
+      const msg = err instanceof Error ? err.message : "Falha ao carregar dados";
+      if (/não autorizado|unauthorized|401/i.test(msg)) {
+        localStorage.removeItem(TOKEN_KEY);
+        toast.error("Sessão expirada. Faça login novamente.");
+        navigate("/admin/login");
+        return;
+      }
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
