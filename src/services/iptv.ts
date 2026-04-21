@@ -89,9 +89,41 @@ export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> 
   return data as LoginResponse;
 }
 
-export async function iptvFetch<T>(creds: IptvCredentials, action: string): Promise<T> {
+export interface Episode {
+  id: string;
+  episode_num: number;
+  title: string;
+  container_extension: string;
+  info?: {
+    movie_image?: string;
+    plot?: string;
+    duration?: string;
+    rating?: string | number;
+  };
+}
+
+export interface SeriesInfo {
+  seasons: Array<{ season_number: number; name?: string; cover?: string }>;
+  info: {
+    name: string;
+    cover: string;
+    plot: string;
+    cast: string;
+    director: string;
+    genre: string;
+    releaseDate: string;
+    rating: string;
+  };
+  episodes: Record<string, Episode[]>;
+}
+
+export async function iptvFetch<T>(
+  creds: IptvCredentials,
+  action: string,
+  extra: Record<string, string | number> = {},
+): Promise<T> {
   const { data, error } = await supabase.functions.invoke("iptv-categories", {
-    body: { ...creds, action },
+    body: { ...creds, action, ...extra },
   });
   if (error) throw new Error(error.message || `Falha ao buscar ${action}`);
   if ((data as any)?.error) throw new Error((data as any).error);
@@ -110,6 +142,8 @@ export const getSeriesCategories = (c: IptvCredentials) =>
   iptvFetch<Category[]>(c, "get_series_categories");
 export const getSeries = (c: IptvCredentials) =>
   iptvFetch<Series[]>(c, "get_series");
+export const getSeriesInfo = (c: IptvCredentials, seriesId: number) =>
+  iptvFetch<SeriesInfo>(c, "get_series_info", { series_id: seriesId });
 
 export function buildLiveStreamUrl(creds: IptvCredentials, streamId: number): string {
   const base = creds.server.replace(/\/+$/, "");
@@ -119,6 +153,15 @@ export function buildLiveStreamUrl(creds: IptvCredentials, streamId: number): st
 export function buildVodStreamUrl(creds: IptvCredentials, streamId: number, ext: string): string {
   const base = creds.server.replace(/\/+$/, "");
   return `${base}/movie/${creds.username}/${creds.password}/${streamId}.${ext}`;
+}
+
+export function buildSeriesEpisodeUrl(
+  creds: IptvCredentials,
+  episodeId: string | number,
+  ext: string,
+): string {
+  const base = creds.server.replace(/\/+$/, "");
+  return `${base}/series/${creds.username}/${creds.password}/${episodeId}.${ext || "mp4"}`;
 }
 
 export function proxyUrl(url: string): string {
