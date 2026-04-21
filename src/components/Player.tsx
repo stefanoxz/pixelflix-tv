@@ -287,7 +287,7 @@ export function Player({
   };
 
   const handleRetry = () => {
-    if (!src) return;
+    if (!safeSrc) return;
     setError(null);
     setLoading(true);
     // Força reload mantendo a mesma estratégia
@@ -303,10 +303,10 @@ export function Player({
           setLoading(false);
           video.play().catch(() => {});
         });
-        hls.loadSource(src);
+        hls.loadSource(safeSrc);
         hls.attachMedia(video);
       } else {
-        video.src = src;
+        video.src = safeSrc;
         video.play().catch(() => {});
       }
     }, 100);
