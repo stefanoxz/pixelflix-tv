@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import Hls from "hls.js";
+import mpegts from "mpegts.js";
 import { Tv } from "lucide-react";
 
 interface PlayerProps {
@@ -12,17 +13,27 @@ interface PlayerProps {
 export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const mpegtsRef = useRef<mpegts.Player | null>(null);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
 
+    // Cleanup previous players
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
+    if (mpegtsRef.current) {
+      mpegtsRef.current.destroy();
+      mpegtsRef.current = null;
+    }
 
-    const isM3u8 = src.includes(".m3u8") || src.includes("mpegurl");
+    // Detect stream type by URL/extension
+    const lower = src.toLowerCase();
+    const isM3u8 = lower.includes(".m3u8") || lower.includes("mpegurl");
+    // Bare .ts (mpegts), but NOT segments inside an m3u8 — those are handled by hls.js
+    const isTs = !isM3u8 && (lower.includes(".ts") || lower.includes("mpeg-ts"));
 
     if (isM3u8 && Hls.isSupported()) {
       const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
@@ -35,7 +46,31 @@ export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (data.fatal) console.error("HLS fatal error", data);
       });
+    } else if (isTs && mpegts.getFeatureList().mseLivePlayback) {
+      const player = mpegts.createPlayer(
+        {
+          type: "mpegts",
+          isLive: true,
+          url: src,
+        },
+        {
+          enableWorker: true,
+          lazyLoad: false,
+          liveBufferLatencyChasing: true,
+          stashInitialSize: 128,
+        }
+      );
+      mpegtsRef.current = player;
+      player.attachMediaElement(video);
+      player.load();
+      if (autoPlay) {
+        player.play().catch(() => {});
+      }
+      player.on(mpegts.Events.ERROR, (errType, errDetail) => {
+        console.error("mpegts.js error", errType, errDetail);
+      });
     } else {
+      // Native playback (MP4/WebM, or Safari with native HLS)
       video.src = src;
       if (autoPlay) video.play().catch(() => {});
     }
@@ -44,6 +79,10 @@ export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
+      }
+      if (mpegtsRef.current) {
+        mpegtsRef.current.destroy();
+        mpegtsRef.current = null;
       }
     };
   }, [src, autoPlay]);
