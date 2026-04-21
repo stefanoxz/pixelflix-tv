@@ -158,9 +158,8 @@ const Admin = () => {
   }, []);
 
   const allowServer = async (server_url: string, label?: string, notes?: string) => {
-    if (!token) return;
     try {
-      await callAdmin(token, "allow_server", { server_url, label, notes });
+      await callAdmin("allow_server", { server_url, label, notes });
       toast.success("DNS autorizada");
       setAddOpen(false);
       setNewUrl("");
@@ -173,10 +172,9 @@ const Admin = () => {
   };
 
   const removeServer = async (server_url: string) => {
-    if (!token) return;
     if (!confirm(`Remover acesso ao servidor "${server_url}"?\nUsuários não conseguirão mais logar nele.`)) return;
     try {
-      await callAdmin(token, "remove_server", { server_url });
+      await callAdmin("remove_server", { server_url });
       toast.success("DNS removida");
       refresh();
     } catch (err) {
