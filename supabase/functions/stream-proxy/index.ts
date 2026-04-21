@@ -18,15 +18,19 @@ Deno.serve(async (req) => {
       return new Response("Invalid url", { status: 400, headers: corsHeaders });
     }
 
-    // Follow redirects manually so we can rewrite based on the final URL.
+    // Forward Range header so MP4/video seek + progressive playback works.
+    const fwdHeaders: Record<string, string> = {
+      "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
+      Referer: `${decoded.protocol}//${decoded.host}/`,
+      Accept: "*/*",
+    };
+    const range = req.headers.get("range");
+    if (range) fwdHeaders["Range"] = range;
+
     const upstream = await fetch(decoded.toString(), {
       method: req.method === "HEAD" ? "HEAD" : "GET",
       redirect: "follow",
-      headers: {
-        "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
-        Referer: `${decoded.protocol}//${decoded.host}/`,
-        Accept: "*/*",
-      },
+      headers: fwdHeaders,
     });
 
     // The URL after redirects — needed to resolve relative segment paths correctly.
@@ -89,14 +93,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Stream binary/ts/image directly
+    // Stream binary/ts/image directly. Pass through Range/Content-Range for video seeking.
     const passthroughHeaders: Record<string, string> = {
       ...corsHeaders,
       "Content-Type": contentType || "application/octet-stream",
       "Cache-Control": upstream.headers.get("cache-control") || "no-cache",
+      "Accept-Ranges": upstream.headers.get("accept-ranges") || "bytes",
     };
     const len = upstream.headers.get("content-length");
     if (len) passthroughHeaders["Content-Length"] = len;
+    const cr = upstream.headers.get("content-range");
+    if (cr) passthroughHeaders["Content-Range"] = cr;
 
     return new Response(upstream.body, {
       status: upstream.status,
