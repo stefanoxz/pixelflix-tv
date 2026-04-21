@@ -97,7 +97,6 @@ function formatRelative(iso: string): string {
 const Admin = () => {
   const navigate = useNavigate();
   const token = localStorage.getItem(TOKEN_KEY);
-  if (!token) return <Navigate to="/admin/login" replace />;
 
   const [tab, setTab] = useState("dashboard");
   const [stats, setStats] = useState<Stats | null>(null);
