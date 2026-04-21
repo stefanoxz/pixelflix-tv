@@ -114,6 +114,7 @@ async function attemptLogin(serverBase: string, username: string, password: stri
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const ua = req.headers.get("user-agent") ?? undefined;
