@@ -1,74 +1,79 @@
 
 
-## Criar conta admin direto no banco
+## O que falta antes de subir pra VPS
 
-Sem precisar passar por signup na UI nem confirmação de e-mail. Tudo numa migração só.
+Já está OK: admin protegido por role no backend, RLS em `allowed_servers` / `login_events` / `user_roles`, conta admin criada. Mas tem **3 bloqueadores reais** e **3 melhorias fortemente recomendadas**.
 
-### O que vou fazer
+### BLOQUEADORES (resolver antes de subir)
 
-1. **Inserir usuário em `auth.users`** com:
-   - E-mail: `stefanobsilva@gmail.com`
-   - Senha: `Britania0*` (criptografada com `crypt()` + bcrypt)
-   - `email_confirmed_at = now()` (já confirmado, login imediato)
-   - Metadata padrão (`aud=authenticated`, `role=authenticated`)
+#### 1. `iptv-categories` aceita qualquer servidor (sem allowlist)
+**Risco:** atacante usa sua função como **proxy aberto** pra qualquer Xtream API no mundo. Banda sua, IP seu queimando, possível abuso pra ataques DDoS contra terceiros.
 
-2. **Inserir entrada em `auth.identities`** (necessário pra login com e-mail/senha funcionar — o Supabase exige um identity provider associado, mesmo pro provider "email").
+**Fix:** validar `server` contra `allowed_servers` na própria função, igual `iptv-login` já faz.
 
-3. **Promover a admin** inserindo em `public.user_roles`:
-   ```sql
-   insert into public.user_roles (user_id, role) values (<novo_uuid>, 'admin');
-   ```
+#### 2. `stream-proxy` é proxy 100% aberto
+**Risco crítico:** qualquer um descobre sua URL e usa pra proxiar **qualquer URL da internet** — vídeos pirata, sites bloqueados, ataques. Sua VPS vira intermediário em tudo.
 
-Tudo numa única migração com bloco `DO $$ ... $$` pra capturar o `id` gerado e usar nas três operações.
+**Fix:** validar que o host de destino bate com algum servidor da `allowed_servers`. Bloqueia IPs internos (`127.0.0.1`, `10.x`, `192.168.x`, `169.254.x`) pra evitar SSRF contra a própria infra.
 
-### Como vai ficar a SQL (resumo)
+#### 3. Rate limiting no `iptv-login`
+**Risco:** brute-force trivial nas credenciais IPTV dos usuários. Sem limite, dá pra testar milhares de senhas/min.
 
-```sql
-do $$
-declare
-  v_user_id uuid := gen_random_uuid();
-begin
-  insert into auth.users (
-    id, instance_id, aud, role, email,
-    encrypted_password, email_confirmed_at,
-    raw_app_meta_data, raw_user_meta_data,
-    created_at, updated_at
-  ) values (
-    v_user_id, '00000000-0000-0000-0000-000000000000',
-    'authenticated', 'authenticated',
-    'stefanobsilva@gmail.com',
-    crypt('Britania0*', gen_salt('bf')),
-    now(),
-    '{"provider":"email","providers":["email"]}'::jsonb,
-    '{}'::jsonb,
-    now(), now()
-  );
+**Fix:** tabela `login_rate_limit (ip, window_start, attempts)` + bloqueio simples (ex: 10 tentativas/min por IP, 20/min por usuário). Reaproveita o cliente admin já existente.
 
-  insert into auth.identities (
-    id, user_id, provider_id, provider, identity_data,
-    created_at, updated_at, last_sign_in_at
-  ) values (
-    gen_random_uuid(), v_user_id, v_user_id::text, 'email',
-    jsonb_build_object('sub', v_user_id::text, 'email', 'stefanobsilva@gmail.com', 'email_verified', true),
-    now(), now(), now()
-  );
+### RECOMENDADAS (não bloqueia mas é bom resolver)
 
-  insert into public.user_roles (user_id, role)
-  values (v_user_id, 'admin');
-end $$;
+#### 4. Credenciais IPTV em localStorage (XSS surface)
+Hoje `IptvContext` salva `username/password/server` em texto puro no `localStorage`. Se um dia entrar XSS, vaza tudo. Refactor médio (cookie HttpOnly + tabela de sessões + endpoint de troca). **Sugestão:** marcar como tarefa pra primeira semana, não bloquear deploy.
+
+#### 5. CORS aberto (`*`) em todas as edge functions
+Em produção, restringir o `Access-Control-Allow-Origin` ao domínio da VPS. Hoje qualquer site pode chamar suas funções a partir do navegador. Não é catastrófico (rate limit + allowlist mitigam), mas é higiene básica.
+
+**Fix:** `ALLOWED_ORIGIN` como secret + helper `corsFor(req)` nas 4 funções.
+
+#### 6. Leaked Password Protection (HIBP)
+Hoje senha mínima do admin é 6 caracteres e aceita "123456". Ativar HIBP check pelo Cloud bloqueia senhas vazadas.
+
+### Detalhes técnicos das mudanças
+
+```text
+supabase/functions/iptv-categories/index.ts
+  + carregar allowed_servers (service role)
+  + validar normalizeServer(server) ∈ allowedList
+  + 403 NO_ACCESS_MSG se não autorizado
+
+supabase/functions/stream-proxy/index.ts
+  + carregar allowed_servers (service role, com cache 60s em memória)
+  + extrair host de decoded.url, comparar com hostKey de cada allowed
+  + bloquear ranges privados (127/8, 10/8, 172.16/12, 192.168/16, 169.254/16, ::1, fc00::/7)
+  + 403 se host não autorizado
+
+supabase/functions/iptv-login/index.ts
+  + checar rate limit antes de tudo
+  + tabela nova: login_rate_limit
+      ip text, window_start timestamptz, attempts int
+      RLS: nenhuma policy (só service role acessa)
+
+supabase/config.toml
+  (sem mudança — já estão com verify_jwt = false e é necessário)
 ```
 
-### Depois disso
+### O que NÃO vou mexer agora
 
-- Você acessa `/admin/login`, aba **Entrar**.
-- E-mail: `stefanobsilva@gmail.com` / Senha: `Britania0*`.
-- Cai direto no painel `/admin`.
+- Migrar login do IPTV pra Supabase Auth (refactor enorme, fora do escopo).
+- UI pra gerenciar admins (continua via SQL).
+- Trocar localStorage por cookie HttpOnly (item 4 — fica pra depois do deploy).
 
-### Recomendação de segurança
+### Plano de ação que recomendo
 
-Assim que entrar, **troque a senha** (posso adicionar um botão "Trocar senha" no `/admin` depois, ou você usa `supabase.auth.updateUser({ password })` pelo console). Senha trafegada em chat não é ideal pra manter em produção.
+**Antes de subir** (1 sessão de trabalho):
+- Itens 1, 2, 3 (bloqueadores) + item 5 (CORS).
 
-### Observação
+**Primeiro dia no ar:**
+- Item 6 (HIBP — botão no Cloud, 30 segundos).
 
-Estou tecnicamente escrevendo na schema `auth` (que normalmente é off-limits), mas só nas tabelas `auth.users` e `auth.identities` — operação documentada e segura, sem alterar estrutura, triggers ou funções da Supabase. Nada que cause downtime.
+**Primeira semana:**
+- Item 4 (cookie HttpOnly).
+
+Confirma se quer que eu faça **tudo (1+2+3+5)** numa tacada só, ou só os 3 bloqueadores (1+2+3) e CORS depois?
 
