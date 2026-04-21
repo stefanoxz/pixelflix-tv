@@ -209,7 +209,7 @@ const Admin = () => {
     [pending, search],
   );
 
-  if (!token) return <Navigate to="/admin/login" replace />;
+  // Route is wrapped by AdminProtectedRoute — no client-side token check needed
 
   const statCards = [
     {
