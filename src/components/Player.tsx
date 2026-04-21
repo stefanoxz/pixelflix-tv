@@ -186,7 +186,7 @@ export function Player({
         });
 
         try {
-          hls.loadSource(src);
+          hls.loadSource(safeSrc!);
           hls.attachMedia(video);
         } catch {
           setLoading(false);
@@ -201,7 +201,7 @@ export function Player({
 
       // Safari / iOS: HLS nativo
       if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        video.src = src;
+        video.src = safeSrc!;
         if (autoPlay) video.play().catch(() => {});
         return;
       }
@@ -216,13 +216,13 @@ export function Player({
     }
 
     // Player nativo (mp4/webm/desconhecido)
-    video.src = src;
+    video.src = safeSrc!;
     if (autoPlay) {
       video.play().catch(() => {
         // Erro de play será capturado pelo listener 'error' abaixo
       });
     }
-  }, [src, strategy, containerExt, autoPlay, copyTarget]);
+  }, [src, safeSrc, strategy, containerExt, autoPlay, copyTarget]);
 
   // Listeners do <video> pra loading + erro nativo
   useEffect(() => {
