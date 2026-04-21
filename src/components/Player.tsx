@@ -64,7 +64,10 @@ export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
       player.attachMediaElement(video);
       player.load();
       if (autoPlay) {
-        player.play().catch(() => {});
+        const p = player.play() as void | Promise<void>;
+        if (p && typeof (p as Promise<void>).catch === "function") {
+          (p as Promise<void>).catch(() => {});
+        }
       }
       player.on(mpegts.Events.ERROR, (errType, errDetail) => {
         console.error("mpegts.js error", errType, errDetail);
