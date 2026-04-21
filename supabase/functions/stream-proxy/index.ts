@@ -52,15 +52,11 @@ Deno.serve(async (req) => {
       }
 
       const baseHref = finalUrl.toString().substring(0, finalUrl.toString().lastIndexOf("/") + 1);
-      // Build a public-facing proxy URL using forwarded headers (Supabase puts
-      // the function behind a gateway, so url.host/path don't reflect the public URL).
-      const fwdHost = req.headers.get("x-forwarded-host") || req.headers.get("host") || url.host;
-      const fwdProto = req.headers.get("x-forwarded-proto") || "https";
-      // Path inside the function is "/stream-proxy"; ensure /functions/v1 prefix for public callers.
-      const publicPath = url.pathname.startsWith("/functions/")
-        ? url.pathname
-        : `/functions/v1${url.pathname}`;
-      const proxyBase = `${fwdProto}://${fwdHost}${publicPath}?url=`;
+      // Build a public-facing proxy URL. The function is behind a gateway, so
+      // request URL/headers may point to internal hosts. Use SUPABASE_URL (always set
+      // for edge functions) to derive the correct public host.
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") || `${url.protocol}//${url.host}`;
+      const proxyBase = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/stream-proxy?url=`;
 
       const rewritten = text
         .split("\n")
