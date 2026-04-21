@@ -290,8 +290,8 @@ const Admin = () => {
             variant="ghost"
             size="sm"
             className="w-full justify-start gap-2 text-destructive hover:text-destructive"
-            onClick={() => {
-              localStorage.removeItem(TOKEN_KEY);
+            onClick={async () => {
+              await supabase.auth.signOut();
               navigate("/admin/login");
             }}
           >
