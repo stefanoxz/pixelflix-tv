@@ -52,7 +52,11 @@ Deno.serve(async (req) => {
       }
 
       const baseHref = finalUrl.toString().substring(0, finalUrl.toString().lastIndexOf("/") + 1);
-      const proxyBase = `${url.origin}${url.pathname}?url=`;
+      // Build a public-facing proxy URL. The function is behind a gateway, so
+      // request URL/headers may point to internal hosts. Use SUPABASE_URL (always set
+      // for edge functions) to derive the correct public host.
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") || `${url.protocol}//${url.host}`;
+      const proxyBase = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/stream-proxy?url=`;
 
       const rewritten = text
         .split("\n")

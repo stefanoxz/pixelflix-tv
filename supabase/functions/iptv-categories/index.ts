@@ -24,7 +24,12 @@ Deno.serve(async (req) => {
     }
     const url = `${baseUrl}/player_api.php?${params.toString()}`;
 
-    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
+        Accept: "application/json, */*",
+      },
+    });
     if (!res.ok) {
       return new Response(JSON.stringify({ error: `IPTV server error: ${res.status}` }), {
         status: 502,
