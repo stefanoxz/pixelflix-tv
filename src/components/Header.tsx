@@ -1,5 +1,6 @@
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Tv, Film, Clapperboard, User, LogOut, Sparkles, Menu, X } from "lucide-react";
+import logoSuperTech from "@/assets/logo-supertech.png";
 import { useState } from "react";
 import { useIptv } from "@/context/IptvContext";
 import { Button } from "@/components/ui/button";
@@ -34,11 +35,13 @@ export function Header() {
       <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-4 md:px-8">
         <div className="flex items-center gap-8">
           <Link to="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-md bg-gradient-primary flex items-center justify-center shadow-glow">
-              <Tv className="h-4 w-4 text-primary-foreground" />
-            </div>
+            <img
+              src={logoSuperTech}
+              alt="SuperTech"
+              className="h-9 w-9 object-contain drop-shadow-[0_0_12px_hsl(var(--primary)/0.4)]"
+            />
             <span className="text-xl font-bold tracking-tight">
-              Flix<span className="text-gradient">Play</span>
+              Super<span className="text-gradient">Tech</span>
             </span>
           </Link>
 

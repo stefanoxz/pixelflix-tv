@@ -56,7 +56,7 @@ const Highlights = () => {
               ✨ Em destaque
             </span>
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-tight">
-              {featured?.name || "Bem-vindo ao FlixPlay"}
+              {featured?.name || "Bem-vindo ao SuperTech"}
             </h1>
             <p className="text-base md:text-lg text-muted-foreground max-w-xl">
               Descubra milhares de filmes, séries e canais ao vivo em alta qualidade.

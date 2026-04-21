@@ -1,6 +1,6 @@
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Tv, Loader2, KeyRound, UserIcon } from "lucide-react";
+import { Loader2, KeyRound, UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { useIptv } from "@/context/IptvContext";
 import { iptvLogin } from "@/services/iptv";
 import { toast } from "sonner";
+import logoSuperTech from "@/assets/logo-supertech.png";
 
 const Login = () => {
   const navigate = useNavigate();
