@@ -34,7 +34,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-const TOKEN_KEY = "admin_token";
+// Auth handled by AdminProtectedRoute + Supabase session
 
 interface Stats {
   totalEvents: number;
