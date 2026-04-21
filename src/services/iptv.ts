@@ -169,3 +169,34 @@ export function buildSeriesEpisodeUrl(
 export function proxyUrl(url: string): string {
   return `${FUNCTIONS_BASE}/stream-proxy?url=${encodeURIComponent(url)}`;
 }
+
+export function normalizeExt(ext?: string): string {
+  return (ext || "").toLowerCase().replace(/^\./, "");
+}
+
+export function isBrowserPlayable(ext?: string): boolean {
+  const e = normalizeExt(ext);
+  return ["mp4", "m3u8", "webm"].includes(e);
+}
+
+export function isExternalOnly(ext?: string): boolean {
+  const e = normalizeExt(ext);
+  return ["mkv", "avi", "mov"].includes(e);
+}
+
+export type FormatBadgeInfo = {
+  label: string;
+  tone: "green" | "blue" | "yellow" | "gray";
+  tooltip: string;
+};
+
+export function getFormatBadge(ext?: string): FormatBadgeInfo {
+  const e = normalizeExt(ext);
+  if (e === "mp4")
+    return { label: "MP4", tone: "green", tooltip: "Compatível com navegador" };
+  if (e === "m3u8")
+    return { label: "STREAM", tone: "blue", tooltip: "Streaming HLS" };
+  if (e === "mkv" || e === "avi" || e === "mov")
+    return { label: "EXTERNO", tone: "yellow", tooltip: "Abrir em player externo" };
+  return { label: e.toUpperCase() || "?", tone: "gray", tooltip: "Formato desconhecido" };
+}

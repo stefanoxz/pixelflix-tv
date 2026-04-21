@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Hls from "hls.js";
-import { Tv, AlertTriangle, Copy, Check, RefreshCw } from "lucide-react";
+import { Tv, AlertTriangle, Copy, Check, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { isExternalOnly, normalizeExt } from "@/services/iptv";
 
 interface PlayerProps {
   src?: string | null;
+  rawUrl?: string;
+  containerExt?: string;
   poster?: string;
   title?: string;
   autoPlay?: boolean;
+  onClose?: () => void;
 }
 
 type PlayerMode = "idle" | "hls" | "native" | "proxy";
@@ -16,6 +20,9 @@ type PlayerMode = "idle" | "hls" | "native" | "proxy";
 type PlayerError = {
   message: string;
   url: string;
+  title?: string;
+  description?: string;
+  external?: boolean;
 };
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
@@ -39,13 +46,26 @@ function detectType(url = "") {
 
 const buildProxyUrl = (u: string) => `${PROXY_BASE}${encodeURIComponent(u)}`;
 
-export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
+export function Player({
+  src,
+  rawUrl,
+  containerExt,
+  poster,
+  title,
+  autoPlay = true,
+  onClose,
+}: PlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [mode, setMode] = useState<PlayerMode>("idle");
   const [finalUrl, setFinalUrl] = useState<string>("");
   const [error, setError] = useState<PlayerError | null>(null);
   const [copied, setCopied] = useState(false);
+  const [hidden, setHidden] = useState(false);
+
+  // Proactive detection: skip loading entirely for MKV/AVI/MOV
+  const externalOnly = useMemo(() => isExternalOnly(containerExt), [containerExt]);
+  const copyTarget = rawUrl || src || "";
 
   // Step 1: decide mode + finalUrl based on source URL
   useEffect(() => {
@@ -57,15 +77,32 @@ export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
 
     setError(null);
     setCopied(false);
-
-    const type = detectType(src);
-    console.log("🎬 URL:", src);
-    console.log("📦 Tipo detectado:", type);
+    setHidden(false);
 
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
+
+    // Proactive: incompatible container — show overlay immediately, do not attach
+    if (externalOnly) {
+      const ext = normalizeExt(containerExt).toUpperCase();
+      console.log(`⛔ Container ${ext} não suportado — mostrando opção externa direto`);
+      setMode("idle");
+      setFinalUrl("");
+      setError({
+        title: "Formato não suportado no navegador",
+        description: `Este conteúdo usa um container (${ext}) que não é compatível com reprodução web.`,
+        message: "",
+        url: copyTarget,
+        external: true,
+      });
+      return;
+    }
+
+    const type = detectType(src);
+    console.log("🎬 URL:", src);
+    console.log("📦 Tipo detectado:", type);
 
     if (type === "hls") {
       console.log("✅ Usando HLS (hls.js) via proxy");
@@ -80,7 +117,7 @@ export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
       setMode("proxy");
       setFinalUrl(buildProxyUrl(src));
     }
-  }, [src]);
+  }, [src, externalOnly, containerExt, copyTarget]);
 
   // Step 2: attach the source to the <video> when finalUrl/mode change
   useEffect(() => {
@@ -126,7 +163,7 @@ export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
       const isUnsupported = mode === "proxy";
       showUnsupported(
         isUnsupported
-          ? "Este formato (MKV/AVI/MOV) não é suportado pelo navegador. Abra em um player externo."
+          ? "Este formato não é suportado pelo navegador. Abra em um player externo."
           : "Não foi possível reproduzir este conteúdo.",
       );
     };
@@ -153,11 +190,12 @@ export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
   }, []);
 
   const handleCopy = async () => {
-    if (!error) return;
+    const target = error?.url || copyTarget;
+    if (!target) return;
     try {
-      await navigator.clipboard.writeText(error.url);
+      await navigator.clipboard.writeText(target);
       setCopied(true);
-      toast.success("Link copiado! Cole no VLC ou outro player.");
+      toast.success("Link copiado — abra no VLC ou MX Player");
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("Não foi possível copiar o link");
@@ -165,14 +203,33 @@ export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
   };
 
   const handleRetry = () => {
-    if (!src) return;
+    if (!src || externalOnly) return;
     console.log("🔁 Tentando novamente via proxy");
     setError(null);
     setMode("proxy");
     setFinalUrl(buildProxyUrl(src) + `&_t=${Date.now()}`);
   };
 
-  if (!src) {
+  const handleClose = () => {
+    const v = videoRef.current;
+    if (v) {
+      try {
+        v.pause();
+        v.removeAttribute("src");
+        v.load();
+      } catch {
+        /* noop */
+      }
+    }
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+    if (onClose) onClose();
+    else setHidden(true);
+  };
+
+  if (!src || hidden) {
     return (
       <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-gradient-card flex items-center justify-center shadow-card">
         <div className="absolute inset-0 bg-gradient-glow opacity-50" />
@@ -180,9 +237,13 @@ export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
           <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
             <Tv className="h-8 w-8 text-primary" />
           </div>
-          <h3 className="text-xl font-semibold text-foreground">Selecione um canal</h3>
+          <h3 className="text-xl font-semibold text-foreground">
+            {hidden ? "Reprodução encerrada" : "Selecione um canal"}
+          </h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            Escolha um canal, filme ou série para começar a assistir
+            {hidden
+              ? "Escolha outro conteúdo para continuar"
+              : "Escolha um canal, filme ou série para começar a assistir"}
           </p>
         </div>
       </div>
@@ -191,13 +252,15 @@ export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
 
   return (
     <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black shadow-card animate-scale-in">
-      <video
-        ref={videoRef}
-        className="h-full w-full"
-        controls
-        playsInline
-        poster={poster}
-      />
+      {!externalOnly && (
+        <video
+          ref={videoRef}
+          className="h-full w-full"
+          controls
+          playsInline
+          poster={poster}
+        />
+      )}
       {title && !error && (
         <div className="pointer-events-none absolute left-0 top-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-4">
           <h3 className="text-sm font-semibold text-white drop-shadow">{title}</h3>
@@ -210,21 +273,40 @@ export function Player({ src, poster, title, autoPlay = true }: PlayerProps) {
               <AlertTriangle className="h-7 w-7 text-destructive" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-foreground">Não foi possível reproduzir</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{error.message}</p>
+              <h3 className="text-lg font-semibold text-foreground">
+                {error.title || "Não foi possível reproduzir"}
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {error.description || error.message}
+              </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 Copie o link e abra no VLC, MX Player ou outro player externo.
               </p>
             </div>
-            <div className="flex items-center justify-center gap-2">
-              <Button onClick={handleRetry} variant="outline" size="sm" className="gap-2">
-                <RefreshCw className="h-4 w-4" />
-                Tentar novamente
-              </Button>
-              <Button onClick={handleCopy} variant="secondary" size="sm" className="gap-2">
-                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                {copied ? "Copiado" : "Copiar link"}
-              </Button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {error.external ? (
+                <>
+                  <Button onClick={handleCopy} variant="default" size="sm" className="gap-2">
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {copied ? "Copiado" : "Copiar link para VLC"}
+                  </Button>
+                  <Button onClick={handleClose} variant="outline" size="sm" className="gap-2">
+                    <X className="h-4 w-4" />
+                    Fechar
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button onClick={handleRetry} variant="outline" size="sm" className="gap-2">
+                    <RefreshCw className="h-4 w-4" />
+                    Tentar novamente
+                  </Button>
+                  <Button onClick={handleCopy} variant="secondary" size="sm" className="gap-2">
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {copied ? "Copiado" : "Copiar link"}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
