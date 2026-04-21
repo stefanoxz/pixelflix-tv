@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { IptvProvider } from "@/context/IptvContext";
 import { Header } from "@/components/Header";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import Index from "./pages/Index.tsx";
 import Login from "./pages/Login";
 import Live from "./pages/Live";
