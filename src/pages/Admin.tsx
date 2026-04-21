@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -24,13 +24,14 @@ import {
   LogOut,
   Shield,
   Server,
-  Ban,
   CheckCircle2,
   XCircle,
   RefreshCw,
   Search,
-  Lock,
-  Unlock,
+  Plus,
+  Trash2,
+  ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 
 const TOKEN_KEY = "admin_token";
@@ -43,7 +44,7 @@ interface Stats {
   onlineNow: number;
   totalUsers: number;
   totalServers: number;
-  blockedServers: number;
+  allowedServers: number;
 }
 
 interface AdminUser {
@@ -54,15 +55,25 @@ interface AdminUser {
   total: number;
 }
 
-interface AdminServer {
+interface AllowedServer {
+  id: string;
   server_url: string;
-  last_seen: string;
+  label: string | null;
+  notes: string | null;
+  created_at: string;
+  last_seen: string | null;
   total_logins: number;
   success_count: number;
   fail_count: number;
   unique_users: number;
-  blocked: boolean;
-  block_reason: string | null;
+}
+
+interface PendingServer {
+  server_url: string;
+  last_seen: string;
+  total_logins: number;
+  fail_count: number;
+  unique_users: number;
 }
 
 interface AdminEvent {
@@ -101,14 +112,16 @@ const Admin = () => {
   const [tab, setTab] = useState("dashboard");
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [servers, setServers] = useState<AdminServer[]>([]);
+  const [allowed, setAllowed] = useState<AllowedServer[]>([]);
+  const [pending, setPending] = useState<PendingServer[]>([]);
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
 
-  const [blockOpen, setBlockOpen] = useState(false);
-  const [blockUrl, setBlockUrl] = useState("");
-  const [blockReason, setBlockReason] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [newUrl, setNewUrl] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [newNotes, setNewNotes] = useState("");
 
   const refresh = async () => {
     if (!token) return;
@@ -117,12 +130,13 @@ const Admin = () => {
       const [s, u, sv, e] = await Promise.all([
         callAdmin<Stats>(token, "stats"),
         callAdmin<{ users: AdminUser[] }>(token, "list_users"),
-        callAdmin<{ servers: AdminServer[] }>(token, "list_servers"),
+        callAdmin<{ allowed: AllowedServer[]; pending: PendingServer[] }>(token, "list_servers"),
         callAdmin<{ events: AdminEvent[] }>(token, "recent_events", { limit: 50 }),
       ]);
       setStats(s);
       setUsers(u.users);
-      setServers(sv.servers);
+      setAllowed(sv.allowed);
+      setPending(sv.pending);
       setEvents(e.events);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha ao carregar dados");
@@ -139,28 +153,30 @@ const Admin = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  const blockServer = async (url: string, reason?: string) => {
+  const allowServer = async (server_url: string, label?: string, notes?: string) => {
     if (!token) return;
     try {
-      await callAdmin(token, "block_server", { server_url: url, reason });
-      toast.success("Servidor bloqueado");
-      setBlockOpen(false);
-      setBlockUrl("");
-      setBlockReason("");
+      await callAdmin(token, "allow_server", { server_url, label, notes });
+      toast.success("DNS autorizada");
+      setAddOpen(false);
+      setNewUrl("");
+      setNewLabel("");
+      setNewNotes("");
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao bloquear");
+      toast.error(err instanceof Error ? err.message : "Erro ao autorizar");
     }
   };
 
-  const unblockServer = async (url: string) => {
+  const removeServer = async (server_url: string) => {
     if (!token) return;
+    if (!confirm(`Remover acesso ao servidor "${server_url}"?\nUsuários não conseguirão mais logar nele.`)) return;
     try {
-      await callAdmin(token, "unblock_server", { server_url: url });
-      toast.success("Servidor desbloqueado");
+      await callAdmin(token, "remove_server", { server_url });
+      toast.success("DNS removida");
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao desbloquear");
+      toast.error(err instanceof Error ? err.message : "Erro ao remover");
     }
   };
 
@@ -172,22 +188,33 @@ const Admin = () => {
     [users, search],
   );
 
-  const filteredServers = useMemo(
+  const filteredAllowed = useMemo(
     () =>
-      servers.filter((s) =>
+      allowed.filter((s) =>
+        search
+          ? s.server_url.toLowerCase().includes(search.toLowerCase()) ||
+            (s.label ?? "").toLowerCase().includes(search.toLowerCase())
+          : true,
+      ),
+    [allowed, search],
+  );
+
+  const filteredPending = useMemo(
+    () =>
+      pending.filter((s) =>
         search ? s.server_url.toLowerCase().includes(search.toLowerCase()) : true,
       ),
-    [servers, search],
+    [pending, search],
   );
 
   if (!token) return <Navigate to="/admin/login" replace />;
 
   const statCards = [
     {
-      icon: Users,
-      label: "Usuários únicos",
-      value: stats?.totalUsers ?? "—",
-      sub: `${stats?.events24h ?? 0} eventos 24h`,
+      icon: ShieldCheck,
+      label: "DNS autorizadas",
+      value: stats?.allowedServers ?? "—",
+      sub: "servidores liberados",
       accent: "primary",
     },
     {
@@ -198,10 +225,10 @@ const Admin = () => {
       accent: "success",
     },
     {
-      icon: Server,
-      label: "Servidores ativos",
-      value: stats?.totalServers ?? "—",
-      sub: `${stats?.blockedServers ?? 0} bloqueados`,
+      icon: Users,
+      label: "Usuários únicos",
+      value: stats?.totalUsers ?? "—",
+      sub: `${stats?.events24h ?? 0} eventos 24h`,
       accent: "primary",
     },
     {
@@ -228,42 +255,25 @@ const Admin = () => {
           <span className="font-bold">Admin Panel</span>
         </div>
         <nav className="space-y-1">
-          <button
-            onClick={() => setTab("dashboard")}
-            className={
-              "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors " +
-              (tab === "dashboard"
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground")
-            }
-          >
-            <TrendingUp className="h-4 w-4" />
-            Dashboard
-          </button>
-          <button
-            onClick={() => setTab("users")}
-            className={
-              "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors " +
-              (tab === "users"
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground")
-            }
-          >
-            <Users className="h-4 w-4" />
-            Usuários
-          </button>
-          <button
-            onClick={() => setTab("servers")}
-            className={
-              "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors " +
-              (tab === "servers"
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground")
-            }
-          >
-            <Server className="h-4 w-4" />
-            Servidores
-          </button>
+          {[
+            { id: "dashboard", label: "Dashboard", icon: TrendingUp },
+            { id: "users", label: "Usuários", icon: Users },
+            { id: "servers", label: "DNS / Servidores", icon: Server },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setTab(item.id)}
+              className={
+                "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors " +
+                (tab === item.id
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground")
+              }
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </button>
+          ))}
         </nav>
         <div className="mt-8 pt-6 border-t border-border/50 space-y-2">
           <Button
@@ -290,18 +300,18 @@ const Admin = () => {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 p-4 md:p-8 space-y-8">
+      <main className="flex-1 p-4 md:p-8 space-y-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-3xl font-bold capitalize">
-              {tab === "dashboard" ? "Dashboard" : tab === "users" ? "Usuários" : "Servidores (DNS)"}
+            <h1 className="text-3xl font-bold">
+              {tab === "dashboard" ? "Dashboard" : tab === "users" ? "Usuários" : "DNS / Servidores"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {tab === "dashboard"
                 ? "Visão geral em tempo real"
                 : tab === "users"
                   ? "Quem está acessando a plataforma"
-                  : "DNS cadastradas pelos usuários — bloqueie acessos indesejados"}
+                  : "Cadastre as DNS autorizadas. Sem cadastro prévio, o cliente não consegue logar."}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
@@ -310,7 +320,7 @@ const Admin = () => {
           </Button>
         </div>
 
-        <Tabs value={tab} onValueChange={setTab} className="space-y-6">
+        <Tabs value={tab} onValueChange={setTab}>
           <TabsContent value="dashboard" className="space-y-6 mt-0">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {statCards.map((s) => {
@@ -329,11 +339,28 @@ const Admin = () => {
               })}
             </div>
 
+            {pending.length > 0 && (
+              <Card className="p-5 bg-gradient-card border-border/50 border-l-4 border-l-warning">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold">Tentativas de DNS não autorizadas</h3>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      {pending.length} servidor(es) tentou logar e foi bloqueado por não estar cadastrado.
+                    </p>
+                    <Button size="sm" variant="outline" onClick={() => setTab("servers")}>
+                      Ver pendentes
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
+
             <Card className="p-6 bg-gradient-card border-border/50">
               <h2 className="text-lg font-semibold mb-4">Eventos recentes</h2>
               {events.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-8 text-center">
-                  Nenhum evento registrado ainda. Logins futuros aparecerão aqui.
+                  Nenhum evento ainda. Logins futuros aparecerão aqui.
                 </p>
               ) : (
                 <div className="divide-y divide-border/50">
@@ -343,7 +370,9 @@ const Admin = () => {
                         <div
                           className={
                             "h-9 w-9 rounded-full flex items-center justify-center shrink-0 " +
-                            (e.success ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive")
+                            (e.success
+                              ? "bg-success/15 text-success"
+                              : "bg-destructive/15 text-destructive")
                           }
                         >
                           {e.success ? (
@@ -404,7 +433,7 @@ const Admin = () => {
                         </div>
                         <span className="truncate font-medium">{u.username}</span>
                       </div>
-                      <div className="col-span-5 text-muted-foreground truncate text-xs">
+                      <div className="col-span-5 text-muted-foreground truncate text-xs font-mono">
                         {u.last_server}
                       </div>
                       <div className="col-span-2 text-muted-foreground text-xs">
@@ -418,7 +447,7 @@ const Admin = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="servers" className="space-y-4 mt-0">
+          <TabsContent value="servers" className="space-y-6 mt-0">
             <div className="flex gap-3 flex-wrap">
               <div className="relative flex-1 min-w-[240px] max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -429,117 +458,174 @@ const Admin = () => {
                   className="pl-9"
                 />
               </div>
-              <Button onClick={() => setBlockOpen(true)} variant="default" size="sm">
-                <Ban className="h-4 w-4 mr-2" />
-                Bloquear DNS
+              <Button onClick={() => setAddOpen(true)} variant="default" size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Cadastrar DNS
               </Button>
             </div>
 
-            <Card className="bg-gradient-card border-border/50 overflow-hidden">
-              {filteredServers.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-12 text-center">
-                  Nenhum servidor registrado ainda.
-                </p>
-              ) : (
-                <div className="divide-y divide-border/50">
-                  {filteredServers.map((s) => (
-                    <div
-                      key={s.server_url}
-                      className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Server className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <span className="font-mono text-sm truncate">{s.server_url}</span>
-                          {s.blocked && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-destructive/15 text-destructive flex items-center gap-1">
-                              <Lock className="h-3 w-3" />
-                              bloqueado
+            {/* Allowed servers */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-success" />
+                <h2 className="font-semibold">DNS autorizadas ({filteredAllowed.length})</h2>
+              </div>
+              <Card className="bg-gradient-card border-border/50 overflow-hidden">
+                {filteredAllowed.length === 0 ? (
+                  <div className="py-12 text-center px-4">
+                    <Server className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+                    <p className="text-sm text-muted-foreground">
+                      Nenhuma DNS cadastrada ainda. Cadastre uma para liberar acessos.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border/50">
+                    {filteredAllowed.map((s) => (
+                      <div
+                        key={s.id}
+                        className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <ShieldCheck className="h-4 w-4 text-success shrink-0" />
+                            {s.label && (
+                              <span className="text-sm font-semibold">{s.label}</span>
+                            )}
+                            <span className="font-mono text-sm text-muted-foreground truncate">
+                              {s.server_url}
                             </span>
-                          )}
+                          </div>
+                          <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
+                            <span>{s.unique_users} usuários</span>
+                            <span className="text-success">{s.success_count} ok</span>
+                            <span className="text-destructive">{s.fail_count} falhas</span>
+                            {s.last_seen ? (
+                              <span>último uso há {formatRelative(s.last_seen)}</span>
+                            ) : (
+                              <span className="italic">nunca usado</span>
+                            )}
+                            {s.notes && <span>• {s.notes}</span>}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
-                          <span>{s.unique_users} usuários</span>
-                          <span className="text-success">{s.success_count} ok</span>
-                          <span className="text-destructive">{s.fail_count} falhas</span>
-                          {s.last_seen && <span>visto há {formatRelative(s.last_seen)}</span>}
-                          {s.block_reason && (
-                            <span className="text-destructive">motivo: {s.block_reason}</span>
-                          )}
-                        </div>
-                      </div>
-                      {s.blocked ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => unblockServer(s.server_url)}
-                        >
-                          <Unlock className="h-4 w-4 mr-2" />
-                          Desbloquear
-                        </Button>
-                      ) : (
                         <Button
                           variant="outline"
                           size="sm"
                           className="text-destructive hover:text-destructive"
+                          onClick={() => removeServer(s.server_url)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Remover
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            {/* Pending / rejected */}
+            {filteredPending.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-warning" />
+                  <h2 className="font-semibold">
+                    Tentativas não autorizadas ({filteredPending.length})
+                  </h2>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Servidores que clientes tentaram usar mas estão bloqueados. Autorize se forem legítimos.
+                </p>
+                <Card className="bg-gradient-card border-border/50 overflow-hidden">
+                  <div className="divide-y divide-border/50">
+                    {filteredPending.map((s) => (
+                      <div
+                        key={s.server_url}
+                        className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <XCircle className="h-4 w-4 text-destructive shrink-0" />
+                            <span className="font-mono text-sm truncate">{s.server_url}</span>
+                          </div>
+                          <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
+                            <span>{s.unique_users} usuários tentaram</span>
+                            <span>{s.total_logins} tentativas</span>
+                            <span>última há {formatRelative(s.last_seen)}</span>
+                          </div>
+                        </div>
+                        <Button
+                          variant="default"
+                          size="sm"
                           onClick={() => {
-                            setBlockUrl(s.server_url);
-                            setBlockOpen(true);
+                            setNewUrl(s.server_url);
+                            setAddOpen(true);
                           }}
                         >
-                          <Ban className="h-4 w-4 mr-2" />
-                          Bloquear
+                          <Plus className="h-4 w-4 mr-2" />
+                          Autorizar
                         </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </main>
 
-      <Dialog open={blockOpen} onOpenChange={setBlockOpen}>
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Bloquear DNS</DialogTitle>
+            <DialogTitle>Cadastrar DNS autorizada</DialogTitle>
             <DialogDescription>
-              Usuários que tentarem logar nesse servidor terão o acesso negado.
+              Apenas usuários cuja DNS esteja cadastrada aqui poderão logar na plataforma.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label htmlFor="block-url">URL do servidor</Label>
+              <Label htmlFor="add-url">URL do servidor *</Label>
               <Input
-                id="block-url"
+                id="add-url"
                 placeholder="http://exemplo.com:8080"
-                value={blockUrl}
-                onChange={(e) => setBlockUrl(e.target.value)}
+                value={newUrl}
+                onChange={(e) => setNewUrl(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Pode incluir ou omitir o "http://". Será normalizado.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="add-label">Nome / Revenda (opcional)</Label>
+              <Input
+                id="add-label"
+                placeholder="Ex: Revenda João"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="block-reason">Motivo (opcional)</Label>
+              <Label htmlFor="add-notes">Observações (opcional)</Label>
               <Textarea
-                id="block-reason"
-                placeholder="Ex: pirataria, abuso, etc"
-                value={blockReason}
-                onChange={(e) => setBlockReason(e.target.value)}
+                id="add-notes"
+                placeholder="Ex: contato, validade, plano..."
+                value={newNotes}
+                onChange={(e) => setNewNotes(e.target.value)}
                 rows={3}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setBlockOpen(false)}>
+            <Button variant="ghost" onClick={() => setAddOpen(false)}>
               Cancelar
             </Button>
             <Button
               variant="default"
-              onClick={() => blockUrl && blockServer(blockUrl, blockReason || undefined)}
-              disabled={!blockUrl}
+              onClick={() => newUrl && allowServer(newUrl, newLabel || undefined, newNotes || undefined)}
+              disabled={!newUrl}
             >
-              <Ban className="h-4 w-4 mr-2" />
-              Bloquear
+              <Plus className="h-4 w-4 mr-2" />
+              Cadastrar
             </Button>
           </DialogFooter>
         </DialogContent>

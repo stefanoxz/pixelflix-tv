@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ADMIN_PASSWORD = Deno.env.get("ADMIN_PASSWORD") ?? "admin123";
+// Token simples para o painel admin (mesmo do AdminLogin.tsx)
+const ADMIN_TOKEN = Deno.env.get("ADMIN_PASSWORD") ?? "admin-panel-2024";
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
 function unauthorized() {
@@ -44,13 +45,13 @@ Deno.serve(async (req) => {
       payload?: any;
     };
 
-    if (!token || token !== ADMIN_PASSWORD) return unauthorized();
+    if (!token || token !== ADMIN_TOKEN) return unauthorized();
 
     if (action === "stats") {
       const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const since1h = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
-      const [eventsTotal, events24h, success24h, fail24h, online1h, distinctUsers, distinctServers, blocked] =
+      const [eventsTotal, events24h, success24h, fail24h, online1h, distinctUsers, distinctServers, allowed] =
         await Promise.all([
           admin.from("login_events").select("id", { count: "exact", head: true }),
           admin.from("login_events").select("id", { count: "exact", head: true }).gte("created_at", since24h),
@@ -71,7 +72,7 @@ Deno.serve(async (req) => {
             .eq("success", true),
           admin.from("login_events").select("username").eq("success", true),
           admin.from("login_events").select("server_url").eq("success", true),
-          admin.from("blocked_servers").select("id", { count: "exact", head: true }),
+          admin.from("allowed_servers").select("id", { count: "exact", head: true }),
         ]);
 
       const onlineSet = new Set((online1h.data ?? []).map((r: any) => r.username));
@@ -86,12 +87,11 @@ Deno.serve(async (req) => {
         onlineNow: onlineSet.size,
         totalUsers: usersSet.size,
         totalServers: serversSet.size,
-        blockedServers: blocked.count ?? 0,
+        allowedServers: allowed.count ?? 0,
       });
     }
 
     if (action === "list_users") {
-      // Last successful login per username
       const { data, error } = await admin
         .from("login_events")
         .select("username, server_url, created_at, success")
@@ -117,62 +117,66 @@ Deno.serve(async (req) => {
     }
 
     if (action === "list_servers") {
-      const { data: events, error: evErr } = await admin
-        .from("login_events")
-        .select("server_url, success, created_at, username")
-        .order("created_at", { ascending: false })
-        .limit(2000);
-      if (evErr) return bad(evErr.message, 500);
+      const [{ data: events }, { data: allowed }] = await Promise.all([
+        admin
+          .from("login_events")
+          .select("server_url, success, created_at, username")
+          .order("created_at", { ascending: false })
+          .limit(2000),
+        admin.from("allowed_servers").select("id, server_url, label, notes, created_at"),
+      ]);
 
-      const { data: blocks, error: blErr } = await admin
-        .from("blocked_servers")
-        .select("server_url, reason, created_at");
-      if (blErr) return bad(blErr.message, 500);
-      const blockedMap = new Map((blocks ?? []).map((b: any) => [b.server_url, b]));
-
-      const map = new Map<string, any>();
+      // Aggregate stats by server from events
+      const stats = new Map<string, any>();
       for (const row of events ?? []) {
         const key = row.server_url;
-        if (!map.has(key)) {
-          map.set(key, {
-            server_url: key,
+        if (!stats.has(key)) {
+          stats.set(key, {
             last_seen: row.created_at,
             total_logins: 0,
             success_count: 0,
             fail_count: 0,
             users: new Set<string>(),
-            blocked: blockedMap.has(key),
-            block_reason: blockedMap.get(key)?.reason ?? null,
           });
         }
-        const item = map.get(key);
+        const item = stats.get(key);
         item.total_logins += 1;
         if (row.success) item.success_count += 1;
         else item.fail_count += 1;
         item.users.add(row.username);
       }
-      // include blocked-only servers (no events yet)
-      for (const b of blocks ?? []) {
-        if (!map.has(b.server_url)) {
-          map.set(b.server_url, {
-            server_url: b.server_url,
-            last_seen: b.created_at,
-            total_logins: 0,
-            success_count: 0,
-            fail_count: 0,
-            users: new Set<string>(),
-            blocked: true,
-            block_reason: b.reason,
-          });
-        }
-      }
-      const servers = Array.from(map.values()).map((s) => ({
-        ...s,
-        unique_users: s.users.size,
-        users: undefined,
-      }));
-      servers.sort((a, b) => (a.last_seen < b.last_seen ? 1 : -1));
-      return ok({ servers });
+
+      // Build allowed list with stats
+      const allowedList = (allowed ?? []).map((a: any) => {
+        const s = stats.get(a.server_url);
+        return {
+          id: a.id,
+          server_url: a.server_url,
+          label: a.label,
+          notes: a.notes,
+          created_at: a.created_at,
+          last_seen: s?.last_seen ?? null,
+          total_logins: s?.total_logins ?? 0,
+          success_count: s?.success_count ?? 0,
+          fail_count: s?.fail_count ?? 0,
+          unique_users: s?.users?.size ?? 0,
+        };
+      });
+
+      // Pending = servers seen in events that are NOT in allowlist (rejected attempts)
+      const allowedSet = new Set((allowed ?? []).map((a: any) => a.server_url));
+      const pending = Array.from(stats.entries())
+        .filter(([url]) => !allowedSet.has(url))
+        .map(([url, s]) => ({
+          server_url: url,
+          last_seen: s.last_seen,
+          total_logins: s.total_logins,
+          success_count: s.success_count,
+          fail_count: s.fail_count,
+          unique_users: s.users.size,
+        }));
+
+      return ok({ allowed: allowedList, pending });
     }
 
     if (action === "recent_events") {
@@ -186,21 +190,22 @@ Deno.serve(async (req) => {
       return ok({ events: data ?? [] });
     }
 
-    if (action === "block_server") {
+    if (action === "allow_server") {
       const url = normalizeServer(String(payload?.server_url ?? ""));
       if (!url) return bad("URL do servidor é obrigatória");
-      const reason = (payload?.reason as string | undefined)?.slice(0, 280) ?? null;
+      const label = (payload?.label as string | undefined)?.slice(0, 120) ?? null;
+      const notes = (payload?.notes as string | undefined)?.slice(0, 500) ?? null;
       const { error } = await admin
-        .from("blocked_servers")
-        .upsert({ server_url: url, reason }, { onConflict: "server_url" });
+        .from("allowed_servers")
+        .upsert({ server_url: url, label, notes }, { onConflict: "server_url" });
       if (error) return bad(error.message, 500);
       return ok({ ok: true, server_url: url });
     }
 
-    if (action === "unblock_server") {
+    if (action === "remove_server") {
       const url = normalizeServer(String(payload?.server_url ?? ""));
       if (!url) return bad("URL do servidor é obrigatória");
-      const { error } = await admin.from("blocked_servers").delete().eq("server_url", url);
+      const { error } = await admin.from("allowed_servers").delete().eq("server_url", url);
       if (error) return bad(error.message, 500);
       return ok({ ok: true });
     }
