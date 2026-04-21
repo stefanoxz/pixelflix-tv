@@ -7,13 +7,17 @@ import {
   getPlaybackStrategy,
   isValidStreamUrl,
   normalizeExt,
+  proxyUrl,
   type PlaybackStrategy,
 } from "@/services/iptv";
 
 interface PlayerProps {
-  /** URL final que será passada pro player (geralmente já com proxy aplicado). */
+  /**
+   * URL do stream. Pode vir crua ou já proxiada — o Player garante
+   * internamente que SEMPRE passe pelo proxy antes de tocar.
+   */
   src?: string | null;
-  /** URL "crua" do stream — usada pra copiar pro VLC. */
+  /** URL "crua" do stream — usada pra copiar pro VLC / abrir externo. */
   rawUrl?: string;
   /** Extensão do container (mp4, m3u8, mkv, etc). */
   containerExt?: string;
