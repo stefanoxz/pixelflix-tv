@@ -180,6 +180,8 @@ const Admin = () => {
     [servers, search],
   );
 
+  if (!token) return <Navigate to="/admin/login" replace />;
+
   const statCards = [
     {
       icon: Users,
