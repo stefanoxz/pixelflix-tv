@@ -8,30 +8,33 @@ const USER_AGENTS = [
   "Lavf/58.76.100",
 ];
 
-async function tryFetch(url: string): Promise<{ res: Response; ua: string } | { error: string }> {
+async function tryFetch(url: string): Promise<{ res: Response; ua: string } | { error: string; body?: string }> {
   let lastErr = "Unknown error";
+  let lastBody = "";
   for (const ua of USER_AGENTS) {
     try {
       const res = await fetch(url, {
         headers: { "User-Agent": ua, Accept: "application/json, */*" },
         redirect: "follow",
       });
-      // 444 / 5xx → try next UA
+      // Read body up-front so we can surface the real reason (e.g. "account suspended")
+      const text = await res.text();
+      // 444 / 5xx → try next UA, but remember the body for diagnostics
       if (res.status === 444 || res.status >= 500) {
-        lastErr = `HTTP ${res.status} with UA "${ua}"`;
-        try {
-          await res.body?.cancel();
-        } catch {
-          /* ignore */
-        }
+        lastErr = `HTTP ${res.status}`;
+        lastBody = text;
         continue;
       }
-      return { res, ua };
+      // Re-wrap response with body so caller can read it
+      return {
+        res: new Response(text, { status: res.status, headers: res.headers }),
+        ua,
+      };
     } catch (e) {
       lastErr = e instanceof Error ? e.message : String(e);
     }
   }
-  return { error: lastErr };
+  return { error: lastErr, body: lastBody };
 }
 
 Deno.serve(async (req) => {
@@ -53,12 +56,21 @@ Deno.serve(async (req) => {
 
     const result = await tryFetch(url);
     if ("error" in result) {
-      return new Response(
-        JSON.stringify({
-          error: `O servidor IPTV recusou a conexão (${result.error}). Verifique o endereço/DNS.`,
-        }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      const body = (result.body || "").trim();
+      let msg = `O servidor IPTV recusou a conexão (${result.error}).`;
+      if (/suspend/i.test(body)) {
+        msg = "Sua conta no servidor IPTV foi suspensa. Entre em contato com o provedor.";
+      } else if (/expir|vencid/i.test(body)) {
+        msg = "Sua assinatura no servidor IPTV expirou.";
+      } else if (body) {
+        msg = `Servidor IPTV: "${body.slice(0, 120)}"`;
+      } else {
+        msg += " Verifique o endereço/DNS ou tente outro servidor.";
+      }
+      return new Response(JSON.stringify({ error: msg }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { res } = result;
