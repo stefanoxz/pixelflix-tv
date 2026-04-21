@@ -52,15 +52,14 @@ Deno.serve(async (req) => {
       }
 
       const baseHref = finalUrl.toString().substring(0, finalUrl.toString().lastIndexOf("/") + 1);
-      // Use forwarded headers when behind a proxy (Supabase Edge Functions),
-      // otherwise the URL we see lacks /functions/v1/ prefix.
+      // Build a public-facing proxy URL using forwarded headers (Supabase puts
+      // the function behind a gateway, so url.host/path don't reflect the public URL).
       const fwdHost = req.headers.get("x-forwarded-host") || req.headers.get("host") || url.host;
-      const fwdProto = req.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
-      const publicPath =
-        req.headers.get("x-original-url") ||
-        req.headers.get("x-forwarded-path") ||
-        // Edge runtime path is "/stream-proxy"; the public-facing path includes /functions/v1
-        (url.pathname.startsWith("/functions/") ? url.pathname : `/functions/v1${url.pathname}`);
+      const fwdProto = req.headers.get("x-forwarded-proto") || "https";
+      // Path inside the function is "/stream-proxy"; ensure /functions/v1 prefix for public callers.
+      const publicPath = url.pathname.startsWith("/functions/")
+        ? url.pathname
+        : `/functions/v1${url.pathname}`;
       const proxyBase = `${fwdProto}://${fwdHost}${publicPath}?url=`;
 
       const rewritten = text
