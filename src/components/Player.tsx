@@ -62,7 +62,14 @@ export function Player({
 
   const copyTarget = rawUrl || src || "";
 
-  // Decide a estratégia de reprodução com base na extensão + URL
+  // Garante que TODA reprodução passe pelo proxy da VPS.
+  // Se já vier proxiada (contém "/stream-proxy/"), reaproveita pra evitar duplo-proxy.
+  const safeSrc = useMemo(() => {
+    if (!src) return null;
+    return src.includes("/stream-proxy/") ? src : proxyUrl(src);
+  }, [src]);
+
+  // Decide a estratégia de reprodução com base na extensão + URL crua
   const strategy = useMemo<PlaybackStrategy>(() => {
     if (!src) return { mode: "error", reason: "Nenhum stream selecionado" };
     return getPlaybackStrategy(containerExt, rawUrl || src);
