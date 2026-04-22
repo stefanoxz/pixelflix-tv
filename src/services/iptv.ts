@@ -559,12 +559,11 @@ export async function iptvFetch<T>(
   action: string,
   extra: Record<string, string | number> = {},
 ): Promise<T> {
-  const { data, error } = await supabase.functions.invoke("iptv-categories", {
-    body: { ...creds, action, ...extra },
-  });
-  if (error) throw new Error(error.message || `Falha ao buscar ${action}`);
-  if ((data as any)?.error) throw new Error((data as any).error);
-  return data as T;
+  return invokeFn<T>(
+    "iptv-categories",
+    { ...creds, action, ...extra } as Record<string, unknown>,
+    "data",
+  );
 }
 
 export const getLiveCategories = (c: IptvCredentials) =>
