@@ -56,6 +56,8 @@ export function Player({
   const hlsRef = useRef<Hls | null>(null);
   const heartbeatRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
+  const stallTimeoutRef = useRef<number | null>(null);
+  const engagedRef = useRef(false);
 
   const [error, setError] = useState<PlayerError | null>(null);
   const [loading, setLoading] = useState(false);
