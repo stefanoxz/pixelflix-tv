@@ -278,6 +278,14 @@ Deno.serve(async (req) => {
     if (payload.k === "segment") {
       // Suspicious IP-jump check
       checkSuspiciousIp(payload.s, ip, ua).catch(() => {});
+      // Lightweight, sampled telemetry: log delivered segments so we can see
+      // what actually reaches the player (vs. just what's issued).
+      // Sample at ~5% to avoid bloating stream_events.
+      if (Math.random() < 0.05) {
+        logEvent(payload.s, "segment_request", ip, ua, payload.u, {
+          host: decoded.host,
+        }).catch(() => {});
+      }
       return new Response(null, {
         status: 302,
         headers: {
