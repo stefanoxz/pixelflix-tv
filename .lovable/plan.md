@@ -1,132 +1,74 @@
 
 
-## Plano — Painel opcional “Logs do player”
+## Relatório de investigação backend — `fragLoadError` e `stream_no_data`
 
-### Objetivo
-Adicionar um painel interno de diagnóstico em `src/components/Player.tsx`, desativado por padrão, que mostra eventos do HLS, do `<video>`, da rede e do diagnóstico, com timestamps relativos e métrica de TTFF. Sem alterar nenhuma lógica existente do player.
+### O que os logs do backend mostram (últimas 2h)
 
-### 1. Estrutura de logs (sem re-render desnecessário)
+| Evento | Total |
+|---|---|
+| `token_issued` | 53 |
+| `stream_started` | 30 (≈ **57% dos tokens viram playback**) |
+| `stream_error` | 20 (≈ **38%**) |
+| `token_rejected` | **76** ← muito alto |
+| `nonce_replay_tolerated` | 2 |
 
-Adicionar tipo e refs no componente:
+**Quebra dos `token_rejected`:**
+- `expired` → **59** (78%)
+- `nonce_replay` → **17** (22%)
 
-```ts
-type LogEntry = {
-  t: number;
-  tRel: number;
-  source: "hls" | "video" | "diag" | "net";
-  level: "info" | "warn" | "error";
-  label: string;
-  details?: string;
-};
+**Quebra dos `stream_error`:**
+- `bootstrap_timeout_12s` + “manifest carregado, mas sem frames” → 7
+- `bootstrap_timeout_12s` + “sem reprodução após 12s” → 6
+- `fragLoadError + no frames` (`stream_no_data`) → 3
+- vazio → 4
 
-const logsRef = useRef<LogEntry[]>([]);
-const setupStartRef = useRef(0);
-const firstFrameAtRef = useRef<number | null>(null);
-const manifestParsedAtRef = useRef<number | null>(null);
+### Diagnóstico real
 
-const [logsPanelOpen, setLogsPanelOpen] = useState<boolean>(() => {
-  try { return localStorage.getItem("player.logsPanel.open") === "1"; }
-  catch { return false; }
-});
-const [logsVersion, setLogsVersion] = useState(0);
-```
+1. **Não é o `stream-proxy` quem está derrubando os segmentos.** A função do proxy para segmentos é apenas emitir um `302` para o upstream — o player baixa direto do `cinemaplaypro.shop`. O `fragLoadError` está acontecendo entre o navegador do cliente e o servidor IPTV, **não** dentro da nossa Edge Function.
 
-Persistir `logsPanelOpen` em `localStorage` chave `player.logsPanel.open` via `useEffect`.
+2. **Há um problema sério, porém, ao redor dos tokens:**
+   - **59 tokens expirados** em 2h. O TTL do segmento é 30s e o do playlist é 60s. Tantos `expired` indicam que tokens estão sendo gerados, ficando guardados (pelo `hls.js` ou por re-tentativas) e depois reusados quando já passaram do prazo.
+   - **17 `nonce_replay`**. Isso é o `hls.js`/Chrome retentando o mesmo segmento. A janela atual de tolerância é de 10s, mas a duração do TTL do segmento também é 30s — quando há retry tardio, o nonce já foi consumido E o token ainda é válido, mas o reuse é negado.
 
-### 2. Helper `pushLog`
+3. O canal `318693` (cinemaplaypro.shop) **claramente está com problema upstream**: o manifesto vem (`#EXTM3U` ok), mas os segmentos `.ts` não respondem. Não dá para resolver isso no nosso backend — é o servidor do provedor.
 
-```ts
-const pushLog = (entry: Omit<LogEntry, "t" | "tRel">) => {
-  const t = performance.now();
-  logsRef.current.push({ ...entry, t, tRel: t - setupStartRef.current });
-  if (logsRef.current.length > 200) logsRef.current.shift();
-  if (logsPanelOpenRef.current) setLogsVersion(v => v + 1);
-};
-```
+4. **Mas nossa rejeição agressiva de tokens piora o cenário**: quando o player tenta retomar, recebe `403` em vez de uma chance de baixar. Isso amplifica a percepção de “canal travado” mesmo em canais cuja origem está OK.
 
-Usar um `logsPanelOpenRef` espelho (`useRef`) sincronizado com o state, para não recriar o helper a cada render e evitar re-renders quando o painel estiver fechado.
+### Plano de correção
 
-### 3. Reset no início do setup
+#### 1. `stream-token` — separar TTL de playlist vs. segment
+- Aumentar `TTL_SEGMENT_S` de 30s para **45s**. O `hls.js` faz retries com backoff e às vezes leva 20–30s para reusar o token; 30s é apertado demais.
+- Manter `TTL_PLAYLIST_S` em 60s.
 
-Dentro do `useEffect` principal, antes do bootstrap do HLS:
+#### 2. `stream-proxy` — ampliar janela de tolerância de nonce
+- Hoje: nonce single-use, com replay tolerado em 10s.
+- Mudar para **30s**, alinhado ao TTL do segmento.
+- Justificativa: a checagem de `ip_prefix + ua_hash + user_id` já garante que o replay não pode ser cross-user; permitir replay dentro do TTL do próprio segmento é seguro e elimina os 17 `nonce_replay` legítimos.
 
-```ts
-logsRef.current = [];
-firstFrameAtRef.current = null;
-manifestParsedAtRef.current = null;
-setupStartRef.current = performance.now();
-pushLog({ source: "diag", level: "info", label: "setup_start" });
-```
+#### 3. `stream-proxy` — não rejeitar token expirado por margem de relógio
+- Adicionar **2s de skew** ao checar `payload.e * 1000 < Date.now()`.
+- Reduz `expired` em casos de retry borderline.
 
-### 4. Pontos de instrumentação
+#### 4. Telemetria adicional no backend
+- Registrar evento novo `segment_request` quando o stream-proxy recebe um segmento válido. Hoje só vemos `token_issued`, sem visibilidade do que efetivamente chegou a ser entregue.
+- Registrar `meta.host` (host upstream) nos `stream_error` para conseguirmos identificar provedores problemáticos no futuro.
 
-Inserir `pushLog` nos pontos já existentes no `Player.tsx`, sem mudar nenhuma lógica:
+#### 5. Frontend — ajuste pequeno no `Player.tsx`
+- Quando classificar como `stream_no_data`, incluir no `reportStreamEvent` o `host` extraído da URL original (não do proxy), para que a telemetria do passo 4 seja útil.
+- Nenhuma mudança de comportamento de UI.
 
-- `MEDIA_ATTACHED` → `hls/media_attached`
-- `MANIFEST_PARSED` → `hls/manifest_parsed` + `manifestParsedAtRef.current = performance.now()`
-- `Hls.Events.ERROR` → `hls/error` com `details: ${type}/${details} fatal=${fatal}`
-- bootstrap timeout (12s) → `diag/bootstrap_timeout_12s`
-- stall timeout (8s) → `diag/stall_timeout_8s`
-- `<video>` `playing` (apenas primeira vez via `firstFrameAtRef === null`) → `video/first_playing` + grava `firstFrameAtRef` + log do TTFF como `details`
-- `<video>` `loadeddata` → `video/loadeddata`
-- `<video>` `waiting` → `video/waiting`
-- `<video>` `stalled` → `video/stalled`
-- `<video>` `error` → `video/error` com `code`/`message`
-- requisição de token OK → `net/token_ok`
-- requisição de token erro → `net/token_error` com mensagem
-- `handleRetry` → `diag/retry`
+### O que **não** muda
+- Nenhuma mudança em RLS, autenticação, lógica de bloqueio de IP, fila global, máquina de diagnóstico do player ou UI do cartão `stream_no_data`.
+- Nenhuma migração de schema (todos os eventos já cabem no `stream_events.meta`).
 
-Cada chamada apenas adiciona ao buffer; nenhuma branch de execução existente é alterada.
+### Arquivos a alterar
+- `supabase/functions/stream-token/index.ts`
+- `supabase/functions/stream-proxy/index.ts`
+- `src/components/Player.tsx` (apenas linha de telemetria)
 
-### 5. Botão de abertura
-
-Pequeno botão no canto **inferior esquerdo** do player:
-- Ícone `Terminal` do `lucide-react`
-- `pointer-events-auto`, `z-20`
-- Sempre visível enquanto houver `src`
-- Toggla `logsPanelOpen`
-
-### 6. Painel de logs
-
-Overlay sobre o player, lado direito, largura ~360px, altura limitada à do player:
-- `bg-background/95 backdrop-blur-md border rounded-md`
-- `overflow-y-auto`
-- `pointer-events-auto`
-- não cobre todo o vídeo
-
-**Cabeçalho:**
-- Título “Logs do player”
-- Botões: copiar JSON (`navigator.clipboard.writeText(JSON.stringify(logsRef.current, null, 2))`), limpar (`logsRef.current = []; setLogsVersion(v=>v+1)`), fechar.
-
-**Resumo de tempos:**
-- Setup → Manifest: `manifestParsedAtRef - setupStartRef` ms
-- Setup → First Frame (TTFF): `firstFrameAtRef - setupStartRef` ms
-- Manifest → First Frame: diferença
-- Mostrar `—` quando não disponível.
-
-**Lista:**
-- `[+1234ms]` tempo relativo
-- badge por `source`:
-  - `hls` → azul
-  - `video` → verde
-  - `diag` → âmbar
-  - `net` → roxo
-- `label` + `details` (truncado, `title` com texto completo)
-- `level === "error"` em vermelho, `warn` em amarelo
-
-**Auto-scroll:**
-- ref no container da lista; `useEffect` em `[logsVersion, logsPanelOpen]` faz `scrollTop = scrollHeight`.
-
-### 7. Garantias de não-regressão
-
-- Nenhuma alteração na máquina de diagnóstico, retry, watchdogs, bootstrap HLS, integração com backend ou telemetria.
-- Logs ficam em `useRef` — não disparam render.
-- `setLogsVersion` só é chamado quando o painel está aberto (via `logsPanelOpenRef`).
-- Buffer limitado a 200 entradas para não crescer indefinidamente.
-
-### Arquivo tocado
-- `src/components/Player.tsx` (único)
-
-### Sem mudanças em
-- `src/pages/Live.tsx`, edge functions, schema, telemetria, `IptvContext`, demais componentes.
+### Resultado esperado
+- Queda significativa de `token_rejected:expired` e `nonce_replay`.
+- Canais cujo upstream funciona param de virar `stream_no_data` por culpa de retry barrado.
+- Canais cujo upstream realmente está caído continuam classificados corretamente, mas agora teremos o `host` registrado para análise futura.
+- Conclusão sobre `cinemaplaypro.shop`/canal `318693`: as correções **não vão fazer esse canal específico voltar** — o problema é do servidor IPTV. Mas vamos eliminar os falsos positivos em outros canais.
 
