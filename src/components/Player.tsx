@@ -88,14 +88,19 @@ export function Player({
       window.clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
     }
+    if (stallTimeoutRef.current !== null) {
+      window.clearTimeout(stallTimeoutRef.current);
+      stallTimeoutRef.current = null;
+    }
+    engagedRef.current = false;
   };
 
-  // Setup whenever src/strategy changes — debounced 250ms to absorb fast zapping.
+  // Setup whenever src/strategy changes — debounced 120ms to absorb fast zapping.
   useEffect(() => {
     let cancelled = false;
     let didSetup = false;
 
-    const debounceMs = 250;
+    const debounceMs = 120;
     const debounceTimer = window.setTimeout(() => {
       didSetup = true;
       runSetup();
