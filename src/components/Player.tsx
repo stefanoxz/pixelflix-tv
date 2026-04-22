@@ -7,17 +7,16 @@ import {
   getPlaybackStrategy,
   isValidStreamUrl,
   normalizeExt,
-  proxyUrl,
+  requestStreamToken,
+  reportStreamEvent,
   type PlaybackStrategy,
 } from "@/services/iptv";
+import { useIptv } from "@/context/IptvContext";
 
 interface PlayerProps {
-  /**
-   * URL do stream. Pode vir crua ou já proxiada — o Player garante
-   * internamente que SEMPRE passe pelo proxy antes de tocar.
-   */
+  /** URL bruta do stream (sem proxy). Player se encarrega de obter token. */
   src?: string | null;
-  /** URL "crua" do stream — usada pra copiar pro VLC / abrir externo. */
+  /** Mantido para compat — mesma URL crua copiada/aberta externamente. */
   rawUrl?: string;
   /** Extensão do container (mp4, m3u8, mkv, etc). */
   containerExt?: string;
@@ -30,9 +29,7 @@ interface PlayerProps {
 type PlayerError = {
   title?: string;
   description?: string;
-  /** URL pra copiar (sempre a rawUrl quando disponível). */
   copyUrl: string;
-  /** Se true, é um caso de "abrir em player externo" (não erro real). */
   external?: boolean;
 };
 
@@ -43,6 +40,8 @@ const HLS_CONFIG: Partial<Hls["config"]> = {
   maxMaxBufferLength: 60,
 };
 
+const HEARTBEAT_INTERVAL_MS = 45_000;
+
 export function Player({
   src,
   rawUrl,
@@ -52,8 +51,11 @@ export function Player({
   autoPlay = true,
   onClose,
 }: PlayerProps) {
+  const { session } = useIptv();
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const heartbeatRef = useRef<number | null>(null);
+  const retryCountRef = useRef(0);
 
   const [error, setError] = useState<PlayerError | null>(null);
   const [loading, setLoading] = useState(false);
@@ -62,28 +64,15 @@ export function Player({
 
   const copyTarget = rawUrl || src || "";
 
-  // Garante que TODA reprodução passe pelo proxy HTTPS (edge function).
-  // Se já vier proxiada (contém "/stream-proxy"), reaproveita pra evitar duplo-proxy.
-  const safeSrc = useMemo(() => {
-    if (!src) return null;
-    return src.includes("/stream-proxy") ? src : proxyUrl(src);
-  }, [src]);
-
-  // Decide a estratégia de reprodução com base na extensão + URL crua
   const strategy = useMemo<PlaybackStrategy>(() => {
     if (!src) return { mode: "error", reason: "Nenhum stream selecionado" };
     return getPlaybackStrategy(containerExt, rawUrl || src);
   }, [src, rawUrl, containerExt]);
 
-  // Cleanup central — destrói HLS e libera o <video>
   const teardown = () => {
     const v = videoRef.current;
     if (hlsRef.current) {
-      try {
-        hlsRef.current.destroy();
-      } catch {
-        /* noop */
-      }
+      try { hlsRef.current.destroy(); } catch { /* noop */ }
       hlsRef.current = null;
     }
     if (v) {
@@ -91,22 +80,26 @@ export function Player({
         v.pause();
         v.removeAttribute("src");
         v.load();
-      } catch {
-        /* noop */
-      }
+      } catch { /* noop */ }
+    }
+    if (heartbeatRef.current !== null) {
+      window.clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
     }
   };
 
-  // Setup do player sempre que muda src/strategy
+  // Setup whenever src/strategy changes
   useEffect(() => {
+    let cancelled = false;
     teardown();
     setError(null);
     setCopied(false);
     setHidden(false);
+    retryCountRef.current = 0;
 
     if (!src) {
       setLoading(false);
-      return;
+      return () => { cancelled = true; };
     }
 
     if (!isValidStreamUrl(src)) {
@@ -116,10 +109,9 @@ export function Player({
         copyUrl: copyTarget,
       });
       setLoading(false);
-      return;
+      return () => { cancelled = true; };
     }
 
-    // Container que o navegador não toca → atalho direto pra player externo
     if (strategy.mode === "external") {
       const ext = normalizeExt(containerExt).toUpperCase() || "?";
       setError({
@@ -129,7 +121,7 @@ export function Player({
         external: true,
       });
       setLoading(false);
-      return;
+      return () => { cancelled = true; };
     }
 
     if (strategy.mode === "error") {
@@ -139,92 +131,120 @@ export function Player({
         copyUrl: copyTarget,
       });
       setLoading(false);
-      return;
+      return () => { cancelled = true; };
     }
 
     const video = videoRef.current;
-    if (!video) return;
+    if (!video) return () => { cancelled = true; };
 
     setLoading(true);
 
-    // Estratégia HLS: usa hls.js, ou Safari nativo
-    if (strategy.type === "hls") {
-      if (Hls.isSupported()) {
-        const hls = new Hls(HLS_CONFIG);
-        hlsRef.current = hls;
-
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          setLoading(false);
-          if (autoPlay) video.play().catch(() => {});
+    const start = async () => {
+      try {
+        const kind = strategy.type === "hls" ? "playlist" : "segment";
+        const tokenResp = await requestStreamToken({
+          url: src,
+          kind,
+          iptvUsername: session?.creds.username,
         });
+        if (cancelled) return;
+        const safeSrc = tokenResp.url;
 
-        hls.on(Hls.Events.ERROR, (_evt, data: ErrorData) => {
-          if (!data.fatal) return;
-          // Tenta recuperar erros não-fatais de rede/mídia antes de desistir
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            try {
-              hls.startLoad();
-              return;
-            } catch {
-              /* fallthrough */
-            }
+        // Heartbeat (renew session lifecycle on backend every 45s)
+        heartbeatRef.current = window.setInterval(() => {
+          reportStreamEvent("session_heartbeat");
+        }, HEARTBEAT_INTERVAL_MS);
+
+        if (strategy.type === "hls") {
+          if (Hls.isSupported()) {
+            const hls = new Hls(HLS_CONFIG);
+            hlsRef.current = hls;
+
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              if (cancelled) return;
+              setLoading(false);
+              reportStreamEvent("stream_started", { url: src, meta: { kind: "hls" } });
+              if (autoPlay) video.play().catch(() => {});
+            });
+
+            hls.on(Hls.Events.ERROR, (_evt, data: ErrorData) => {
+              if (!data.fatal) return;
+              if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCountRef.current < 3) {
+                retryCountRef.current += 1;
+                setTimeout(() => {
+                  try { hls.startLoad(); } catch { /* noop */ }
+                }, 2000 * retryCountRef.current);
+                return;
+              }
+              if (data.type === Hls.ErrorTypes.MEDIA_ERROR && retryCountRef.current < 3) {
+                retryCountRef.current += 1;
+                try { hls.recoverMediaError(); return; } catch { /* fallthrough */ }
+              }
+              setLoading(false);
+              setError({
+                title: "Falha ao carregar o stream",
+                description: "O canal pode estar offline ou instável. Tente novamente em alguns segundos.",
+                copyUrl: copyTarget,
+              });
+              reportStreamEvent("stream_error", {
+                url: src,
+                meta: { type: data.type, details: data.details },
+              });
+            });
+
+            hls.loadSource(safeSrc);
+            hls.attachMedia(video);
+            return;
           }
-          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-            try {
-              hls.recoverMediaError();
-              return;
-            } catch {
-              /* fallthrough */
-            }
+
+          if (video.canPlayType("application/vnd.apple.mpegurl")) {
+            video.src = safeSrc;
+            reportStreamEvent("stream_started", { url: src, meta: { kind: "hls-native" } });
+            if (autoPlay) video.play().catch(() => {});
+            return;
           }
+
           setLoading(false);
           setError({
-            title: "Falha ao carregar o stream",
-            description: "O canal pode estar offline ou instável. Tente novamente em alguns segundos.",
+            title: "Navegador incompatível",
+            description: "Seu navegador não suporta HLS. Use Chrome, Firefox, Edge ou Safari.",
             copyUrl: copyTarget,
           });
-        });
-
-        try {
-          hls.loadSource(safeSrc!);
-          hls.attachMedia(video);
-        } catch {
-          setLoading(false);
-          setError({
-            title: "Erro ao iniciar player",
-            description: "Não foi possível inicializar o stream HLS.",
-            copyUrl: copyTarget,
-          });
+          return;
         }
-        return;
-      }
 
-      // Safari / iOS: HLS nativo
-      if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        video.src = safeSrc!;
+        // Native (mp4 / webm)
+        video.src = safeSrc;
+        reportStreamEvent("stream_started", { url: src, meta: { kind: "native" } });
         if (autoPlay) video.play().catch(() => {});
-        return;
+      } catch (err) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : "Erro desconhecido";
+        setLoading(false);
+        const blocked = /blocked|bloque/i.test(msg);
+        const ratelimit = /Too many|429/i.test(msg);
+        setError({
+          title: blocked
+            ? "Acesso temporariamente bloqueado"
+            : ratelimit
+              ? "Limite de uso atingido"
+              : "Não foi possível autorizar o stream",
+          description: blocked
+            ? "Detectamos atividade incomum. Tente novamente em alguns minutos."
+            : ratelimit
+              ? "Aguarde 1 minuto antes de tentar novamente."
+              : msg,
+          copyUrl: copyTarget,
+        });
       }
+    };
 
-      setLoading(false);
-      setError({
-        title: "Navegador incompatível",
-        description: "Seu navegador não suporta HLS. Use Chrome, Firefox, Edge ou Safari.",
-        copyUrl: copyTarget,
-      });
-      return;
-    }
+    start();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src, strategy, containerExt, autoPlay, copyTarget]);
 
-    // Player nativo (mp4/webm/desconhecido)
-    video.src = safeSrc!;
-    if (autoPlay) {
-      video.play().catch(() => {
-        // Erro de play será capturado pelo listener 'error' abaixo
-      });
-    }
-  }, [src, safeSrc, strategy, containerExt, autoPlay, copyTarget]);
-
-  // Listeners do <video> pra loading + erro nativo
+  // Native <video> listeners
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -233,18 +253,14 @@ export function Player({
     const onPlaying = () => setLoading(false);
     const onCanPlay = () => setLoading(false);
     const onLoadedData = () => setLoading(false);
+    const onStalled = () => setLoading(true);
     const onError = () => {
-      // Se já tem erro definido (HLS / inválido), não sobrescreve
       setError((prev) =>
-        prev
-          ? prev
-          : {
-              title: "Não foi possível reproduzir",
-              description:
-                "Este conteúdo pode estar offline, em formato incompatível ou bloqueado pelo servidor.",
-              copyUrl: copyTarget,
-            },
-      );
+        prev ? prev : {
+          title: "Não foi possível reproduzir",
+          description: "Este conteúdo pode estar offline, em formato incompatível ou bloqueado pelo servidor.",
+          copyUrl: copyTarget,
+        });
       setLoading(false);
     };
 
@@ -252,6 +268,7 @@ export function Player({
     video.addEventListener("playing", onPlaying);
     video.addEventListener("canplay", onCanPlay);
     video.addEventListener("loadeddata", onLoadedData);
+    video.addEventListener("stalled", onStalled);
     video.addEventListener("error", onError);
 
     return () => {
@@ -259,11 +276,11 @@ export function Player({
       video.removeEventListener("playing", onPlaying);
       video.removeEventListener("canplay", onCanPlay);
       video.removeEventListener("loadeddata", onLoadedData);
+      video.removeEventListener("stalled", onStalled);
       video.removeEventListener("error", onError);
     };
   }, [copyTarget]);
 
-  // Cleanup final ao desmontar
   useEffect(() => () => teardown(), []);
 
   const handleCopy = async () => {
@@ -282,34 +299,19 @@ export function Player({
   const handleOpenExternal = () => {
     const target = error?.copyUrl || copyTarget;
     if (!target) return;
-    // Tenta abrir num player externo via protocol handler do sistema
     window.open(target, "_blank", "noopener,noreferrer");
   };
 
   const handleRetry = () => {
-    if (!safeSrc) return;
+    if (!src) return;
     setError(null);
+    retryCountRef.current = 0;
+    // Force the setup effect to re-run by quickly toggling teardown.
     setLoading(true);
-    // Força reload mantendo a mesma estratégia
-    const video = videoRef.current;
     teardown();
-    if (!video) return;
-    setTimeout(() => {
-      // Re-aciona o effect ajustando uma key implícita via reload do src
-      if (strategy.mode === "internal" && strategy.type === "hls" && Hls.isSupported()) {
-        const hls = new Hls(HLS_CONFIG);
-        hlsRef.current = hls;
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          setLoading(false);
-          video.play().catch(() => {});
-        });
-        hls.loadSource(safeSrc);
-        hls.attachMedia(video);
-      } else {
-        video.src = safeSrc;
-        video.play().catch(() => {});
-      }
-    }, 100);
+    // Re-trigger via no-op state change: change "hidden" then back.
+    setHidden(true);
+    setTimeout(() => setHidden(false), 30);
   };
 
   const handleClose = () => {
@@ -318,7 +320,6 @@ export function Player({
     else setHidden(true);
   };
 
-  // Estado vazio (nenhum stream selecionado)
   if (!src || hidden) {
     return (
       <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-gradient-card flex items-center justify-center shadow-card">
@@ -331,9 +332,7 @@ export function Player({
             {hidden ? "Reprodução encerrada" : "Selecione um canal"}
           </h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            {hidden
-              ? "Escolha outro conteúdo para continuar"
-              : "Escolha um canal, filme ou série para começar a assistir"}
+            {hidden ? "Escolha outro conteúdo para continuar" : "Escolha um canal, filme ou série para começar a assistir"}
           </p>
         </div>
       </div>
@@ -360,17 +359,15 @@ export function Player({
         </div>
       )}
 
-      {/* Loading overlay (não bloqueia controles) */}
       {loading && !error && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <p className="text-xs text-white/80">Carregando stream...</p>
+            <p className="text-xs text-white/80">Conectando…</p>
           </div>
         </div>
       )}
 
-      {/* Erro / formato externo */}
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/85 backdrop-blur-sm p-6">
           <div className="max-w-md text-center space-y-4">
