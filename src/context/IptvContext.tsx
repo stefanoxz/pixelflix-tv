@@ -1,26 +1,16 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import type { IptvCredentials, ServerInfo, UserInfo } from "@/services/iptv";
+import { useEffect, useState, ReactNode } from "react";
+import {
+  IptvContext,
+  IPTV_STORAGE_KEY,
+  type IptvSession,
+} from "./iptv-context";
 
-interface IptvSession {
-  creds: IptvCredentials;
-  userInfo: UserInfo;
-  serverInfo?: ServerInfo;
-}
-
-interface IptvContextValue {
-  session: IptvSession | null;
-  setSession: (s: IptvSession | null) => void;
-  logout: () => void;
-}
-
-const IptvContext = createContext<IptvContextValue | undefined>(undefined);
-
-const STORAGE_KEY = "iptv_session";
+export { useIptv } from "./useIptv";
 
 export function IptvProvider({ children }: { children: ReactNode }) {
   const [session, setSessionState] = useState<IptvSession | null>(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(IPTV_STORAGE_KEY);
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -29,15 +19,15 @@ export function IptvProvider({ children }: { children: ReactNode }) {
 
   const setSession = (s: IptvSession | null) => {
     setSessionState(s);
-    if (s) localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-    else localStorage.removeItem(STORAGE_KEY);
+    if (s) localStorage.setItem(IPTV_STORAGE_KEY, JSON.stringify(s));
+    else localStorage.removeItem(IPTV_STORAGE_KEY);
   };
 
   const logout = () => setSession(null);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) {
+      if (e.key === IPTV_STORAGE_KEY) {
         setSessionState(e.newValue ? JSON.parse(e.newValue) : null);
       }
     };
@@ -50,10 +40,4 @@ export function IptvProvider({ children }: { children: ReactNode }) {
       {children}
     </IptvContext.Provider>
   );
-}
-
-export function useIptv() {
-  const ctx = useContext(IptvContext);
-  if (!ctx) throw new Error("useIptv must be used within IptvProvider");
-  return ctx;
 }
