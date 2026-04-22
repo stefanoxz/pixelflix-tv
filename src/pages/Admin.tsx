@@ -116,6 +116,7 @@ const Admin = () => {
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
 
   const [addOpen, setAddOpen] = useState(false);
   const [newUrl, setNewUrl] = useState("");
@@ -137,6 +138,7 @@ const Admin = () => {
       setPending(sv.pending);
       setEvents(e.events);
     } catch (err) {
+      if (signingOut) return;
       const msg = err instanceof Error ? err.message : "Falha ao carregar dados";
       if (/não autorizado|unauthorized|401|sessão/i.test(msg)) {
         await supabase.auth.signOut();
@@ -291,6 +293,7 @@ const Admin = () => {
             size="sm"
             className="w-full justify-start gap-2 text-destructive hover:text-destructive"
             onClick={async () => {
+              setSigningOut(true);
               await supabase.auth.signOut();
               navigate("/admin/login");
             }}
@@ -325,6 +328,7 @@ const Admin = () => {
               variant="outline"
               size="sm"
               onClick={async () => {
+                setSigningOut(true);
                 await supabase.auth.signOut();
                 navigate("/login", { replace: true });
               }}
