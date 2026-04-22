@@ -62,11 +62,11 @@ export function Player({
 
   const copyTarget = rawUrl || src || "";
 
-  // Garante que TODA reprodução passe pelo proxy da VPS.
-  // Se já vier proxiada (contém "/stream-proxy/"), reaproveita pra evitar duplo-proxy.
+  // Garante que TODA reprodução passe pelo proxy HTTPS (edge function).
+  // Se já vier proxiada (contém "/stream-proxy"), reaproveita pra evitar duplo-proxy.
   const safeSrc = useMemo(() => {
     if (!src) return null;
-    return src.includes("/stream-proxy/") ? src : proxyUrl(src);
+    return src.includes("/stream-proxy") ? src : proxyUrl(src);
   }, [src]);
 
   // Decide a estratégia de reprodução com base na extensão + URL crua
