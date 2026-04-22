@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Hls, { type ErrorData } from "hls.js";
-import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink } from "lucide-react";
+import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -12,6 +12,7 @@ import {
   type PlaybackStrategy,
 } from "@/services/iptv";
 import { useIptv } from "@/context/IptvContext";
+import { cn } from "@/lib/utils";
 
 interface PlayerProps {
   /** URL bruta do stream (sem proxy). Player se encarrega de obter token. */
@@ -33,6 +34,13 @@ type PlayerError = {
   external?: boolean;
 };
 
+type DiagnosticStatus =
+  | "connecting"
+  | "playback_started"
+  | "stall_timeout"
+  | "codec_incompatible"
+  | "stream_error";
+
 const HLS_CONFIG: Partial<Hls["config"]> = {
   lowLatencyMode: true,
   enableWorker: true,
@@ -41,6 +49,16 @@ const HLS_CONFIG: Partial<Hls["config"]> = {
 };
 
 const HEARTBEAT_INTERVAL_MS = 45_000;
+const BOOTSTRAP_TIMEOUT_MS = 12_000;
+const STALL_TIMEOUT_MS = 8_000;
+
+const STATUS_LABEL: Record<DiagnosticStatus, string> = {
+  connecting: "Conectando",
+  playback_started: "Reprodução iniciada",
+  stall_timeout: "Stall timeout",
+  codec_incompatible: "Codec incompatível",
+  stream_error: "Erro no stream",
+};
 
 export function Player({
   src,
@@ -56,13 +74,24 @@ export function Player({
   const hlsRef = useRef<Hls | null>(null);
   const heartbeatRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
+
+  // Watchdog timers
+  const bootstrapTimeoutRef = useRef<number | null>(null);
   const stallTimeoutRef = useRef<number | null>(null);
-  const engagedRef = useRef(false);
+
+  // Diagnostic flags
+  const playbackStartedRef = useRef(false);
+  const manifestReadyRef = useRef(false);
+  const lastReasonRef = useRef<string | null>(null);
 
   const [error, setError] = useState<PlayerError | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [hidden, setHidden] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
+
+  const [status, setStatus] = useState<DiagnosticStatus>("connecting");
+  const [lastReason, setLastReason] = useState<string | null>(null);
 
   const copyTarget = rawUrl || src || "";
 
@@ -70,6 +99,31 @@ export function Player({
     if (!src) return { mode: "error", reason: "Nenhum stream selecionado" };
     return getPlaybackStrategy(containerExt, rawUrl || src);
   }, [src, rawUrl, containerExt]);
+
+  const updateStatus = (next: DiagnosticStatus, reason?: string | null) => {
+    setStatus(next);
+    if (reason !== undefined) {
+      lastReasonRef.current = reason;
+      setLastReason(reason);
+    }
+    reportStreamEvent("session_heartbeat", {
+      url: src ?? undefined,
+      meta: { diagnostic_status: next, reason: reason ?? lastReasonRef.current ?? null },
+    });
+  };
+
+  const clearBootstrapTimeout = () => {
+    if (bootstrapTimeoutRef.current !== null) {
+      window.clearTimeout(bootstrapTimeoutRef.current);
+      bootstrapTimeoutRef.current = null;
+    }
+  };
+  const clearStallTimeout = () => {
+    if (stallTimeoutRef.current !== null) {
+      window.clearTimeout(stallTimeoutRef.current);
+      stallTimeoutRef.current = null;
+    }
+  };
 
   const teardown = () => {
     const v = videoRef.current;
@@ -88,23 +142,21 @@ export function Player({
       window.clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
     }
-    if (stallTimeoutRef.current !== null) {
-      window.clearTimeout(stallTimeoutRef.current);
-      stallTimeoutRef.current = null;
-    }
-    engagedRef.current = false;
+    clearBootstrapTimeout();
+    clearStallTimeout();
+    playbackStartedRef.current = false;
+    manifestReadyRef.current = false;
   };
 
-  // Setup whenever src/strategy changes — debounced 120ms to absorb fast zapping.
+  // Setup whenever src/strategy/retryNonce changes — debounced 120ms.
   useEffect(() => {
     let cancelled = false;
     let didSetup = false;
 
-    const debounceMs = 120;
     const debounceTimer = window.setTimeout(() => {
       didSetup = true;
       runSetup();
-    }, debounceMs);
+    }, 120);
 
     const runSetup = () => {
       teardown();
@@ -112,6 +164,9 @@ export function Player({
       setCopied(false);
       setHidden(false);
       retryCountRef.current = 0;
+      lastReasonRef.current = null;
+      setLastReason(null);
+      setStatus("connecting");
 
       if (!src) {
         setLoading(false);
@@ -125,6 +180,7 @@ export function Player({
           copyUrl: copyTarget,
         });
         setLoading(false);
+        updateStatus("stream_error", "URL inválida");
         return;
       }
 
@@ -137,6 +193,7 @@ export function Player({
           external: true,
         });
         setLoading(false);
+        updateStatus("codec_incompatible", `container ${ext}`);
         return;
       }
 
@@ -147,6 +204,7 @@ export function Player({
           copyUrl: copyTarget,
         });
         setLoading(false);
+        updateStatus("stream_error", strategy.reason);
         return;
       }
 
@@ -155,23 +213,27 @@ export function Player({
 
       setLoading(true);
 
-      // Stall watchdog: if no playback within 12s, surface a clear error.
-      stallTimeoutRef.current = window.setTimeout(() => {
+      // Bootstrap watchdog: must reach `playing`/`loadeddata` within 12s.
+      bootstrapTimeoutRef.current = window.setTimeout(() => {
         if (cancelled) return;
-        if (engagedRef.current) return;
+        if (playbackStartedRef.current) return;
         setLoading(false);
+        const reason = manifestReadyRef.current
+          ? "manifest carregado, mas sem frames"
+          : (lastReasonRef.current || "sem reprodução após 12s");
+        updateStatus("stall_timeout", reason);
         setError({
           title: "Canal não respondeu",
           description:
-            "Pode ser um stream em 4K/HEVC incompatível com o navegador, ou o canal está offline. Copie o link e abra no VLC.",
+            "O stream não começou a reproduzir em 12s. Pode ser 4K/HEVC incompatível ou o canal está offline. Copie o link e abra no VLC.",
           copyUrl: copyTarget,
           external: true,
         });
         reportStreamEvent("stream_error", {
           url: src,
-          meta: { reason: "stall_timeout_12s" },
+          meta: { reason: "bootstrap_timeout_12s", lastReason: reason },
         });
-      }, 12_000);
+      }, BOOTSTRAP_TIMEOUT_MS);
 
       const start = async () => {
         try {
@@ -194,16 +256,53 @@ export function Player({
               const hls = new Hls(HLS_CONFIG);
               hlsRef.current = hls;
 
+              // Safe bootstrap: attach FIRST, then load source after attached.
+              hls.attachMedia(video);
+
+              hls.once(Hls.Events.MEDIA_ATTACHED, () => {
+                if (cancelled) return;
+                try { hls.loadSource(safeSrc); } catch (e) {
+                  lastReasonRef.current = `loadSource falhou: ${(e as Error).message}`;
+                  setLastReason(lastReasonRef.current);
+                }
+              });
+
               hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 if (cancelled) return;
-                engagedRef.current = true;
-                setLoading(false);
-                reportStreamEvent("stream_started", { url: src, meta: { kind: "hls" } });
+                manifestReadyRef.current = true;
+                lastReasonRef.current = "manifest carregado";
+                setLastReason("manifest carregado");
                 if (autoPlay) video.play().catch(() => {});
+                // NB: don't touch loading or status here — wait for real `playing`.
               });
 
               hls.on(Hls.Events.ERROR, (_evt, data: ErrorData) => {
+                const detail = `${data.type}/${data.details}`;
+                lastReasonRef.current = detail;
+                setLastReason(detail);
+
+                // Codec / decode → mark immediately
+                if (
+                  data.details === Hls.ErrorDetails.MANIFEST_INCOMPATIBLE_CODECS_ERROR ||
+                  data.details === Hls.ErrorDetails.BUFFER_INCOMPATIBLE_CODECS_ERROR
+                ) {
+                  if (data.fatal) {
+                    setLoading(false);
+                    updateStatus("codec_incompatible", detail);
+                    setError({
+                      title: "Codec incompatível",
+                      description: "O canal usa codec não suportado pelo navegador (provavelmente HEVC/4K). Abra no VLC.",
+                      copyUrl: copyTarget,
+                      external: true,
+                    });
+                    clearBootstrapTimeout();
+                    clearStallTimeout();
+                  }
+                  return;
+                }
+
                 if (!data.fatal) return;
+
                 if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCountRef.current < 3) {
                   retryCountRef.current += 1;
                   setTimeout(() => {
@@ -216,19 +315,20 @@ export function Player({
                   try { hls.recoverMediaError(); return; } catch { /* fallthrough */ }
                 }
                 setLoading(false);
+                updateStatus("stream_error", detail);
                 setError({
                   title: "Falha ao carregar o stream",
                   description: "O canal pode estar offline ou instável. Tente novamente em alguns segundos.",
                   copyUrl: copyTarget,
                 });
+                clearBootstrapTimeout();
+                clearStallTimeout();
                 reportStreamEvent("stream_error", {
                   url: src,
                   meta: { type: data.type, details: data.details },
                 });
               });
 
-              hls.loadSource(safeSrc);
-              hls.attachMedia(video);
               return;
             }
 
@@ -240,6 +340,7 @@ export function Player({
             }
 
             setLoading(false);
+            updateStatus("stream_error", "navegador sem suporte HLS");
             setError({
               title: "Navegador incompatível",
               description: "Seu navegador não suporta HLS. Use Chrome, Firefox, Edge ou Safari.",
@@ -258,6 +359,7 @@ export function Player({
           setLoading(false);
           const blocked = /blocked|bloque/i.test(msg);
           const ratelimit = /Too many|429/i.test(msg);
+          updateStatus("stream_error", msg);
           setError({
             title: blocked
               ? "Acesso temporariamente bloqueado"
@@ -271,6 +373,7 @@ export function Player({
                 : msg,
             copyUrl: copyTarget,
           });
+          clearBootstrapTimeout();
         }
       };
 
@@ -281,7 +384,6 @@ export function Player({
       cancelled = true;
       window.clearTimeout(debounceTimer);
       if (!didSetup) {
-        // Cancelled before materializing — avoid teardown/setup churn during zapping.
         reportStreamEvent("stream_error", {
           url: src ?? undefined,
           meta: { reason: "player_switch_debounced" },
@@ -289,46 +391,72 @@ export function Player({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src, strategy, containerExt, autoPlay, copyTarget]);
+  }, [src, strategy, containerExt, autoPlay, copyTarget, retryNonce]);
 
   // Native <video> listeners
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    // Only show the main spinner BEFORE the player is engaged. Once playback
-    // has started at least once, we ignore `waiting`/`stalled` for the spinner
-    // (a brief buffer hiccup shouldn't blank the UI). The 12s stall watchdog
-    // in the setup effect is what surfaces a real error.
     const onWaiting = () => {
-      if (!engagedRef.current) setLoading(true);
+      if (!playbackStartedRef.current) {
+        setLoading(true);
+        return;
+      }
+      // Mid-stream stall: arm the stall timeout
+      if (stallTimeoutRef.current === null) {
+        stallTimeoutRef.current = window.setTimeout(() => {
+          updateStatus("stall_timeout", lastReasonRef.current || "BUFFER_STALLED_ERROR");
+        }, STALL_TIMEOUT_MS);
+      }
     };
     const onStalled = () => {
-      if (!engagedRef.current) setLoading(true);
+      lastReasonRef.current = "BUFFER_STALLED_ERROR";
+      setLastReason("BUFFER_STALLED_ERROR");
+      if (!playbackStartedRef.current) {
+        setLoading(true);
+        return;
+      }
+      if (stallTimeoutRef.current === null) {
+        stallTimeoutRef.current = window.setTimeout(() => {
+          updateStatus("stall_timeout", "BUFFER_STALLED_ERROR");
+        }, STALL_TIMEOUT_MS);
+      }
     };
     const onPlaying = () => {
-      engagedRef.current = true;
+      const wasFirst = !playbackStartedRef.current;
+      playbackStartedRef.current = true;
       setLoading(false);
-      if (stallTimeoutRef.current !== null) {
-        window.clearTimeout(stallTimeoutRef.current);
-        stallTimeoutRef.current = null;
+      clearBootstrapTimeout();
+      clearStallTimeout();
+      if (wasFirst) {
+        updateStatus("playback_started", null);
+        reportStreamEvent("stream_started", { url: src ?? undefined, meta: { trigger: "playing_event" } });
+      } else if (status === "stall_timeout") {
+        updateStatus("playback_started", "recuperado após stall");
       }
     };
     const onCanPlay = () => setLoading(false);
     const onLoadedData = () => {
-      engagedRef.current = true;
+      const wasFirst = !playbackStartedRef.current;
+      playbackStartedRef.current = true;
       setLoading(false);
-      if (stallTimeoutRef.current !== null) {
-        window.clearTimeout(stallTimeoutRef.current);
-        stallTimeoutRef.current = null;
+      clearBootstrapTimeout();
+      clearStallTimeout();
+      if (wasFirst) {
+        updateStatus("playback_started", null);
       }
     };
     const onError = () => {
       const code = video.error?.code;
-      // MEDIA_ERR_SRC_NOT_SUPPORTED (4) or MEDIA_ERR_DECODE (3) → codec issue
+      const msg = video.error?.message;
       const isCodec = code === 4 || code === 3;
+      const reason = `MEDIA_ERR_${code ?? "?"}${msg ? `: ${msg}` : ""}`;
+      lastReasonRef.current = reason;
+      setLastReason(reason);
+      updateStatus(isCodec ? "codec_incompatible" : "stream_error", reason);
       setError({
-        title: isCodec ? "Formato/codec incompatível" : "Não foi possível reproduzir",
+        title: isCodec ? "Codec incompatível" : "Não foi possível reproduzir",
         description: isCodec
           ? "Este canal usa um codec (provavelmente HEVC/4K) que o navegador não decodifica. Abra no VLC para assistir."
           : "Este conteúdo pode estar offline, em formato incompatível ou bloqueado pelo servidor.",
@@ -336,10 +464,8 @@ export function Player({
         external: isCodec,
       });
       setLoading(false);
-      if (stallTimeoutRef.current !== null) {
-        window.clearTimeout(stallTimeoutRef.current);
-        stallTimeoutRef.current = null;
-      }
+      clearBootstrapTimeout();
+      clearStallTimeout();
     };
 
     video.addEventListener("waiting", onWaiting);
@@ -357,7 +483,8 @@ export function Player({
       video.removeEventListener("stalled", onStalled);
       video.removeEventListener("error", onError);
     };
-  }, [copyTarget]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copyTarget, src]);
 
   useEffect(() => () => teardown(), []);
 
@@ -384,12 +511,8 @@ export function Player({
     if (!src) return;
     setError(null);
     retryCountRef.current = 0;
-    // Force the setup effect to re-run by quickly toggling teardown.
     setLoading(true);
-    teardown();
-    // Re-trigger via no-op state change: change "hidden" then back.
-    setHidden(true);
-    setTimeout(() => setHidden(false), 30);
+    setRetryNonce((n) => n + 1);
   };
 
   const handleClose = () => {
@@ -419,6 +542,15 @@ export function Player({
 
   const showVideo = strategy.mode === "internal" && (!error || !error.external);
 
+  // Diagnostic card colors via semantic tokens
+  const statusTone: Record<DiagnosticStatus, string> = {
+    connecting: "border-border bg-background/80 text-muted-foreground",
+    playback_started: "border-primary/40 bg-primary/15 text-primary-foreground",
+    stall_timeout: "border-yellow-500/50 bg-yellow-500/15 text-yellow-100",
+    codec_incompatible: "border-destructive/50 bg-destructive/15 text-destructive-foreground",
+    stream_error: "border-destructive/50 bg-destructive/15 text-destructive-foreground",
+  };
+
   return (
     <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black shadow-card animate-scale-in">
       {showVideo && (
@@ -436,6 +568,26 @@ export function Player({
           <h3 className="text-sm font-semibold text-white drop-shadow">{title}</h3>
         </div>
       )}
+
+      {/* Diagnostic card — small, non-blocking, bottom-right */}
+      <div
+        className={cn(
+          "pointer-events-none absolute bottom-3 right-3 z-20 max-w-[260px] rounded-md border px-2.5 py-1.5 backdrop-blur-md shadow-lg text-[11px] leading-tight",
+          statusTone[status],
+        )}
+        role="status"
+        aria-live="polite"
+      >
+        <div className="flex items-center gap-1.5 font-semibold">
+          <Activity className="h-3 w-3" />
+          <span>{STATUS_LABEL[status]}</span>
+        </div>
+        {lastReason && (
+          <div className="mt-0.5 truncate opacity-80" title={lastReason}>
+            {lastReason}
+          </div>
+        )}
+      </div>
 
       {loading && !error && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
@@ -473,6 +625,10 @@ export function Player({
                   <Button onClick={handleCopy} variant="secondary" size="sm" className="gap-2">
                     {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     {copied ? "Copiado" : "Copiar link"}
+                  </Button>
+                  <Button onClick={handleRetry} variant="outline" size="sm" className="gap-2">
+                    <RefreshCw className="h-4 w-4" />
+                    Tentar novamente
                   </Button>
                   <Button onClick={handleClose} variant="outline" size="sm" className="gap-2">
                     <X className="h-4 w-4" />
