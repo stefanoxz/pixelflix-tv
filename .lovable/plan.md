@@ -1,41 +1,32 @@
 
 
-## Resetar a senha do admin `stefanobsilva@gmail.com`
+## Definir nova senha admin: `Britania@`
 
-### Diagnóstico (confirmado pelo painel)
-- Backend de auth: **OK** (sem mais erro 500 / schema)
-- Conta existe: **OK**
-- Senha digitada (5 caracteres): **não confere** com o hash salvo
+### Problema
+A senha sugerida `Britania@` tem **9 caracteres** e é aceitável em comprimento, mas **não atende a boas práticas** (palavra de dicionário + símbolo previsível). Vou aplicá-la mesmo assim porque você pediu explicitamente — recomendo trocar depois pela tela de conta.
 
-Ou seja, o único bloqueio agora é não saber a senha correta. Duas formas de resolver — escolha uma:
+### O que vai ser feito
+1. Rodar uma migração SQL que sobrescreve o hash da senha do admin `stefanobsilva@gmail.com` no banco:
+   ```sql
+   UPDATE auth.users
+   SET encrypted_password = crypt('Britania@', gen_salt('bf')),
+       updated_at = now()
+   WHERE email = 'stefanobsilva@gmail.com';
+   ```
+2. Confirmar que a linha foi atualizada (1 row affected).
+3. Te avisar pra entrar em `/admin/login` com:
+   - **E-mail**: `stefanobsilva@gmail.com`
+   - **Senha**: `Britania@`
 
-### Opção A — Resetar a senha direto no banco (rápido)
-Eu rodo uma migração que sobrescreve a senha do admin com um valor que **você me informar agora** (mínimo 8 caracteres, recomendo algo provisório só para entrar e depois trocar).
+### Observações de segurança
+- Senha trafegou em chat — considere trocá-la assim que entrar.
+- O fluxo "Esqueci minha senha" (Opção B) já está implementado e disponível como backup.
+- Nenhuma mudança de código será feita; é apenas uma migração de dados em `auth.users`.
 
-Passos:
-1. `UPDATE auth.users SET encrypted_password = crypt('<sua_senha>', gen_salt('bf')), updated_at = now() WHERE email = 'stefanobsilva@gmail.com'`
-2. Você entra em `/admin/login` com a nova senha.
-3. (Opcional) Troca depois pela tela de conta.
+### Tecnicamente
+- Schema reservado `auth` é tocado apenas para um `UPDATE` de coluna (`encrypted_password`, `updated_at`), sem alterar estrutura, triggers ou políticas.
+- Usa a extensão `pgcrypto` (já disponível no Supabase) via `crypt()` + `gen_salt('bf')` para gerar hash bcrypt compatível com o Supabase Auth.
 
-**Me responda com a senha provisória que quer usar** (ex.: `Admin@2026`) e eu aplico.
-
-### Opção B — Adicionar fluxo "Esqueci minha senha" na tela `/admin/login`
-Implementação:
-1. Novo botão **"Esqueci minha senha"** abaixo do formulário de login.
-2. Modal pedindo o e-mail → chama `supabase.auth.resetPasswordForEmail(email, { redirectTo: \`${window.location.origin}/admin/reset-password\` })`.
-3. Nova rota pública `/admin/reset-password`:
-   - Detecta `type=recovery` no hash da URL.
-   - Formulário de nova senha + confirmação.
-   - Chama `supabase.auth.updateUser({ password })`.
-   - Redireciona para `/admin/login` ao concluir.
-4. E-mail de recuperação usa o template padrão do Lovable Cloud (sem precisar configurar domínio).
-
-Vantagem: fica permanente, serve para qualquer admin futuro.
-Desvantagem: depende do e-mail chegar (cheque spam).
-
-### Recomendação
-- Se quiser **entrar agora**: vá de **Opção A** e me passe a senha provisória.
-- Se quiser **solução definitiva**: vá de **Opção B** (posso implementar e você dispara o e-mail logo após).
-
-Pode também pedir **as duas** — reseto agora pra desbloquear e já deixo o fluxo de recuperação pronto.
+### Próximo passo
+Aprove o plano e eu rodo a migração imediatamente.
 
