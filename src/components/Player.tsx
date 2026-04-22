@@ -91,6 +91,7 @@ export function Player({
   const hlsRef = useRef<Hls | null>(null);
   const heartbeatRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
+  const fragLoadErrorCountRef = useRef(0);
 
   // Watchdog timers
   const bootstrapTimeoutRef = useRef<number | null>(null);
