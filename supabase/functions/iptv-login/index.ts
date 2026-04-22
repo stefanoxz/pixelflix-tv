@@ -74,50 +74,93 @@ async function tryFetch(url: string): Promise<{ res: Response; ua: string } | { 
   let lastErr = "Unknown error";
   let lastBody = "";
   for (const ua of USER_AGENTS) {
-    try {
-      const res = await fetch(url, {
-        headers: { "User-Agent": ua, Accept: "application/json, */*" },
-        redirect: "follow",
-      });
-      const text = await res.text();
-      if (res.status === 444 || res.status >= 500) {
-        lastErr = `HTTP ${res.status}`;
-        lastBody = text;
-        continue;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(url, {
+          headers: { "User-Agent": ua, Accept: "application/json, */*" },
+          redirect: "follow",
+        });
+        const text = await res.text();
+        if (res.status === 444 || res.status >= 500) {
+          lastErr = `HTTP ${res.status}`;
+          lastBody = text;
+          await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+          continue;
+        }
+        return {
+          res: new Response(text, { status: res.status, headers: res.headers }),
+          ua,
+        };
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : String(e);
+        await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
       }
-      return {
-        res: new Response(text, { status: res.status, headers: res.headers }),
-        ua,
-      };
-    } catch (e) {
-      lastErr = e instanceof Error ? e.message : String(e);
     }
   }
   return { error: lastErr, body: lastBody };
 }
 
+function buildVariants(serverBase: string): string[] {
+  // Generate URL variants to try (different schemes / common ports) to bypass
+  // transient network blocks (Connection reset by peer, scheme rejection, etc.).
+  const variants = new Set<string>();
+  const stripped = serverBase.replace(/\/+$/, "");
+  let proto = "http";
+  let hostPort = stripped;
+  const m = stripped.match(/^(https?):\/\/(.+)$/i);
+  if (m) {
+    proto = m[1].toLowerCase();
+    hostPort = m[2];
+  }
+  const hasPort = /:\d+$/.test(hostPort);
+  const host = hasPort ? hostPort.replace(/:\d+$/, "") : hostPort;
+
+  variants.add(`${proto}://${hostPort}`);
+  const otherProto = proto === "http" ? "https" : "http";
+  variants.add(`${otherProto}://${hostPort}`);
+  if (!hasPort) {
+    variants.add(`http://${host}:80`);
+    variants.add(`http://${host}:8080`);
+    variants.add(`https://${host}:443`);
+  }
+  return [...variants];
+}
+
 async function attemptLogin(serverBase: string, username: string, password: string) {
-  const url = `${serverBase}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-  const result = await tryFetch(url);
-  if ("error" in result) {
-    return { ok: false as const, status: 502, reason: result.error, body: result.body ?? "" };
+  const variants = buildVariants(serverBase);
+  let lastReason = "credenciais inválidas";
+  let lastBody = "";
+
+  for (const base of variants) {
+    const url = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+    const result = await tryFetch(url);
+    if ("error" in result) {
+      lastReason = result.error;
+      lastBody = result.body ?? "";
+      continue;
+    }
+    const { res } = result;
+    if (!res.ok) {
+      lastReason = `HTTP ${res.status}`;
+      lastBody = await res.text();
+      continue;
+    }
+    const raw = await res.text();
+    let data: any;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      lastReason = "resposta não JSON";
+      lastBody = raw;
+      continue;
+    }
+    if (!data?.user_info || data.user_info.auth === 0) {
+      return { ok: false as const, status: 401, reason: "credenciais inválidas", body: raw };
+    }
+    return { ok: true as const, data };
   }
-  const { res } = result;
-  if (!res.ok) {
-    const text = await res.text();
-    return { ok: false as const, status: res.status, reason: `HTTP ${res.status}`, body: text };
-  }
-  const raw = await res.text();
-  let data: any;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    return { ok: false as const, status: 502, reason: "resposta não JSON", body: raw };
-  }
-  if (!data?.user_info || data.user_info.auth === 0) {
-    return { ok: false as const, status: 401, reason: "credenciais inválidas", body: raw };
-  }
-  return { ok: true as const, data };
+
+  return { ok: false as const, status: 502, reason: lastReason, body: lastBody };
 }
 
 Deno.serve(async (req) => {
