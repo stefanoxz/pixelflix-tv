@@ -32,6 +32,9 @@ import {
   Trash2,
   ShieldCheck,
   AlertTriangle,
+  Monitor,
+  Activity as ActivityIcon,
+  Ban,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
@@ -85,7 +88,43 @@ interface AdminEvent {
   created_at: string;
 }
 
-async function callAdmin<T>(action: string, payload?: any): Promise<T> {
+interface MonitoringSession {
+  anon_user_id: string;
+  iptv_username: string | null;
+  ip_masked: string;
+  started_at: string;
+  last_seen_at: string;
+  duration_s: number;
+}
+interface MonitoringBlock {
+  anon_user_id: string;
+  blocked_until: string;
+  reason: string | null;
+  created_at: string;
+}
+interface MonitoringErrorEvent {
+  id: string;
+  anon_user_id: string | null;
+  event_type: string;
+  ip_masked: string;
+  meta: Record<string, unknown> | null;
+  created_at: string;
+}
+interface MonitoringOverview {
+  online_now: number;
+  active_sessions: MonitoringSession[];
+  active_blocks: MonitoringBlock[];
+  recent_errors: MonitoringErrorEvent[];
+  top_rejected_ips: { ip_masked: string; count: number }[];
+}
+interface TopConsumer {
+  anon_user_id: string;
+  iptv_username: string;
+  requests: number;
+  segments: number;
+}
+
+async function callAdmin<T>(action: string, payload?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("admin-api", {
     body: { action, payload },
   });
@@ -114,6 +153,8 @@ const Admin = () => {
   const [allowed, setAllowed] = useState<AllowedServer[]>([]);
   const [pending, setPending] = useState<PendingServer[]>([]);
   const [events, setEvents] = useState<AdminEvent[]>([]);
+  const [monitoring, setMonitoring] = useState<MonitoringOverview | null>(null);
+  const [topConsumers, setTopConsumers] = useState<TopConsumer[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [signingOut, setSigningOut] = useState(false);
