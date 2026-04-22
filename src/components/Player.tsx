@@ -104,6 +104,33 @@ export function Player({
   const [status, setStatus] = useState<DiagnosticStatus>("connecting");
   const [lastReason, setLastReason] = useState<string | null>(null);
 
+  // Logs panel — buffered in refs to avoid re-renders when closed
+  const logsRef = useRef<LogEntry[]>([]);
+  const setupStartRef = useRef(0);
+  const firstFrameAtRef = useRef<number | null>(null);
+  const manifestParsedAtRef = useRef<number | null>(null);
+  const logsPanelOpenRef = useRef(false);
+  const [logsPanelOpen, setLogsPanelOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem("player.logsPanel.open") === "1"; }
+    catch { return false; }
+  });
+  const [logsVersion, setLogsVersion] = useState(0);
+  const logsListRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    logsPanelOpenRef.current = logsPanelOpen;
+    try { localStorage.setItem("player.logsPanel.open", logsPanelOpen ? "1" : "0"); }
+    catch { /* noop */ }
+  }, [logsPanelOpen]);
+
+  const pushLog = (entry: Omit<LogEntry, "t" | "tRel">) => {
+    const t = performance.now();
+    const tRel = setupStartRef.current ? t - setupStartRef.current : 0;
+    logsRef.current.push({ ...entry, t, tRel });
+    if (logsRef.current.length > 200) logsRef.current.shift();
+    if (logsPanelOpenRef.current) setLogsVersion((v) => v + 1);
+  };
+
   const copyTarget = rawUrl || src || "";
 
   const strategy = useMemo<PlaybackStrategy>(() => {
