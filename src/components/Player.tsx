@@ -39,7 +39,8 @@ type DiagnosticStatus =
   | "playback_started"
   | "stall_timeout"
   | "codec_incompatible"
-  | "stream_error";
+  | "stream_error"
+  | "stream_no_data";
 
 type LogSource = "hls" | "video" | "diag" | "net";
 type LogLevel = "info" | "warn" | "error";
@@ -69,7 +70,10 @@ const STATUS_LABEL: Record<DiagnosticStatus, string> = {
   stall_timeout: "Stall timeout",
   codec_incompatible: "Codec incompatível",
   stream_error: "Erro no stream",
+  stream_no_data: "Sem vídeo no canal",
 };
+
+const FRAG_LOAD_ERROR_THRESHOLD = 3;
 
 export function Player({
   src,
