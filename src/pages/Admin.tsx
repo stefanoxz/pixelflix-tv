@@ -410,6 +410,153 @@ const Admin = () => {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
+          <TabsContent value="monitoring" className="space-y-6 mt-0">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="p-5 bg-gradient-card border-border/50">
+                <div className="h-10 w-10 rounded-lg text-success bg-success/10 flex items-center justify-center mb-3">
+                  <UserCheck className="h-5 w-5" />
+                </div>
+                <p className="text-xs text-muted-foreground">Usuários online agora</p>
+                <p className="text-2xl font-bold mt-1">{monitoring?.online_now ?? "—"}</p>
+                <p className="text-xs text-muted-foreground mt-1">heartbeat &lt; 90s</p>
+              </Card>
+              <Card className="p-5 bg-gradient-card border-border/50">
+                <div className="h-10 w-10 rounded-lg text-primary bg-primary/10 flex items-center justify-center mb-3">
+                  <ActivityIcon className="h-5 w-5" />
+                </div>
+                <p className="text-xs text-muted-foreground">Streams ativos</p>
+                <p className="text-2xl font-bold mt-1">{monitoring?.active_sessions.length ?? "—"}</p>
+                <p className="text-xs text-muted-foreground mt-1">com player ativo</p>
+              </Card>
+              <Card className="p-5 bg-gradient-card border-border/50">
+                <div className="h-10 w-10 rounded-lg text-destructive bg-destructive/10 flex items-center justify-center mb-3">
+                  <Ban className="h-5 w-5" />
+                </div>
+                <p className="text-xs text-muted-foreground">Bloqueios ativos</p>
+                <p className="text-2xl font-bold mt-1">{monitoring?.active_blocks.length ?? "—"}</p>
+                <p className="text-xs text-muted-foreground mt-1">temporários</p>
+              </Card>
+              <Card className="p-5 bg-gradient-card border-border/50">
+                <div className="h-10 w-10 rounded-lg text-warning bg-warning/10 flex items-center justify-center mb-3">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <p className="text-xs text-muted-foreground">Erros 24h</p>
+                <p className="text-2xl font-bold mt-1">{monitoring?.recent_errors.length ?? "—"}</p>
+                <p className="text-xs text-muted-foreground mt-1">últimos 50</p>
+              </Card>
+            </div>
+
+            <Card className="p-6 bg-gradient-card border-border/50">
+              <h2 className="text-lg font-semibold mb-4">Sessões ativas</h2>
+              {!monitoring?.active_sessions.length ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">Ninguém online no momento.</p>
+              ) : (
+                <div className="divide-y divide-border/50">
+                  <div className="grid grid-cols-12 gap-3 px-2 py-2 text-xs font-medium text-muted-foreground">
+                    <div className="col-span-3">Usuário IPTV</div>
+                    <div className="col-span-3">IP</div>
+                    <div className="col-span-2">Início</div>
+                    <div className="col-span-2">Duração</div>
+                    <div className="col-span-2 text-right">Ação</div>
+                  </div>
+                  {monitoring.active_sessions.map((s) => (
+                    <div key={s.anon_user_id} className="grid grid-cols-12 gap-3 px-2 py-3 items-center text-sm">
+                      <div className="col-span-3 font-medium truncate">{s.iptv_username || "—"}</div>
+                      <div className="col-span-3 font-mono text-xs text-muted-foreground">{s.ip_masked}</div>
+                      <div className="col-span-2 text-xs text-muted-foreground">há {formatRelative(s.started_at)}</div>
+                      <div className="col-span-2 text-xs">{Math.floor(s.duration_s / 60)}min</div>
+                      <div className="col-span-2 text-right">
+                        <Button size="sm" variant="outline" onClick={() => evictSession(s.anon_user_id)}>
+                          <X className="h-3 w-3 mr-1" />Encerrar
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="p-6 bg-gradient-card border-border/50">
+                <h2 className="text-lg font-semibold mb-4">Top consumidores (24h)</h2>
+                {!topConsumers.length ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">Sem consumo registrado.</p>
+                ) : (
+                  <div className="divide-y divide-border/50">
+                    {topConsumers.map((c) => (
+                      <div key={c.anon_user_id} className="flex items-center justify-between py-2 text-sm">
+                        <span className="font-medium truncate">{c.iptv_username || c.anon_user_id.slice(0, 8)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {c.requests} req • {c.segments} seg
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              <Card className="p-6 bg-gradient-card border-border/50">
+                <h2 className="text-lg font-semibold mb-4">Bloqueios ativos</h2>
+                {!monitoring?.active_blocks.length ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">Nenhum bloqueio ativo.</p>
+                ) : (
+                  <div className="divide-y divide-border/50">
+                    {monitoring.active_blocks.map((b) => (
+                      <div key={b.anon_user_id} className="flex items-center justify-between py-2 text-sm gap-2">
+                        <div className="min-w-0">
+                          <p className="font-mono text-xs truncate">{b.anon_user_id.slice(0, 12)}…</p>
+                          <p className="text-xs text-muted-foreground">
+                            {b.reason || "—"} • até {new Date(b.blocked_until).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => unblockUser(b.anon_user_id)}>
+                          Desbloquear
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            <Card className="p-6 bg-gradient-card border-border/50">
+              <h2 className="text-lg font-semibold mb-4">Erros recentes (24h)</h2>
+              {!monitoring?.recent_errors.length ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">Nenhum erro registrado.</p>
+              ) : (
+                <div className="divide-y divide-border/50 max-h-96 overflow-y-auto">
+                  {monitoring.recent_errors.map((e) => (
+                    <div key={e.id} className="py-2 flex items-center justify-between gap-3 text-sm">
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{e.event_type}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {e.ip_masked} • {(e.meta as { reason?: string })?.reason || "—"}
+                        </p>
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0">há {formatRelative(e.created_at)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <Card className="p-6 bg-gradient-card border-border/50">
+              <h2 className="text-lg font-semibold mb-4">Top IPs com mais rejeições (24h)</h2>
+              {!monitoring?.top_rejected_ips.length ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">Sem rejeições.</p>
+              ) : (
+                <div className="divide-y divide-border/50">
+                  {monitoring.top_rejected_ips.map((r) => (
+                    <div key={r.ip_masked} className="flex items-center justify-between py-2 text-sm">
+                      <span className="font-mono text-xs">{r.ip_masked}</span>
+                      <span className="text-xs text-muted-foreground">{r.count} rejeições</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
           <TabsContent value="dashboard" className="space-y-6 mt-0">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {statCards.map((s) => {
