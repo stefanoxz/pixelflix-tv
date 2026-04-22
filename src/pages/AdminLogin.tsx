@@ -146,6 +146,33 @@ const AdminLogin = () => {
     }
   };
 
+  const handleForgotPassword = async () => {
+    setLastError(null);
+    if (!email) {
+      toast.error("Informe seu e-mail no campo acima primeiro");
+      pushDebug("forgot", false, "e-mail vazio");
+      return;
+    }
+    setLoading(true);
+    pushDebug("forgot:start", true, `email=${maskEmail(email)}`);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/admin/reset-password`,
+      });
+      if (error) throw error;
+      pushDebug("forgot", true, "e-mail de recuperação enviado (se a conta existir)");
+      toast.success("Se a conta existir, um link de recuperação foi enviado.");
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : "Falha ao enviar e-mail";
+      const friendly = describeAuthError(raw);
+      pushDebug("forgot", false, raw);
+      setLastError(`${friendly} — raw: ${raw}`);
+      toast.error(friendly);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const runDiagnostics = async () => {
     setLastError(null);
     pushDebug("diag:start", true, `email=${maskEmail(email) || "(vazio)"}`);
@@ -217,6 +244,14 @@ const AdminLogin = () => {
               <Button type="submit" disabled={loading} className="w-full bg-gradient-primary shadow-glow">
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
               </Button>
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={loading}
+                className="block w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              >
+                Esqueci minha senha
+              </button>
             </form>
           </TabsContent>
 

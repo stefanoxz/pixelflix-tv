@@ -13,6 +13,7 @@ import Movies from "./pages/Movies";
 import SeriesPage from "./pages/Series";
 import Account from "./pages/Account";
 import AdminLogin from "./pages/AdminLogin";
+import AdminResetPassword from "./pages/AdminResetPassword";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -32,6 +33,7 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/reset-password" element={<AdminResetPassword />} />
             <Route
               path="/admin"
               element={
