@@ -103,8 +103,9 @@ async function tryFetch(url: string): Promise<{ res: Response; ua: string } | { 
 function buildVariants(serverBase: string): string[] {
   // Generate URL variants to try (different schemes / common ports) to bypass
   // transient network blocks (Connection reset by peer, scheme rejection, etc.).
+  // Sanitize input: strip whitespace from hostname (invalid registries).
   const variants = new Set<string>();
-  const stripped = serverBase.replace(/\/+$/, "");
+  const stripped = serverBase.trim().replace(/\/+$/, "");
   let proto = "http";
   let hostPort = stripped;
   const m = stripped.match(/^(https?):\/\/(.+)$/i);
@@ -112,16 +113,27 @@ function buildVariants(serverBase: string): string[] {
     proto = m[1].toLowerCase();
     hostPort = m[2];
   }
+  hostPort = hostPort.replace(/\s+/g, "");
+  if (!hostPort) return [];
+
   const hasPort = /:\d+$/.test(hostPort);
   const host = hasPort ? hostPort.replace(/:\d+$/, "") : hostPort;
 
-  variants.add(`${proto}://${hostPort}`);
-  const otherProto = proto === "http" ? "https" : "http";
-  variants.add(`${otherProto}://${hostPort}`);
+  const candidates = [
+    `${proto}://${hostPort}`,
+    `${proto === "http" ? "https" : "http"}://${hostPort}`,
+  ];
   if (!hasPort) {
-    variants.add(`http://${host}:80`);
-    variants.add(`http://${host}:8080`);
-    variants.add(`https://${host}:443`);
+    candidates.push(`http://${host}:80`, `http://${host}:8080`, `https://${host}:443`);
+  }
+
+  for (const c of candidates) {
+    try {
+      new URL(c);
+      variants.add(c);
+    } catch {
+      // skip invalid variant
+    }
   }
   return [...variants];
 }
