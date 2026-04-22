@@ -1,159 +1,132 @@
 
-## Plano — cartão de diagnóstico no player e correção do “carregando infinito” nos canais ao vivo
 
-### Diagnóstico confirmado
-O problema não está só na UI do spinner. No `Player` atual ainda existem dois erros de fluxo que explicam por que o ao vivo continua “carregando”:
+## Plano — Painel opcional “Logs do player”
 
-1. **`MANIFEST_PARSED` está sendo tratado como playback iniciado**
-   - Hoje `engagedRef.current = true` é marcado cedo demais.
-   - Isso desarma o watchdog antes do primeiro frame real.
-   - Resultado: o canal pode nunca tocar e mesmo assim o player não entra no estado correto de falha.
+### Objetivo
+Adicionar um painel interno de diagnóstico em `src/components/Player.tsx`, desativado por padrão, que mostra eventos do HLS, do `<video>`, da rede e do diagnóstico, com timestamps relativos e métrica de TTFF. Sem alterar nenhuma lógica existente do player.
 
-2. **Sequência do HLS ainda é frágil**
-   - O código faz `hls.loadSource(...)` antes de `hls.attachMedia(...)`.
-   - Em canais instáveis isso pode causar corrida de eventos e deixar o player preso em estado parcial.
+### 1. Estrutura de logs (sem re-render desnecessário)
 
-### O que será implementado
-
-#### 1. `src/components/Player.tsx` — máquina de diagnóstico explícita
-Criar estado de diagnóstico separado do overlay principal:
-
-- `connecting`
-- `playback_started`
-- `stall_timeout`
-- `codec_incompatible`
-- `stream_error`
-
-Também adicionar:
-- `lastReason`
-- `playbackStartedRef`
-- `manifestReadyRef`
-- `stallSinceRef`
-- `retryNonce`
-
-Regra principal:
-- **Só considerar “Reprodução iniciada” após `playing` ou `loadeddata`**
-- `MANIFEST_PARSED` passa a significar apenas **manifest carregado**, não reprodução real
-
-#### 2. `src/components/Player.tsx` — corrigir bootstrap do HLS
-Trocar o fluxo para o padrão seguro:
+Adicionar tipo e refs no componente:
 
 ```ts
-const hls = new Hls(HLS_CONFIG);
-hls.attachMedia(video);
-hls.once(Hls.Events.MEDIA_ATTACHED, () => {
-  hls.loadSource(safeSrc);
+type LogEntry = {
+  t: number;
+  tRel: number;
+  source: "hls" | "video" | "diag" | "net";
+  level: "info" | "warn" | "error";
+  label: string;
+  details?: string;
+};
+
+const logsRef = useRef<LogEntry[]>([]);
+const setupStartRef = useRef(0);
+const firstFrameAtRef = useRef<number | null>(null);
+const manifestParsedAtRef = useRef<number | null>(null);
+
+const [logsPanelOpen, setLogsPanelOpen] = useState<boolean>(() => {
+  try { return localStorage.getItem("player.logsPanel.open") === "1"; }
+  catch { return false; }
 });
+const [logsVersion, setLogsVersion] = useState(0);
 ```
 
-Ajustes adicionais:
-- `MANIFEST_PARSED` não encerra mais o diagnóstico nem o timeout inicial
-- o timeout inicial só é limpo no primeiro `playing` ou `loadeddata`
+Persistir `logsPanelOpen` em `localStorage` chave `player.logsPanel.open` via `useEffect`.
 
-#### 3. `src/components/Player.tsx` — watchdog real contra carregamento infinito
-Implementar dois timers distintos:
+### 2. Helper `pushLog`
 
-**a) Timeout de bootstrap**
-- Se não houver `playing`/`loadeddata` em até 12s:
-  - status = `stall_timeout`
-  - `loading = false`
-  - `lastReason = "sem reprodução após 12s"` ou último detalhe HLS/vídeo disponível
+```ts
+const pushLog = (entry: Omit<LogEntry, "t" | "tRel">) => {
+  const t = performance.now();
+  logsRef.current.push({ ...entry, t, tRel: t - setupStartRef.current });
+  if (logsRef.current.length > 200) logsRef.current.shift();
+  if (logsPanelOpenRef.current) setLogsVersion(v => v + 1);
+};
+```
 
-**b) Timeout de stall após manifest**
-- Se o player entrar em `waiting`/`stalled` e não se recuperar em 8s:
-  - status = `stall_timeout`
-  - mostrar motivo do último erro HLS/vídeo
-  - parar o spinner infinito
+Usar um `logsPanelOpenRef` espelho (`useRef`) sincronizado com o state, para não recriar o helper a cada render e evitar re-renders quando o painel estiver fechado.
 
-Com isso, nenhum canal poderá ficar eternamente em `loading=true`.
+### 3. Reset no início do setup
 
-#### 4. `src/components/Player.tsx` — cartão pequeno de diagnóstico no player
-Adicionar um cartão compacto, não-bloqueante, no canto inferior direito do player com:
+Dentro do `useEffect` principal, antes do bootstrap do HLS:
 
-- Status:
-  - `Reprodução iniciada`
-  - `Stall timeout`
-  - `Codec incompatível`
-  - opcionalmente `Conectando`
-- Motivo do último erro:
-  - `BUFFER_STALLED_ERROR`
-  - `manifest carregado, mas sem frames`
-  - `MEDIA_ERR_DECODE`
-  - `MEDIA_ERR_SRC_NOT_SUPPORTED`
-  - mensagem retornada do backend/HLS quando existir
+```ts
+logsRef.current = [];
+firstFrameAtRef.current = null;
+manifestParsedAtRef.current = null;
+setupStartRef.current = performance.now();
+pushLog({ source: "diag", level: "info", label: "setup_start" });
+```
 
-Formato visual:
-- pequeno
-- sem ocupar a tela toda
-- sempre visível enquanto houver `src`
-- cor por estado:
-  - verde = reprodução iniciada
-  - amarelo = stall timeout
-  - vermelho = codec incompatível / erro
+### 4. Pontos de instrumentação
 
-#### 5. `src/components/Player.tsx` — mapear erros corretamente
-Melhorar o tratamento de erro do HLS e do `<video>`:
+Inserir `pushLog` nos pontos já existentes no `Player.tsx`, sem mudar nenhuma lógica:
 
-**HLS**
-- guardar sempre o último `data.type` e `data.details`, mesmo quando o erro não for fatal
-- quando houver `MEDIA_ERROR` com cara de codec/decode, trocar diagnóstico para `codec_incompatible`
-- quando houver `NETWORK_ERROR`/`BUFFER_STALLED_ERROR`, alimentar `lastReason`
+- `MEDIA_ATTACHED` → `hls/media_attached`
+- `MANIFEST_PARSED` → `hls/manifest_parsed` + `manifestParsedAtRef.current = performance.now()`
+- `Hls.Events.ERROR` → `hls/error` com `details: ${type}/${details} fatal=${fatal}`
+- bootstrap timeout (12s) → `diag/bootstrap_timeout_12s`
+- stall timeout (8s) → `diag/stall_timeout_8s`
+- `<video>` `playing` (apenas primeira vez via `firstFrameAtRef === null`) → `video/first_playing` + grava `firstFrameAtRef` + log do TTFF como `details`
+- `<video>` `loadeddata` → `video/loadeddata`
+- `<video>` `waiting` → `video/waiting`
+- `<video>` `stalled` → `video/stalled`
+- `<video>` `error` → `video/error` com `code`/`message`
+- requisição de token OK → `net/token_ok`
+- requisição de token erro → `net/token_error` com mensagem
+- `handleRetry` → `diag/retry`
 
-**Video element**
-- mapear:
-  - `MEDIA_ERR_DECODE` → `Codec incompatível`
-  - `MEDIA_ERR_SRC_NOT_SUPPORTED` → `Codec incompatível`
-  - demais códigos → `stream_error`
-- parar de sobrescrever tudo com mensagem genérica
-- manter ações úteis:
-  - abrir externamente
-  - copiar link
-  - tentar novamente
+Cada chamada apenas adiciona ao buffer; nenhuma branch de execução existente é alterada.
 
-#### 6. `src/components/Player.tsx` — consertar retry de verdade
-O `handleRetry` atual não força um novo setup com segurança.
+### 5. Botão de abertura
 
-Será trocado por:
-- `retryNonce` no estado
-- efeito principal dependente de `retryNonce`
-- botão “Tentar novamente” realmente recria a sessão do player e reinicia o HLS do zero
+Pequeno botão no canto **inferior esquerdo** do player:
+- Ícone `Terminal` do `lucide-react`
+- `pointer-events-auto`, `z-20`
+- Sempre visível enquanto houver `src`
+- Toggla `logsPanelOpen`
 
-#### 7. `src/pages/Live.tsx` — forçar remount limpo ao trocar canal
-Adicionar `key` estável no `Player` com base no canal ativo, por exemplo:
-- `activeChannel?.stream_id`
-- e opcionalmente a URL final
+### 6. Painel de logs
 
-Isso garante:
-- teardown completo por canal
-- nenhum estado residual de um canal anterior contaminando o próximo
-- troca mais previsível no ao vivo
+Overlay sobre o player, lado direito, largura ~360px, altura limitada à do player:
+- `bg-background/95 backdrop-blur-md border rounded-md`
+- `overflow-y-auto`
+- `pointer-events-auto`
+- não cobre todo o vídeo
 
-#### 8. Telemetria de diagnóstico
-Aproveitar `reportStreamEvent` já existente para registrar transições relevantes:
-- `diagnostic_status_change`
-- `stall_timeout`
-- `codec_incompatible`
-- `playback_started`
+**Cabeçalho:**
+- Título “Logs do player”
+- Botões: copiar JSON (`navigator.clipboard.writeText(JSON.stringify(logsRef.current, null, 2))`), limpar (`logsRef.current = []; setLogsVersion(v=>v+1)`), fechar.
 
-Sem mudar backend agora; apenas enviar `meta` mais útil do frontend para facilitar depuração posterior.
+**Resumo de tempos:**
+- Setup → Manifest: `manifestParsedAtRef - setupStartRef` ms
+- Setup → First Frame (TTFF): `firstFrameAtRef - setupStartRef` ms
+- Manifest → First Frame: diferença
+- Mostrar `—` quando não disponível.
 
-### Resultado esperado
-Depois dessa refatoração:
+**Lista:**
+- `[+1234ms]` tempo relativo
+- badge por `source`:
+  - `hls` → azul
+  - `video` → verde
+  - `diag` → âmbar
+  - `net` → roxo
+- `label` + `details` (truncado, `title` com texto completo)
+- `level === "error"` em vermelho, `warn` em amarelo
 
-- o player **não ficará mais preso indefinidamente em “Conectando…”**
-- canais que realmente tocarem mostrarão **“Reprodução iniciada”**
-- canais que travarem passarão para **“Stall timeout”** com motivo
-- canais com problema de codec mostrarão **“Codec incompatível”** com a causa
-- a troca entre canais ao vivo ficará mais estável por causa do remount limpo e do bootstrap HLS corrigido
+**Auto-scroll:**
+- ref no container da lista; `useEffect` em `[logsVersion, logsPanelOpen]` faz `scrollTop = scrollHeight`.
 
-### Arquivos a alterar
-- `src/components/Player.tsx`
-- `src/pages/Live.tsx`
+### 7. Garantias de não-regressão
 
-### Validação
-Após aplicar:
-1. abrir um canal que funciona → deve exibir `Reprodução iniciada`
-2. abrir um canal que hoje fica só carregando → deve sair do spinner e virar `Stall timeout`
-3. abrir um canal com decode ruim / codec incompatível → deve mostrar `Codec incompatível`
-4. clicar em “Tentar novamente” → deve reinicializar o player de fato
-5. trocar de canal ao vivo → o novo canal deve montar limpo, sem herdar estado do anterior
+- Nenhuma alteração na máquina de diagnóstico, retry, watchdogs, bootstrap HLS, integração com backend ou telemetria.
+- Logs ficam em `useRef` — não disparam render.
+- `setLogsVersion` só é chamado quando o painel está aberto (via `logsPanelOpenRef`).
+- Buffer limitado a 200 entradas para não crescer indefinidamente.
+
+### Arquivo tocado
+- `src/components/Player.tsx` (único)
+
+### Sem mudanças em
+- `src/pages/Live.tsx`, edge functions, schema, telemetria, `IptvContext`, demais componentes.
+
