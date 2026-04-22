@@ -459,6 +459,7 @@ export function Player({
     if (!video) return;
 
     const onWaiting = () => {
+      pushLog({ source: "video", level: "warn", label: "waiting" });
       if (!playbackStartedRef.current) {
         setLoading(true);
         return;
@@ -467,12 +468,14 @@ export function Player({
       if (stallTimeoutRef.current === null) {
         stallTimeoutRef.current = window.setTimeout(() => {
           updateStatus("stall_timeout", lastReasonRef.current || "BUFFER_STALLED_ERROR");
+          pushLog({ source: "diag", level: "error", label: "stall_timeout_8s", details: lastReasonRef.current ?? undefined });
         }, STALL_TIMEOUT_MS);
       }
     };
     const onStalled = () => {
       lastReasonRef.current = "BUFFER_STALLED_ERROR";
       setLastReason("BUFFER_STALLED_ERROR");
+      pushLog({ source: "video", level: "warn", label: "stalled" });
       if (!playbackStartedRef.current) {
         setLoading(true);
         return;
@@ -480,6 +483,7 @@ export function Player({
       if (stallTimeoutRef.current === null) {
         stallTimeoutRef.current = window.setTimeout(() => {
           updateStatus("stall_timeout", "BUFFER_STALLED_ERROR");
+          pushLog({ source: "diag", level: "error", label: "stall_timeout_8s", details: "BUFFER_STALLED_ERROR" });
         }, STALL_TIMEOUT_MS);
       }
     };
@@ -490,10 +494,14 @@ export function Player({
       clearBootstrapTimeout();
       clearStallTimeout();
       if (wasFirst) {
+        firstFrameAtRef.current = performance.now();
+        const ttff = setupStartRef.current ? Math.round(firstFrameAtRef.current - setupStartRef.current) : 0;
+        pushLog({ source: "video", level: "info", label: "first_playing", details: `TTFF=${ttff}ms` });
         updateStatus("playback_started", null);
-        reportStreamEvent("stream_started", { url: src ?? undefined, meta: { trigger: "playing_event" } });
+        reportStreamEvent("stream_started", { url: src ?? undefined, meta: { trigger: "playing_event", ttff_ms: ttff } });
       } else if (status === "stall_timeout") {
         updateStatus("playback_started", "recuperado após stall");
+        pushLog({ source: "diag", level: "info", label: "recovered_after_stall" });
       }
     };
     const onCanPlay = () => setLoading(false);
@@ -503,7 +511,11 @@ export function Player({
       setLoading(false);
       clearBootstrapTimeout();
       clearStallTimeout();
+      pushLog({ source: "video", level: "info", label: "loadeddata" });
       if (wasFirst) {
+        if (firstFrameAtRef.current === null) {
+          firstFrameAtRef.current = performance.now();
+        }
         updateStatus("playback_started", null);
       }
     };
@@ -514,6 +526,7 @@ export function Player({
       const reason = `MEDIA_ERR_${code ?? "?"}${msg ? `: ${msg}` : ""}`;
       lastReasonRef.current = reason;
       setLastReason(reason);
+      pushLog({ source: "video", level: "error", label: "error", details: reason });
       updateStatus(isCodec ? "codec_incompatible" : "stream_error", reason);
       setError({
         title: isCodec ? "Codec incompatível" : "Não foi possível reproduzir",
