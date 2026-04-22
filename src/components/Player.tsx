@@ -368,6 +368,49 @@ export function Player({
                   return;
                 }
 
+                // Track repeated frag-load errors when manifest is ready but
+                // playback never started — classify as "stream sem dados".
+                if (
+                  data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR ||
+                  data.details === Hls.ErrorDetails.FRAG_LOAD_TIMEOUT ||
+                  data.details === Hls.ErrorDetails.FRAG_PARSING_ERROR
+                ) {
+                  fragLoadErrorCountRef.current += 1;
+                  pushLog({
+                    source: "diag",
+                    level: "warn",
+                    label: "frag_load_error_count",
+                    details: `${fragLoadErrorCountRef.current}/${FRAG_LOAD_ERROR_THRESHOLD}`,
+                  });
+                  if (
+                    !playbackStartedRef.current &&
+                    manifestReadyRef.current &&
+                    fragLoadErrorCountRef.current >= FRAG_LOAD_ERROR_THRESHOLD
+                  ) {
+                    setLoading(false);
+                    const reason = "fragLoadError + no frames";
+                    updateStatus("stream_no_data", reason);
+                    pushLog({ source: "diag", level: "error", label: "stream_no_data", details: reason });
+                    setError({
+                      title: "Sem vídeo no canal",
+                      description:
+                        "Este canal abriu, mas não está transmitindo vídeo no momento. Tente outro canal ou volte mais tarde.",
+                      copyUrl: copyTarget,
+                      noData: true,
+                    });
+                    clearBootstrapTimeout();
+                    clearStallTimeout();
+                    reportStreamEvent("stream_error", {
+                      url: src,
+                      meta: { type: "stream_no_data", reason },
+                    });
+                    try { hls.stopLoad(); } catch { /* noop */ }
+                    return;
+                  }
+                  // Not yet at threshold — let HLS retry naturally.
+                  return;
+                }
+
                 if (!data.fatal) return;
 
                 if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCountRef.current < 3) {
