@@ -48,6 +48,15 @@ const AdminLogin = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [debugLog, setDebugLog] = useState<DebugEntry[]>([]);
+  const [lastError, setLastError] = useState<string | null>(null);
+
+  const pushDebug = (step: string, ok: boolean, detail: string) => {
+    setDebugLog((prev) =>
+      [...prev, { ts: new Date().toLocaleTimeString(), step, ok, detail }].slice(-30),
+    );
+  };
 
   // If already logged in AND admin, jump straight to /admin
   useEffect(() => {
@@ -55,10 +64,12 @@ const AdminLogin = () => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user || !active) return;
+      pushDebug("session", true, `sessão ativa: ${maskEmail(session.user.email ?? "")}`);
       const { data: isAdmin } = await supabase.rpc("has_role", {
         _user_id: session.user.id,
         _role: "admin",
       });
+      pushDebug("has_role", !!isAdmin, isAdmin ? "admin confirmado" : "não é admin");
       if (isAdmin && active) navigate("/admin", { replace: true });
     })();
     return () => { active = false; };
@@ -67,27 +78,41 @@ const AdminLogin = () => {
   const handleSignIn = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setLastError(null);
+    pushDebug("signin:start", true, `email=${maskEmail(email)} senha=${password.length} chars`);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      if (error) {
+        pushDebug("signin:auth", false, `${error.status ?? "?"} ${error.message}`);
+        throw error;
+      }
       const userId = data.user?.id;
       if (!userId) throw new Error("Falha ao obter sessão");
+      pushDebug("signin:auth", true, `user_id=${userId.slice(0, 8)}…`);
 
       const { data: isAdmin, error: roleErr } = await supabase.rpc("has_role", {
         _user_id: userId,
         _role: "admin",
       });
-      if (roleErr) throw roleErr;
+      if (roleErr) {
+        pushDebug("has_role", false, roleErr.message);
+        throw roleErr;
+      }
+      pushDebug("has_role", !!isAdmin, isAdmin ? "admin OK" : "sem papel admin");
       if (!isAdmin) {
         await supabase.auth.signOut();
-        toast.error("Sua conta não tem permissão de admin. Peça ao administrador para liberar.");
+        const msg = "Conta autenticou, mas não tem papel admin. Peça liberação.";
+        setLastError(msg);
+        toast.error(msg);
         return;
       }
       toast.success("Bem-vindo ao painel admin");
       navigate("/admin", { replace: true });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Falha no login";
-      toast.error(msg);
+      const raw = err instanceof Error ? err.message : "Falha no login";
+      const friendly = describeAuthError(raw);
+      setLastError(`${friendly} — raw: ${raw}`);
+      toast.error(friendly);
     } finally {
       setLoading(false);
     }
@@ -96,21 +121,53 @@ const AdminLogin = () => {
   const handleSignUp = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setLastError(null);
+    pushDebug("signup:start", true, `email=${maskEmail(email)} senha=${password.length} chars`);
     try {
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: { emailRedirectTo: `${window.location.origin}/admin` },
       });
-      if (error) throw error;
+      if (error) {
+        pushDebug("signup", false, `${error.status ?? "?"} ${error.message}`);
+        throw error;
+      }
+      pushDebug("signup", true, "conta criada (verifique e-mail se exigido)");
       toast.success("Conta criada. Peça ao admin atual para liberar permissão.");
       setMode("signin");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Falha no cadastro";
-      toast.error(msg);
+      const raw = err instanceof Error ? err.message : "Falha no cadastro";
+      const friendly = describeAuthError(raw);
+      setLastError(`${friendly} — raw: ${raw}`);
+      toast.error(friendly);
     } finally {
       setLoading(false);
     }
+  };
+
+  const runDiagnostics = async () => {
+    setLastError(null);
+    pushDebug("diag:start", true, `email=${maskEmail(email) || "(vazio)"}`);
+    if (!email) {
+      pushDebug("diag", false, "informe um e-mail antes de diagnosticar");
+      toast.error("Informe o e-mail primeiro");
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/admin/login`,
+    });
+    if (error) {
+      pushDebug("diag:reset", false, `${error.status ?? "?"} ${error.message}`);
+    } else {
+      pushDebug("diag:reset", true, "backend respondeu sem 500 (e-mail enviado se conta existir)");
+    }
+    const { data: { session } } = await supabase.auth.getSession();
+    pushDebug(
+      "diag:session",
+      !!session,
+      session ? `logado: ${maskEmail(session.user.email ?? "")}` : "sem sessão ativa",
+    );
   };
 
   return (
