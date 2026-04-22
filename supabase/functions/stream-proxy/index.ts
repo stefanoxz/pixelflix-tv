@@ -84,6 +84,29 @@ function isPrivateHost(host: string): boolean {
   return false;
 }
 
+/**
+ * Verifica se um host de redirecionamento é "razoavelmente derivado" do host
+ * original. Aceitamos:
+ *  - mesmo host
+ *  - subdomínio do mesmo registrable domain (ex.: cdn.dominio.com a partir de dominio.com)
+ *  - host pai (ex.: dominio.com a partir de cdn.dominio.com)
+ *  - mesma "raiz" de 2 últimos labels (heurística simples, ignora TLD multiparte)
+ */
+function isRelatedHost(originalHost: string, redirectHost: string): boolean {
+  const o = originalHost.toLowerCase().split(":")[0];
+  const r = redirectHost.toLowerCase().split(":")[0];
+  if (o === r) return true;
+  if (r.endsWith(`.${o}`) || o.endsWith(`.${r}`)) return true;
+  const oParts = o.split(".");
+  const rParts = r.split(".");
+  if (oParts.length >= 2 && rParts.length >= 2) {
+    const oRoot = oParts.slice(-2).join(".");
+    const rRoot = rParts.slice(-2).join(".");
+    if (oRoot === rRoot) return true;
+  }
+  return false;
+}
+
 Deno.serve(async (req) => {
   const corsHeaders = corsFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -111,8 +134,11 @@ Deno.serve(async (req) => {
     }
 
     const allowedHosts = await getAllowedHosts();
-    if (!allowedHosts.has(targetHost) && !allowedHosts.has(targetHost.split(":")[0])) {
-      return new Response("Host not allowed", { status: 403, headers: corsHeaders });
+    const originalAllowed =
+      allowedHosts.has(targetHost) || allowedHosts.has(targetHost.split(":")[0]);
+    if (!originalAllowed) {
+      console.warn("[stream-proxy] host not allowed:", targetHost);
+      return new Response(`Host not allowed: ${targetHost}`, { status: 403, headers: corsHeaders });
     }
 
     const fwdHeaders: Record<string, string> = {
@@ -130,9 +156,27 @@ Deno.serve(async (req) => {
     });
 
     const finalUrl = new URL(upstream.url || decoded.toString());
-    // Re-validate after redirects (defense in depth).
-    if (isPrivateHost(finalUrl.host) || (!allowedHosts.has(finalUrl.host.toLowerCase()) && !allowedHosts.has(finalUrl.host.toLowerCase().split(":")[0]))) {
-      return new Response("Redirect to forbidden host", { status: 403, headers: corsHeaders });
+    const finalHost = finalUrl.host.toLowerCase();
+
+    // Re-valida após redirects: bloqueia hosts privados, mas aceita CDNs derivadas
+    // do host original autorizado (defesa em profundidade contra SSRF sem
+    // quebrar provedores que entregam mídia via subdomínio/CDN).
+    if (isPrivateHost(finalHost)) {
+      return new Response("Redirect to private host", { status: 403, headers: corsHeaders });
+    }
+    const finalDirectAllowed =
+      allowedHosts.has(finalHost) || allowedHosts.has(finalHost.split(":")[0]);
+    if (!finalDirectAllowed && !isRelatedHost(targetHost, finalHost)) {
+      console.warn(
+        "[stream-proxy] redirect blocked:",
+        targetHost,
+        "->",
+        finalHost,
+      );
+      return new Response(
+        `Redirect to forbidden host: ${finalHost}`,
+        { status: 403, headers: corsHeaders },
+      );
     }
 
     const contentType = upstream.headers.get("content-type") || "";
