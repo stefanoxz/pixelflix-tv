@@ -1,18 +1,25 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
 
-const ALLOWED_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") || "*";
+const ALLOWED_SUFFIXES = [".lovable.app", ".lovableproject.com", ".lovable.dev"];
 function corsFor(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") || "";
-  const allow =
-    ALLOWED_ORIGIN === "*"
-      ? "*"
-      : ALLOWED_ORIGIN.split(",").map((s) => s.trim()).includes(origin)
-      ? origin
-      : ALLOWED_ORIGIN.split(",")[0].trim();
+  let allow = "*";
+  try {
+    const u = new URL(origin);
+    if (
+      ALLOWED_SUFFIXES.some((s) => u.hostname.endsWith(s)) ||
+      u.hostname === "localhost"
+    ) {
+      allow = origin;
+    }
+  } catch {
+    // ignore invalid origin
+  }
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
     "Vary": "Origin",
   };
 }
