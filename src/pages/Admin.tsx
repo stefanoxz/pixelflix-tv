@@ -293,6 +293,7 @@ const Admin = () => {
             size="sm"
             className="w-full justify-start gap-2 text-destructive hover:text-destructive"
             onClick={async () => {
+              setSigningOut(true);
               await supabase.auth.signOut();
               navigate("/admin/login");
             }}
