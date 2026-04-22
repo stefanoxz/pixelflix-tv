@@ -316,10 +316,23 @@ const Admin = () => {
                   : "Cadastre as DNS autorizadas. Sem cadastro prévio, o cliente não consegue logar."}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
-            <RefreshCw className={"h-4 w-4 mr-2 " + (loading ? "animate-spin" : "")} />
-            Atualizar
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
+              <RefreshCw className={"h-4 w-4 mr-2 " + (loading ? "animate-spin" : "")} />
+              Atualizar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                await supabase.auth.signOut();
+                navigate("/login", { replace: true });
+              }}
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Sair do Admin
+            </Button>
+          </div>
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
