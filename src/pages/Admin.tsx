@@ -167,17 +167,21 @@ const Admin = () => {
   const refresh = async () => {
     setLoading(true);
     try {
-      const [s, u, sv, e] = await Promise.all([
+      const [s, u, sv, e, mo, tc] = await Promise.all([
         callAdmin<Stats>("stats"),
         callAdmin<{ users: AdminUser[] }>("list_users"),
         callAdmin<{ allowed: AllowedServer[]; pending: PendingServer[] }>("list_servers"),
         callAdmin<{ events: AdminEvent[] }>("recent_events", { limit: 50 }),
+        callAdmin<MonitoringOverview>("monitoring_overview"),
+        callAdmin<{ consumers: TopConsumer[] }>("top_consumers"),
       ]);
       setStats(s);
       setUsers(u.users);
       setAllowed(sv.allowed);
       setPending(sv.pending);
       setEvents(e.events);
+      setMonitoring(mo);
+      setTopConsumers(tc.consumers);
     } catch (err) {
       if (signingOut) return;
       const msg = err instanceof Error ? err.message : "Falha ao carregar dados";
@@ -195,10 +199,12 @@ const Admin = () => {
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 30_000);
+    // Faster refresh while on Monitoring tab
+    const interval = tab === "monitoring" ? 10_000 : 30_000;
+    const t = setInterval(refresh, interval);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [tab]);
 
   const allowServer = async (server_url: string, label?: string, notes?: string) => {
     try {
@@ -222,6 +228,26 @@ const Admin = () => {
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao remover");
+    }
+  };
+
+  const unblockUser = async (anon_user_id: string) => {
+    try {
+      await callAdmin("unblock_user", { anon_user_id });
+      toast.success("Usuário desbloqueado");
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao desbloquear");
+    }
+  };
+
+  const evictSession = async (anon_user_id: string) => {
+    try {
+      await callAdmin("evict_session", { anon_user_id });
+      toast.success("Sessão encerrada");
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao encerrar");
     }
   };
 
