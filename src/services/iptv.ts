@@ -168,12 +168,12 @@ export function buildSeriesEpisodeUrl(
 }
 
 /**
- * Proxy externo de streaming (VPS).
- * Todos os streams (HLS, MP4, IPTV) passam por aqui pra evitar bloqueios de CDN
- * e melhorar performance/estabilidade.
+ * Proxy de streaming via edge function HTTPS.
+ * Necessário para evitar mixed content quando o app roda em HTTPS
+ * e a origem do stream é HTTP. Também reescreve playlists HLS.
  */
 export function proxyUrl(url: string): string {
-  return `http://82.197.65.169/stream-proxy/?url=${encodeURIComponent(url)}`;
+  return `${FUNCTIONS_BASE}/stream-proxy?url=${encodeURIComponent(url)}`;
 }
 
 export function normalizeExt(ext?: string): string {
