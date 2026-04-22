@@ -32,6 +32,8 @@ type PlayerError = {
   description?: string;
   copyUrl: string;
   external?: boolean;
+  /** Show "Trocar canal" action and dedicated empty-stream messaging. */
+  noData?: boolean;
 };
 
 type DiagnosticStatus =
