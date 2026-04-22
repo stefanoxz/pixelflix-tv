@@ -582,10 +582,58 @@ export function Player({
 
   const handleRetry = () => {
     if (!src) return;
+    pushLog({ source: "diag", level: "info", label: "retry" });
     setError(null);
     retryCountRef.current = 0;
     setLoading(true);
     setRetryNonce((n) => n + 1);
+  };
+
+  // Auto-scroll the logs list to the bottom when new logs arrive
+  useEffect(() => {
+    if (!logsPanelOpen) return;
+    const el = logsListRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [logsVersion, logsPanelOpen]);
+
+  const handleCopyLogs = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(logsRef.current, null, 2));
+      toast.success("Logs copiados");
+    } catch {
+      toast.error("Não foi possível copiar os logs");
+    }
+  };
+  const handleClearLogs = () => {
+    logsRef.current = [];
+    setLogsVersion((v) => v + 1);
+  };
+
+  const fmtMs = (ms: number | null) =>
+    ms === null || !Number.isFinite(ms) ? "—" : `${Math.round(ms)} ms`;
+  const setupToManifest =
+    manifestParsedAtRef.current && setupStartRef.current
+      ? manifestParsedAtRef.current - setupStartRef.current
+      : null;
+  const setupToFirstFrame =
+    firstFrameAtRef.current && setupStartRef.current
+      ? firstFrameAtRef.current - setupStartRef.current
+      : null;
+  const manifestToFirstFrame =
+    firstFrameAtRef.current && manifestParsedAtRef.current
+      ? firstFrameAtRef.current - manifestParsedAtRef.current
+      : null;
+
+  const sourceBadge: Record<LogSource, string> = {
+    hls: "bg-blue-500/20 text-blue-200 border-blue-500/40",
+    video: "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
+    diag: "bg-amber-500/20 text-amber-200 border-amber-500/40",
+    net: "bg-purple-500/20 text-purple-200 border-purple-500/40",
+  };
+  const levelTone: Record<LogLevel, string> = {
+    info: "text-foreground",
+    warn: "text-yellow-300",
+    error: "text-red-400",
   };
 
   const handleClose = () => {
@@ -721,6 +769,95 @@ export function Player({
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Logs panel toggle — bottom-left */}
+      <button
+        type="button"
+        onClick={() => setLogsPanelOpen((o) => !o)}
+        className={cn(
+          "pointer-events-auto absolute bottom-3 left-3 z-20 inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium backdrop-blur-md shadow-sm transition-colors",
+          logsPanelOpen
+            ? "border-primary/50 bg-primary/20 text-primary-foreground"
+            : "border-border bg-background/80 text-muted-foreground hover:bg-background/95",
+        )}
+        aria-pressed={logsPanelOpen}
+        aria-label="Alternar logs do player"
+      >
+        <Terminal className="h-3 w-3" />
+        Logs
+      </button>
+
+      {/* Logs panel — right side overlay */}
+      {logsPanelOpen && (
+        <div
+          className="pointer-events-auto absolute top-3 right-3 bottom-14 z-30 w-[360px] max-w-[calc(100%-1.5rem)] flex flex-col rounded-md border bg-background/95 backdrop-blur-md shadow-xl text-foreground"
+          role="dialog"
+          aria-label="Logs do player"
+        >
+          <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold">
+              <Terminal className="h-3.5 w-3.5" />
+              Logs do player
+            </div>
+            <div className="flex items-center gap-1">
+              <Button onClick={handleCopyLogs} variant="ghost" size="icon" className="h-7 w-7" title="Copiar JSON">
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+              <Button onClick={handleClearLogs} variant="ghost" size="icon" className="h-7 w-7" title="Limpar">
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+              <Button onClick={() => setLogsPanelOpen(false)} variant="ghost" size="icon" className="h-7 w-7" title="Fechar">
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="border-b px-3 py-2 text-[11px] grid grid-cols-1 gap-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Setup → Manifest</span>
+              <span className="font-mono">{fmtMs(setupToManifest)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Setup → First Frame (TTFF)</span>
+              <span className="font-mono">{fmtMs(setupToFirstFrame)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Manifest → First Frame</span>
+              <span className="font-mono">{fmtMs(manifestToFirstFrame)}</span>
+            </div>
+          </div>
+
+          <div ref={logsListRef} className="flex-1 overflow-y-auto px-2 py-1.5 space-y-1 text-[11px] font-mono">
+            {logsRef.current.length === 0 ? (
+              <div className="text-muted-foreground text-center py-4">Sem eventos ainda</div>
+            ) : (
+              logsRef.current.map((entry, i) => (
+                <div key={i} className="flex items-start gap-1.5 leading-tight">
+                  <span className="shrink-0 text-muted-foreground tabular-nums">
+                    [+{Math.round(entry.tRel)}ms]
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded border px-1 py-0 text-[10px] uppercase tracking-wide",
+                      sourceBadge[entry.source],
+                    )}
+                  >
+                    {entry.source}
+                  </span>
+                  <div className={cn("min-w-0 flex-1", levelTone[entry.level])}>
+                    <span className="font-semibold">{entry.label}</span>
+                    {entry.details && (
+                      <span className="ml-1 text-muted-foreground truncate inline-block max-w-full align-bottom" title={entry.details}>
+                        {entry.details}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
