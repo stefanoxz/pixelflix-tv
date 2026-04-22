@@ -88,159 +88,180 @@ export function Player({
     }
   };
 
-  // Setup whenever src/strategy changes
+  // Setup whenever src/strategy changes — debounced 250ms to absorb fast zapping.
   useEffect(() => {
     let cancelled = false;
-    teardown();
-    setError(null);
-    setCopied(false);
-    setHidden(false);
-    retryCountRef.current = 0;
+    let didSetup = false;
 
-    if (!src) {
-      setLoading(false);
-      return () => { cancelled = true; };
-    }
+    const debounceMs = 250;
+    const debounceTimer = window.setTimeout(() => {
+      didSetup = true;
+      runSetup();
+    }, debounceMs);
 
-    if (!isValidStreamUrl(src)) {
-      setError({
-        title: "URL inválida",
-        description: "Não foi possível reproduzir este conteúdo (URL malformada).",
-        copyUrl: copyTarget,
-      });
-      setLoading(false);
-      return () => { cancelled = true; };
-    }
+    const runSetup = () => {
+      teardown();
+      setError(null);
+      setCopied(false);
+      setHidden(false);
+      retryCountRef.current = 0;
 
-    if (strategy.mode === "external") {
-      const ext = normalizeExt(containerExt).toUpperCase() || "?";
-      setError({
-        title: "Formato não suportado no navegador",
-        description: `Este conteúdo usa um container (${ext}) que não é compatível com reprodução web.`,
-        copyUrl: copyTarget,
-        external: true,
-      });
-      setLoading(false);
-      return () => { cancelled = true; };
-    }
+      if (!src) {
+        setLoading(false);
+        return;
+      }
 
-    if (strategy.mode === "error") {
-      setError({
-        title: "Não foi possível reproduzir",
-        description: strategy.reason,
-        copyUrl: copyTarget,
-      });
-      setLoading(false);
-      return () => { cancelled = true; };
-    }
-
-    const video = videoRef.current;
-    if (!video) return () => { cancelled = true; };
-
-    setLoading(true);
-
-    const start = async () => {
-      try {
-        const kind = strategy.type === "hls" ? "playlist" : "segment";
-        const tokenResp = await requestStreamToken({
-          url: src,
-          kind,
-          iptvUsername: session?.creds.username,
+      if (!isValidStreamUrl(src)) {
+        setError({
+          title: "URL inválida",
+          description: "Não foi possível reproduzir este conteúdo (URL malformada).",
+          copyUrl: copyTarget,
         });
-        if (cancelled) return;
-        const safeSrc = tokenResp.url;
+        setLoading(false);
+        return;
+      }
 
-        // Heartbeat (renew session lifecycle on backend every 45s)
-        heartbeatRef.current = window.setInterval(() => {
-          reportStreamEvent("session_heartbeat");
-        }, HEARTBEAT_INTERVAL_MS);
+      if (strategy.mode === "external") {
+        const ext = normalizeExt(containerExt).toUpperCase() || "?";
+        setError({
+          title: "Formato não suportado no navegador",
+          description: `Este conteúdo usa um container (${ext}) que não é compatível com reprodução web.`,
+          copyUrl: copyTarget,
+          external: true,
+        });
+        setLoading(false);
+        return;
+      }
 
-        if (strategy.type === "hls") {
-          if (Hls.isSupported()) {
-            const hls = new Hls(HLS_CONFIG);
-            hlsRef.current = hls;
+      if (strategy.mode === "error") {
+        setError({
+          title: "Não foi possível reproduzir",
+          description: strategy.reason,
+          copyUrl: copyTarget,
+        });
+        setLoading(false);
+        return;
+      }
 
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-              if (cancelled) return;
-              setLoading(false);
-              reportStreamEvent("stream_started", { url: src, meta: { kind: "hls" } });
+      const video = videoRef.current;
+      if (!video) return;
+
+      setLoading(true);
+
+      const start = async () => {
+        try {
+          const kind = strategy.type === "hls" ? "playlist" : "segment";
+          const tokenResp = await requestStreamToken({
+            url: src,
+            kind,
+            iptvUsername: session?.creds.username,
+          });
+          if (cancelled) return;
+          const safeSrc = tokenResp.url;
+
+          // Heartbeat (renew session lifecycle on backend every 45s)
+          heartbeatRef.current = window.setInterval(() => {
+            reportStreamEvent("session_heartbeat");
+          }, HEARTBEAT_INTERVAL_MS);
+
+          if (strategy.type === "hls") {
+            if (Hls.isSupported()) {
+              const hls = new Hls(HLS_CONFIG);
+              hlsRef.current = hls;
+
+              hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                if (cancelled) return;
+                setLoading(false);
+                reportStreamEvent("stream_started", { url: src, meta: { kind: "hls" } });
+                if (autoPlay) video.play().catch(() => {});
+              });
+
+              hls.on(Hls.Events.ERROR, (_evt, data: ErrorData) => {
+                if (!data.fatal) return;
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCountRef.current < 3) {
+                  retryCountRef.current += 1;
+                  setTimeout(() => {
+                    try { hls.startLoad(); } catch { /* noop */ }
+                  }, 2000 * retryCountRef.current);
+                  return;
+                }
+                if (data.type === Hls.ErrorTypes.MEDIA_ERROR && retryCountRef.current < 3) {
+                  retryCountRef.current += 1;
+                  try { hls.recoverMediaError(); return; } catch { /* fallthrough */ }
+                }
+                setLoading(false);
+                setError({
+                  title: "Falha ao carregar o stream",
+                  description: "O canal pode estar offline ou instável. Tente novamente em alguns segundos.",
+                  copyUrl: copyTarget,
+                });
+                reportStreamEvent("stream_error", {
+                  url: src,
+                  meta: { type: data.type, details: data.details },
+                });
+              });
+
+              hls.loadSource(safeSrc);
+              hls.attachMedia(video);
+              return;
+            }
+
+            if (video.canPlayType("application/vnd.apple.mpegurl")) {
+              video.src = safeSrc;
+              reportStreamEvent("stream_started", { url: src, meta: { kind: "hls-native" } });
               if (autoPlay) video.play().catch(() => {});
-            });
+              return;
+            }
 
-            hls.on(Hls.Events.ERROR, (_evt, data: ErrorData) => {
-              if (!data.fatal) return;
-              if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCountRef.current < 3) {
-                retryCountRef.current += 1;
-                setTimeout(() => {
-                  try { hls.startLoad(); } catch { /* noop */ }
-                }, 2000 * retryCountRef.current);
-                return;
-              }
-              if (data.type === Hls.ErrorTypes.MEDIA_ERROR && retryCountRef.current < 3) {
-                retryCountRef.current += 1;
-                try { hls.recoverMediaError(); return; } catch { /* fallthrough */ }
-              }
-              setLoading(false);
-              setError({
-                title: "Falha ao carregar o stream",
-                description: "O canal pode estar offline ou instável. Tente novamente em alguns segundos.",
-                copyUrl: copyTarget,
-              });
-              reportStreamEvent("stream_error", {
-                url: src,
-                meta: { type: data.type, details: data.details },
-              });
+            setLoading(false);
+            setError({
+              title: "Navegador incompatível",
+              description: "Seu navegador não suporta HLS. Use Chrome, Firefox, Edge ou Safari.",
+              copyUrl: copyTarget,
             });
-
-            hls.loadSource(safeSrc);
-            hls.attachMedia(video);
             return;
           }
 
-          if (video.canPlayType("application/vnd.apple.mpegurl")) {
-            video.src = safeSrc;
-            reportStreamEvent("stream_started", { url: src, meta: { kind: "hls-native" } });
-            if (autoPlay) video.play().catch(() => {});
-            return;
-          }
-
+          // Native (mp4 / webm)
+          video.src = safeSrc;
+          reportStreamEvent("stream_started", { url: src, meta: { kind: "native" } });
+          if (autoPlay) video.play().catch(() => {});
+        } catch (err) {
+          if (cancelled) return;
+          const msg = err instanceof Error ? err.message : "Erro desconhecido";
           setLoading(false);
+          const blocked = /blocked|bloque/i.test(msg);
+          const ratelimit = /Too many|429/i.test(msg);
           setError({
-            title: "Navegador incompatível",
-            description: "Seu navegador não suporta HLS. Use Chrome, Firefox, Edge ou Safari.",
+            title: blocked
+              ? "Acesso temporariamente bloqueado"
+              : ratelimit
+                ? "Limite de uso atingido"
+                : "Não foi possível autorizar o stream",
+            description: blocked
+              ? "Detectamos atividade incomum. Tente novamente em alguns minutos."
+              : ratelimit
+                ? "Aguarde 1 minuto antes de tentar novamente."
+                : msg,
             copyUrl: copyTarget,
           });
-          return;
         }
+      };
 
-        // Native (mp4 / webm)
-        video.src = safeSrc;
-        reportStreamEvent("stream_started", { url: src, meta: { kind: "native" } });
-        if (autoPlay) video.play().catch(() => {});
-      } catch (err) {
-        if (cancelled) return;
-        const msg = err instanceof Error ? err.message : "Erro desconhecido";
-        setLoading(false);
-        const blocked = /blocked|bloque/i.test(msg);
-        const ratelimit = /Too many|429/i.test(msg);
-        setError({
-          title: blocked
-            ? "Acesso temporariamente bloqueado"
-            : ratelimit
-              ? "Limite de uso atingido"
-              : "Não foi possível autorizar o stream",
-          description: blocked
-            ? "Detectamos atividade incomum. Tente novamente em alguns minutos."
-            : ratelimit
-              ? "Aguarde 1 minuto antes de tentar novamente."
-              : msg,
-          copyUrl: copyTarget,
+      start();
+    };
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(debounceTimer);
+      if (!didSetup) {
+        // Cancelled before materializing — avoid teardown/setup churn during zapping.
+        reportStreamEvent("stream_error", {
+          url: src ?? undefined,
+          meta: { reason: "player_switch_debounced" },
         });
       }
     };
-
-    start();
-    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, strategy, containerExt, autoPlay, copyTarget]);
 

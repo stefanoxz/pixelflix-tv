@@ -88,13 +88,441 @@ export interface Series {
 
 const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
+// =============================================================================
+// Connectivity, telemetry, global request queue
+// =============================================================================
+
+/**
+ * Tunable connectivity & queue parameters. Mutable at runtime via
+ * `setConnectivityConfig` for debug / progressive rollout.
+ */
+export const connectivityConfig = {
+  // Online/offline debouncing
+  failureWindowMs: 10_000,
+  failuresToOffline: 3,
+  successesToOnline: 2,
+  cooldownMs: 4_000,
+  // Reconnect storm control
+  reconnectWindowMs: 1_500,
+  reconnectSpacingMs: 200,
+  reconnectConcurrency: 2,
+  normalConcurrency: 4,
+  // Per-operation timeouts (ms)
+  timeoutLogin: 10_000,
+  timeoutToken: 5_000,
+  timeoutData: 7_000,
+  // Retry budget
+  retriesLogin: 1,
+  retriesToken: 1,
+  retriesData: 1,
+};
+
+export function setConnectivityConfig(partial: Partial<typeof connectivityConfig>) {
+  Object.assign(connectivityConfig, partial);
+}
+
+// ---- Telemetry (in-memory, best-effort) -------------------------------------
+type TelemetryEvent = {
+  ts: number;
+  type: string;
+  meta?: Record<string, unknown>;
+};
+const telemetry: TelemetryEvent[] = [];
+const TELEMETRY_CAP = 200;
+function recordTelemetry(type: string, meta?: Record<string, unknown>) {
+  telemetry.push({ ts: Date.now(), type, meta });
+  if (telemetry.length > TELEMETRY_CAP) telemetry.splice(0, telemetry.length - TELEMETRY_CAP);
+}
+export function getTelemetrySnapshot() {
+  return telemetry.slice();
+}
+
+// ---- Adaptive state machine (hysteresis) ------------------------------------
+type AdaptiveLevel = "normal" | "degraded" | "severe";
+const adaptive = {
+  level: "normal" as AdaptiveLevel,
+  failureTimestamps: [] as number[], // sliding 60s
+  lastTransitionAt: 0,
+  stableSince: Date.now(),
+};
+const ADAPTIVE_COOLDOWN_MS = 10_000;
+const ADAPTIVE_STABLE_MS = 30_000;
+const ADAPTIVE_RATE_WINDOW_MS = 60_000;
+
+function pruneAdaptive(now: number) {
+  const cutoff = now - ADAPTIVE_RATE_WINDOW_MS;
+  while (adaptive.failureTimestamps.length && adaptive.failureTimestamps[0] < cutoff) {
+    adaptive.failureTimestamps.shift();
+  }
+}
+
+function applyLevel(next: AdaptiveLevel, rate: number) {
+  if (next === adaptive.level) return;
+  const from = adaptive.level;
+  adaptive.level = next;
+  adaptive.lastTransitionAt = Date.now();
+  adaptive.stableSince = Date.now();
+  if (next === "normal") {
+    connectivityConfig.failureWindowMs = 10_000;
+    connectivityConfig.normalConcurrency = 4;
+  } else if (next === "degraded") {
+    connectivityConfig.failureWindowMs = 15_000;
+    connectivityConfig.normalConcurrency = 3;
+  } else {
+    connectivityConfig.failureWindowMs = 20_000;
+    connectivityConfig.normalConcurrency = 2;
+  }
+  recordTelemetry("adaptive_state_change", { from, to: next, failureRate: rate });
+}
+
+function evaluateAdaptive() {
+  const now = Date.now();
+  pruneAdaptive(now);
+  const rate = adaptive.failureTimestamps.length;
+  const sinceTransition = now - adaptive.lastTransitionAt;
+  if (sinceTransition < ADAPTIVE_COOLDOWN_MS) return;
+
+  // Escalate readily
+  if (adaptive.level === "normal" && rate > 8) return applyLevel("degraded", rate);
+  if (adaptive.level === "degraded" && rate > 15) return applyLevel("severe", rate);
+
+  // De-escalate only after sustained stability
+  const stableEnough = rate < 3 && now - adaptive.stableSince >= ADAPTIVE_STABLE_MS;
+  if (adaptive.level === "severe" && stableEnough) return applyLevel("degraded", rate);
+  if (adaptive.level === "degraded" && stableEnough) return applyLevel("normal", rate);
+
+  // Track stable window: reset stableSince if a recent failure exists
+  if (rate >= 3) adaptive.stableSince = now;
+}
+
+// ---- Real connectivity (debounced, separate from navigator.onLine) ----------
+type ConnectivityListener = (online: boolean) => void;
+const connectivity = {
+  realOnline: true,
+  consecutiveSuccesses: 0,
+  failureTimestamps: [] as number[],
+  lastTransitionAt: 0,
+  listeners: new Set<ConnectivityListener>(),
+};
+
+export function isRealOnline() {
+  return connectivity.realOnline && (typeof navigator === "undefined" || navigator.onLine);
+}
+
+export function subscribeConnectivity(fn: ConnectivityListener): () => void {
+  connectivity.listeners.add(fn);
+  return () => connectivity.listeners.delete(fn);
+}
+
+function emitConnectivity() {
+  const online = isRealOnline();
+  connectivity.listeners.forEach((fn) => {
+    try { fn(online); } catch { /* noop */ }
+  });
+}
+
+function tryTransition(toOnline: boolean) {
+  const now = Date.now();
+  if (now - connectivity.lastTransitionAt < connectivityConfig.cooldownMs && !toOnline) return;
+  if (connectivity.realOnline === toOnline) return;
+  connectivity.realOnline = toOnline;
+  connectivity.lastTransitionAt = now;
+  recordTelemetry("connectivity_change", { online: toOnline });
+  emitConnectivity();
+  if (toOnline) onConnectivityRestored();
+}
+
+function noteRequestSuccess() {
+  connectivity.consecutiveSuccesses += 1;
+  if (
+    !connectivity.realOnline &&
+    connectivity.consecutiveSuccesses >= connectivityConfig.successesToOnline
+  ) {
+    tryTransition(true);
+  }
+}
+
+function noteRequestFailure(kind: "timeout" | "network" | "other") {
+  connectivity.consecutiveSuccesses = 0;
+  const now = Date.now();
+  connectivity.failureTimestamps.push(now);
+  const cutoff = now - connectivityConfig.failureWindowMs;
+  while (connectivity.failureTimestamps.length && connectivity.failureTimestamps[0] < cutoff) {
+    connectivity.failureTimestamps.shift();
+  }
+  if (
+    connectivity.realOnline &&
+    connectivity.failureTimestamps.length >= connectivityConfig.failuresToOffline
+  ) {
+    tryTransition(false);
+  }
+  // Adaptive feeds only on real network/timeout failures
+  if (kind === "timeout" || kind === "network") {
+    adaptive.failureTimestamps.push(now);
+    evaluateAdaptive();
+    recordTelemetry(kind === "timeout" ? "request_timeout" : "request_network_error");
+  }
+}
+
+// ---- Global request queue ---------------------------------------------------
+type QueueTask<T> = {
+  run: () => Promise<T>;
+  resolve: (v: T) => void;
+  reject: (e: unknown) => void;
+  enqueuedAt: number;
+};
+const queue: QueueTask<unknown>[] = [];
+let inFlight = 0;
+let dynamicConcurrency = connectivityConfig.normalConcurrency;
+let reconnectUntil = 0;
+let lastDispatchAt = 0;
+const waitSamples: number[] = []; // last 50
+const QUEUE_SAMPLE_CAP = 50;
+
+function effectiveConcurrency(): number {
+  if (Date.now() < reconnectUntil) return connectivityConfig.reconnectConcurrency;
+  return dynamicConcurrency;
+}
+
+function pump() {
+  const cap = effectiveConcurrency();
+  while (inFlight < cap && queue.length > 0) {
+    if (Date.now() < reconnectUntil) {
+      const since = Date.now() - lastDispatchAt;
+      if (since < connectivityConfig.reconnectSpacingMs) {
+        setTimeout(pump, connectivityConfig.reconnectSpacingMs - since);
+        return;
+      }
+    }
+    const task = queue.shift()!;
+    inFlight += 1;
+    lastDispatchAt = Date.now();
+    const wait = lastDispatchAt - task.enqueuedAt;
+    waitSamples.push(wait);
+    if (waitSamples.length > QUEUE_SAMPLE_CAP) waitSamples.splice(0, waitSamples.length - QUEUE_SAMPLE_CAP);
+    recordTelemetry("queue_dequeued", { waitMs: wait });
+    Promise.resolve()
+      .then(() => task.run())
+      .then(
+        (v) => task.resolve(v),
+        (e) => task.reject(e),
+      )
+      .finally(() => {
+        inFlight -= 1;
+        pump();
+      });
+  }
+}
+
+function enqueue<T>(run: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    queue.push({
+      run: run as () => Promise<unknown>,
+      resolve: resolve as (v: unknown) => void,
+      reject,
+      enqueuedAt: Date.now(),
+    });
+    recordTelemetry("queue_enqueued");
+    pump();
+  });
+}
+
+function onConnectivityRestored() {
+  reconnectUntil = Date.now() + connectivityConfig.reconnectWindowMs;
+  recordTelemetry("reconnect_window_start", { windowMs: connectivityConfig.reconnectWindowMs });
+  pump();
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => {
+    // Treat as a hint only; real status confirmed by request successes
+    onConnectivityRestored();
+  });
+  window.addEventListener("offline", () => {
+    tryTransition(false);
+  });
+}
+
+// ---- Queue health & dynamic concurrency tuning -----------------------------
+export type QueueHealth = "healthy" | "warning" | "critical";
+
+function percentile(sorted: number[], p: number): number {
+  if (!sorted.length) return 0;
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor((p / 100) * sorted.length)));
+  return sorted[idx];
+}
+
+export function getQueueStats() {
+  const sorted = waitSamples.slice().sort((a, b) => a - b);
+  const avg = sorted.length ? sorted.reduce((s, v) => s + v, 0) / sorted.length : 0;
+  const p95 = percentile(sorted, 95);
+  const depth = queue.length;
+  let health: QueueHealth = "healthy";
+  if (avg >= 700 || p95 >= 1800 || depth >= 10) health = "critical";
+  else if (avg >= 300 || p95 >= 800 || depth >= 5) health = "warning";
+  return {
+    avgWaitMs: Math.round(avg),
+    p95WaitMs: Math.round(p95),
+    currentDepth: depth,
+    currentInFlight: inFlight,
+    concurrency: effectiveConcurrency(),
+    adaptiveLevel: adaptive.level,
+    health,
+  };
+}
+
+let lastWarnLogAt = 0;
+let lastHealth: QueueHealth = "healthy";
+let highDepthSince = 0;
+let monitorStarted = false;
+
+function ensureMonitor() {
+  if (monitorStarted || typeof window === "undefined") return;
+  monitorStarted = true;
+  setInterval(() => {
+    const stats = getQueueStats();
+    const now = Date.now();
+    const baseline = connectivityConfig.normalConcurrency;
+    const cap = 6;
+    // Bump up when depth is high but waits stay low (healthy demand spike)
+    if (stats.currentDepth > 8 && stats.avgWaitMs < 400) {
+      if (!highDepthSince) highDepthSince = now;
+      if (now - highDepthSince >= 2000 && dynamicConcurrency < Math.min(cap, baseline + 2)) {
+        const from = dynamicConcurrency;
+        dynamicConcurrency = Math.min(cap, baseline + 2);
+        recordTelemetry("concurrency_adjusted", { from, to: dynamicConcurrency, reason: "depth_spike_healthy" });
+      }
+    } else {
+      highDepthSince = 0;
+    }
+    // Pull back when latency is climbing
+    if ((stats.avgWaitMs > 600 || stats.p95WaitMs > 1500) && dynamicConcurrency > baseline) {
+      const from = dynamicConcurrency;
+      dynamicConcurrency = Math.max(baseline, dynamicConcurrency - 1);
+      recordTelemetry("concurrency_adjusted", { from, to: dynamicConcurrency, reason: "latency_pressure" });
+    }
+    // Decay back to baseline when stable
+    if (stats.health === "healthy" && stats.currentDepth < 3 && dynamicConcurrency !== baseline) {
+      const from = dynamicConcurrency;
+      dynamicConcurrency = baseline;
+      recordTelemetry("concurrency_adjusted", { from, to: dynamicConcurrency, reason: "decay_to_baseline" });
+    }
+    // Health logs
+    if (stats.health === "critical" && lastHealth !== "critical") {
+      console.warn("[iptv-queue] critical", stats);
+    } else if (stats.health === "warning" && now - lastWarnLogAt > 60_000) {
+      console.warn("[iptv-queue] warning", stats);
+      lastWarnLogAt = now;
+    }
+    lastHealth = stats.health;
+  }, 1000);
+}
+
+// ---- Wrapped invoker --------------------------------------------------------
+type InvokeKind = "login" | "token" | "data" | "event";
+
+function timeoutFor(kind: InvokeKind): number {
+  switch (kind) {
+    case "login": return connectivityConfig.timeoutLogin;
+    case "token": return connectivityConfig.timeoutToken;
+    case "event": return 4_000;
+    default: return connectivityConfig.timeoutData;
+  }
+}
+
+function retriesFor(kind: InvokeKind): number {
+  switch (kind) {
+    case "login": return connectivityConfig.retriesLogin;
+    case "token": return connectivityConfig.retriesToken;
+    case "event": return 0;
+    default: return connectivityConfig.retriesData;
+  }
+}
+
+class TimeoutError extends Error {
+  constructor() { super("timeout"); this.name = "TimeoutError"; }
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new TimeoutError()), ms);
+    p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
+
+function classifyError(e: unknown): "timeout" | "network" | "other" {
+  if (e instanceof TimeoutError) return "timeout";
+  const msg = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
+  if (/network|failed to fetch|networkerror|fetch failed|load failed/.test(msg)) return "network";
+  return "other";
+}
+
+async function invokeFn<T>(
+  name: string,
+  body: Record<string, unknown>,
+  kind: InvokeKind,
+): Promise<T> {
+  ensureMonitor();
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    throw new Error("Sem conexão com a internet");
+  }
+  const timeout = timeoutFor(kind);
+  const maxRetries = retriesFor(kind);
+
+  const attempt = async (): Promise<T> => {
+    const exec = async () => {
+      const { data, error } = await supabase.functions.invoke(name, { body });
+      if (error) throw new Error(error.message || `Falha em ${name}`);
+      if ((data as { error?: string })?.error) {
+        throw new Error((data as { error: string }).error);
+      }
+      return data as T;
+    };
+    return withTimeout(enqueue(exec), timeout);
+  };
+
+  let lastErr: unknown;
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      const out = await attempt();
+      noteRequestSuccess();
+      return out;
+    } catch (e) {
+      lastErr = e;
+      const cls = classifyError(e);
+      noteRequestFailure(cls);
+      if (cls === "other" || i === maxRetries) break;
+      // Small backoff
+      await new Promise((r) => setTimeout(r, 250 * (i + 1)));
+      recordTelemetry("request_retry", { fn: name, attempt: i + 1, kind: cls });
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Falha desconhecida");
+}
+
+// =============================================================================
+
 export async function iptvLogin(
   creds: IptvCredentials
 ): Promise<LoginResponse & { server_url?: string }> {
-  const { data, error } = await supabase.functions.invoke("iptv-login", { body: creds });
-  if (error) throw new Error(error.message || "Falha no login");
-  if ((data as any)?.error) throw new Error((data as any).error);
-  return data as LoginResponse & { server_url?: string };
+  try {
+    return await invokeFn<LoginResponse & { server_url?: string }>("iptv-login", creds as unknown as Record<string, unknown>, "login");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Falha no login";
+    if (e instanceof TimeoutError || /timeout/i.test(msg)) {
+      throw new Error("Tempo esgotado ao contatar o servidor. Verifique sua conexão.");
+    }
+    if (/invalid|credenc|unauthor|401|403/i.test(msg)) {
+      throw new Error("Usuário ou senha inválidos");
+    }
+    if (/network|failed to fetch/i.test(msg)) {
+      throw new Error("Servidor inacessível. Tente novamente em instantes.");
+    }
+    throw new Error(msg);
+  }
 }
 
 export interface Episode {
@@ -131,12 +559,11 @@ export async function iptvFetch<T>(
   action: string,
   extra: Record<string, string | number> = {},
 ): Promise<T> {
-  const { data, error } = await supabase.functions.invoke("iptv-categories", {
-    body: { ...creds, action, ...extra },
-  });
-  if (error) throw new Error(error.message || `Falha ao buscar ${action}`);
-  if ((data as any)?.error) throw new Error((data as any).error);
-  return data as T;
+  return invokeFn<T>(
+    "iptv-categories",
+    { ...creds, action, ...extra } as Record<string, unknown>,
+    "data",
+  );
 }
 
 export const getLiveCategories = (c: IptvCredentials) =>
@@ -238,18 +665,15 @@ export async function requestStreamToken(params: {
   kind: StreamKind;
   iptvUsername?: string;
 }): Promise<{ url: string; expires_at: number }> {
-  const { data, error } = await supabase.functions.invoke("stream-token", {
-    body: {
+  return invokeFn<{ url: string; expires_at: number }>(
+    "stream-token",
+    {
       url: params.url,
       kind: params.kind,
       iptv_username: params.iptvUsername,
     },
-  });
-  if (error) throw new Error(error.message || "Falha ao autorizar stream");
-  if ((data as { error?: string })?.error) {
-    throw new Error((data as { error: string }).error);
-  }
-  return data as { url: string; expires_at: number };
+    "token",
+  );
 }
 
 /** Lightweight event reporting (errors / heartbeats). Best-effort. */
@@ -258,9 +682,11 @@ export async function reportStreamEvent(
   payload?: { url?: string; meta?: Record<string, unknown> },
 ): Promise<void> {
   try {
-    await supabase.functions.invoke("stream-event", {
-      body: { event_type, ...payload },
-    });
+    await invokeFn<unknown>(
+      "stream-event",
+      { event_type, ...payload },
+      "event",
+    );
   } catch {
     // best-effort
   }
