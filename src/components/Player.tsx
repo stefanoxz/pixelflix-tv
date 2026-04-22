@@ -292,6 +292,7 @@ export function Player({
           });
           if (cancelled) return;
           const safeSrc = tokenResp.url;
+          pushLog({ source: "net", level: "info", label: "token_ok", details: kind });
 
           // Heartbeat (renew session lifecycle on backend every 45s)
           heartbeatRef.current = window.setInterval(() => {
@@ -308,17 +309,22 @@ export function Player({
 
               hls.once(Hls.Events.MEDIA_ATTACHED, () => {
                 if (cancelled) return;
+                pushLog({ source: "hls", level: "info", label: "media_attached" });
                 try { hls.loadSource(safeSrc); } catch (e) {
-                  lastReasonRef.current = `loadSource falhou: ${(e as Error).message}`;
-                  setLastReason(lastReasonRef.current);
+                  const msg = `loadSource falhou: ${(e as Error).message}`;
+                  lastReasonRef.current = msg;
+                  setLastReason(msg);
+                  pushLog({ source: "hls", level: "error", label: "loadSource_error", details: msg });
                 }
               });
 
               hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 if (cancelled) return;
                 manifestReadyRef.current = true;
+                manifestParsedAtRef.current = performance.now();
                 lastReasonRef.current = "manifest carregado";
                 setLastReason("manifest carregado");
+                pushLog({ source: "hls", level: "info", label: "manifest_parsed" });
                 if (autoPlay) video.play().catch(() => {});
                 // NB: don't touch loading or status here — wait for real `playing`.
               });
@@ -327,6 +333,12 @@ export function Player({
                 const detail = `${data.type}/${data.details}`;
                 lastReasonRef.current = detail;
                 setLastReason(detail);
+                pushLog({
+                  source: "hls",
+                  level: data.fatal ? "error" : "warn",
+                  label: "error",
+                  details: `${detail} fatal=${data.fatal}`,
+                });
 
                 // Codec / decode → mark immediately
                 if (
@@ -407,6 +419,7 @@ export function Player({
           const blocked = /blocked|bloque/i.test(msg);
           const ratelimit = /Too many|429/i.test(msg);
           updateStatus("stream_error", msg);
+          pushLog({ source: "net", level: "error", label: "token_error", details: msg });
           setError({
             title: blocked
               ? "Acesso temporariamente bloqueado"
