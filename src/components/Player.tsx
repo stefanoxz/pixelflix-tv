@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Hls, { type ErrorData } from "hls.js";
-import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink, Activity } from "lucide-react";
+import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink, Activity, Terminal, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -40,6 +40,17 @@ type DiagnosticStatus =
   | "stall_timeout"
   | "codec_incompatible"
   | "stream_error";
+
+type LogSource = "hls" | "video" | "diag" | "net";
+type LogLevel = "info" | "warn" | "error";
+type LogEntry = {
+  t: number;
+  tRel: number;
+  source: LogSource;
+  level: LogLevel;
+  label: string;
+  details?: string;
+};
 
 const HLS_CONFIG: Partial<Hls["config"]> = {
   lowLatencyMode: true,
@@ -92,6 +103,33 @@ export function Player({
 
   const [status, setStatus] = useState<DiagnosticStatus>("connecting");
   const [lastReason, setLastReason] = useState<string | null>(null);
+
+  // Logs panel — buffered in refs to avoid re-renders when closed
+  const logsRef = useRef<LogEntry[]>([]);
+  const setupStartRef = useRef(0);
+  const firstFrameAtRef = useRef<number | null>(null);
+  const manifestParsedAtRef = useRef<number | null>(null);
+  const logsPanelOpenRef = useRef(false);
+  const [logsPanelOpen, setLogsPanelOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem("player.logsPanel.open") === "1"; }
+    catch { return false; }
+  });
+  const [logsVersion, setLogsVersion] = useState(0);
+  const logsListRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    logsPanelOpenRef.current = logsPanelOpen;
+    try { localStorage.setItem("player.logsPanel.open", logsPanelOpen ? "1" : "0"); }
+    catch { /* noop */ }
+  }, [logsPanelOpen]);
+
+  const pushLog = (entry: Omit<LogEntry, "t" | "tRel">) => {
+    const t = performance.now();
+    const tRel = setupStartRef.current ? t - setupStartRef.current : 0;
+    logsRef.current.push({ ...entry, t, tRel });
+    if (logsRef.current.length > 200) logsRef.current.shift();
+    if (logsPanelOpenRef.current) setLogsVersion((v) => v + 1);
+  };
 
   const copyTarget = rawUrl || src || "";
 
@@ -168,6 +206,14 @@ export function Player({
       setLastReason(null);
       setStatus("connecting");
 
+      // Reset logs for the new setup cycle
+      logsRef.current = [];
+      firstFrameAtRef.current = null;
+      manifestParsedAtRef.current = null;
+      setupStartRef.current = performance.now();
+      pushLog({ source: "diag", level: "info", label: "setup_start", details: src ?? undefined });
+      if (logsPanelOpenRef.current) setLogsVersion((v) => v + 1);
+
       if (!src) {
         setLoading(false);
         return;
@@ -222,6 +268,7 @@ export function Player({
           ? "manifest carregado, mas sem frames"
           : (lastReasonRef.current || "sem reprodução após 12s");
         updateStatus("stall_timeout", reason);
+        pushLog({ source: "diag", level: "warn", label: "bootstrap_timeout_12s", details: reason });
         setError({
           title: "Canal não respondeu",
           description:
@@ -245,6 +292,7 @@ export function Player({
           });
           if (cancelled) return;
           const safeSrc = tokenResp.url;
+          pushLog({ source: "net", level: "info", label: "token_ok", details: kind });
 
           // Heartbeat (renew session lifecycle on backend every 45s)
           heartbeatRef.current = window.setInterval(() => {
@@ -261,17 +309,22 @@ export function Player({
 
               hls.once(Hls.Events.MEDIA_ATTACHED, () => {
                 if (cancelled) return;
+                pushLog({ source: "hls", level: "info", label: "media_attached" });
                 try { hls.loadSource(safeSrc); } catch (e) {
-                  lastReasonRef.current = `loadSource falhou: ${(e as Error).message}`;
-                  setLastReason(lastReasonRef.current);
+                  const msg = `loadSource falhou: ${(e as Error).message}`;
+                  lastReasonRef.current = msg;
+                  setLastReason(msg);
+                  pushLog({ source: "hls", level: "error", label: "loadSource_error", details: msg });
                 }
               });
 
               hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 if (cancelled) return;
                 manifestReadyRef.current = true;
+                manifestParsedAtRef.current = performance.now();
                 lastReasonRef.current = "manifest carregado";
                 setLastReason("manifest carregado");
+                pushLog({ source: "hls", level: "info", label: "manifest_parsed" });
                 if (autoPlay) video.play().catch(() => {});
                 // NB: don't touch loading or status here — wait for real `playing`.
               });
@@ -280,6 +333,12 @@ export function Player({
                 const detail = `${data.type}/${data.details}`;
                 lastReasonRef.current = detail;
                 setLastReason(detail);
+                pushLog({
+                  source: "hls",
+                  level: data.fatal ? "error" : "warn",
+                  label: "error",
+                  details: `${detail} fatal=${data.fatal}`,
+                });
 
                 // Codec / decode → mark immediately
                 if (
@@ -360,6 +419,7 @@ export function Player({
           const blocked = /blocked|bloque/i.test(msg);
           const ratelimit = /Too many|429/i.test(msg);
           updateStatus("stream_error", msg);
+          pushLog({ source: "net", level: "error", label: "token_error", details: msg });
           setError({
             title: blocked
               ? "Acesso temporariamente bloqueado"
@@ -399,6 +459,7 @@ export function Player({
     if (!video) return;
 
     const onWaiting = () => {
+      pushLog({ source: "video", level: "warn", label: "waiting" });
       if (!playbackStartedRef.current) {
         setLoading(true);
         return;
@@ -407,12 +468,14 @@ export function Player({
       if (stallTimeoutRef.current === null) {
         stallTimeoutRef.current = window.setTimeout(() => {
           updateStatus("stall_timeout", lastReasonRef.current || "BUFFER_STALLED_ERROR");
+          pushLog({ source: "diag", level: "error", label: "stall_timeout_8s", details: lastReasonRef.current ?? undefined });
         }, STALL_TIMEOUT_MS);
       }
     };
     const onStalled = () => {
       lastReasonRef.current = "BUFFER_STALLED_ERROR";
       setLastReason("BUFFER_STALLED_ERROR");
+      pushLog({ source: "video", level: "warn", label: "stalled" });
       if (!playbackStartedRef.current) {
         setLoading(true);
         return;
@@ -420,6 +483,7 @@ export function Player({
       if (stallTimeoutRef.current === null) {
         stallTimeoutRef.current = window.setTimeout(() => {
           updateStatus("stall_timeout", "BUFFER_STALLED_ERROR");
+          pushLog({ source: "diag", level: "error", label: "stall_timeout_8s", details: "BUFFER_STALLED_ERROR" });
         }, STALL_TIMEOUT_MS);
       }
     };
@@ -430,10 +494,14 @@ export function Player({
       clearBootstrapTimeout();
       clearStallTimeout();
       if (wasFirst) {
+        firstFrameAtRef.current = performance.now();
+        const ttff = setupStartRef.current ? Math.round(firstFrameAtRef.current - setupStartRef.current) : 0;
+        pushLog({ source: "video", level: "info", label: "first_playing", details: `TTFF=${ttff}ms` });
         updateStatus("playback_started", null);
-        reportStreamEvent("stream_started", { url: src ?? undefined, meta: { trigger: "playing_event" } });
+        reportStreamEvent("stream_started", { url: src ?? undefined, meta: { trigger: "playing_event", ttff_ms: ttff } });
       } else if (status === "stall_timeout") {
         updateStatus("playback_started", "recuperado após stall");
+        pushLog({ source: "diag", level: "info", label: "recovered_after_stall" });
       }
     };
     const onCanPlay = () => setLoading(false);
@@ -443,7 +511,11 @@ export function Player({
       setLoading(false);
       clearBootstrapTimeout();
       clearStallTimeout();
+      pushLog({ source: "video", level: "info", label: "loadeddata" });
       if (wasFirst) {
+        if (firstFrameAtRef.current === null) {
+          firstFrameAtRef.current = performance.now();
+        }
         updateStatus("playback_started", null);
       }
     };
@@ -454,6 +526,7 @@ export function Player({
       const reason = `MEDIA_ERR_${code ?? "?"}${msg ? `: ${msg}` : ""}`;
       lastReasonRef.current = reason;
       setLastReason(reason);
+      pushLog({ source: "video", level: "error", label: "error", details: reason });
       updateStatus(isCodec ? "codec_incompatible" : "stream_error", reason);
       setError({
         title: isCodec ? "Codec incompatível" : "Não foi possível reproduzir",
@@ -509,10 +582,58 @@ export function Player({
 
   const handleRetry = () => {
     if (!src) return;
+    pushLog({ source: "diag", level: "info", label: "retry" });
     setError(null);
     retryCountRef.current = 0;
     setLoading(true);
     setRetryNonce((n) => n + 1);
+  };
+
+  // Auto-scroll the logs list to the bottom when new logs arrive
+  useEffect(() => {
+    if (!logsPanelOpen) return;
+    const el = logsListRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [logsVersion, logsPanelOpen]);
+
+  const handleCopyLogs = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(logsRef.current, null, 2));
+      toast.success("Logs copiados");
+    } catch {
+      toast.error("Não foi possível copiar os logs");
+    }
+  };
+  const handleClearLogs = () => {
+    logsRef.current = [];
+    setLogsVersion((v) => v + 1);
+  };
+
+  const fmtMs = (ms: number | null) =>
+    ms === null || !Number.isFinite(ms) ? "—" : `${Math.round(ms)} ms`;
+  const setupToManifest =
+    manifestParsedAtRef.current && setupStartRef.current
+      ? manifestParsedAtRef.current - setupStartRef.current
+      : null;
+  const setupToFirstFrame =
+    firstFrameAtRef.current && setupStartRef.current
+      ? firstFrameAtRef.current - setupStartRef.current
+      : null;
+  const manifestToFirstFrame =
+    firstFrameAtRef.current && manifestParsedAtRef.current
+      ? firstFrameAtRef.current - manifestParsedAtRef.current
+      : null;
+
+  const sourceBadge: Record<LogSource, string> = {
+    hls: "bg-blue-500/20 text-blue-200 border-blue-500/40",
+    video: "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
+    diag: "bg-amber-500/20 text-amber-200 border-amber-500/40",
+    net: "bg-purple-500/20 text-purple-200 border-purple-500/40",
+  };
+  const levelTone: Record<LogLevel, string> = {
+    info: "text-foreground",
+    warn: "text-yellow-300",
+    error: "text-red-400",
   };
 
   const handleClose = () => {
@@ -648,6 +769,95 @@ export function Player({
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Logs panel toggle — bottom-left */}
+      <button
+        type="button"
+        onClick={() => setLogsPanelOpen((o) => !o)}
+        className={cn(
+          "pointer-events-auto absolute bottom-3 left-3 z-20 inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium backdrop-blur-md shadow-sm transition-colors",
+          logsPanelOpen
+            ? "border-primary/50 bg-primary/20 text-primary-foreground"
+            : "border-border bg-background/80 text-muted-foreground hover:bg-background/95",
+        )}
+        aria-pressed={logsPanelOpen}
+        aria-label="Alternar logs do player"
+      >
+        <Terminal className="h-3 w-3" />
+        Logs
+      </button>
+
+      {/* Logs panel — right side overlay */}
+      {logsPanelOpen && (
+        <div
+          className="pointer-events-auto absolute top-3 right-3 bottom-14 z-30 w-[360px] max-w-[calc(100%-1.5rem)] flex flex-col rounded-md border bg-background/95 backdrop-blur-md shadow-xl text-foreground"
+          role="dialog"
+          aria-label="Logs do player"
+        >
+          <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold">
+              <Terminal className="h-3.5 w-3.5" />
+              Logs do player
+            </div>
+            <div className="flex items-center gap-1">
+              <Button onClick={handleCopyLogs} variant="ghost" size="icon" className="h-7 w-7" title="Copiar JSON">
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+              <Button onClick={handleClearLogs} variant="ghost" size="icon" className="h-7 w-7" title="Limpar">
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+              <Button onClick={() => setLogsPanelOpen(false)} variant="ghost" size="icon" className="h-7 w-7" title="Fechar">
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="border-b px-3 py-2 text-[11px] grid grid-cols-1 gap-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Setup → Manifest</span>
+              <span className="font-mono">{fmtMs(setupToManifest)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Setup → First Frame (TTFF)</span>
+              <span className="font-mono">{fmtMs(setupToFirstFrame)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Manifest → First Frame</span>
+              <span className="font-mono">{fmtMs(manifestToFirstFrame)}</span>
+            </div>
+          </div>
+
+          <div ref={logsListRef} className="flex-1 overflow-y-auto px-2 py-1.5 space-y-1 text-[11px] font-mono">
+            {logsRef.current.length === 0 ? (
+              <div className="text-muted-foreground text-center py-4">Sem eventos ainda</div>
+            ) : (
+              logsRef.current.map((entry, i) => (
+                <div key={i} className="flex items-start gap-1.5 leading-tight">
+                  <span className="shrink-0 text-muted-foreground tabular-nums">
+                    [+{Math.round(entry.tRel)}ms]
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded border px-1 py-0 text-[10px] uppercase tracking-wide",
+                      sourceBadge[entry.source],
+                    )}
+                  >
+                    {entry.source}
+                  </span>
+                  <div className={cn("min-w-0 flex-1", levelTone[entry.level])}>
+                    <span className="font-semibold">{entry.label}</span>
+                    {entry.details && (
+                      <span className="ml-1 text-muted-foreground truncate inline-block max-w-full align-bottom" title={entry.details}>
+                        {entry.details}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
