@@ -85,8 +85,7 @@ const App = () => (
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
-    </IptvProvider>
-  </QueryClientProvider>
+  </IptvProvider>
 );
 
 export default App;
