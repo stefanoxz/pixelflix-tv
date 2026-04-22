@@ -268,6 +268,7 @@ export function Player({
           ? "manifest carregado, mas sem frames"
           : (lastReasonRef.current || "sem reprodução após 12s");
         updateStatus("stall_timeout", reason);
+        pushLog({ source: "diag", level: "warn", label: "bootstrap_timeout_12s", details: reason });
         setError({
           title: "Canal não respondeu",
           description:
