@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Hls, { type ErrorData } from "hls.js";
-import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink, Activity, Terminal, Trash2 } from "lucide-react";
+import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink, Activity, Terminal, Trash2, VideoOff, ListVideo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -732,7 +732,8 @@ export function Player({
     );
   }
 
-  const showVideo = strategy.mode === "internal" && (!error || !error.external);
+  const showVideo =
+    strategy.mode === "internal" && (!error || (!error.external && !error.noData));
 
   // Diagnostic card colors via semantic tokens
   const statusTone: Record<DiagnosticStatus, string> = {
@@ -741,6 +742,7 @@ export function Player({
     stall_timeout: "border-yellow-500/50 bg-yellow-500/15 text-yellow-100",
     codec_incompatible: "border-destructive/50 bg-destructive/15 text-destructive-foreground",
     stream_error: "border-destructive/50 bg-destructive/15 text-destructive-foreground",
+    stream_no_data: "border-yellow-500/50 bg-yellow-500/15 text-yellow-100",
   };
 
   return (
@@ -793,8 +795,17 @@ export function Player({
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/85 backdrop-blur-sm p-6">
           <div className="max-w-md text-center space-y-4">
-            <div className="mx-auto h-14 w-14 rounded-full bg-destructive/15 flex items-center justify-center">
-              <AlertTriangle className="h-7 w-7 text-destructive" />
+            <div
+              className={cn(
+                "mx-auto h-14 w-14 rounded-full flex items-center justify-center",
+                error.noData ? "bg-yellow-500/15" : "bg-destructive/15",
+              )}
+            >
+              {error.noData ? (
+                <VideoOff className="h-7 w-7 text-yellow-400" />
+              ) : (
+                <AlertTriangle className="h-7 w-7 text-destructive" />
+              )}
             </div>
             <div>
               <h3 className="text-lg font-semibold text-foreground">
@@ -803,12 +814,25 @@ export function Player({
               {error.description && (
                 <p className="mt-1 text-sm text-muted-foreground">{error.description}</p>
               )}
-              <p className="mt-2 text-xs text-muted-foreground">
-                Copie o link e abra no VLC, MX Player ou outro player externo.
-              </p>
+              {!error.noData && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Copie o link e abra no VLC, MX Player ou outro player externo.
+                </p>
+              )}
             </div>
             <div className="flex flex-wrap items-center justify-center gap-2">
-              {error.external ? (
+              {error.noData ? (
+                <>
+                  <Button onClick={handleRetry} variant="default" size="sm" className="gap-2">
+                    <RefreshCw className="h-4 w-4" />
+                    Tentar novamente
+                  </Button>
+                  <Button onClick={handleClose} variant="secondary" size="sm" className="gap-2">
+                    <ListVideo className="h-4 w-4" />
+                    Trocar canal
+                  </Button>
+                </>
+              ) : error.external ? (
                 <>
                   <Button onClick={handleOpenExternal} variant="default" size="sm" className="gap-2">
                     <ExternalLink className="h-4 w-4" />
