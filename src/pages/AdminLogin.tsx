@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Loader2 } from "lucide-react";
+import { Shield, Loader2, Bug, ChevronDown, ChevronUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,39 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+
+type DebugEntry = {
+  ts: string;
+  step: string;
+  ok: boolean;
+  detail: string;
+};
+
+function maskEmail(email: string) {
+  if (!email || !email.includes("@")) return email || "(vazio)";
+  const [user, domain] = email.split("@");
+  const head = user.slice(0, 2);
+  return `${head}${"•".repeat(Math.max(1, user.length - 2))}@${domain}`;
+}
+
+function describeAuthError(msg: string): string {
+  const m = msg.toLowerCase();
+  if (m.includes("invalid login credentials"))
+    return "E-mail ou senha incorretos. A conta existe, mas a senha não bateu.";
+  if (m.includes("email not confirmed"))
+    return "E-mail ainda não confirmado. Verifique sua caixa de entrada.";
+  if (m.includes("database error querying schema"))
+    return "Erro de schema no banco de auth (linhas com NULL em colunas de token).";
+  if (m.includes("user not found"))
+    return "Nenhuma conta encontrada com esse e-mail.";
+  if (m.includes("rate limit") || m.includes("too many"))
+    return "Muitas tentativas. Aguarde alguns segundos.";
+  if (m.includes("password should be") || m.includes("weak password"))
+    return "Senha fraca ou não atende aos requisitos.";
+  if (m.includes("already registered") || m.includes("user already"))
+    return "Já existe uma conta com esse e-mail.";
+  return msg;
+}
 
 const AdminLogin = () => {
   const navigate = useNavigate();
