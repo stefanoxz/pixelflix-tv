@@ -225,13 +225,28 @@ Deno.serve(async (req) => {
       return await rejectToken(ip, ua, "blocked", cors, payload.s, payload.u);
     }
 
-    // Nonce single-use for segment tokens
+    // Nonce single-use for segment tokens — but tolerate legitimate re-fetches
+    // by hls.js/Chrome within a 10s window from the same user/ip/ua.
     if (payload.k === "segment") {
       const { error } = await admin
         .from("used_nonces")
         .insert({ nonce: payload.n });
       if (error) {
-        return await rejectToken(ip, ua, "nonce_replay", cors, payload.s, payload.u);
+        // Nonce already exists. Allow the replay only if it was used in the
+        // last 10s — the token itself is already bound to user/ip/ua via
+        // earlier checks, so this cannot be exploited cross-user.
+        const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString();
+        const { data: recent } = await admin
+          .from("used_nonces")
+          .select("used_at")
+          .eq("nonce", payload.n)
+          .gte("used_at", tenSecondsAgo)
+          .maybeSingle();
+        if (!recent) {
+          return await rejectToken(ip, ua, "nonce_replay", cors, payload.s, payload.u);
+        }
+        // Tolerated replay — log and continue.
+        logEvent(payload.s, "nonce_replay_tolerated", ip, ua, payload.u).catch(() => {});
       }
       // Best-effort cleanup
       if (Math.random() < 0.01) {

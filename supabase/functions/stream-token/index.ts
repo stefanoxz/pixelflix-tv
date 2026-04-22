@@ -43,7 +43,7 @@ const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-const MAX_SESSIONS = 1;
+const MAX_SESSIONS = 2;
 const RATE_REQ_PER_MIN = 60;
 const RATE_SEG_PER_MIN = 300;
 const TTL_PLAYLIST_S = 60;
