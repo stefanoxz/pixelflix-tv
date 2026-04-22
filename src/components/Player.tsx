@@ -155,6 +155,24 @@ export function Player({
 
       setLoading(true);
 
+      // Stall watchdog: if no playback within 12s, surface a clear error.
+      stallTimeoutRef.current = window.setTimeout(() => {
+        if (cancelled) return;
+        if (engagedRef.current) return;
+        setLoading(false);
+        setError({
+          title: "Canal não respondeu",
+          description:
+            "Pode ser um stream em 4K/HEVC incompatível com o navegador, ou o canal está offline. Copie o link e abra no VLC.",
+          copyUrl: copyTarget,
+          external: true,
+        });
+        reportStreamEvent("stream_error", {
+          url: src,
+          meta: { reason: "stall_timeout_12s" },
+        });
+      }, 12_000);
+
       const start = async () => {
         try {
           const kind = strategy.type === "hls" ? "playlist" : "segment";
@@ -178,6 +196,7 @@ export function Player({
 
               hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 if (cancelled) return;
+                engagedRef.current = true;
                 setLoading(false);
                 reportStreamEvent("stream_started", { url: src, meta: { kind: "hls" } });
                 if (autoPlay) video.play().catch(() => {});
