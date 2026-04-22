@@ -116,6 +116,7 @@ const Admin = () => {
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
 
   const [addOpen, setAddOpen] = useState(false);
   const [newUrl, setNewUrl] = useState("");
