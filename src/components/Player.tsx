@@ -41,6 +41,17 @@ type DiagnosticStatus =
   | "codec_incompatible"
   | "stream_error";
 
+type LogSource = "hls" | "video" | "diag" | "net";
+type LogLevel = "info" | "warn" | "error";
+type LogEntry = {
+  t: number;
+  tRel: number;
+  source: LogSource;
+  level: LogLevel;
+  label: string;
+  details?: string;
+};
+
 const HLS_CONFIG: Partial<Hls["config"]> = {
   lowLatencyMode: true,
   enableWorker: true,
