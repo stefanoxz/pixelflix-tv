@@ -173,6 +173,7 @@ const AdminLogin = () => {
     }
   };
 
+  const runDiagnostics = async () => {
     setLastError(null);
     pushDebug("diag:start", true, `email=${maskEmail(email) || "(vazio)"}`);
     if (!email) {
