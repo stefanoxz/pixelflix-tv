@@ -289,9 +289,11 @@ export function Player({
             copyUrl: copyTarget,
             noData: true,
           });
+          let upstreamHost: string | null = null;
+          try { if (src) upstreamHost = new URL(src).host; } catch { /* noop */ }
           reportStreamEvent("stream_error", {
             url: src,
-            meta: { type: "stream_no_data", reason },
+            meta: { type: "stream_no_data", reason, host: upstreamHost },
           });
           return;
         }
@@ -420,9 +422,11 @@ export function Player({
                     });
                     clearBootstrapTimeout();
                     clearStallTimeout();
+                    let upstreamHost: string | null = null;
+                    try { if (src) upstreamHost = new URL(src).host; } catch { /* noop */ }
                     reportStreamEvent("stream_error", {
                       url: src,
-                      meta: { type: "stream_no_data", reason },
+                      meta: { type: "stream_no_data", reason, host: upstreamHost },
                     });
                     try { hls.stopLoad(); } catch { /* noop */ }
                     return;
