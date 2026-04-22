@@ -272,9 +272,29 @@ export function Player({
         if (cancelled) return;
         if (playbackStartedRef.current) return;
         setLoading(false);
-        const reason = manifestReadyRef.current
-          ? "manifest carregado, mas sem frames"
-          : (lastReasonRef.current || "sem reprodução após 12s");
+        const noData =
+          manifestReadyRef.current && fragLoadErrorCountRef.current > 0;
+        const reason = noData
+          ? "fragLoadError + no frames"
+          : manifestReadyRef.current
+            ? "manifest carregado, mas sem frames"
+            : (lastReasonRef.current || "sem reprodução após 12s");
+        if (noData) {
+          updateStatus("stream_no_data", reason);
+          pushLog({ source: "diag", level: "error", label: "stream_no_data", details: reason });
+          setError({
+            title: "Sem vídeo no canal",
+            description:
+              "Este canal abriu, mas não está transmitindo vídeo no momento. Tente outro canal ou volte mais tarde.",
+            copyUrl: copyTarget,
+            noData: true,
+          });
+          reportStreamEvent("stream_error", {
+            url: src,
+            meta: { type: "stream_no_data", reason },
+          });
+          return;
+        }
         updateStatus("stall_timeout", reason);
         pushLog({ source: "diag", level: "warn", label: "bootstrap_timeout_12s", details: reason });
         setError({
