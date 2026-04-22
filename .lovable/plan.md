@@ -1,32 +1,28 @@
 
 
-## Definir nova senha admin: `Britania@`
+## Botão "Sair do Admin" → tela de login do webplayer
 
-### Problema
-A senha sugerida `Britania@` tem **9 caracteres** e é aceitável em comprimento, mas **não atende a boas práticas** (palavra de dicionário + símbolo previsível). Vou aplicá-la mesmo assim porque você pediu explicitamente — recomendo trocar depois pela tela de conta.
+### O que fazer
+Adicionar um botão no header da página `/admin` que:
+1. Faz `supabase.auth.signOut()` (encerra a sessão admin).
+2. Redireciona para `/login` (tela de login do webplayer).
 
-### O que vai ser feito
-1. Rodar uma migração SQL que sobrescreve o hash da senha do admin `stefanobsilva@gmail.com` no banco:
-   ```sql
-   UPDATE auth.users
-   SET encrypted_password = crypt('Britania@', gen_salt('bf')),
-       updated_at = now()
-   WHERE email = 'stefanobsilva@gmail.com';
-   ```
-2. Confirmar que a linha foi atualizada (1 row affected).
-3. Te avisar pra entrar em `/admin/login` com:
-   - **E-mail**: `stefanobsilva@gmail.com`
-   - **Senha**: `Britania@`
+### Onde
+Arquivo: `src/pages/Admin.tsx` — no topo da página, ao lado do título/cabeçalho existente do painel admin.
 
-### Observações de segurança
-- Senha trafegou em chat — considere trocá-la assim que entrar.
-- O fluxo "Esqueci minha senha" (Opção B) já está implementado e disponível como backup.
-- Nenhuma mudança de código será feita; é apenas uma migração de dados em `auth.users`.
+### Como (técnico)
+- Importar `supabase` de `@/integrations/supabase/client` e `useNavigate` de `react-router-dom`.
+- Importar `LogOut` de `lucide-react` e `Button` de `@/components/ui/button`.
+- Handler:
+  ```ts
+  const handleExitAdmin = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
+  ```
+- Botão `variant="outline"` com ícone `LogOut` e label **"Sair do Admin"**, posicionado no canto superior direito do header da página.
 
-### Tecnicamente
-- Schema reservado `auth` é tocado apenas para um `UPDATE` de coluna (`encrypted_password`, `updated_at`), sem alterar estrutura, triggers ou políticas.
-- Usa a extensão `pgcrypto` (já disponível no Supabase) via `crypt()` + `gen_salt('bf')` para gerar hash bcrypt compatível com o Supabase Auth.
-
-### Próximo passo
-Aprove o plano e eu rodo a migração imediatamente.
+### Observações
+- O `AdminProtectedRoute` já bloqueia acesso a `/admin` sem sessão admin, então após o `signOut` qualquer tentativa de voltar cai em `/admin/login` automaticamente — mas o redirect explícito para `/login` garante que o usuário vá direto pro webplayer, como pedido.
+- Nenhuma mudança de rota, schema ou backend necessária.
 
