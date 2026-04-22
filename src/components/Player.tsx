@@ -56,6 +56,8 @@ export function Player({
   const hlsRef = useRef<Hls | null>(null);
   const heartbeatRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
+  const stallTimeoutRef = useRef<number | null>(null);
+  const engagedRef = useRef(false);
 
   const [error, setError] = useState<PlayerError | null>(null);
   const [loading, setLoading] = useState(false);
@@ -86,14 +88,19 @@ export function Player({
       window.clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
     }
+    if (stallTimeoutRef.current !== null) {
+      window.clearTimeout(stallTimeoutRef.current);
+      stallTimeoutRef.current = null;
+    }
+    engagedRef.current = false;
   };
 
-  // Setup whenever src/strategy changes — debounced 250ms to absorb fast zapping.
+  // Setup whenever src/strategy changes — debounced 120ms to absorb fast zapping.
   useEffect(() => {
     let cancelled = false;
     let didSetup = false;
 
-    const debounceMs = 250;
+    const debounceMs = 120;
     const debounceTimer = window.setTimeout(() => {
       didSetup = true;
       runSetup();
@@ -148,6 +155,24 @@ export function Player({
 
       setLoading(true);
 
+      // Stall watchdog: if no playback within 12s, surface a clear error.
+      stallTimeoutRef.current = window.setTimeout(() => {
+        if (cancelled) return;
+        if (engagedRef.current) return;
+        setLoading(false);
+        setError({
+          title: "Canal não respondeu",
+          description:
+            "Pode ser um stream em 4K/HEVC incompatível com o navegador, ou o canal está offline. Copie o link e abra no VLC.",
+          copyUrl: copyTarget,
+          external: true,
+        });
+        reportStreamEvent("stream_error", {
+          url: src,
+          meta: { reason: "stall_timeout_12s" },
+        });
+      }, 12_000);
+
       const start = async () => {
         try {
           const kind = strategy.type === "hls" ? "playlist" : "segment";
@@ -171,6 +196,7 @@ export function Player({
 
               hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 if (cancelled) return;
+                engagedRef.current = true;
                 setLoading(false);
                 reportStreamEvent("stream_started", { url: src, meta: { kind: "hls" } });
                 if (autoPlay) video.play().catch(() => {});
@@ -270,19 +296,50 @@ export function Player({
     const video = videoRef.current;
     if (!video) return;
 
-    const onWaiting = () => setLoading(true);
-    const onPlaying = () => setLoading(false);
-    const onCanPlay = () => setLoading(false);
-    const onLoadedData = () => setLoading(false);
-    const onStalled = () => setLoading(true);
-    const onError = () => {
-      setError((prev) =>
-        prev ? prev : {
-          title: "Não foi possível reproduzir",
-          description: "Este conteúdo pode estar offline, em formato incompatível ou bloqueado pelo servidor.",
-          copyUrl: copyTarget,
-        });
+    // Only show the main spinner BEFORE the player is engaged. Once playback
+    // has started at least once, we ignore `waiting`/`stalled` for the spinner
+    // (a brief buffer hiccup shouldn't blank the UI). The 12s stall watchdog
+    // in the setup effect is what surfaces a real error.
+    const onWaiting = () => {
+      if (!engagedRef.current) setLoading(true);
+    };
+    const onStalled = () => {
+      if (!engagedRef.current) setLoading(true);
+    };
+    const onPlaying = () => {
+      engagedRef.current = true;
       setLoading(false);
+      if (stallTimeoutRef.current !== null) {
+        window.clearTimeout(stallTimeoutRef.current);
+        stallTimeoutRef.current = null;
+      }
+    };
+    const onCanPlay = () => setLoading(false);
+    const onLoadedData = () => {
+      engagedRef.current = true;
+      setLoading(false);
+      if (stallTimeoutRef.current !== null) {
+        window.clearTimeout(stallTimeoutRef.current);
+        stallTimeoutRef.current = null;
+      }
+    };
+    const onError = () => {
+      const code = video.error?.code;
+      // MEDIA_ERR_SRC_NOT_SUPPORTED (4) or MEDIA_ERR_DECODE (3) → codec issue
+      const isCodec = code === 4 || code === 3;
+      setError({
+        title: isCodec ? "Formato/codec incompatível" : "Não foi possível reproduzir",
+        description: isCodec
+          ? "Este canal usa um codec (provavelmente HEVC/4K) que o navegador não decodifica. Abra no VLC para assistir."
+          : "Este conteúdo pode estar offline, em formato incompatível ou bloqueado pelo servidor.",
+        copyUrl: copyTarget,
+        external: isCodec,
+      });
+      setLoading(false);
+      if (stallTimeoutRef.current !== null) {
+        window.clearTimeout(stallTimeoutRef.current);
+        stallTimeoutRef.current = null;
+      }
     };
 
     video.addEventListener("waiting", onWaiting);
