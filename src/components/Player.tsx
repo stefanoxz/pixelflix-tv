@@ -209,6 +209,7 @@ export function Player({
       setCopied(false);
       setHidden(false);
       retryCountRef.current = 0;
+      fragLoadErrorCountRef.current = 0;
       lastReasonRef.current = null;
       setLastReason(null);
       setStatus("connecting");
