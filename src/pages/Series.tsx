@@ -20,7 +20,6 @@ import {
   getSeries,
   getSeriesInfo,
   buildSeriesEpisodeUrl,
-  proxyUrl,
   isBrowserPlayable,
   isExternalOnly,
   getFormatBadge,
@@ -76,14 +75,15 @@ const SeriesPage = () => {
   const allEpisodes = seriesInfo?.episodes?.[currentSeason] || [];
 
   const externalCount = useMemo(
-    () => allEpisodes.filter((ep) => isExternalOnly(ep.container_extension)).length,
+    () =>
+      allEpisodes.filter((ep) => isExternalOnly(ep.container_extension, ep.direct_source)).length,
     [allEpisodes],
   );
 
   const episodes = useMemo(
     () =>
       onlyCompatible
-        ? allEpisodes.filter((ep) => isBrowserPlayable(ep.container_extension))
+        ? allEpisodes.filter((ep) => isBrowserPlayable(ep.container_extension, ep.direct_source))
         : allEpisodes,
     [allEpisodes, onlyCompatible],
   );
@@ -95,7 +95,7 @@ const SeriesPage = () => {
   };
 
   const handleCopyExternal = async (ep: Episode) => {
-    const url = buildSeriesEpisodeUrl(creds, ep.id, ep.container_extension);
+    const url = buildSeriesEpisodeUrl(creds, ep.id, ep.container_extension, ep.direct_source);
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Link copiado — abra no VLC ou MX Player");
@@ -161,20 +161,24 @@ const SeriesPage = () => {
 
               {playingEp ? (
                 <div className="space-y-4">
-                  <Player
-                    src={proxyUrl(
-                      buildSeriesEpisodeUrl(creds, playingEp.id, playingEp.container_extension),
-                    )}
-                    rawUrl={buildSeriesEpisodeUrl(
+                  {(() => {
+                    const epUrl = buildSeriesEpisodeUrl(
                       creds,
                       playingEp.id,
                       playingEp.container_extension,
-                    )}
-                    containerExt={playingEp.container_extension}
-                    title={playingEp.title}
-                    poster={playingEp.info?.movie_image || openSeries.cover}
-                    onClose={() => setPlayingEp(null)}
-                  />
+                      playingEp.direct_source,
+                    );
+                    return (
+                      <Player
+                        src={epUrl}
+                        rawUrl={epUrl}
+                        containerExt={playingEp.container_extension}
+                        title={playingEp.title}
+                        poster={playingEp.info?.movie_image || openSeries.cover}
+                        onClose={() => setPlayingEp(null)}
+                      />
+                    );
+                  })()}
                   <Button variant="outline" onClick={() => setPlayingEp(null)}>
                     ← Voltar aos episódios
                   </Button>
@@ -265,8 +269,8 @@ const SeriesPage = () => {
                           ) : (
                             episodes.map((ep) => {
                               const ext = ep.container_extension;
-                              const external = isExternalOnly(ext);
-                              const badge = getFormatBadge(ext);
+                              const external = isExternalOnly(ext, ep.direct_source);
+                              const badge = getFormatBadge(ext, ep.direct_source);
                               return (
                                 <div
                                   key={ep.id}

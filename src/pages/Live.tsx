@@ -10,7 +10,6 @@ import {
   getLiveCategories,
   getLiveStreams,
   buildLiveStreamUrl,
-  proxyUrl,
   type LiveStream,
 } from "@/services/iptv";
 
@@ -43,8 +42,9 @@ const Live = () => {
     if (!activeChannel && filtered.length > 0) setActiveChannel(filtered[0]);
   }, [filtered, activeChannel]);
 
-  const rawLiveUrl = activeChannel ? buildLiveStreamUrl(creds, activeChannel.stream_id) : null;
-  const playerSrc = rawLiveUrl ? proxyUrl(rawLiveUrl) : null;
+  const rawLiveUrl = activeChannel
+    ? buildLiveStreamUrl(creds, activeChannel.stream_id, activeChannel.direct_source)
+    : null;
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 md:px-8 py-6 space-y-6">
@@ -79,7 +79,7 @@ const Live = () => {
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1 min-w-0">
             <Player
-              src={playerSrc}
+              src={rawLiveUrl}
               rawUrl={rawLiveUrl ?? undefined}
               containerExt="m3u8"
               title={activeChannel?.name}

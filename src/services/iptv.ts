@@ -4,6 +4,12 @@ export interface IptvCredentials {
   server?: string;
   username: string;
   password: string;
+  /**
+   * Base de mídia resolvida a partir do `server_info` retornado pelo login
+   * (protocolo + host + porta corretos pra streams). Quando ausente,
+   * cai pro `server` (DNS do panel).
+   */
+  streamBase?: string;
 }
 
 export interface UserInfo {
@@ -96,6 +102,7 @@ export interface Episode {
   episode_num: number;
   title: string;
   container_extension: string;
+  direct_source?: string;
   info?: {
     movie_image?: string;
     plot?: string;
@@ -147,15 +154,55 @@ export const getSeries = (c: IptvCredentials) =>
 export const getSeriesInfo = (c: IptvCredentials, seriesId: number) =>
   iptvFetch<SeriesInfo>(c, "get_series_info", { series_id: seriesId });
 
-function serverBase(creds: IptvCredentials): string {
-  return (creds.server || "").replace(/\/+$/, "");
+/**
+ * Resolve a base correta de stream a partir do server_info do login.
+ * Prefere protocolo/porta retornados pelo provedor (que podem diferir do panel).
+ * Fallback: server_url cru.
+ */
+export function resolveStreamBase(serverInfo?: ServerInfo | null, fallback?: string): string {
+  if (serverInfo?.url) {
+    const proto = (serverInfo.server_protocol || "http").toLowerCase();
+    const host = serverInfo.url.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+    const port =
+      proto === "https"
+        ? serverInfo.https_port || serverInfo.port
+        : serverInfo.port || serverInfo.https_port;
+    const portPart = port && !host.includes(":") ? `:${port}` : "";
+    return `${proto}://${host}${portPart}`;
+  }
+  return (fallback || "").replace(/\/+$/, "");
 }
 
-export function buildLiveStreamUrl(creds: IptvCredentials, streamId: number): string {
+function serverBase(creds: IptvCredentials): string {
+  return (creds.streamBase || creds.server || "").replace(/\/+$/, "");
+}
+
+/** Considera direct_source válido se for uma URL absoluta http(s). */
+function pickDirectSource(direct?: string): string | null {
+  if (!direct) return null;
+  const trimmed = direct.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return null;
+  return trimmed;
+}
+
+export function buildLiveStreamUrl(
+  creds: IptvCredentials,
+  streamId: number,
+  directSource?: string,
+): string {
+  const direct = pickDirectSource(directSource);
+  if (direct) return direct;
   return `${serverBase(creds)}/live/${creds.username}/${creds.password}/${streamId}.m3u8`;
 }
 
-export function buildVodStreamUrl(creds: IptvCredentials, streamId: number, ext: string): string {
+export function buildVodStreamUrl(
+  creds: IptvCredentials,
+  streamId: number,
+  ext: string,
+  directSource?: string,
+): string {
+  const direct = pickDirectSource(directSource);
+  if (direct) return direct;
   return `${serverBase(creds)}/movie/${creds.username}/${creds.password}/${streamId}.${ext}`;
 }
 
@@ -163,7 +210,10 @@ export function buildSeriesEpisodeUrl(
   creds: IptvCredentials,
   episodeId: string | number,
   ext: string,
+  directSource?: string,
 ): string {
+  const direct = pickDirectSource(directSource);
+  if (direct) return direct;
   return `${serverBase(creds)}/series/${creds.username}/${creds.password}/${episodeId}.${ext || "mp4"}`;
 }
 
@@ -180,23 +230,41 @@ export function normalizeExt(ext?: string): string {
   return (ext || "").toLowerCase().replace(/^\./, "");
 }
 
-export function isBrowserPlayable(ext?: string): boolean {
-  const e = normalizeExt(ext);
-  return ["mp4", "m3u8", "webm"].includes(e);
+/** Extrai a extensão real (sem querystring) de uma URL, se houver. */
+export function extFromUrl(url?: string | null): string {
+  if (!url) return "";
+  try {
+    const u = new URL(url);
+    const m = u.pathname.toLowerCase().match(/\.([a-z0-9]{2,5})$/);
+    return m ? m[1] : "";
+  } catch {
+    const cleaned = url.toLowerCase().split("?")[0];
+    const m = cleaned.match(/\.([a-z0-9]{2,5})$/);
+    return m ? m[1] : "";
+  }
 }
 
-export function isExternalOnly(ext?: string): boolean {
-  const e = normalizeExt(ext);
-  return ["mkv", "avi", "mov"].includes(e);
+/**
+ * Decide se um conteúdo abre no navegador, considerando extensão declarada,
+ * direct_source e URL final. Mais robusto que olhar só container_extension.
+ */
+export function isBrowserPlayable(ext?: string, url?: string | null): boolean {
+  const candidates = [normalizeExt(ext), extFromUrl(url)].filter(Boolean);
+  return candidates.some((e) => ["mp4", "m3u8", "webm"].includes(e));
+}
+
+export function isExternalOnly(ext?: string, url?: string | null): boolean {
+  const candidates = [normalizeExt(ext), extFromUrl(url)].filter(Boolean);
+  // Só considera "externo" se pelo menos uma pista bater e nenhuma indicar compatível
+  if (candidates.length === 0) return false;
+  if (candidates.some((e) => ["mp4", "m3u8", "webm"].includes(e))) return false;
+  return candidates.some((e) => ["mkv", "avi", "mov", "ts", "wmv", "flv"].includes(e));
 }
 
 export type StreamType = "hls" | "video" | "external" | "unknown";
 
 /**
  * Detecta o tipo de stream a partir da extensão e/ou URL.
- * - hls: m3u8 (precisa de hls.js ou suporte nativo Safari)
- * - video: mp4/webm (player nativo do navegador)
- * - external: mkv/avi/mov (não tocam no browser, precisam de player externo)
  */
 export function getStreamType(ext?: string, url?: string): StreamType {
   const e = normalizeExt(ext);
@@ -204,7 +272,8 @@ export function getStreamType(ext?: string, url?: string): StreamType {
 
   if (e === "m3u8" || u.includes(".m3u8") || u.includes("mpegurl")) return "hls";
   if (["mp4", "webm"].includes(e) || u.endsWith(".mp4") || u.endsWith(".webm")) return "video";
-  if (["mkv", "avi", "mov"].includes(e) || /\.(mkv|avi|mov)$/.test(u)) return "external";
+  if (["mkv", "avi", "mov", "ts", "wmv", "flv"].includes(e) || /\.(mkv|avi|mov|ts|wmv|flv)$/.test(u))
+    return "external";
 
   return "unknown";
 }
@@ -214,13 +283,6 @@ export type PlaybackStrategy =
   | { mode: "external" }
   | { mode: "error"; reason: string };
 
-/**
- * Decide como reproduzir um stream:
- * - internal/hls: usa hls.js (ou fallback nativo Safari)
- * - internal/native: tag <video> direto
- * - external: mostra botão pra abrir em VLC/MX Player
- * - error: URL inválida ou tipo desconhecido
- */
 export function getPlaybackStrategy(ext?: string, url?: string): PlaybackStrategy {
   if (!isValidStreamUrl(url)) return { mode: "error", reason: "URL de stream inválida" };
 
@@ -229,14 +291,9 @@ export function getPlaybackStrategy(ext?: string, url?: string): PlaybackStrateg
   if (type === "video") return { mode: "internal", type: "native" };
   if (type === "external") return { mode: "external" };
 
-  // unknown: tenta player nativo via proxy como último recurso
   return { mode: "internal", type: "native" };
 }
 
-/**
- * Valida se a URL é minimamente segura pra ser passada ao player.
- * Aceita apenas http(s) absoluto ou a URL do nosso proxy.
- */
 export function isValidStreamUrl(url?: string | null): url is string {
   if (!url || typeof url !== "string") return false;
   const trimmed = url.trim();
@@ -255,13 +312,13 @@ export type FormatBadgeInfo = {
   tooltip: string;
 };
 
-export function getFormatBadge(ext?: string): FormatBadgeInfo {
-  const e = normalizeExt(ext);
+export function getFormatBadge(ext?: string, url?: string | null): FormatBadgeInfo {
+  const e = normalizeExt(ext) || extFromUrl(url);
   if (e === "mp4")
     return { label: "MP4", tone: "green", tooltip: "Compatível com navegador" };
   if (e === "m3u8")
     return { label: "STREAM", tone: "blue", tooltip: "Streaming HLS" };
-  if (e === "mkv" || e === "avi" || e === "mov")
+  if (["mkv", "avi", "mov", "ts", "wmv", "flv"].includes(e))
     return { label: "EXTERNO", tone: "yellow", tooltip: "Abrir em player externo" };
   return { label: e.toUpperCase() || "?", tone: "gray", tooltip: "Formato desconhecido" };
 }
