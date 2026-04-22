@@ -1,39 +1,41 @@
 
 
-## Corrigir erro "Database error querying schema" no login admin
+## Resetar a senha do admin `stefanobsilva@gmail.com`
 
-### Problema
-A conta admin `stefanobsilva@gmail.com` foi criada diretamente via SQL e ficou com colunas de token (`confirmation_token`, `email_change`, `email_change_token_new`, `recovery_token`, etc.) com valor `NULL`. O serviço de autenticação espera string vazia (`''`) nessas colunas e quebra com erro `500: converting NULL to string is unsupported` ao tentar logar.
+### Diagnóstico (confirmado pelo painel)
+- Backend de auth: **OK** (sem mais erro 500 / schema)
+- Conta existe: **OK**
+- Senha digitada (5 caracteres): **não confere** com o hash salvo
 
-### Solução
+Ou seja, o único bloqueio agora é não saber a senha correta. Duas formas de resolver — escolha uma:
 
-**1. Migração SQL** para normalizar todos os usuários afetados em `auth.users`, trocando `NULL` por `''` nas colunas de token:
-- `confirmation_token`
-- `email_change`
-- `email_change_token_new`
-- `email_change_token_current`
-- `recovery_token`
-- `reauthentication_token`
-- `phone_change`
-- `phone_change_token`
+### Opção A — Resetar a senha direto no banco (rápido)
+Eu rodo uma migração que sobrescreve a senha do admin com um valor que **você me informar agora** (mínimo 8 caracteres, recomendo algo provisório só para entrar e depois trocar).
 
-A migração roda apenas em linhas onde a coluna está `NULL`, é idempotente e não afeta usuários saudáveis.
+Passos:
+1. `UPDATE auth.users SET encrypted_password = crypt('<sua_senha>', gen_salt('bf')), updated_at = now() WHERE email = 'stefanobsilva@gmail.com'`
+2. Você entra em `/admin/login` com a nova senha.
+3. (Opcional) Troca depois pela tela de conta.
 
-**2. Verificação pós-migração**: confirmar que `stefanobsilva@gmail.com` tem `email_confirmed_at` preenchido (já está) e nenhum token mais como `NULL`.
+**Me responda com a senha provisória que quer usar** (ex.: `Admin@2026`) e eu aplico.
 
-### Resultado esperado
-- Login admin volta a funcionar normalmente em `/admin/login`.
-- Novos usuários criados via fluxo padrão de signup já não sofrem disso (apenas inserts SQL diretos causam o problema).
+### Opção B — Adicionar fluxo "Esqueci minha senha" na tela `/admin/login`
+Implementação:
+1. Novo botão **"Esqueci minha senha"** abaixo do formulário de login.
+2. Modal pedindo o e-mail → chama `supabase.auth.resetPasswordForEmail(email, { redirectTo: \`${window.location.origin}/admin/reset-password\` })`.
+3. Nova rota pública `/admin/reset-password`:
+   - Detecta `type=recovery` no hash da URL.
+   - Formulário de nova senha + confirmação.
+   - Chama `supabase.auth.updateUser({ password })`.
+   - Redireciona para `/admin/login` ao concluir.
+4. E-mail de recuperação usa o template padrão do Lovable Cloud (sem precisar configurar domínio).
 
-### Detalhes técnicos
-- **Causa raiz**: GoTrue (serviço de auth) usa `sql.Scan` em `string` (não `sql.NullString`) para essas colunas. Inserts SQL manuais em `auth.users` sem fornecer valor default `''` deixam `NULL` e quebram o scan.
-- **Escopo da migração**: somente `UPDATE` em `auth.users` — schema reservado, mas a operação é uma normalização de dados segura, sem alterar estrutura nem triggers.
-- **Sem mudanças de código frontend**: o erro é 100% no banco/auth, não em React.
+Vantagem: fica permanente, serve para qualquer admin futuro.
+Desvantagem: depende do e-mail chegar (cheque spam).
 
-### Recomendação adicional
-Se você não lembra a senha, posso (em modo padrão, após sua aprovação) também:
-- Resetar a senha via `crypt()` para um valor que você forneça, **ou**
-- Adicionar um fluxo "Esqueci minha senha" na tela `/admin/login`.
+### Recomendação
+- Se quiser **entrar agora**: vá de **Opção A** e me passe a senha provisória.
+- Se quiser **solução definitiva**: vá de **Opção B** (posso implementar e você dispara o e-mail logo após).
 
-Me diga se quer incluir alguma dessas opções junto com a correção.
+Pode também pedir **as duas** — reseto agora pra desbloquear e já deixo o fluxo de recuperação pronto.
 
