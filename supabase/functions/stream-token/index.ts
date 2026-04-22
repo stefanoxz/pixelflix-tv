@@ -47,7 +47,9 @@ const MAX_SESSIONS = 2;
 const RATE_REQ_PER_MIN = 60;
 const RATE_SEG_PER_MIN = 300;
 const TTL_PLAYLIST_S = 60;
-const TTL_SEGMENT_S = 30;
+// Increased from 30s → 45s. hls.js retries with backoff and may reuse a token
+// 20–30s after issuance; 30s caused legitimate "expired" rejections.
+const TTL_SEGMENT_S = 45;
 
 const PROXY_BASE = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/stream-proxy`;
 

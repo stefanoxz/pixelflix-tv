@@ -46,7 +46,14 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 const PROXY_BASE = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/stream-proxy`;
-const SEGMENT_TTL_S = 30;
+// Aligned with stream-token TTL_SEGMENT_S (45s).
+const SEGMENT_TTL_S = 45;
+// Tolerate clock skew between client/edge when checking token expiration.
+const EXP_SKEW_MS = 2_000;
+// Window in which a previously-used nonce can be replayed by the same
+// (user, ip/24, ua) — aligned with SEGMENT_TTL_S so hls.js retries within the
+// token's own lifetime are not falsely rejected.
+const NONCE_REPLAY_WINDOW_MS = 30_000;
 
 // In-memory per-IP failure tracking (best-effort, per worker)
 const ipFailures = new Map<string, { count: number; first: number; until?: number }>();
@@ -201,7 +208,7 @@ Deno.serve(async (req) => {
     const payload = await verifyToken(tokenStr) as TokenPayload | null;
     if (!payload) return await rejectToken(ip, ua, "bad_signature", cors);
 
-    if (payload.e * 1000 < Date.now()) {
+    if (payload.e * 1000 + EXP_SKEW_MS < Date.now()) {
       return await rejectToken(ip, ua, "expired", cors, payload.s, payload.u);
     }
     if (payload.i && payload.i !== ipPrefix(ip)) {
@@ -226,21 +233,21 @@ Deno.serve(async (req) => {
     }
 
     // Nonce single-use for segment tokens — but tolerate legitimate re-fetches
-    // by hls.js/Chrome within a 10s window from the same user/ip/ua.
+    // by hls.js/Chrome within NONCE_REPLAY_WINDOW_MS from the same user/ip/ua.
     if (payload.k === "segment") {
       const { error } = await admin
         .from("used_nonces")
         .insert({ nonce: payload.n });
       if (error) {
-        // Nonce already exists. Allow the replay only if it was used in the
-        // last 10s — the token itself is already bound to user/ip/ua via
-        // earlier checks, so this cannot be exploited cross-user.
-        const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString();
+        // Nonce already exists. Allow the replay only if it was used within
+        // the segment TTL window — the token itself is already bound to
+        // user/ip/ua via earlier checks, so this cannot be exploited cross-user.
+        const windowStart = new Date(Date.now() - NONCE_REPLAY_WINDOW_MS).toISOString();
         const { data: recent } = await admin
           .from("used_nonces")
           .select("used_at")
           .eq("nonce", payload.n)
-          .gte("used_at", tenSecondsAgo)
+          .gte("used_at", windowStart)
           .maybeSingle();
         if (!recent) {
           return await rejectToken(ip, ua, "nonce_replay", cors, payload.s, payload.u);
