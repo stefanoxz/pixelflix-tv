@@ -296,19 +296,50 @@ export function Player({
     const video = videoRef.current;
     if (!video) return;
 
-    const onWaiting = () => setLoading(true);
-    const onPlaying = () => setLoading(false);
-    const onCanPlay = () => setLoading(false);
-    const onLoadedData = () => setLoading(false);
-    const onStalled = () => setLoading(true);
-    const onError = () => {
-      setError((prev) =>
-        prev ? prev : {
-          title: "Não foi possível reproduzir",
-          description: "Este conteúdo pode estar offline, em formato incompatível ou bloqueado pelo servidor.",
-          copyUrl: copyTarget,
-        });
+    // Only show the main spinner BEFORE the player is engaged. Once playback
+    // has started at least once, we ignore `waiting`/`stalled` for the spinner
+    // (a brief buffer hiccup shouldn't blank the UI). The 12s stall watchdog
+    // in the setup effect is what surfaces a real error.
+    const onWaiting = () => {
+      if (!engagedRef.current) setLoading(true);
+    };
+    const onStalled = () => {
+      if (!engagedRef.current) setLoading(true);
+    };
+    const onPlaying = () => {
+      engagedRef.current = true;
       setLoading(false);
+      if (stallTimeoutRef.current !== null) {
+        window.clearTimeout(stallTimeoutRef.current);
+        stallTimeoutRef.current = null;
+      }
+    };
+    const onCanPlay = () => setLoading(false);
+    const onLoadedData = () => {
+      engagedRef.current = true;
+      setLoading(false);
+      if (stallTimeoutRef.current !== null) {
+        window.clearTimeout(stallTimeoutRef.current);
+        stallTimeoutRef.current = null;
+      }
+    };
+    const onError = () => {
+      const code = video.error?.code;
+      // MEDIA_ERR_SRC_NOT_SUPPORTED (4) or MEDIA_ERR_DECODE (3) → codec issue
+      const isCodec = code === 4 || code === 3;
+      setError({
+        title: isCodec ? "Formato/codec incompatível" : "Não foi possível reproduzir",
+        description: isCodec
+          ? "Este canal usa um codec (provavelmente HEVC/4K) que o navegador não decodifica. Abra no VLC para assistir."
+          : "Este conteúdo pode estar offline, em formato incompatível ou bloqueado pelo servidor.",
+        copyUrl: copyTarget,
+        external: isCodec,
+      });
+      setLoading(false);
+      if (stallTimeoutRef.current !== null) {
+        window.clearTimeout(stallTimeoutRef.current);
+        stallTimeoutRef.current = null;
+      }
     };
 
     video.addEventListener("waiting", onWaiting);
