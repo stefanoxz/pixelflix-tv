@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { useIptv } from "@/context/IptvContext";
-import { iptvLogin } from "@/services/iptv";
+import { iptvLogin, resolveStreamBase } from "@/services/iptv";
 import { toast } from "sonner";
 import logoSuperTech from "@/assets/logo-supertech.png";
 
@@ -27,9 +27,16 @@ const Login = () => {
     try {
       const data = await iptvLogin({ username: username.trim(), password });
       const resolvedServer = data.server_url ?? "";
+      const streamBase = resolveStreamBase(data.server_info, resolvedServer);
       setSession({
-        creds: { server: resolvedServer, username: username.trim(), password },
+        creds: {
+          server: resolvedServer,
+          username: username.trim(),
+          password,
+          streamBase,
+        },
         userInfo: data.user_info,
+        serverInfo: data.server_info,
       });
       toast.success(`Bem-vindo, ${data.user_info.username}!`);
       navigate("/");

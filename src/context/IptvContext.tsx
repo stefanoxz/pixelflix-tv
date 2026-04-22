@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import type { IptvCredentials, UserInfo } from "@/services/iptv";
+import type { IptvCredentials, ServerInfo, UserInfo } from "@/services/iptv";
 
 interface IptvSession {
   creds: IptvCredentials;
   userInfo: UserInfo;
+  serverInfo?: ServerInfo;
 }
 
 interface IptvContextValue {
@@ -35,7 +36,6 @@ export function IptvProvider({ children }: { children: ReactNode }) {
   const logout = () => setSession(null);
 
   useEffect(() => {
-    // sync across tabs
     const onStorage = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY) {
         setSessionState(e.newValue ? JSON.parse(e.newValue) : null);
