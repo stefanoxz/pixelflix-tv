@@ -1,58 +1,41 @@
 
 
-## Corrigir CORS do login do webplayer (e demais edge functions)
+## Corrigir reprodução de canais, filmes e séries
 
-### Causa raiz (confirmada por logs)
-- O browser envia o preflight `OPTIONS` → edge function responde 200 ✅
-- O browser envia o `POST` → falha com **"Failed to fetch"** antes de chegar à função (não aparece nos logs do Supabase) ❌
-- Origin do preview: `https://1c24e52c-d430-494c-8e08-55923434b0dd.lovableproject.com`
-- A função `iptv-login` (e as outras) montam o header `Access-Control-Allow-Origin` a partir da env `ALLOWED_ORIGIN`. Quando essa env está setada para um domínio diferente (provável valor antigo: `https://*.lovable.app` ou outro), o browser rejeita a resposta real e exibe a mensagem genérica "Failed to send a request to the Edge Function".
+### Causa raiz
+O helper `proxyUrl()` em `src/services/iptv.ts` envia todo stream para uma VPS HTTP hardcoded (`http://82.197.65.169/stream-proxy/`). Como o preview/produção do app rodam em HTTPS, o navegador bloqueia silenciosamente a requisição (mixed content) — por isso o player fica eternamente em "Carregando stream..." e filmes/séries não abrem.
 
-### Solução
-Remover a dependência de `ALLOWED_ORIGIN` e refletir o origin do request (com lista de domínios Lovable confiáveis), em todas as edge functions chamadas pelo webplayer.
+A edge function `stream-proxy` já existe, está deployada via HTTPS e tem allowlist de hosts + reescrita de playlist HLS pronta. Basta apontar o cliente pra ela.
 
-### Arquivos a alterar
-1. `supabase/functions/iptv-login/index.ts`
-2. `supabase/functions/iptv-categories/index.ts`
-3. `supabase/functions/stream-proxy/index.ts`
-4. `supabase/functions/admin-api/index.ts`
+### O que vou alterar
 
-### Mudança técnica em cada função
-Substituir o helper `corsFor(req)` por uma versão que:
-- Aceita qualquer origin que termine em `.lovable.app`, `.lovableproject.com`, `.lovable.dev` ou seja `http://localhost:*`.
-- Reflete esse origin no header `Access-Control-Allow-Origin`.
-- Mantém `Vary: Origin`.
-- Mantém os mesmos `Access-Control-Allow-Headers` (incluindo `authorization, apikey, content-type, x-client-info, x-supabase-client-*`).
-- Adiciona `Access-Control-Allow-Methods: POST, GET, OPTIONS`.
+**Arquivo único: `src/services/iptv.ts`**
 
-Pseudocódigo:
+Trocar o `proxyUrl()` para usar a edge function:
+
 ```ts
-const ALLOWED_SUFFIXES = [".lovable.app", ".lovableproject.com", ".lovable.dev"];
-function corsFor(req: Request) {
-  const origin = req.headers.get("origin") || "";
-  let allow = "*";
-  try {
-    const u = new URL(origin);
-    if (
-      ALLOWED_SUFFIXES.some(s => u.hostname.endsWith(s)) ||
-      u.hostname === "localhost"
-    ) allow = origin;
-  } catch {}
-  return {
-    "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-    "Vary": "Origin",
-  };
+export function proxyUrl(url: string): string {
+  return `${FUNCTIONS_BASE}/stream-proxy?url=${encodeURIComponent(url)}`;
 }
 ```
 
-### Não faz parte
-- Não mexer em `supabase/config.toml` (já está correto: `verify_jwt = false` para as funções públicas).
-- Não mexer no frontend (`src/services/iptv.ts`, `Login.tsx`) — o problema é 100% no header de resposta da edge function.
-- Não mexer em schema/banco/RLS.
+`FUNCTIONS_BASE` já é `${VITE_SUPABASE_URL}/functions/v1` (HTTPS), então o mixed content desaparece.
+
+### Por que vai funcionar
+- A edge `stream-proxy` consulta `allowed_servers`, então a DNS já cadastrada (`http://ubrutus.shop`) é liberada automaticamente.
+- Para `.m3u8` (canais ao vivo), ela já reescreve cada segmento `.ts` para passar de novo pelo proxy — Hls.js consegue tocar.
+- Para `.mp4` (filmes/episódios), faz passthrough com suporte a `Range` — o `<video>` nativo toca normalmente.
+- O `Player.tsx` já detecta se a URL "já está proxiada" (`includes("/stream-proxy/")`) — vou manter esse guard funcionando ajustando o check pra `/stream-proxy?` (mais robusto, evita duplo-proxy independente de ter `/` no fim).
+
+### O que NÃO muda
+- Edge functions (já estão prontas).
+- Banco / RLS / migrations.
+- Player, páginas Live/Movies/Series — só passam a receber URLs HTTPS válidas.
+- Filtro de formato (mp4/m3u8/mkv) continua funcionando igual.
 
 ### Resultado esperado
-Após o redeploy automático, o POST para `/functions/v1/iptv-login` passa pelo browser, a função recebe `username`/`password`, valida contra a allowlist de DNS e retorna a sessão IPTV normalmente. Os outros endpoints (categorias, streams, admin) também voltam a funcionar do preview.
+- **Canais ao vivo** (`.m3u8`): tocam direto no player Hls.js.
+- **Filmes** (`.mp4`): tocam no `<video>` nativo, com seek/Range funcionando.
+- **Séries**: idem filmes.
+- **Formatos `.mkv/.avi/.mov`**: continuam mostrando o botão "Abrir em player externo" como já faz hoje.
 
