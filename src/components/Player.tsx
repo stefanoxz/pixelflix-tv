@@ -206,6 +206,14 @@ export function Player({
       setLastReason(null);
       setStatus("connecting");
 
+      // Reset logs for the new setup cycle
+      logsRef.current = [];
+      firstFrameAtRef.current = null;
+      manifestParsedAtRef.current = null;
+      setupStartRef.current = performance.now();
+      pushLog({ source: "diag", level: "info", label: "setup_start", details: src ?? undefined });
+      if (logsPanelOpenRef.current) setLogsVersion((v) => v + 1);
+
       if (!src) {
         setLoading(false);
         return;
