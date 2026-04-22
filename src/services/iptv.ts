@@ -218,12 +218,52 @@ export function buildSeriesEpisodeUrl(
 }
 
 /**
- * Proxy de streaming via edge function HTTPS.
- * Necessário para evitar mixed content quando o app roda em HTTPS
- * e a origem do stream é HTTP. Também reescreve playlists HLS.
+ * Legacy raw proxy URL — kept for any debug/external case.
+ * Real reproduction must go through `requestStreamToken` below,
+ * which validates auth, rate limit and sessions and returns a
+ * short-lived signed URL.
  */
 export function proxyUrl(url: string): string {
   return `${FUNCTIONS_BASE}/stream-proxy?url=${encodeURIComponent(url)}`;
+}
+
+export type StreamKind = "playlist" | "segment";
+
+/**
+ * Asks the backend for a signed, short-lived stream URL.
+ * Requires an active Supabase session (anonymous or otherwise).
+ */
+export async function requestStreamToken(params: {
+  url: string;
+  kind: StreamKind;
+  iptvUsername?: string;
+}): Promise<{ url: string; expires_at: number }> {
+  const { data, error } = await supabase.functions.invoke("stream-token", {
+    body: {
+      url: params.url,
+      kind: params.kind,
+      iptv_username: params.iptvUsername,
+    },
+  });
+  if (error) throw new Error(error.message || "Falha ao autorizar stream");
+  if ((data as { error?: string })?.error) {
+    throw new Error((data as { error: string }).error);
+  }
+  return data as { url: string; expires_at: number };
+}
+
+/** Lightweight event reporting (errors / heartbeats). Best-effort. */
+export async function reportStreamEvent(
+  event_type: "stream_started" | "stream_error" | "session_heartbeat",
+  payload?: { url?: string; meta?: Record<string, unknown> },
+): Promise<void> {
+  try {
+    await supabase.functions.invoke("stream-event", {
+      body: { event_type, ...payload },
+    });
+  } catch {
+    // best-effort
+  }
 }
 
 export function normalizeExt(ext?: string): string {
