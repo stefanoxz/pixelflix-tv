@@ -138,6 +138,7 @@ const Admin = () => {
       setPending(sv.pending);
       setEvents(e.events);
     } catch (err) {
+      if (signingOut) return;
       const msg = err instanceof Error ? err.message : "Falha ao carregar dados";
       if (/não autorizado|unauthorized|401|sessão/i.test(msg)) {
         await supabase.auth.signOut();
