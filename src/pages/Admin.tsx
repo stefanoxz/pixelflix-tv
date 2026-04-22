@@ -328,6 +328,7 @@ const Admin = () => {
         <nav className="space-y-1">
           {[
             { id: "dashboard", label: "Dashboard", icon: TrendingUp },
+            { id: "monitoring", label: "Monitoramento", icon: Monitor },
             { id: "users", label: "Usuários", icon: Users },
             { id: "servers", label: "DNS / Servidores", icon: Server },
           ].map((item) => (
@@ -376,14 +377,16 @@ const Admin = () => {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-3xl font-bold">
-              {tab === "dashboard" ? "Dashboard" : tab === "users" ? "Usuários" : "DNS / Servidores"}
+              {tab === "dashboard" ? "Dashboard"
+                : tab === "monitoring" ? "Monitoramento"
+                : tab === "users" ? "Usuários"
+                : "DNS / Servidores"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {tab === "dashboard"
-                ? "Visão geral em tempo real"
-                : tab === "users"
-                  ? "Quem está acessando a plataforma"
-                  : "Cadastre as DNS autorizadas. Sem cadastro prévio, o cliente não consegue logar."}
+              {tab === "dashboard" ? "Visão geral em tempo real"
+                : tab === "monitoring" ? "Sessões ativas, consumo e bloqueios — atualiza a cada 10s"
+                : tab === "users" ? "Quem está acessando a plataforma"
+                : "Cadastre as DNS autorizadas. Sem cadastro prévio, o cliente não consegue logar."}
             </p>
           </div>
           <div className="flex items-center gap-2">
