@@ -79,6 +79,7 @@ const Live = () => {
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1 min-w-0">
             <Player
+              key={activeChannel?.stream_id ?? "none"}
               src={rawLiveUrl}
               rawUrl={rawLiveUrl ?? undefined}
               containerExt="m3u8"
