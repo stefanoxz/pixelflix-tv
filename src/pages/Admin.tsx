@@ -327,6 +327,7 @@ const Admin = () => {
               variant="outline"
               size="sm"
               onClick={async () => {
+                setSigningOut(true);
                 await supabase.auth.signOut();
                 navigate("/login", { replace: true });
               }}
