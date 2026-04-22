@@ -665,18 +665,15 @@ export async function requestStreamToken(params: {
   kind: StreamKind;
   iptvUsername?: string;
 }): Promise<{ url: string; expires_at: number }> {
-  const { data, error } = await supabase.functions.invoke("stream-token", {
-    body: {
+  return invokeFn<{ url: string; expires_at: number }>(
+    "stream-token",
+    {
       url: params.url,
       kind: params.kind,
       iptv_username: params.iptvUsername,
     },
-  });
-  if (error) throw new Error(error.message || "Falha ao autorizar stream");
-  if ((data as { error?: string })?.error) {
-    throw new Error((data as { error: string }).error);
-  }
-  return data as { url: string; expires_at: number };
+    "token",
+  );
 }
 
 /** Lightweight event reporting (errors / heartbeats). Best-effort. */
@@ -685,9 +682,11 @@ export async function reportStreamEvent(
   payload?: { url?: string; meta?: Record<string, unknown> },
 ): Promise<void> {
   try {
-    await supabase.functions.invoke("stream-event", {
-      body: { event_type, ...payload },
-    });
+    await invokeFn<unknown>(
+      "stream-event",
+      { event_type, ...payload },
+      "event",
+    );
   } catch {
     // best-effort
   }
