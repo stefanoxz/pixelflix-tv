@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      active_sessions: {
+        Row: {
+          anon_user_id: string
+          id: string
+          ip: string | null
+          iptv_username: string | null
+          last_seen_at: string
+          started_at: string
+          ua_hash: string | null
+        }
+        Insert: {
+          anon_user_id: string
+          id?: string
+          ip?: string | null
+          iptv_username?: string | null
+          last_seen_at?: string
+          started_at?: string
+          ua_hash?: string | null
+        }
+        Update: {
+          anon_user_id?: string
+          id?: string
+          ip?: string | null
+          iptv_username?: string | null
+          last_seen_at?: string
+          started_at?: string
+          ua_hash?: string | null
+        }
+        Relationships: []
+      }
       allowed_servers: {
         Row: {
           created_at: string
@@ -68,6 +98,96 @@ export type Database = {
           success?: boolean
           user_agent?: string | null
           username?: string
+        }
+        Relationships: []
+      }
+      stream_events: {
+        Row: {
+          anon_user_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          ip: string | null
+          meta: Json | null
+          ua_hash: string | null
+          url_hash: string | null
+        }
+        Insert: {
+          anon_user_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          ip?: string | null
+          meta?: Json | null
+          ua_hash?: string | null
+          url_hash?: string | null
+        }
+        Update: {
+          anon_user_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          ip?: string | null
+          meta?: Json | null
+          ua_hash?: string | null
+          url_hash?: string | null
+        }
+        Relationships: []
+      }
+      usage_counters: {
+        Row: {
+          anon_user_id: string
+          request_count: number
+          segment_count: number
+          window_start: string
+        }
+        Insert: {
+          anon_user_id: string
+          request_count?: number
+          segment_count?: number
+          window_start: string
+        }
+        Update: {
+          anon_user_id?: string
+          request_count?: number
+          segment_count?: number
+          window_start?: string
+        }
+        Relationships: []
+      }
+      used_nonces: {
+        Row: {
+          nonce: string
+          used_at: string
+        }
+        Insert: {
+          nonce: string
+          used_at?: string
+        }
+        Update: {
+          nonce?: string
+          used_at?: string
+        }
+        Relationships: []
+      }
+      user_blocks: {
+        Row: {
+          anon_user_id: string
+          blocked_until: string
+          created_at: string
+          reason: string | null
+        }
+        Insert: {
+          anon_user_id: string
+          blocked_until: string
+          created_at?: string
+          reason?: string | null
+        }
+        Update: {
+          anon_user_id?: string
+          blocked_until?: string
+          created_at?: string
+          reason?: string | null
         }
         Relationships: []
       }

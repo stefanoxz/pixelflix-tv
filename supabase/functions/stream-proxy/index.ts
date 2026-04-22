@@ -1,4 +1,27 @@
+// Stream proxy.
+// New mode (preferred): GET /stream-proxy?t=<signed token>
+//   - playlist token  → fetches upstream m3u8, rewrites segment URLs as new tokens
+//   - segment token   → 302 redirect to upstream (no video bytes through Supabase)
+// Legacy mode (kept for backward compat with admin/manual debugging only):
+//   - GET /stream-proxy?url=<raw>  → proxies bytes if host is allow-listed
+//
+// Anti-abuse:
+//   - HMAC verification (timing-safe)
+//   - exp / ip /24 / ua hash checks
+//   - segment nonces single-use
+//   - per-IP failure blocklist (in-memory, best-effort)
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
+import {
+  clientIp,
+  ipPrefix,
+  newNonce,
+  signToken,
+  uaHash,
+  urlHash,
+  verifyToken,
+  type TokenPayload,
+} from "../_shared/stream-token.ts";
 
 const ALLOWED_SUFFIXES = [".lovable.app", ".lovableproject.com", ".lovable.dev"];
 function corsFor(req: Request): Record<string, string> {
@@ -6,15 +29,10 @@ function corsFor(req: Request): Record<string, string> {
   let allow = "*";
   try {
     const u = new URL(origin);
-    if (
-      ALLOWED_SUFFIXES.some((s) => u.hostname.endsWith(s)) ||
-      u.hostname === "localhost"
-    ) {
+    if (ALLOWED_SUFFIXES.some((s) => u.hostname.endsWith(s)) || u.hostname === "localhost") {
       allow = origin;
     }
-  } catch {
-    // ignore invalid origin
-  }
+  } catch { /* ignore */ }
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Headers":
@@ -27,6 +45,30 @@ function corsFor(req: Request): Record<string, string> {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+const PROXY_BASE = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/stream-proxy`;
+const SEGMENT_TTL_S = 30;
+
+// In-memory per-IP failure tracking (best-effort, per worker)
+const ipFailures = new Map<string, { count: number; first: number; until?: number }>();
+function noteFailure(ip: string) {
+  const now = Date.now();
+  const cur = ipFailures.get(ip);
+  if (!cur || now - cur.first > 60_000) {
+    ipFailures.set(ip, { count: 1, first: now });
+    return;
+  }
+  cur.count += 1;
+  if (cur.count > 10) cur.until = now + 5 * 60_000;
+}
+function isIpBlocked(ip: string): boolean {
+  const cur = ipFailures.get(ip);
+  if (!cur?.until) return false;
+  if (Date.now() > cur.until) {
+    ipFailures.delete(ip);
+    return false;
+  }
+  return true;
+}
 
 function normalizeServer(url: string) {
   let u = url.trim().toLowerCase();
@@ -47,207 +89,289 @@ async function getAllowedHosts(): Promise<Set<string>> {
   const { data } = await admin.from("allowed_servers").select("server_url");
   const hosts = new Set<string>();
   for (const r of data ?? []) {
-    const h = hostOf(normalizeServer((r as any).server_url));
+    const h = hostOf(normalizeServer((r as { server_url: string }).server_url));
     if (h) hosts.add(h);
   }
   cache = { at: Date.now(), hosts };
   return hosts;
 }
 
-// Block private/loopback/link-local ranges to prevent SSRF against internal infra.
 function isPrivateHost(host: string): boolean {
   const h = host.split(":")[0].toLowerCase();
   if (h === "localhost" || h === "ip6-localhost" || h === "ip6-loopback") return true;
-
-  // IPv4 literal
   const m4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (m4) {
     const [a, b] = [parseInt(m4[1], 10), parseInt(m4[2], 10)];
     if (a === 10) return true;
     if (a === 127) return true;
     if (a === 0) return true;
-    if (a === 169 && b === 254) return true; // link-local
+    if (a === 169 && b === 254) return true;
     if (a === 172 && b >= 16 && b <= 31) return true;
     if (a === 192 && b === 168) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
-    if (a >= 224) return true; // multicast / reserved
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a >= 224) return true;
     return false;
   }
-
-  // IPv6 literal (simple checks)
   if (h.includes(":")) {
     if (h === "::1" || h === "::") return true;
-    if (h.startsWith("fe80:")) return true; // link-local
-    if (h.startsWith("fc") || h.startsWith("fd")) return true; // unique local fc00::/7
+    if (h.startsWith("fe80:")) return true;
+    if (h.startsWith("fc") || h.startsWith("fd")) return true;
     return false;
   }
   return false;
 }
 
-/**
- * Verifica se um host de redirecionamento é "razoavelmente derivado" do host
- * original. Aceitamos:
- *  - mesmo host
- *  - subdomínio do mesmo registrable domain (ex.: cdn.dominio.com a partir de dominio.com)
- *  - host pai (ex.: dominio.com a partir de cdn.dominio.com)
- *  - mesma "raiz" de 2 últimos labels (heurística simples, ignora TLD multiparte)
- */
-function isRelatedHost(originalHost: string, redirectHost: string): boolean {
-  const o = originalHost.toLowerCase().split(":")[0];
-  const r = redirectHost.toLowerCase().split(":")[0];
-  if (o === r) return true;
-  if (r.endsWith(`.${o}`) || o.endsWith(`.${r}`)) return true;
-  const oParts = o.split(".");
-  const rParts = r.split(".");
-  if (oParts.length >= 2 && rParts.length >= 2) {
-    const oRoot = oParts.slice(-2).join(".");
-    const rRoot = rParts.slice(-2).join(".");
-    if (oRoot === rRoot) return true;
+async function logEvent(
+  userId: string | null,
+  type: string,
+  ip: string,
+  ua: string,
+  url: string | null,
+  meta?: Record<string, unknown>,
+) {
+  try {
+    await admin.from("stream_events").insert({
+      anon_user_id: userId,
+      event_type: type,
+      ip,
+      ua_hash: await uaHash(ua),
+      url_hash: url ? await urlHash(url) : null,
+      meta: meta ?? null,
+    });
+  } catch { /* never block */ }
+}
+
+async function rejectToken(
+  ip: string,
+  ua: string,
+  reason: string,
+  cors: Record<string, string>,
+  userId: string | null = null,
+  url: string | null = null,
+) {
+  noteFailure(ip);
+  await logEvent(userId, "token_rejected", ip, ua, url, { reason });
+  return new Response("Forbidden", { status: 403, headers: cors });
+}
+
+// Detect rapid IP /24 changes for the same user (token sharing)
+async function checkSuspiciousIp(userId: string, ip: string, ua: string) {
+  const since = new Date(Date.now() - 30_000).toISOString();
+  const { data } = await admin
+    .from("stream_events")
+    .select("ip, created_at")
+    .eq("anon_user_id", userId)
+    .eq("event_type", "token_issued")
+    .gte("created_at", since)
+    .limit(20);
+  const prefixes = new Set<string>();
+  prefixes.add(ipPrefix(ip));
+  for (const row of data ?? []) {
+    if (row.ip) prefixes.add(ipPrefix(row.ip));
+  }
+  if (prefixes.size > 1) {
+    const until = new Date(Date.now() + 5 * 60_000).toISOString();
+    await admin.from("user_blocks").upsert(
+      { anon_user_id: userId, blocked_until: until, reason: "ip_jump" },
+      { onConflict: "anon_user_id" },
+    );
+    await admin.from("active_sessions").delete().eq("anon_user_id", userId);
+    await logEvent(userId, "suspicious_pattern", ip, ua, null, { kind: "ip_jump", prefixes: Array.from(prefixes) });
+    return true;
   }
   return false;
 }
 
 Deno.serve(async (req) => {
-  const corsHeaders = corsFor(req);
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const cors = corsFor(req);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
-  try {
-    const url = new URL(req.url);
-    const target = url.searchParams.get("url");
-    if (!target) return new Response("Missing url param", { status: 400, headers: corsHeaders });
+  const url = new URL(req.url);
+  const ip = clientIp(req);
+  const ua = req.headers.get("user-agent") || "";
 
-    let decoded: URL;
-    try {
-      decoded = new URL(target);
-    } catch {
-      return new Response("Invalid url", { status: 400, headers: corsHeaders });
+  if (isIpBlocked(ip)) {
+    return new Response("Too many failures", { status: 429, headers: cors });
+  }
+
+  const tokenStr = url.searchParams.get("t");
+
+  // ===== TOKEN MODE =====
+  if (tokenStr) {
+    const payload = await verifyToken(tokenStr) as TokenPayload | null;
+    if (!payload) return await rejectToken(ip, ua, "bad_signature", cors);
+
+    if (payload.e * 1000 < Date.now()) {
+      return await rejectToken(ip, ua, "expired", cors, payload.s, payload.u);
+    }
+    if (payload.i && payload.i !== ipPrefix(ip)) {
+      return await rejectToken(ip, ua, "ip_mismatch", cors, payload.s, payload.u);
+    }
+    const curUa = await uaHash(ua);
+    if (payload.h && payload.h !== curUa) {
+      return await rejectToken(ip, ua, "ua_mismatch", cors, payload.s, payload.u);
+    }
+    if (!ua) {
+      return await rejectToken(ip, ua, "empty_ua", cors, payload.s, payload.u);
     }
 
-    if (decoded.protocol !== "http:" && decoded.protocol !== "https:") {
-      return new Response("Unsupported protocol", { status: 400, headers: corsHeaders });
+    // Block list
+    const { data: blockRow } = await admin
+      .from("user_blocks")
+      .select("blocked_until")
+      .eq("anon_user_id", payload.s)
+      .maybeSingle();
+    if (blockRow && new Date(blockRow.blocked_until).getTime() > Date.now()) {
+      return await rejectToken(ip, ua, "blocked", cors, payload.s, payload.u);
     }
 
-    const targetHost = decoded.host.toLowerCase();
-
-    if (isPrivateHost(targetHost)) {
-      return new Response("Forbidden host", { status: 403, headers: corsHeaders });
-    }
-
-    const allowedHosts = await getAllowedHosts();
-    const originalAllowed =
-      allowedHosts.has(targetHost) || allowedHosts.has(targetHost.split(":")[0]);
-    if (!originalAllowed) {
-      console.warn("[stream-proxy] host not allowed:", targetHost);
-      return new Response(`Host not allowed: ${targetHost}`, { status: 403, headers: corsHeaders });
-    }
-
-    const fwdHeaders: Record<string, string> = {
-      "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
-      Referer: `${decoded.protocol}//${decoded.host}/`,
-      Accept: "*/*",
-    };
-    const range = req.headers.get("range");
-    if (range) fwdHeaders["Range"] = range;
-
-    const upstream = await fetch(decoded.toString(), {
-      method: req.method === "HEAD" ? "HEAD" : "GET",
-      redirect: "follow",
-      headers: fwdHeaders,
-    });
-
-    const finalUrl = new URL(upstream.url || decoded.toString());
-    const finalHost = finalUrl.host.toLowerCase();
-
-    // Re-valida após redirects: bloqueia hosts privados, mas aceita CDNs derivadas
-    // do host original autorizado (defesa em profundidade contra SSRF sem
-    // quebrar provedores que entregam mídia via subdomínio/CDN).
-    if (isPrivateHost(finalHost)) {
-      return new Response("Redirect to private host", { status: 403, headers: corsHeaders });
-    }
-    const finalDirectAllowed =
-      allowedHosts.has(finalHost) || allowedHosts.has(finalHost.split(":")[0]);
-    if (!finalDirectAllowed && !isRelatedHost(targetHost, finalHost)) {
-      console.warn(
-        "[stream-proxy] redirect blocked:",
-        targetHost,
-        "->",
-        finalHost,
-      );
-      return new Response(
-        `Redirect to forbidden host: ${finalHost}`,
-        { status: 403, headers: corsHeaders },
-      );
-    }
-
-    const contentType = upstream.headers.get("content-type") || "";
-    const looksLikeM3u8 =
-      contentType.includes("mpegurl") ||
-      contentType.includes("application/x-mpegurl") ||
-      finalUrl.pathname.endsWith(".m3u8") ||
-      finalUrl.pathname.endsWith(".m3u") ||
-      decoded.pathname.endsWith(".m3u8") ||
-      decoded.pathname.endsWith(".m3u");
-
-    if (looksLikeM3u8) {
-      const text = await upstream.text();
-      if (!text.includes("#EXTM3U") && !text.includes("#EXT-X")) {
-        return new Response(`Upstream did not return a playlist:\n${text.slice(0, 500)}`, {
-          status: 502,
-          headers: { ...corsHeaders, "Content-Type": "text/plain" },
-        });
+    // Nonce single-use for segment tokens
+    if (payload.k === "segment") {
+      const { error } = await admin
+        .from("used_nonces")
+        .insert({ nonce: payload.n });
+      if (error) {
+        return await rejectToken(ip, ua, "nonce_replay", cors, payload.s, payload.u);
       }
+      // Best-effort cleanup
+      if (Math.random() < 0.01) {
+        const cutoff = new Date(Date.now() - 60 * 60_000).toISOString();
+        admin.from("used_nonces").delete().lt("used_at", cutoff).then(() => {});
+      }
+    }
 
-      const baseHref = finalUrl.toString().substring(0, finalUrl.toString().lastIndexOf("/") + 1);
-      const supabasePublicUrl = Deno.env.get("SUPABASE_URL") || `${url.protocol}//${url.host}`;
-      const proxyBase = `${supabasePublicUrl.replace(/\/+$/, "")}/functions/v1/stream-proxy?url=`;
+    // Validate target
+    let decoded: URL;
+    try { decoded = new URL(payload.u); } catch {
+      return await rejectToken(ip, ua, "bad_url", cors, payload.s, payload.u);
+    }
+    if (decoded.protocol !== "http:" && decoded.protocol !== "https:") {
+      return await rejectToken(ip, ua, "bad_proto", cors, payload.s, payload.u);
+    }
+    if (isPrivateHost(decoded.host)) {
+      return await rejectToken(ip, ua, "private_host", cors, payload.s, payload.u);
+    }
 
-      const rewritten = text
-        .split("\n")
-        .map((line) => {
-          const trimmed = line.trim();
-          if (!trimmed) return line;
-          if (trimmed.startsWith("#")) {
-            return line.replace(/URI="([^"]+)"/g, (_m, p1) => {
-              const abs = new URL(p1, baseHref).toString();
-              return `URI="${proxyBase}${encodeURIComponent(abs)}"`;
-            });
-          }
-          try {
-            const abs = new URL(trimmed, baseHref).toString();
-            return `${proxyBase}${encodeURIComponent(abs)}`;
-          } catch {
-            return line;
-          }
-        })
-        .join("\n");
-
-      return new Response(rewritten, {
-        status: 200,
+    // ----- segment / chave / VOD: 302 redirect — NO BYTES through proxy -----
+    if (payload.k === "segment") {
+      // Suspicious IP-jump check
+      checkSuspiciousIp(payload.s, ip, ua).catch(() => {});
+      return new Response(null, {
+        status: 302,
         headers: {
-          ...corsHeaders,
-          "Content-Type": "application/vnd.apple.mpegurl",
-          "Cache-Control": "no-cache",
+          ...cors,
+          Location: payload.u,
+          "Cache-Control": "no-store",
         },
       });
     }
 
-    const passthroughHeaders: Record<string, string> = {
-      ...corsHeaders,
-      "Content-Type": contentType || "application/octet-stream",
-      "Cache-Control": upstream.headers.get("cache-control") || "no-cache",
-      "Accept-Ranges": upstream.headers.get("accept-ranges") || "bytes",
-    };
-    const len = upstream.headers.get("content-length");
-    if (len) passthroughHeaders["Content-Length"] = len;
-    const cr = upstream.headers.get("content-range");
-    if (cr) passthroughHeaders["Content-Range"] = cr;
-
-    return new Response(upstream.body, {
-      status: upstream.status,
-      headers: passthroughHeaders,
+    // ----- playlist: fetch upstream, rewrite, return inline -----
+    const upstream = await fetch(payload.u, {
+      method: "GET",
+      redirect: "follow",
+      headers: {
+        "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
+        Referer: `${decoded.protocol}//${decoded.host}/`,
+        Accept: "*/*",
+      },
     });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    return new Response(msg, { status: 500, headers: corsFor(req) });
+    const finalUrl = new URL(upstream.url || payload.u);
+    if (isPrivateHost(finalUrl.host)) {
+      return new Response("Forbidden", { status: 403, headers: cors });
+    }
+    const text = await upstream.text();
+    if (!text.includes("#EXTM3U") && !text.includes("#EXT-X")) {
+      return new Response("Bad upstream playlist", {
+        status: 502,
+        headers: { ...cors, "Content-Type": "text/plain" },
+      });
+    }
+
+    const baseHref = finalUrl.toString().substring(0, finalUrl.toString().lastIndexOf("/") + 1);
+
+    // Re-sign each segment URL with a new short-lived segment token bound to
+    // the same user/ip/ua. We sign here (not via stream-token call) to avoid
+    // round-tripping for every line.
+    const signSegment = async (abs: string): Promise<string> => {
+      const exp = Math.floor(Date.now() / 1000) + SEGMENT_TTL_S;
+      const tok = await signToken({
+        u: abs, e: exp, s: payload.s, i: payload.i, h: payload.h, n: newNonce(), k: "segment",
+      });
+      return `${PROXY_BASE}?t=${encodeURIComponent(tok)}`;
+    };
+
+    const lines = text.split("\n");
+    const out: string[] = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) { out.push(line); continue; }
+      if (trimmed.startsWith("#")) {
+        // Rewrite URI="..." inside tags (keys, maps, etc.)
+        const m = line.match(/URI="([^"]+)"/);
+        if (m) {
+          try {
+            const abs = new URL(m[1], baseHref).toString();
+            const signed = await signSegment(abs);
+            out.push(line.replace(/URI="([^"]+)"/, `URI="${signed}"`));
+            continue;
+          } catch { /* fallthrough */ }
+        }
+        out.push(line);
+        continue;
+      }
+      try {
+        const abs = new URL(trimmed, baseHref).toString();
+        // Nested playlists (rare) → re-sign as playlist; otherwise segment.
+        const isNestedPlaylist = abs.toLowerCase().includes(".m3u8");
+        if (isNestedPlaylist) {
+          const exp = Math.floor(Date.now() / 1000) + 60;
+          const tok = await signToken({
+            u: abs, e: exp, s: payload.s, i: payload.i, h: payload.h, n: newNonce(), k: "playlist",
+          });
+          out.push(`${PROXY_BASE}?t=${encodeURIComponent(tok)}`);
+        } else {
+          out.push(await signSegment(abs));
+        }
+      } catch {
+        out.push(line);
+      }
+    }
+
+    return new Response(out.join("\n"), {
+      status: 200,
+      headers: {
+        ...cors,
+        "Content-Type": "application/vnd.apple.mpegurl",
+        "Cache-Control": "no-cache",
+      },
+    });
   }
+
+  // ===== LEGACY MODE (raw url) — admin/debug only, allow-listed hosts =====
+  const target = url.searchParams.get("url");
+  if (!target) return new Response("Missing url/t param", { status: 400, headers: cors });
+
+  let decoded: URL;
+  try { decoded = new URL(target); } catch {
+    return new Response("Invalid url", { status: 400, headers: cors });
+  }
+  if (decoded.protocol !== "http:" && decoded.protocol !== "https:") {
+    return new Response("Unsupported protocol", { status: 400, headers: cors });
+  }
+  const targetHost = decoded.host.toLowerCase();
+  if (isPrivateHost(targetHost)) {
+    return new Response("Forbidden host", { status: 403, headers: cors });
+  }
+  const allowedHosts = await getAllowedHosts();
+  const originalAllowed = allowedHosts.has(targetHost) || allowedHosts.has(targetHost.split(":")[0]);
+  if (!originalAllowed) {
+    return new Response(`Host not allowed: ${targetHost}`, { status: 403, headers: cors });
+  }
+
+  // Legacy: 302 to upstream (no bytes through proxy).
+  return new Response(null, {
+    status: 302,
+    headers: { ...cors, Location: decoded.toString(), "Cache-Control": "no-store" },
+  });
 });

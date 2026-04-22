@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { useIptv } from "@/context/IptvContext";
 import { iptvLogin, resolveStreamBase } from "@/services/iptv";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import logoSuperTech from "@/assets/logo-supertech.png";
 
@@ -28,6 +29,15 @@ const Login = () => {
       const data = await iptvLogin({ username: username.trim(), password });
       const resolvedServer = data.server_url ?? "";
       const streamBase = resolveStreamBase(data.server_info, resolvedServer);
+
+      // Establish a Supabase anonymous session for stream-token / events.
+      // Reuse if one already exists.
+      const { data: cur } = await supabase.auth.getSession();
+      if (!cur.session) {
+        const { error: anonErr } = await supabase.auth.signInAnonymously();
+        if (anonErr) throw new Error("Falha ao iniciar sessão segura");
+      }
+
       setSession({
         creds: {
           server: resolvedServer,

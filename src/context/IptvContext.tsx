@@ -4,6 +4,7 @@ import {
   IPTV_STORAGE_KEY,
   type IptvSession,
 } from "./iptv-context";
+import { supabase } from "@/integrations/supabase/client";
 
 export { useIptv } from "./useIptv";
 
@@ -23,7 +24,11 @@ export function IptvProvider({ children }: { children: ReactNode }) {
     else localStorage.removeItem(IPTV_STORAGE_KEY);
   };
 
-  const logout = () => setSession(null);
+  const logout = () => {
+    setSession(null);
+    // Also drop the Supabase anon session so stream-token stops working.
+    supabase.auth.signOut().catch(() => {});
+  };
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
