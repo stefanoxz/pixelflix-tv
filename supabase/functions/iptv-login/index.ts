@@ -1,5 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
 
+console.log("[iptv-login] boot");
+
 const ALLOWED_SUFFIXES = [".lovable.app", ".lovableproject.com", ".lovable.dev"];
 function corsFor(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") || "";
@@ -31,12 +33,31 @@ const USER_AGENTS = [
   "Lavf/58.76.100",
 ];
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-
 const NO_ACCESS_MSG =
   "Você não tem acesso a esta plataforma. Entre em contato com a sua revenda para liberar o seu servidor (DNS).";
+
+let _admin: ReturnType<typeof createClient> | null = null;
+function getAdminClient() {
+  try {
+    if (_admin) return _admin;
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    console.log("[iptv-login] env", { hasUrl: !!url, hasKey: !!key });
+    if (!url || !key) throw new Error("MISSING_ENV");
+    _admin = createClient(url, key, { auth: { persistSession: false } });
+    return _admin;
+  } catch (err) {
+    console.error("[iptv-login] getAdminClient error", err);
+    throw err;
+  }
+}
+
+function jsonResponse(status: number, body: unknown, cors: Record<string, string>) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
+}
 
 function normalizeServer(url: string) {
   let u = url.trim().toLowerCase();
@@ -57,6 +78,7 @@ async function logEvent(opts: {
   ip?: string;
 }) {
   try {
+    const admin = getAdminClient();
     await admin.from("login_events").insert({
       server_url: normalizeServer(opts.server),
       username: opts.username,
@@ -65,8 +87,9 @@ async function logEvent(opts: {
       user_agent: opts.ua ?? null,
       ip_address: opts.ip ?? null,
     });
-  } catch (_e) {
-    // never fail login because telemetry failed
+  } catch (err) {
+    console.warn("[iptv-login] logEvent failed", err);
+    return;
   }
 }
 
@@ -101,9 +124,6 @@ async function tryFetch(url: string): Promise<{ res: Response; ua: string } | { 
 }
 
 function buildVariants(serverBase: string): string[] {
-  // Generate URL variants to try (different schemes / common ports) to bypass
-  // transient network blocks (Connection reset by peer, scheme rejection, etc.).
-  // Sanitize input: strip whitespace from hostname (invalid registries).
   const variants = new Set<string>();
   const stripped = serverBase.trim().replace(/\/+$/, "");
   let proto = "http";
@@ -176,34 +196,57 @@ async function attemptLogin(serverBase: string, username: string, password: stri
 }
 
 Deno.serve(async (req) => {
-  const corsHeaders = corsFor(req);
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
-  const ua = req.headers.get("user-agent") ?? undefined;
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("cf-connecting-ip") ||
-    undefined;
+  let corsHeaders: Record<string, string> = {};
 
   try {
-    const { server, username, password } = await req.json();
-    if (!username || !password) {
-      return new Response(JSON.stringify({ error: "Informe usuário e senha" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    try {
+      corsHeaders = corsFor(req);
+    } catch {
+      corsHeaders = { "Access-Control-Allow-Origin": "*" };
     }
 
+    if (req.method === "OPTIONS") {
+      return new Response("ok", { headers: corsHeaders });
+    }
+
+    console.log("[iptv-login] start request");
+
+    const ua = req.headers.get("user-agent") ?? undefined;
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      req.headers.get("cf-connecting-ip") ||
+      undefined;
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse(400, { error: "Body inválido" }, corsHeaders);
+    }
+
+    const { server, username, password } = body || {};
+    if (!username || !password) {
+      return jsonResponse(400, { error: "Informe usuário e senha" }, corsHeaders);
+    }
+
+    const admin = getAdminClient();
+
     // Load allowlist
-    const { data: allowedRows } = await admin.from("allowed_servers").select("server_url");
+    let allowedRows: any[] | null = null;
+    try {
+      const result = await admin.from("allowed_servers").select("server_url");
+      if (result.error) throw result.error;
+      allowedRows = result.data;
+    } catch (err) {
+      console.error("[iptv-login] db error", err);
+      return jsonResponse(503, { error: "Serviço temporariamente indisponível" }, corsHeaders);
+    }
+
     const allowedList = (allowedRows ?? []).map((r: any) => normalizeServer(r.server_url));
 
     if (allowedList.length === 0) {
       await logEvent({ server: server ?? "-", username, success: false, reason: "nenhuma DNS cadastrada", ua, ip });
-      return new Response(JSON.stringify({ error: NO_ACCESS_MSG }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse(403, { error: NO_ACCESS_MSG }, corsHeaders);
     }
 
     // If client sent a server, validate it's in allowlist; otherwise try all allowed servers
@@ -216,10 +259,7 @@ Deno.serve(async (req) => {
       const match = allowedList.find((a) => a === normalized || hostKey(a) === inputHost);
       if (!match) {
         await logEvent({ server: fullBase, username, success: false, reason: "DNS não autorizada", ua, ip });
-        return new Response(JSON.stringify({ error: NO_ACCESS_MSG }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResponse(403, { error: NO_ACCESS_MSG }, corsHeaders);
       }
       candidates = [match];
     } else {
@@ -232,26 +272,19 @@ Deno.serve(async (req) => {
       const r = await attemptLogin(base, username, password);
       if (r.ok) {
         await logEvent({ server: base, username, success: true, ua, ip });
-        return new Response(JSON.stringify({ ...r.data, server_url: base }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResponse(200, { ...r.data, server_url: base }, corsHeaders);
       }
       lastReason = r.reason;
-      // Log each failed attempt for admin visibility
       await logEvent({ server: base, username, success: false, reason: r.reason, ua, ip });
     }
 
-    // Nothing worked
-    return new Response(JSON.stringify({ error: `Usuário ou senha inválidos (${lastReason})` }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse(401, { error: `Usuário ou senha inválidos (${lastReason})` }, corsHeaders);
+  } catch (err) {
+    console.error("[iptv-login] fatal", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "MISSING_ENV") {
+      return jsonResponse(500, { error: "Configuração do servidor ausente" }, corsHeaders);
+    }
+    return jsonResponse(500, { error: "Erro interno do servidor" }, corsHeaders);
   }
 });
