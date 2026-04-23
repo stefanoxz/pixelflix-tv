@@ -88,6 +88,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 }, forwardedRef) {
   const { session } = useIptv();
   const videoRef = useRef<HTMLVideoElement>(null);
+  useImperativeHandle(forwardedRef, () => videoRef.current as HTMLVideoElement);
   const hlsRef = useRef<Hls | null>(null);
   const heartbeatRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
@@ -976,4 +977,4 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       )}
     </div>
   );
-}
+});
