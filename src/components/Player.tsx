@@ -77,7 +77,7 @@ const STATUS_LABEL: Record<DiagnosticStatus, string> = {
 
 const FRAG_LOAD_ERROR_THRESHOLD = 3;
 
-export function Player({
+export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player({
   src,
   rawUrl,
   containerExt,
@@ -85,7 +85,7 @@ export function Player({
   title,
   autoPlay = true,
   onClose,
-}: PlayerProps) {
+}, forwardedRef) {
   const { session } = useIptv();
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
