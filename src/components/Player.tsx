@@ -267,36 +267,50 @@ export function Player({
 
       setLoading(true);
 
+      // Helper: finalize as "stream sem dados" (single classification path).
+      const finalizeStreamNoData = (reason: string) => {
+        if (cancelled) return;
+        if (playbackStartedRef.current) return;
+        setLoading(false);
+        updateStatus("stream_no_data", reason);
+        pushLog({ source: "diag", level: "error", label: "stream_no_data", details: reason });
+        setError({
+          title: "Sem vídeo no canal",
+          description:
+            "Este canal abriu, mas não está transmitindo vídeo no momento. Tente outro canal ou volte mais tarde.",
+          copyUrl: copyTarget,
+          noData: true,
+        });
+        clearBootstrapTimeout();
+        clearStallTimeout();
+        let upstreamHost: string | null = null;
+        try { if (src) upstreamHost = new URL(src).host; } catch { /* noop */ }
+        reportStreamEvent("stream_error", {
+          url: src,
+          meta: { type: "stream_no_data", reason, host: upstreamHost },
+        });
+      };
+
       // Bootstrap watchdog: must reach `playing`/`loadeddata` within 12s.
       bootstrapTimeoutRef.current = window.setTimeout(() => {
         if (cancelled) return;
         if (playbackStartedRef.current) return;
-        setLoading(false);
-        const noData =
-          manifestReadyRef.current && fragLoadErrorCountRef.current > 0;
-        const reason = noData
-          ? "fragLoadError + no frames"
-          : manifestReadyRef.current
-            ? "manifest carregado, mas sem frames"
-            : (lastReasonRef.current || "sem reprodução após 12s");
-        if (noData) {
-          updateStatus("stream_no_data", reason);
-          pushLog({ source: "diag", level: "error", label: "stream_no_data", details: reason });
-          setError({
-            title: "Sem vídeo no canal",
-            description:
-              "Este canal abriu, mas não está transmitindo vídeo no momento. Tente outro canal ou volte mais tarde.",
-            copyUrl: copyTarget,
-            noData: true,
-          });
-          let upstreamHost: string | null = null;
-          try { if (src) upstreamHost = new URL(src).host; } catch { /* noop */ }
-          reportStreamEvent("stream_error", {
-            url: src,
-            meta: { type: "stream_no_data", reason, host: upstreamHost },
-          });
+
+        // C7 fix — manifest pronto mas sem frames: ALWAYS classifica como
+        // stream_no_data (não há cenário plausível em que manifest carrega,
+        // 12s passam, e ainda assim seja só "stall"). Sem flicker.
+        if (manifestReadyRef.current) {
+          const reason =
+            fragLoadErrorCountRef.current > 0
+              ? "fragLoadError + no frames"
+              : "manifest carregado, mas sem frames";
+          finalizeStreamNoData(reason);
           return;
         }
+
+        // Manifest NUNCA chegou em 12s → falha real de bootstrap.
+        const reason = lastReasonRef.current || "sem reprodução após 12s";
+        setLoading(false);
         updateStatus("stall_timeout", reason);
         pushLog({ source: "diag", level: "warn", label: "bootstrap_timeout_12s", details: reason });
         setError({
