@@ -1,9 +1,16 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, forwardRef, useEffect, useState } from "react";
 import { useIptv } from "@/context/IptvContext";
 import { supabase } from "@/integrations/supabase/client";
 
-export function ProtectedRoute({ children }: { children: ReactNode }) {
+interface ProtectedRouteProps {
+  children: ReactNode;
+}
+
+export const ProtectedRoute = forwardRef<unknown, ProtectedRouteProps>(function ProtectedRoute(
+  { children },
+  _ref,
+) {
   const { session, logout } = useIptv();
   const location = useLocation();
   const [supabaseChecked, setSupabaseChecked] = useState(false);
@@ -48,4 +55,6 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   return <>{children}</>;
-}
+});
+
+ProtectedRoute.displayName = "ProtectedRoute";

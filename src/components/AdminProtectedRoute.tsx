@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -11,7 +11,10 @@ interface Props {
 
 type State = "loading" | "allowed" | "denied";
 
-const AdminProtectedRoute = ({ children }: Props) => {
+const AdminProtectedRoute = forwardRef<unknown, Props>(function AdminProtectedRoute(
+  { children },
+  _ref,
+) {
   const [state, setState] = useState<State>("loading");
   const [session, setSession] = useState<Session | null>(null);
 
@@ -75,6 +78,8 @@ const AdminProtectedRoute = ({ children }: Props) => {
   }
 
   return <>{children}</>;
-};
+});
+
+AdminProtectedRoute.displayName = "AdminProtectedRoute";
 
 export default AdminProtectedRoute;
