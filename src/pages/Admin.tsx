@@ -968,6 +968,23 @@ const Admin = () => {
                                       </Tooltip>
                                     );
                                   })()}
+                                  {(() => {
+                                    const info = reasonInfo(h.reason);
+                                    // Só mostra o chip de causa quando agrega info além do "Online" simples
+                                    if (!info || h.reason === "online") return null;
+                                    return (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className={`px-1.5 py-0.5 rounded border border-border/50 cursor-help ${info.cls}`}>
+                                            {info.label}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">
+                                          {info.tooltip}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    );
+                                  })()}
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <span className={`${latencyClass(h.latency)} cursor-help`}>
