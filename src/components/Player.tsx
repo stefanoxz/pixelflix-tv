@@ -906,7 +906,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src, strategy, containerExt, autoPlay, copyTarget, retryNonce]);
+  }, [src, strategy, containerExt, autoPlay, copyTarget, retryNonce, engine]);
 
   // Native <video> listeners
   useEffect(() => {
