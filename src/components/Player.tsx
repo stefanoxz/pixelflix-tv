@@ -1,6 +1,56 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import Hls, { type ErrorData } from "hls.js";
-import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink, Activity, Terminal, Trash2, VideoOff, ListVideo } from "lucide-react";
+import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink, Activity, Terminal, Trash2, VideoOff, ListVideo, Zap } from "lucide-react";
+
+/**
+ * Motor de reprodução para canais ao vivo.
+ * - hls     : padrão (hls.js sobre .m3u8)
+ * - mpegts  : mpegts.js com fallback automático .ts → .m3u8
+ * - external: oculta vídeo, oferece "Abrir no VLC" + copiar URL
+ */
+type PlaybackEngine = "hls" | "mpegts" | "external";
+
+const ENGINE_LABEL: Record<PlaybackEngine, string> = {
+  hls: "HLS",
+  mpegts: "MPEG-TS",
+  external: "Externo",
+};
+
+const ENGINE_STORAGE_PREFIX = "player.engine.host:";
+const MPEGTS_BOOTSTRAP_TIMEOUT_MS = 8_000;
+
+function safeHostFromUrl(u: string | null | undefined): string | null {
+  if (!u) return null;
+  try { return new URL(u).host.toLowerCase(); } catch { return null; }
+}
+
+function getPreferredEngine(host: string | null): PlaybackEngine | null {
+  if (!host) return null;
+  try {
+    const v = localStorage.getItem(`${ENGINE_STORAGE_PREFIX}${host}`);
+    if (v === "hls" || v === "mpegts" || v === "external") return v;
+  } catch { /* noop */ }
+  return null;
+}
+
+function setPreferredEngine(host: string | null, engine: PlaybackEngine) {
+  if (!host) return;
+  try { localStorage.setItem(`${ENGINE_STORAGE_PREFIX}${host}`, engine); }
+  catch { /* noop */ }
+}
+
+/** Detecta canal ao vivo Xtream: /live/<u>/<p>/<id>.m3u8 */
+function isLiveXtreamUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return /\/live\/[^/]+\/[^/]+\/\d+\.(m3u8|ts)(\?|$)/i.test(url);
+}
+
+/** Troca .m3u8 → .ts apenas para padrão Xtream live. Caso contrário devolve original. */
+function toMpegtsTsUrl(url: string): string | null {
+  if (!isLiveXtreamUrl(url)) return null;
+  if (/\.ts(\?|$)/i.test(url)) return url;
+  return url.replace(/\.m3u8(\?|$)/i, ".ts$1");
+}
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -170,6 +220,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const videoRef = useRef<HTMLVideoElement>(null);
   useImperativeHandle(forwardedRef, () => videoRef.current as HTMLVideoElement);
   const hlsRef = useRef<Hls | null>(null);
+  // mpegts.js — tipado como any para evitar acoplar @types ao bundle.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mpegtsRef = useRef<any>(null);
+  const mpegtsTriedM3u8Ref = useRef(false);
   const heartbeatRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
   const fragLoadErrorCountRef = useRef(0);
@@ -198,6 +252,23 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const [rootCauseDetail, setRootCauseDetail] = useState<string | null>(null);
   const rootCauseLockedRef = useRef(false);
   const upstreamHost = useMemo(() => extractUpstreamHost(rawUrl ?? src), [rawUrl, src]);
+
+  // Motor de reprodução (apenas faz sentido em canais ao vivo).
+  const isLive = useMemo(() => isLiveXtreamUrl(rawUrl ?? src ?? null), [rawUrl, src]);
+  const [engine, setEngine] = useState<PlaybackEngine>(() => {
+    if (!isLive) return "hls";
+    return getPreferredEngine(safeHostFromUrl(rawUrl ?? src)) ?? "hls";
+  });
+  // Re-sincroniza engine quando o canal muda de host.
+  useEffect(() => {
+    if (!isLive) {
+      setEngine("hls");
+      return;
+    }
+    const pref = getPreferredEngine(safeHostFromUrl(rawUrl ?? src)) ?? "hls";
+    setEngine(pref);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [upstreamHost, isLive]);
 
   // Logs panel — buffered in refs to avoid re-renders when closed
   const logsRef = useRef<LogEntry[]>([]);
@@ -282,6 +353,16 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       try { hlsRef.current.destroy(); } catch { /* noop */ }
       hlsRef.current = null;
     }
+    if (mpegtsRef.current) {
+      try {
+        mpegtsRef.current.pause?.();
+        mpegtsRef.current.unload?.();
+        mpegtsRef.current.detachMediaElement?.();
+        mpegtsRef.current.destroy?.();
+      } catch { /* noop */ }
+      mpegtsRef.current = null;
+    }
+    mpegtsTriedM3u8Ref.current = false;
     if (v) {
       try {
         v.pause();
@@ -348,6 +429,22 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         setLoading(false);
         updateStatus("stream_error", "URL inválida");
         setRootCauseOnce("url_invalid", "URL malformada");
+        return;
+      }
+
+      // Motor "Externo" selecionado manualmente: não tenta reproduzir,
+      // apenas mostra ações para abrir em VLC / copiar link.
+      if (engine === "external" && isLive) {
+        setError({
+          title: "Reprodução externa selecionada",
+          description: "Abra este canal no VLC, MX Player ou outro player externo.",
+          copyUrl: copyTarget,
+          external: true,
+        });
+        setLoading(false);
+        updateStatus("connecting", "engine=external");
+        setRootCauseOnce("ok", "engine=external");
+        pushLog({ source: "diag", level: "info", label: "engine_external", details: copyTarget });
         return;
       }
 
@@ -467,6 +564,141 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           heartbeatRef.current = window.setInterval(() => {
             reportStreamEvent("session_heartbeat");
           }, HEARTBEAT_INTERVAL_MS);
+
+          // Motor MPEG-TS para canais ao vivo Xtream.
+          // Tenta primeiro a URL .ts; se falhar (sem frames em 8s ou erro fatal),
+          // recria automaticamente sobre a URL .m3u8 original ainda no mpegts.js.
+          if (engine === "mpegts" && strategy.type === "hls" && isLiveXtreamUrl(safeSrc)) {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const mpegtsMod: any = await import("mpegts.js");
+              if (cancelled) return;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const mpegts: any = mpegtsMod.default ?? mpegtsMod;
+              if (!mpegts.isSupported?.()) {
+                pushLog({ source: "diag", level: "warn", label: "mpegts_unsupported", details: "fallback HLS" });
+                // Cai para o branch HLS abaixo (não retorna).
+              } else {
+                const tsUrl = toMpegtsTsUrl(safeSrc) ?? safeSrc;
+
+                const buildPlayer = (url: string, type: "mpegts" | "mse") => {
+                  const player = mpegts.createPlayer(
+                    { type, url, isLive: true, cors: true },
+                    { enableWorker: false, lazyLoad: false, liveBufferLatencyChasing: true },
+                  );
+                  mpegtsRef.current = player;
+                  player.attachMediaElement(video);
+                  player.load();
+                  // O play é disparado pelo evento `loadeddata` no listener de vídeo.
+                  if (autoPlay) {
+                    try { player.play(); } catch { /* noop */ }
+                  }
+                  pushLog({
+                    source: "diag",
+                    level: "info",
+                    label: "mpegts_create",
+                    details: `${type} ${url}`,
+                  });
+
+                  player.on(mpegts.Events.ERROR, (errType: string, detail: string, info: unknown) => {
+                    const msg = `${errType}/${detail}`;
+                    lastReasonRef.current = msg;
+                    setLastReason(msg);
+                    pushLog({
+                      source: "diag",
+                      level: "error",
+                      label: "mpegts_error",
+                      details: `${msg} ${info ? JSON.stringify(info) : ""}`,
+                    });
+
+                    // Fallback automático .ts → .m3u8 enquanto não tocou ainda.
+                    if (
+                      !playbackStartedRef.current &&
+                      !mpegtsTriedM3u8Ref.current &&
+                      type === "mpegts"
+                    ) {
+                      mpegtsTriedM3u8Ref.current = true;
+                      pushLog({ source: "diag", level: "warn", label: "mpegts_fallback_m3u8" });
+                      try {
+                        player.pause();
+                        player.unload();
+                        player.detachMediaElement();
+                        player.destroy();
+                      } catch { /* noop */ }
+                      mpegtsRef.current = null;
+                      // Recria com a URL .m3u8 original (mpegts.js suporta type "mse" para HLS).
+                      buildPlayer(safeSrc, "mse");
+                      return;
+                    }
+
+                    // Falha definitiva neste motor.
+                    setLoading(false);
+                    updateStatus("stream_error", msg);
+                    setRootCauseOnce("stream_error", msg);
+                    setError({
+                      title: "MPEG-TS falhou",
+                      description: "Tente o motor HLS ou abra no VLC.",
+                      copyUrl: copyTarget,
+                    });
+                    clearBootstrapTimeout();
+                    clearStallTimeout();
+                  });
+
+                  // O loadeddata/playing nativos cuidam do "primeiro frame".
+                };
+
+                buildPlayer(tsUrl, "mpegts");
+
+                // Watchdog dedicado de 8s para o motor MPEG-TS.
+                clearBootstrapTimeout();
+                bootstrapTimeoutRef.current = window.setTimeout(() => {
+                  if (cancelled) return;
+                  if (playbackStartedRef.current) return;
+                  // Se ainda não tentou m3u8 e watchdog estourou, faz o fallback.
+                  if (!mpegtsTriedM3u8Ref.current && mpegtsRef.current) {
+                    mpegtsTriedM3u8Ref.current = true;
+                    pushLog({ source: "diag", level: "warn", label: "mpegts_watchdog_fallback_m3u8" });
+                    try {
+                      mpegtsRef.current.pause();
+                      mpegtsRef.current.unload();
+                      mpegtsRef.current.detachMediaElement();
+                      mpegtsRef.current.destroy();
+                    } catch { /* noop */ }
+                    mpegtsRef.current = null;
+                    buildPlayer(safeSrc, "mse");
+                    // Re-arma o watchdog para a 2ª tentativa.
+                    bootstrapTimeoutRef.current = window.setTimeout(() => {
+                      if (cancelled || playbackStartedRef.current) return;
+                      setLoading(false);
+                      updateStatus("stream_error", "mpegts sem frames em 8s");
+                      setRootCauseOnce("bootstrap_timeout", "mpegts sem frames em 8s");
+                      setError({
+                        title: "MPEG-TS sem resposta",
+                        description: "Tente o motor HLS ou abra no VLC.",
+                        copyUrl: copyTarget,
+                      });
+                    }, MPEGTS_BOOTSTRAP_TIMEOUT_MS);
+                    return;
+                  }
+                  // Watchdog estourou na 2ª tentativa também.
+                  setLoading(false);
+                  updateStatus("stream_error", "mpegts sem frames em 8s");
+                  setRootCauseOnce("bootstrap_timeout", "mpegts sem frames em 8s");
+                  setError({
+                    title: "MPEG-TS sem resposta",
+                    description: "Tente o motor HLS ou abra no VLC.",
+                    copyUrl: copyTarget,
+                  });
+                }, MPEGTS_BOOTSTRAP_TIMEOUT_MS);
+
+                return;
+              }
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : "import mpegts.js falhou";
+              pushLog({ source: "diag", level: "error", label: "mpegts_import_error", details: msg });
+              // Cai para HLS abaixo.
+            }
+          }
 
           if (strategy.type === "hls") {
             if (Hls.isSupported()) {
@@ -674,7 +906,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src, strategy, containerExt, autoPlay, copyTarget, retryNonce]);
+  }, [src, strategy, containerExt, autoPlay, copyTarget, retryNonce, engine]);
 
   // Native <video> listeners
   useEffect(() => {
@@ -812,6 +1044,16 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     retryCountRef.current = 0;
     setLoading(true);
     setRetryNonce((n) => n + 1);
+  };
+
+  const handleEngineChange = (next: PlaybackEngine) => {
+    if (next === engine) return;
+    setPreferredEngine(safeHostFromUrl(rawUrl ?? src), next);
+    pushLog({ source: "diag", level: "info", label: "engine_change", details: `${engine} → ${next}` });
+    console.log("[player] engine_change:", engine, "→", next);
+    setError(null);
+    setLoading(true);
+    setEngine(next);
   };
 
   // Auto-scroll the logs list to the bottom when new logs arrive
@@ -1119,6 +1361,59 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
               </div>
             )}
           </div>
+
+          {/* Seletor de motor — apenas para canais ao vivo Xtream */}
+          {isLive && (
+            <div className="border-b px-3 py-2 text-[11px] space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Motor</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {ENGINE_LABEL[engine]}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1">
+                {(["hls", "mpegts", "external"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => handleEngineChange(opt)}
+                    aria-pressed={engine === opt}
+                    className={cn(
+                      "rounded border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+                      engine === opt
+                        ? "bg-primary/20 border-primary/50 text-primary"
+                        : "bg-background/60 border-border text-muted-foreground hover:bg-background/90",
+                    )}
+                  >
+                    {ENGINE_LABEL[opt]}
+                  </button>
+                ))}
+              </div>
+              {engine === "hls" &&
+                (rootCause === "frag_load_error" ||
+                  rootCause === "manifest_empty" ||
+                  rootCause === "codec_incompatible") && (
+                  <button
+                    type="button"
+                    onClick={() => handleEngineChange("mpegts")}
+                    className="w-full inline-flex items-center justify-center gap-1.5 rounded border border-primary/50 bg-primary/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary hover:bg-primary/25 transition-colors"
+                  >
+                    <Zap className="h-3 w-3" />
+                    Tente MPEG-TS direto
+                  </button>
+                )}
+              {engine === "mpegts" && rootCause !== "ok" && rootCause !== "unknown" && (
+                <button
+                  type="button"
+                  onClick={() => handleEngineChange("external")}
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded border border-border bg-background/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground hover:bg-background/90 transition-colors"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Abrir externo (VLC)
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="border-b px-3 py-2 text-[11px] grid grid-cols-1 gap-1">
             <div className="flex items-center justify-between gap-2">
