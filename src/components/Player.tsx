@@ -570,9 +570,11 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           // recria automaticamente sobre a URL .m3u8 original ainda no mpegts.js.
           if (engine === "mpegts" && strategy.type === "hls" && isLiveXtreamUrl(safeSrc)) {
             try {
-              const mpegtsMod = await import("mpegts.js");
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const mpegtsMod: any = await import("mpegts.js");
               if (cancelled) return;
-              const mpegts = mpegtsMod.default ?? mpegtsMod;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const mpegts: any = mpegtsMod.default ?? mpegtsMod;
               if (!mpegts.isSupported?.()) {
                 pushLog({ source: "diag", level: "warn", label: "mpegts_unsupported", details: "fallback HLS" });
                 // Cai para o branch HLS abaixo (não retorna).
