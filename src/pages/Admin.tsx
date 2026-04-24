@@ -77,6 +77,7 @@ interface AllowedServer {
   success_count: number;
   fail_count: number;
   unique_users: number;
+  stream_broken?: boolean;
 }
 
 interface PendingServer {
