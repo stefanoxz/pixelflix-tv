@@ -159,8 +159,16 @@ function latencyClass(ms: number | null): string {
 interface HealthStatus {
   online: boolean;
   latency: number | null;
+  status: number | null;
   checked_at: string;
   error?: string;
+}
+
+function statusClass(status: number | null): string {
+  if (status == null) return "text-muted-foreground bg-muted/40";
+  if (status >= 200 && status < 300) return "text-success bg-success/10";
+  if (status === 401 || status === 403) return "text-warning bg-warning/10";
+  return "text-destructive bg-destructive/10";
 }
 
 const Admin = () => {
@@ -199,6 +207,7 @@ const Admin = () => {
         map[r.url] = {
           online: r.online,
           latency: r.latency,
+          status: r.status ?? null,
           checked_at: r.checked_at,
           error: r.error,
         };
