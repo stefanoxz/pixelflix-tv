@@ -264,6 +264,28 @@ const Admin = () => {
       if (Object.keys(map).length > 0) {
         setHealth((prev) => ({ ...prev, ...map }));
       }
+
+      // Resumo do ping
+      const values = Object.values(map);
+      const total = values.length;
+      if (total > 0) {
+        const online = values.filter((h) => h.state === "online").length;
+        const unstable = values.filter((h) => h.state === "unstable").length;
+        const offline = values.filter((h) => h.state === "offline").length;
+        const hasIssues = unstable > 0 || offline > 0;
+        if (manual || hasIssues) {
+          if (!hasIssues) {
+            toast.success(`Ping concluído: ${online}/${total} servidores online`);
+          } else {
+            const parts = [`${online} online`];
+            if (unstable) parts.push(`${unstable} instáveis`);
+            if (offline) parts.push(`${offline} offline`);
+            const msg = `Ping concluído: ${parts.join(" · ")}`;
+            if (offline > 0) toast.error(msg);
+            else toast.warning(msg);
+          }
+        }
+      }
     } catch {
       // silencioso — fallback "Verificando..." permanece
     } finally {
