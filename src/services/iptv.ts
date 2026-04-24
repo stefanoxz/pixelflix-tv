@@ -32,6 +32,8 @@ export interface ServerInfo {
 export interface LoginResponse {
   user_info: UserInfo;
   server_info: ServerInfo;
+  /** DNS atualmente autorizadas no painel (devolvidas pela edge no login). */
+  allowed_servers?: string[];
 }
 
 export interface Category {
