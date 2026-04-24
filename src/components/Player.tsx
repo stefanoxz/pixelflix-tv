@@ -432,6 +432,22 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         return;
       }
 
+      // Motor "Externo" selecionado manualmente: não tenta reproduzir,
+      // apenas mostra ações para abrir em VLC / copiar link.
+      if (engine === "external" && isLive) {
+        setError({
+          title: "Reprodução externa selecionada",
+          description: "Abra este canal no VLC, MX Player ou outro player externo.",
+          copyUrl: copyTarget,
+          external: true,
+        });
+        setLoading(false);
+        updateStatus("connecting", "engine=external");
+        setRootCauseOnce("ok", "engine=external");
+        pushLog({ source: "diag", level: "info", label: "engine_external", details: copyTarget });
+        return;
+      }
+
       if (strategy.mode === "external") {
         const ext = normalizeExt(containerExt).toUpperCase() || "?";
         setError({
