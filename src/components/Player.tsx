@@ -55,6 +55,27 @@ type LogEntry = {
   details?: string;
 };
 
+/** Por onde o manifest do canal foi carregado. */
+type LoadMethod = "browser" | "edge" | "unknown";
+
+/**
+ * Causa raiz da falha de reprodução, classificada para o painel de
+ * diagnóstico. Mantida separada de DiagnosticStatus para mensagem precisa.
+ */
+type RootCause =
+  | "ok"
+  | "manifest_empty"
+  | "frag_load_error"
+  | "codec_incompatible"
+  | "bootstrap_timeout"
+  | "mixed_content"
+  | "cors_blocked"
+  | "network_error"
+  | "token_error"
+  | "stream_error"
+  | "url_invalid"
+  | "unknown";
+
 const HLS_CONFIG: Partial<Hls["config"]> = {
   lowLatencyMode: true,
   enableWorker: true,
@@ -74,6 +95,65 @@ const STATUS_LABEL: Record<DiagnosticStatus, string> = {
   stream_error: "Erro no stream",
   stream_no_data: "Sem vídeo no canal",
 };
+
+const ROOT_CAUSE_LABEL: Record<RootCause, string> = {
+  ok: "Reproduzindo",
+  manifest_empty: "Manifest vazio / sem segmentos",
+  frag_load_error: "Falha ao baixar segmentos (fragLoadError)",
+  codec_incompatible: "Codec incompatível (HEVC/4K)",
+  bootstrap_timeout: "Timeout no bootstrap (12s)",
+  mixed_content: "Mixed content (HTTPS → HTTP bloqueado)",
+  cors_blocked: "CORS bloqueado pelo upstream",
+  network_error: "Erro de rede",
+  token_error: "Falha ao autorizar stream",
+  stream_error: "Erro genérico no stream",
+  url_invalid: "URL de stream inválida",
+  unknown: "Causa desconhecida",
+};
+
+const ROOT_CAUSE_HINT: Record<RootCause, string> = {
+  ok: "",
+  manifest_empty: "O servidor IPTV respondeu, mas o playlist veio vazio. Canal pode estar offline ou bloqueando o IP do edge.",
+  frag_load_error: "Manifest carregou mas os segmentos .ts retornam erro. Pode ser geo-bloqueio ou canal fora do ar.",
+  codec_incompatible: "Use VLC ou MX Player para esse canal (HEVC não roda no navegador).",
+  bootstrap_timeout: "Nenhum dado em 12s. Canal pode estar offline ou muito lento.",
+  mixed_content: "App é HTTPS mas o stream é HTTP. Nada a fazer no browser — abra no VLC.",
+  cors_blocked: "O upstream rejeitou o fetch do navegador. Fallback edge cobre esse caso.",
+  network_error: "Falha de conexão até o servidor. Verifique sua internet.",
+  token_error: "Backend não emitiu token. Veja o detalhe abaixo.",
+  stream_error: "O servidor abriu mas o stream falhou. Tente outro canal.",
+  url_invalid: "URL malformada. Verifique a credencial.",
+  unknown: "—",
+};
+
+const LOAD_METHOD_LABEL: Record<LoadMethod, string> = {
+  browser: "Browser (direto)",
+  edge: "Edge (proxy)",
+  unknown: "—",
+};
+
+const FUNCTIONS_BASE_HOST = (() => {
+  try {
+    return new URL(import.meta.env.VITE_SUPABASE_URL).host.toLowerCase();
+  } catch {
+    return "";
+  }
+})();
+
+function detectLoadMethod(safeSrc: string): LoadMethod {
+  try {
+    const host = new URL(safeSrc).host.toLowerCase();
+    if (FUNCTIONS_BASE_HOST && host === FUNCTIONS_BASE_HOST) return "edge";
+    return "browser";
+  } catch {
+    return "unknown";
+  }
+}
+
+function extractUpstreamHost(rawUrl?: string | null): string | null {
+  if (!rawUrl) return null;
+  try { return new URL(rawUrl).host; } catch { return null; }
+}
 
 const FRAG_LOAD_ERROR_THRESHOLD = 3;
 
