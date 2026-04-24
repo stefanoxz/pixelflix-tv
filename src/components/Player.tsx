@@ -565,6 +565,139 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
             reportStreamEvent("session_heartbeat");
           }, HEARTBEAT_INTERVAL_MS);
 
+          // Motor MPEG-TS para canais ao vivo Xtream.
+          // Tenta primeiro a URL .ts; se falhar (sem frames em 8s ou erro fatal),
+          // recria automaticamente sobre a URL .m3u8 original ainda no mpegts.js.
+          if (engine === "mpegts" && strategy.type === "hls" && isLiveXtreamUrl(safeSrc)) {
+            try {
+              const mpegtsMod = await import("mpegts.js");
+              if (cancelled) return;
+              const mpegts = mpegtsMod.default ?? mpegtsMod;
+              if (!mpegts.isSupported?.()) {
+                pushLog({ source: "diag", level: "warn", label: "mpegts_unsupported", details: "fallback HLS" });
+                // Cai para o branch HLS abaixo (não retorna).
+              } else {
+                const tsUrl = toMpegtsTsUrl(safeSrc) ?? safeSrc;
+
+                const buildPlayer = (url: string, type: "mpegts" | "mse") => {
+                  const player = mpegts.createPlayer(
+                    { type, url, isLive: true, cors: true },
+                    { enableWorker: false, lazyLoad: false, liveBufferLatencyChasing: true },
+                  );
+                  mpegtsRef.current = player;
+                  player.attachMediaElement(video);
+                  player.load();
+                  // O play é disparado pelo evento `loadeddata` no listener de vídeo.
+                  if (autoPlay) {
+                    try { player.play(); } catch { /* noop */ }
+                  }
+                  pushLog({
+                    source: "diag",
+                    level: "info",
+                    label: "mpegts_create",
+                    details: `${type} ${url}`,
+                  });
+
+                  player.on(mpegts.Events.ERROR, (errType: string, detail: string, info: unknown) => {
+                    const msg = `${errType}/${detail}`;
+                    lastReasonRef.current = msg;
+                    setLastReason(msg);
+                    pushLog({
+                      source: "diag",
+                      level: "error",
+                      label: "mpegts_error",
+                      details: `${msg} ${info ? JSON.stringify(info) : ""}`,
+                    });
+
+                    // Fallback automático .ts → .m3u8 enquanto não tocou ainda.
+                    if (
+                      !playbackStartedRef.current &&
+                      !mpegtsTriedM3u8Ref.current &&
+                      type === "mpegts"
+                    ) {
+                      mpegtsTriedM3u8Ref.current = true;
+                      pushLog({ source: "diag", level: "warn", label: "mpegts_fallback_m3u8" });
+                      try {
+                        player.pause();
+                        player.unload();
+                        player.detachMediaElement();
+                        player.destroy();
+                      } catch { /* noop */ }
+                      mpegtsRef.current = null;
+                      // Recria com a URL .m3u8 original (mpegts.js suporta type "mse" para HLS).
+                      buildPlayer(safeSrc, "mse");
+                      return;
+                    }
+
+                    // Falha definitiva neste motor.
+                    setLoading(false);
+                    updateStatus("stream_error", msg);
+                    setRootCauseOnce("stream_error", msg);
+                    setError({
+                      title: "MPEG-TS falhou",
+                      description: "Tente o motor HLS ou abra no VLC.",
+                      copyUrl: copyTarget,
+                    });
+                    clearBootstrapTimeout();
+                    clearStallTimeout();
+                  });
+
+                  // O loadeddata/playing nativos cuidam do "primeiro frame".
+                };
+
+                buildPlayer(tsUrl, "mpegts");
+
+                // Watchdog dedicado de 8s para o motor MPEG-TS.
+                clearBootstrapTimeout();
+                bootstrapTimeoutRef.current = window.setTimeout(() => {
+                  if (cancelled) return;
+                  if (playbackStartedRef.current) return;
+                  // Se ainda não tentou m3u8 e watchdog estourou, faz o fallback.
+                  if (!mpegtsTriedM3u8Ref.current && mpegtsRef.current) {
+                    mpegtsTriedM3u8Ref.current = true;
+                    pushLog({ source: "diag", level: "warn", label: "mpegts_watchdog_fallback_m3u8" });
+                    try {
+                      mpegtsRef.current.pause();
+                      mpegtsRef.current.unload();
+                      mpegtsRef.current.detachMediaElement();
+                      mpegtsRef.current.destroy();
+                    } catch { /* noop */ }
+                    mpegtsRef.current = null;
+                    buildPlayer(safeSrc, "mse");
+                    // Re-arma o watchdog para a 2ª tentativa.
+                    bootstrapTimeoutRef.current = window.setTimeout(() => {
+                      if (cancelled || playbackStartedRef.current) return;
+                      setLoading(false);
+                      updateStatus("stream_error", "mpegts sem frames em 8s");
+                      setRootCauseOnce("bootstrap_timeout", "mpegts sem frames em 8s");
+                      setError({
+                        title: "MPEG-TS sem resposta",
+                        description: "Tente o motor HLS ou abra no VLC.",
+                        copyUrl: copyTarget,
+                      });
+                    }, MPEGTS_BOOTSTRAP_TIMEOUT_MS);
+                    return;
+                  }
+                  // Watchdog estourou na 2ª tentativa também.
+                  setLoading(false);
+                  updateStatus("stream_error", "mpegts sem frames em 8s");
+                  setRootCauseOnce("bootstrap_timeout", "mpegts sem frames em 8s");
+                  setError({
+                    title: "MPEG-TS sem resposta",
+                    description: "Tente o motor HLS ou abra no VLC.",
+                    copyUrl: copyTarget,
+                  });
+                }, MPEGTS_BOOTSTRAP_TIMEOUT_MS);
+
+                return;
+              }
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : "import mpegts.js falhou";
+              pushLog({ source: "diag", level: "error", label: "mpegts_import_error", details: msg });
+              // Cai para HLS abaixo.
+            }
+          }
+
           if (strategy.type === "hls") {
             if (Hls.isSupported()) {
               const hls = new Hls(HLS_CONFIG);
