@@ -331,7 +331,11 @@ Deno.serve(async (req) => {
       const r = await attemptLogin(base, username, password);
       if (r.ok) {
         await logEvent({ server: base, username, success: true, ua, ip });
-        return jsonResponse(200, { ...r.data, server_url: base }, corsHeaders);
+        return jsonResponse(
+          200,
+          { ...r.data, server_url: base, allowed_servers: allowedList },
+          corsHeaders,
+        );
       }
       lastReason = r.reason;
       await logEvent({ server: base, username, success: false, reason: r.reason, ua, ip });

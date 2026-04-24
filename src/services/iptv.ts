@@ -32,6 +32,8 @@ export interface ServerInfo {
 export interface LoginResponse {
   user_info: UserInfo;
   server_info: ServerInfo;
+  /** DNS atualmente autorizadas no painel (devolvidas pela edge no login). */
+  allowed_servers?: string[];
 }
 
 export interface Category {
@@ -850,11 +852,40 @@ export const getSeriesInfo = (c: IptvCredentials, seriesId: number) =>
   iptvFetch<SeriesInfo>(c, "get_series_info", { series_id: seriesId });
 
 /**
- * Resolve a base correta de stream a partir do server_info do login.
- * Prefere protocolo/porta retornados pelo provedor (que podem diferir do panel).
- * Fallback: server_url cru.
+ * Extrai o hostname (lowercase, sem porta) de uma URL — tolerante a entradas
+ * sem protocolo. Retorna null se não conseguir parsear.
  */
-export function resolveStreamBase(serverInfo?: ServerInfo | null, fallback?: string): string {
+function hostnameOf(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const withProto = /^https?:\/\//i.test(url) ? url : `http://${url}`;
+  try {
+    return new URL(withProto).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True se `candidate` (host ou URL) bate com algum host em `allowed`.
+ */
+export function isHostAllowed(candidate: string | null | undefined, allowed?: string[] | null): boolean {
+  const h = hostnameOf(candidate);
+  if (!h || !allowed?.length) return false;
+  return allowed.some((a) => hostnameOf(a) === h);
+}
+
+/**
+ * Resolve a base correta de stream a partir do server_info do login.
+ * Prefere protocolo/porta retornados pelo provedor, MAS só aceita o host
+ * dele se estiver dentro da allowlist atual. Se o provedor devolver um host
+ * que não está mais cadastrado no painel, cai para o `fallback` (que já
+ * passou pela validação da edge).
+ */
+export function resolveStreamBase(
+  serverInfo?: ServerInfo | null,
+  fallback?: string,
+  allowed?: string[] | null,
+): string {
   if (serverInfo?.url) {
     const proto = (serverInfo.server_protocol || "http").toLowerCase();
     const host = serverInfo.url.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
@@ -863,9 +894,32 @@ export function resolveStreamBase(serverInfo?: ServerInfo | null, fallback?: str
         ? serverInfo.https_port || serverInfo.port
         : serverInfo.port || serverInfo.https_port;
     const portPart = port && !host.includes(":") ? `:${port}` : "";
-    return `${proto}://${host}${portPart}`;
+    const built = `${proto}://${host}${portPart}`;
+
+    // Sem allowlist disponível → comportamento legado.
+    if (!allowed || allowed.length === 0) return built;
+
+    // Só aceita o host devolvido pelo provedor se estiver na allowlist.
+    if (isHostAllowed(built, allowed)) return built;
   }
   return (fallback || "").replace(/\/+$/, "");
+}
+
+/**
+ * Pergunta à edge a lista atual de DNS autorizadas (sem credenciais).
+ * Usado no boot para revalidar sessões salvas no localStorage.
+ */
+export async function fetchAllowedServers(): Promise<string[]> {
+  try {
+    const r = await invokeFn<{ allowed: boolean; candidates?: string[] }>(
+      "iptv-login",
+      { mode: "validate" },
+      "data",
+    );
+    return r.allowed ? r.candidates ?? [] : [];
+  } catch {
+    return [];
+  }
 }
 
 function serverBase(creds: IptvCredentials): string {

@@ -28,7 +28,7 @@ const Login = () => {
     try {
       const data = await iptvLogin({ username: username.trim(), password });
       const resolvedServer = data.server_url ?? "";
-      const streamBase = resolveStreamBase(data.server_info, resolvedServer);
+      const streamBase = resolveStreamBase(data.server_info, resolvedServer, data.allowed_servers);
 
       // Establish a Supabase anonymous session for stream-token / events.
       // Reuse if one already exists.
