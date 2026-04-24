@@ -28,16 +28,23 @@ async function pingOne(url: string): Promise<PingResult> {
   const target = url.replace(/\/+$/, "") + "/player_api.php";
   const start = Date.now();
   try {
-    const res = await fetch(target, {
-      method: "GET",
+    let res = await fetch(target, {
+      method: "HEAD",
       signal: AbortSignal.timeout(5000),
     });
-    // Drain body to avoid resource leak
-    try { await res.text(); } catch { /* ignore */ }
+    // Alguns servidores Xtream não respondem HEAD (405/501) — fallback para GET
+    if (res.status === 405 || res.status === 501) {
+      res = await fetch(target, {
+        method: "GET",
+        signal: AbortSignal.timeout(5000),
+      });
+      try { await res.text(); } catch { /* ignore */ }
+    }
     const latency = Date.now() - start;
     return {
       url,
-      online: res.ok,
+      // Servidor respondeu = está vivo (inclui 401/403 — auth ausente, mas online)
+      online: res.ok || res.status === 401 || res.status === 403,
       latency,
       status: res.status,
       checked_at,
