@@ -752,6 +752,15 @@ const Admin = () => {
                   className="pl-9"
                 />
               </div>
+              <Button
+                onClick={checkAllServers}
+                variant="outline"
+                size="sm"
+                disabled={healthLoading || allowed.length === 0}
+              >
+                <RefreshCw className={"h-4 w-4 mr-2 " + (healthLoading ? "animate-spin" : "")} />
+                Atualizar pings
+              </Button>
               <Button onClick={() => setAddOpen(true)} variant="default" size="sm">
                 <Plus className="h-4 w-4 mr-2" />
                 Cadastrar DNS
@@ -800,6 +809,29 @@ const Admin = () => {
                             )}
                             {s.notes && <span>• {s.notes}</span>}
                           </div>
+                          {(() => {
+                            const h = health[s.server_url];
+                            if (!h) {
+                              return (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Verificando ping…
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="flex items-center gap-3 mt-1 text-xs flex-wrap">
+                                <span className={h.online ? "text-success" : "text-destructive"}>
+                                  ● {h.online ? "Online" : "Offline"}
+                                </span>
+                                <span className={latencyClass(h.latency)}>
+                                  {h.latency != null ? `${h.latency} ms` : "—"}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  último ping {formatTime(h.checked_at)}
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
                         <Button
                           variant="outline"
