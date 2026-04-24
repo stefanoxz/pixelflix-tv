@@ -122,6 +122,7 @@ async function pingOne(url: string): Promise<PingResult> {
       latency: a1.latency,
       status: a1.status,
       attempts: 1,
+      reason: a1.reason,
       error: a1.error,
       checked_at,
     };
@@ -138,6 +139,7 @@ async function pingOne(url: string): Promise<PingResult> {
     latency,
     status: pick.status,
     attempts: 2,
+    reason: pick.reason,
     error: pick.error,
     checked_at,
   };
