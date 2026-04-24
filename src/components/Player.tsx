@@ -1064,6 +1064,62 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
             </div>
           </div>
 
+          {/* Diagnóstico estruturado: causa raiz + método de carga */}
+          <div className="border-b px-3 py-2 text-[11px] space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Causa</span>
+              <span
+                className={cn(
+                  "font-semibold rounded px-1.5 py-0.5 border text-[10px] uppercase tracking-wide",
+                  rootCause === "ok"
+                    ? "bg-primary/15 text-primary border-primary/40"
+                    : rootCause === "unknown"
+                      ? "bg-muted text-muted-foreground border-border"
+                      : "bg-destructive/15 text-destructive border-destructive/40",
+                )}
+                title={rootCauseDetail ?? undefined}
+              >
+                {ROOT_CAUSE_LABEL[rootCause]}
+              </span>
+            </div>
+            {rootCause !== "ok" && rootCause !== "unknown" && (
+              <p className="text-muted-foreground leading-snug">
+                {ROOT_CAUSE_HINT[rootCause]}
+              </p>
+            )}
+            {rootCauseDetail && (
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-muted-foreground shrink-0">Detalhe</span>
+                <span className="font-mono text-right break-all" title={rootCauseDetail}>
+                  {rootCauseDetail}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Método</span>
+              <span
+                className={cn(
+                  "font-semibold rounded px-1.5 py-0.5 border text-[10px] uppercase tracking-wide",
+                  loadMethod === "browser"
+                    ? "bg-primary/15 text-primary border-primary/40"
+                    : loadMethod === "edge"
+                      ? "bg-secondary text-secondary-foreground border-border"
+                      : "bg-muted text-muted-foreground border-border",
+                )}
+              >
+                {LOAD_METHOD_LABEL[loadMethod]}
+              </span>
+            </div>
+            {upstreamHost && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Upstream</span>
+                <span className="font-mono truncate max-w-[60%] text-right" title={upstreamHost}>
+                  {upstreamHost}
+                </span>
+              </div>
+            )}
+          </div>
+
           <div className="border-b px-3 py-2 text-[11px] grid grid-cols-1 gap-1">
             <div className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground">Setup → Manifest</span>
