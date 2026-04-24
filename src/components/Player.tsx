@@ -1046,6 +1046,16 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     setRetryNonce((n) => n + 1);
   };
 
+  const handleEngineChange = (next: PlaybackEngine) => {
+    if (next === engine) return;
+    setPreferredEngine(safeHostFromUrl(rawUrl ?? src), next);
+    pushLog({ source: "diag", level: "info", label: "engine_change", details: `${engine} → ${next}` });
+    console.log("[player] engine_change:", engine, "→", next);
+    setError(null);
+    setLoading(true);
+    setEngine(next);
+  };
+
   // Auto-scroll the logs list to the bottom when new logs arrive
   useEffect(() => {
     if (!logsPanelOpen) return;
