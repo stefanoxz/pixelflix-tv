@@ -166,6 +166,18 @@ function latencyClass(ms: number | null): string {
 
 type HealthState = "online" | "unstable" | "offline";
 
+type HealthReason =
+  | "online"
+  | "auth_required"
+  | "blocked"
+  | "not_found"
+  | "http_error"
+  | "timeout"
+  | "rst"
+  | "network"
+  | "stream_broken"
+  | "unknown";
+
 interface HealthStatus {
   state: HealthState;
   online: boolean;
@@ -174,6 +186,7 @@ interface HealthStatus {
   attempts?: number;
   checked_at: string;
   error?: string;
+  reason?: HealthReason;
 }
 
 function statusClass(status: number | null): string {
@@ -214,6 +227,33 @@ function httpTooltip(status: number): string {
   if (status >= 500 && status < 600) return `${status} — erro interno do servidor (sobrecarga ou falha).`;
   return `HTTP ${status} — resposta inesperada do servidor.`;
 }
+
+function reasonInfo(reason: HealthReason | undefined): { label: string; tooltip: string; cls: string } | null {
+  switch (reason) {
+    case "online":
+      return { label: "Online", tooltip: "Servidor respondeu normalmente (HTTP 2xx).", cls: "text-success" };
+    case "auth_required":
+      return { label: "Online (auth)", tooltip: "Servidor vivo, exige autenticação (HTTP 401). Considerado disponível.", cls: "text-success" };
+    case "blocked":
+      return { label: "Bloqueado", tooltip: "Servidor bloqueou a requisição (HTTP 403 — Cloudflare/WAF).", cls: "text-warning" };
+    case "http_error":
+      return { label: "Erro no servidor", tooltip: "Servidor respondeu com erro 5xx (sobrecarga ou falha interna).", cls: "text-warning" };
+    case "not_found":
+      return { label: "Endpoint ausente", tooltip: "HTTP 404 — /player_api.php não encontrado nessa DNS.", cls: "text-warning" };
+    case "timeout":
+      return { label: "Lento / timeout", tooltip: "Sem resposta em 5s. Servidor lento ou sobrecarregado.", cls: "text-warning" };
+    case "rst":
+      return { label: "Conexão recusada", tooltip: "Servidor derrubou a conexão (RST). Aplicação parada ou domínio migrado.", cls: "text-destructive" };
+    case "network":
+      return { label: "Sem conexão", tooltip: "Erro de rede (DNS, TLS ou recusa). Servidor inacessível.", cls: "text-destructive" };
+    case "stream_broken":
+      return { label: "Sem stream", tooltip: "Servidor responde ao ping, mas usuários reportaram falha ao reproduzir vídeo (≥3 reports em 5min).", cls: "text-destructive" };
+    case "unknown":
+    default:
+      return null;
+  }
+}
+
 
 
 const Admin = () => {
