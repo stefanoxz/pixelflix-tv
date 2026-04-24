@@ -862,91 +862,150 @@ const Admin = () => {
                     </p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-border/50">
-                    {filteredAllowed.map((s) => (
-                      <div
-                        key={s.id}
-                        className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <ShieldCheck className="h-4 w-4 text-success shrink-0" />
-                            {s.label && (
-                              <span className="text-sm font-semibold">{s.label}</span>
-                            )}
-                            <span className="font-mono text-sm text-muted-foreground truncate">
-                              {s.server_url}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
-                            <span>{s.unique_users} usuários</span>
-                            <span className="text-success">{s.success_count} ok</span>
-                            <span className="text-destructive">{s.fail_count} falhas</span>
-                            {s.last_seen ? (
-                              <span>último uso há {formatRelative(s.last_seen)}</span>
-                            ) : (
-                              <span className="italic">nunca usado</span>
-                            )}
-                            {s.notes && <span>• {s.notes}</span>}
-                          </div>
-                          {(() => {
-                            const h = health[s.server_url];
-                            if (!h) {
+                  <TooltipProvider delayDuration={200}>
+                    <div className="divide-y divide-border/50">
+                      {filteredAllowed.map((s) => (
+                        <div
+                          key={s.id}
+                          className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <ShieldCheck className="h-4 w-4 text-success shrink-0" />
+                              {s.label && (
+                                <span className="text-sm font-semibold">{s.label}</span>
+                              )}
+                              <span className="font-mono text-sm text-muted-foreground truncate">
+                                {s.server_url}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
+                              <span>{s.unique_users} usuários</span>
+                              <span className="text-success">{s.success_count} ok</span>
+                              <span className="text-destructive">{s.fail_count} falhas</span>
+                              {s.last_seen ? (
+                                <span>último uso há {formatRelative(s.last_seen)}</span>
+                              ) : (
+                                <span className="italic">nunca usado</span>
+                              )}
+                              {s.notes && <span>• {s.notes}</span>}
+                            </div>
+                            {(() => {
+                              const h = health[s.server_url];
+                              if (!h) {
+                                return (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    Verificando ping…
+                                  </div>
+                                );
+                              }
                               return (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  Verificando ping…
+                                <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
+                                  {(() => {
+                                    const b = stateBadge(h.state);
+                                    return (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className={`${b.cls} cursor-help`}>
+                                            {b.dot} {b.label}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">
+                                          {stateTooltip(h.state)}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    );
+                                  })()}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className={`${latencyClass(h.latency)} cursor-help`}>
+                                        {h.latency != null ? `${h.latency} ms` : "—"}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                      Tempo de resposta. &lt;200ms ótimo · &lt;500ms aceitável · &gt;500ms lento.
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  {h.status != null ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span
+                                          className={`px-1.5 py-0.5 rounded font-mono cursor-help ${statusClass(h.status)}`}
+                                        >
+                                          HTTP {h.status}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs">
+                                        {httpTooltip(h.status)}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : h.error ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="px-1.5 py-0.5 rounded font-mono text-warning bg-warning/10 cursor-help">
+                                          {h.error === "timeout" ? "timeout" : "rede"}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs">
+                                        {h.error === "timeout"
+                                          ? "Servidor não respondeu em 5s. Pode estar lento ou inacessível."
+                                          : "Erro de rede (DNS, conexão recusada ou TLS). Servidor inacessível."}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : null}
+                                  {h.attempts === 2 && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="text-muted-foreground cursor-help">×2</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs">
+                                        Resultado confirmado em 2 tentativas (retry automático).
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="text-muted-foreground cursor-help">
+                                        último ping {formatTime(h.checked_at)}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                      Horário da última verificação. Auto-refresh a cada 30s.
+                                    </TooltipContent>
+                                  </Tooltip>
                                 </div>
                               );
-                            }
-                            return (
-                              <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
-                                {(() => {
-                                  const b = stateBadge(h.state);
-                                  return (
-                                    <span className={b.cls}>
-                                      {b.dot} {b.label}
-                                    </span>
-                                  );
-                                })()}
-                                <span className={latencyClass(h.latency)}>
-                                  {h.latency != null ? `${h.latency} ms` : "—"}
-                                </span>
-                                {h.status != null ? (
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded font-mono ${statusClass(h.status)}`}
-                                    title="Código HTTP da resposta"
-                                  >
-                                    HTTP {h.status}
-                                  </span>
-                                ) : h.error ? (
-                                  <span className="px-1.5 py-0.5 rounded font-mono text-warning bg-warning/10">
-                                    {h.error === "timeout" ? "timeout" : "rede"}
-                                  </span>
-                                ) : null}
-                                {h.attempts === 2 && (
-                                  <span className="text-muted-foreground" title="Confirmado em 2 tentativas">
-                                    ×2
-                                  </span>
-                                )}
-                                <span className="text-muted-foreground">
-                                  último ping {formatTime(h.checked_at)}
-                                </span>
-                              </div>
-                            );
-                          })()}
+                            })()}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingServer(s);
+                                setNewUrl(s.server_url);
+                                setNewLabel(s.label ?? "");
+                                setNewNotes(s.notes ?? "");
+                                setAddOpen(true);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Editar
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => removeServer(s.server_url)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Remover
+                            </Button>
+                          </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => removeServer(s.server_url)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Remover
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  </TooltipProvider>
                 )}
               </Card>
             </div>
