@@ -234,11 +234,12 @@ const Admin = () => {
   const [newUrl, setNewUrl] = useState("");
   const [newLabel, setNewLabel] = useState("");
   const [newNotes, setNewNotes] = useState("");
+  const [editingServer, setEditingServer] = useState<AllowedServer | null>(null);
 
   const [health, setHealth] = useState<Record<string, HealthStatus>>({});
   const [healthLoading, setHealthLoading] = useState(false);
 
-  const checkAllServers = async () => {
+  const checkAllServers = async (manual = false) => {
     if (!allowed.length) return;
     setHealthLoading(true);
     try {
