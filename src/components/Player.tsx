@@ -1,6 +1,56 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import Hls, { type ErrorData } from "hls.js";
-import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink, Activity, Terminal, Trash2, VideoOff, ListVideo } from "lucide-react";
+import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink, Activity, Terminal, Trash2, VideoOff, ListVideo, Zap } from "lucide-react";
+
+/**
+ * Motor de reprodução para canais ao vivo.
+ * - hls     : padrão (hls.js sobre .m3u8)
+ * - mpegts  : mpegts.js com fallback automático .ts → .m3u8
+ * - external: oculta vídeo, oferece "Abrir no VLC" + copiar URL
+ */
+type PlaybackEngine = "hls" | "mpegts" | "external";
+
+const ENGINE_LABEL: Record<PlaybackEngine, string> = {
+  hls: "HLS",
+  mpegts: "MPEG-TS",
+  external: "Externo",
+};
+
+const ENGINE_STORAGE_PREFIX = "player.engine.host:";
+const MPEGTS_BOOTSTRAP_TIMEOUT_MS = 8_000;
+
+function safeHostFromUrl(u: string | null | undefined): string | null {
+  if (!u) return null;
+  try { return new URL(u).host.toLowerCase(); } catch { return null; }
+}
+
+function getPreferredEngine(host: string | null): PlaybackEngine | null {
+  if (!host) return null;
+  try {
+    const v = localStorage.getItem(`${ENGINE_STORAGE_PREFIX}${host}`);
+    if (v === "hls" || v === "mpegts" || v === "external") return v;
+  } catch { /* noop */ }
+  return null;
+}
+
+function setPreferredEngine(host: string | null, engine: PlaybackEngine) {
+  if (!host) return;
+  try { localStorage.setItem(`${ENGINE_STORAGE_PREFIX}${host}`, engine); }
+  catch { /* noop */ }
+}
+
+/** Detecta canal ao vivo Xtream: /live/<u>/<p>/<id>.m3u8 */
+function isLiveXtreamUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return /\/live\/[^/]+\/[^/]+\/\d+\.(m3u8|ts)(\?|$)/i.test(url);
+}
+
+/** Troca .m3u8 → .ts apenas para padrão Xtream live. Caso contrário devolve original. */
+function toMpegtsTsUrl(url: string): string | null {
+  if (!isLiveXtreamUrl(url)) return null;
+  if (/\.ts(\?|$)/i.test(url)) return url;
+  return url.replace(/\.m3u8(\?|$)/i, ".ts$1");
+}
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
