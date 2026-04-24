@@ -23,6 +23,7 @@ import {
   isBrowserPlayable,
   isExternalOnly,
   getFormatBadge,
+  proxyImageUrl,
   type Series,
   type Episode,
 } from "@/services/iptv";

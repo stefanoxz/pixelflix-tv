@@ -13,6 +13,7 @@ import {
   getVodStreams,
   buildVodStreamUrl,
   isBrowserPlayable,
+  proxyImageUrl,
   type VodStream,
 } from "@/services/iptv";
 import { Button } from "@/components/ui/button";

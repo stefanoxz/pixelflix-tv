@@ -4,7 +4,7 @@ import { Loader2, Play, Tv, Film, Clapperboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MediaCard } from "@/components/MediaCard";
 import { useIptv } from "@/context/IptvContext";
-import { getLiveStreams, getVodStreams, getSeries } from "@/services/iptv";
+import { getLiveStreams, getVodStreams, getSeries, proxyImageUrl } from "@/services/iptv";
 
 const Highlights = () => {
   const { session } = useIptv();
