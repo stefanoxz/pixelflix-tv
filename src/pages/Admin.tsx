@@ -145,6 +145,24 @@ function formatRelative(iso: string): string {
   return `${d}d`;
 }
 
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function latencyClass(ms: number | null): string {
+  if (ms == null) return "text-muted-foreground";
+  if (ms < 200) return "text-success";
+  if (ms < 500) return "text-warning";
+  return "text-destructive";
+}
+
+interface HealthStatus {
+  online: boolean;
+  latency: number | null;
+  checked_at: string;
+  error?: string;
+}
+
 const Admin = () => {
   const navigate = useNavigate();
 
@@ -164,6 +182,36 @@ const Admin = () => {
   const [newUrl, setNewUrl] = useState("");
   const [newLabel, setNewLabel] = useState("");
   const [newNotes, setNewNotes] = useState("");
+
+  const [health, setHealth] = useState<Record<string, HealthStatus>>({});
+  const [healthLoading, setHealthLoading] = useState(false);
+
+  const checkAllServers = async () => {
+    if (!allowed.length) return;
+    setHealthLoading(true);
+    try {
+      const { data } = await supabase.functions.invoke("check-server", {
+        body: { urls: allowed.map((s) => s.server_url) },
+      });
+      const results = (data as { results?: (HealthStatus & { url: string })[] } | null)?.results ?? [];
+      const map: Record<string, HealthStatus> = {};
+      for (const r of results) {
+        map[r.url] = {
+          online: r.online,
+          latency: r.latency,
+          checked_at: r.checked_at,
+          error: r.error,
+        };
+      }
+      if (Object.keys(map).length > 0) {
+        setHealth((prev) => ({ ...prev, ...map }));
+      }
+    } catch {
+      // silencioso — fallback "Verificando..." permanece
+    } finally {
+      setHealthLoading(false);
+    }
+  };
 
   const refresh = async () => {
     setLoading(true);
@@ -206,6 +254,15 @@ const Admin = () => {
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
+
+  // Health check polling — apenas no tab "servers"
+  useEffect(() => {
+    if (tab !== "servers" || allowed.length === 0) return;
+    checkAllServers();
+    const t = setInterval(checkAllServers, 30_000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, allowed.length]);
 
   const allowServer = async (server_url: string, label?: string, notes?: string) => {
     try {
@@ -695,6 +752,15 @@ const Admin = () => {
                   className="pl-9"
                 />
               </div>
+              <Button
+                onClick={checkAllServers}
+                variant="outline"
+                size="sm"
+                disabled={healthLoading || allowed.length === 0}
+              >
+                <RefreshCw className={"h-4 w-4 mr-2 " + (healthLoading ? "animate-spin" : "")} />
+                Atualizar pings
+              </Button>
               <Button onClick={() => setAddOpen(true)} variant="default" size="sm">
                 <Plus className="h-4 w-4 mr-2" />
                 Cadastrar DNS
@@ -743,6 +809,29 @@ const Admin = () => {
                             )}
                             {s.notes && <span>• {s.notes}</span>}
                           </div>
+                          {(() => {
+                            const h = health[s.server_url];
+                            if (!h) {
+                              return (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Verificando ping…
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="flex items-center gap-3 mt-1 text-xs flex-wrap">
+                                <span className={h.online ? "text-success" : "text-destructive"}>
+                                  ● {h.online ? "Online" : "Offline"}
+                                </span>
+                                <span className={latencyClass(h.latency)}>
+                                  {h.latency != null ? `${h.latency} ms` : "—"}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  último ping {formatTime(h.checked_at)}
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
                         <Button
                           variant="outline"
