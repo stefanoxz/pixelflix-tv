@@ -77,6 +77,7 @@ interface AllowedServer {
   success_count: number;
   fail_count: number;
   unique_users: number;
+  stream_broken?: boolean;
 }
 
 interface PendingServer {
@@ -165,6 +166,18 @@ function latencyClass(ms: number | null): string {
 
 type HealthState = "online" | "unstable" | "offline";
 
+type HealthReason =
+  | "online"
+  | "auth_required"
+  | "blocked"
+  | "not_found"
+  | "http_error"
+  | "timeout"
+  | "rst"
+  | "network"
+  | "stream_broken"
+  | "unknown";
+
 interface HealthStatus {
   state: HealthState;
   online: boolean;
@@ -173,6 +186,7 @@ interface HealthStatus {
   attempts?: number;
   checked_at: string;
   error?: string;
+  reason?: HealthReason;
 }
 
 function statusClass(status: number | null): string {
@@ -214,6 +228,33 @@ function httpTooltip(status: number): string {
   return `HTTP ${status} — resposta inesperada do servidor.`;
 }
 
+function reasonInfo(reason: HealthReason | undefined): { label: string; tooltip: string; cls: string } | null {
+  switch (reason) {
+    case "online":
+      return { label: "Online", tooltip: "Servidor respondeu normalmente (HTTP 2xx).", cls: "text-success" };
+    case "auth_required":
+      return { label: "Online (auth)", tooltip: "Servidor vivo, exige autenticação (HTTP 401). Considerado disponível.", cls: "text-success" };
+    case "blocked":
+      return { label: "Bloqueado", tooltip: "Servidor bloqueou a requisição (HTTP 403 — Cloudflare/WAF).", cls: "text-warning" };
+    case "http_error":
+      return { label: "Erro no servidor", tooltip: "Servidor respondeu com erro 5xx (sobrecarga ou falha interna).", cls: "text-warning" };
+    case "not_found":
+      return { label: "Endpoint ausente", tooltip: "HTTP 404 — /player_api.php não encontrado nessa DNS.", cls: "text-warning" };
+    case "timeout":
+      return { label: "Lento / timeout", tooltip: "Sem resposta em 5s. Servidor lento ou sobrecarregado.", cls: "text-warning" };
+    case "rst":
+      return { label: "Conexão recusada", tooltip: "Servidor derrubou a conexão (RST). Aplicação parada ou domínio migrado.", cls: "text-destructive" };
+    case "network":
+      return { label: "Sem conexão", tooltip: "Erro de rede (DNS, TLS ou recusa). Servidor inacessível.", cls: "text-destructive" };
+    case "stream_broken":
+      return { label: "Sem stream", tooltip: "Servidor responde ao ping, mas usuários reportaram falha ao reproduzir vídeo (≥3 reports em 5min).", cls: "text-destructive" };
+    case "unknown":
+    default:
+      return null;
+  }
+}
+
+
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -246,19 +287,28 @@ const Admin = () => {
       const { data } = await supabase.functions.invoke("check-server", {
         body: { urls: allowed.map((s) => s.server_url) },
       });
-      const results = (data as { results?: (Partial<HealthStatus> & { url: string })[] } | null)?.results ?? [];
+      const results = (data as { results?: (Partial<HealthStatus> & { url: string; reason?: HealthReason })[] } | null)?.results ?? [];
+      // Mapa server_url -> stream_broken (vindo do list_servers / admin-api)
+      const brokenMap = new Map<string, boolean>();
+      for (const s of allowed) brokenMap.set(s.server_url, !!s.stream_broken);
+
       const map: Record<string, HealthStatus> = {};
       for (const r of results) {
         const state: HealthState =
           r.state ?? (r.online ? "online" : "offline");
+        // Se admin-api sinalizou stream_broken, sobrepõe o reason (mesmo se ping deu online)
+        const reason: HealthReason | undefined = brokenMap.get(r.url)
+          ? "stream_broken"
+          : r.reason;
         map[r.url] = {
-          state,
+          state: brokenMap.get(r.url) && state === "online" ? "unstable" : state,
           online: state === "online" || state === "unstable",
           latency: r.latency ?? null,
           status: r.status ?? null,
           attempts: r.attempts,
           checked_at: r.checked_at ?? new Date().toISOString(),
           error: r.error,
+          reason,
         };
       }
       if (Object.keys(map).length > 0) {
@@ -914,6 +964,23 @@ const Admin = () => {
                                         </TooltipTrigger>
                                         <TooltipContent className="max-w-xs">
                                           {stateTooltip(h.state)}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    );
+                                  })()}
+                                  {(() => {
+                                    const info = reasonInfo(h.reason);
+                                    // Só mostra o chip de causa quando agrega info além do "Online" simples
+                                    if (!info || h.reason === "online") return null;
+                                    return (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className={`px-1.5 py-0.5 rounded border border-border/50 cursor-help ${info.cls}`}>
+                                            {info.label}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">
+                                          {info.tooltip}
                                         </TooltipContent>
                                       </Tooltip>
                                     );

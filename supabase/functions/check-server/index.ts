@@ -16,10 +16,22 @@ function json(data: unknown, status = 200) {
 
 type State = "online" | "unstable" | "offline";
 
+type Reason =
+  | "online"
+  | "auth_required"
+  | "blocked"
+  | "not_found"
+  | "http_error"
+  | "timeout"
+  | "rst"
+  | "network"
+  | "unknown";
+
 interface Attempt {
   state: State;
   latency: number | null;
   status: number | null;
+  reason: Reason;
   error?: "timeout" | "network";
 }
 
@@ -30,8 +42,18 @@ interface PingResult {
   latency: number | null;
   status: number | null;
   attempts: number;
+  reason: Reason;
   error?: "timeout" | "network";
   checked_at: string;
+}
+
+function classifyHttp(s: number): { state: State; reason: Reason } {
+  if (s >= 200 && s < 300) return { state: "online", reason: "online" };
+  if (s === 401) return { state: "online", reason: "auth_required" };
+  if (s === 403) return { state: "unstable", reason: "blocked" };
+  if (s === 404) return { state: "unstable", reason: "not_found" };
+  if (s >= 500 && s < 600) return { state: "unstable", reason: "http_error" };
+  return { state: "unstable", reason: "unknown" };
 }
 
 async function singlePing(url: string): Promise<Attempt> {
@@ -50,19 +72,22 @@ async function singlePing(url: string): Promise<Attempt> {
       try { await res.text(); } catch { /* ignore */ }
     }
     const latency = Date.now() - start;
-    const s = res.status;
-    let state: State;
-    if ((s >= 200 && s < 300) || s === 401) state = "online";
-    else if (s === 403 || (s >= 500 && s < 600)) state = "unstable";
-    else state = "unstable"; // 404 e demais 4xx
-    return { state, latency, status: s };
+    const { state, reason } = classifyHttp(res.status);
+    return { state, latency, status: res.status, reason };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const isTimeout = /timeout|timed out|aborted/i.test(message);
+    const isTimeout = /timeout|timed out|aborted|abort/i.test(message);
+    const isReset = /reset|ECONNRESET|connection reset/i.test(message);
+    let reason: Reason;
+    let state: State;
+    if (isTimeout) { reason = "timeout"; state = "unstable"; }
+    else if (isReset) { reason = "rst"; state = "offline"; }
+    else { reason = "network"; state = "offline"; }
     return {
-      state: isTimeout ? "unstable" : "offline",
+      state,
       latency: null,
       status: null,
+      reason,
       error: isTimeout ? "timeout" : "network",
     };
   }
@@ -97,6 +122,7 @@ async function pingOne(url: string): Promise<PingResult> {
       latency: a1.latency,
       status: a1.status,
       attempts: 1,
+      reason: a1.reason,
       error: a1.error,
       checked_at,
     };
@@ -113,6 +139,7 @@ async function pingOne(url: string): Promise<PingResult> {
     latency,
     status: pick.status,
     attempts: 2,
+    reason: pick.reason,
     error: pick.error,
     checked_at,
   };
