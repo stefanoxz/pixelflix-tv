@@ -345,16 +345,18 @@ const Admin = () => {
   }, [tab, allowed.length]);
 
   const allowServer = async (server_url: string, label?: string, notes?: string) => {
+    const isEdit = !!editingServer;
     try {
       await callAdmin("allow_server", { server_url, label, notes });
-      toast.success("DNS autorizada");
+      toast.success(isEdit ? "DNS atualizada" : "DNS autorizada");
       setAddOpen(false);
+      setEditingServer(null);
       setNewUrl("");
       setNewLabel("");
       setNewNotes("");
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao autorizar");
+      toast.error(err instanceof Error ? err.message : isEdit ? "Erro ao atualizar" : "Erro ao autorizar");
     }
   };
 
