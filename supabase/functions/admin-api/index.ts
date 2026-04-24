@@ -150,10 +150,30 @@ Deno.serve(async (req) => {
     }
 
     if (action === "list_servers") {
-      const [{ data: events }, { data: allowed }] = await Promise.all([
+      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const [{ data: events }, { data: allowed }, { data: brokenEvents }] = await Promise.all([
         admin.from("login_events").select("server_url, success, created_at, username").order("created_at", { ascending: false }).limit(2000),
         admin.from("allowed_servers").select("id, server_url, label, notes, created_at"),
+        admin.from("stream_events")
+          .select("meta")
+          .eq("event_type", "stream_error")
+          .gte("created_at", fiveMinAgo)
+          .limit(1000),
       ]);
+
+      // Hosts com >=3 reports de stream_no_data nos últimos 5 min
+      const brokenCount = new Map<string, number>();
+      for (const row of (brokenEvents ?? []) as { meta: Record<string, unknown> | null }[]) {
+        const meta = row.meta ?? {};
+        if (meta.type !== "stream_no_data") continue;
+        const host = typeof meta.host === "string" ? meta.host.toLowerCase() : null;
+        if (!host) continue;
+        brokenCount.set(host, (brokenCount.get(host) ?? 0) + 1);
+      }
+      const brokenHosts = new Set<string>();
+      for (const [host, n] of brokenCount.entries()) {
+        if (n >= 3) brokenHosts.add(host);
+      }
 
       const stats = new Map<string, { last_seen: string; total_logins: number; success_count: number; fail_count: number; users: Set<string> }>();
       for (const row of events ?? []) {
@@ -170,6 +190,8 @@ Deno.serve(async (req) => {
 
       const allowedList = (allowed ?? []).map((a: { id: string; server_url: string; label: string | null; notes: string | null; created_at: string }) => {
         const s = stats.get(a.server_url);
+        let host: string | null = null;
+        try { host = new URL(a.server_url).host.toLowerCase(); } catch { /* noop */ }
         return {
           id: a.id,
           server_url: a.server_url,
@@ -181,6 +203,7 @@ Deno.serve(async (req) => {
           success_count: s?.success_count ?? 0,
           fail_count: s?.fail_count ?? 0,
           unique_users: s?.users?.size ?? 0,
+          stream_broken: host ? brokenHosts.has(host) : false,
         };
       });
 
