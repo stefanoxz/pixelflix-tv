@@ -253,6 +253,23 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const rootCauseLockedRef = useRef(false);
   const upstreamHost = useMemo(() => extractUpstreamHost(rawUrl ?? src), [rawUrl, src]);
 
+  // Motor de reprodução (apenas faz sentido em canais ao vivo).
+  const isLive = useMemo(() => isLiveXtreamUrl(rawUrl ?? src ?? null), [rawUrl, src]);
+  const [engine, setEngine] = useState<PlaybackEngine>(() => {
+    if (!isLive) return "hls";
+    return getPreferredEngine(safeHostFromUrl(rawUrl ?? src)) ?? "hls";
+  });
+  // Re-sincroniza engine quando o canal muda de host.
+  useEffect(() => {
+    if (!isLive) {
+      setEngine("hls");
+      return;
+    }
+    const pref = getPreferredEngine(safeHostFromUrl(rawUrl ?? src)) ?? "hls";
+    setEngine(pref);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [upstreamHost, isLive]);
+
   // Logs panel — buffered in refs to avoid re-renders when closed
   const logsRef = useRef<LogEntry[]>([]);
   const setupStartRef = useRef(0);
