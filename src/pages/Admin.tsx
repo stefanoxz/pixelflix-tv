@@ -156,10 +156,14 @@ function latencyClass(ms: number | null): string {
   return "text-destructive";
 }
 
+type HealthState = "online" | "unstable" | "offline";
+
 interface HealthStatus {
+  state: HealthState;
   online: boolean;
   latency: number | null;
   status: number | null;
+  attempts?: number;
   checked_at: string;
   error?: string;
 }
@@ -167,8 +171,20 @@ interface HealthStatus {
 function statusClass(status: number | null): string {
   if (status == null) return "text-muted-foreground bg-muted/40";
   if (status >= 200 && status < 300) return "text-success bg-success/10";
-  if (status === 401 || status === 403) return "text-warning bg-warning/10";
-  return "text-destructive bg-destructive/10";
+  if (status === 401) return "text-success bg-success/10";
+  if (status === 403 || (status >= 500 && status < 600)) return "text-warning bg-warning/10";
+  return "text-warning bg-warning/10";
+}
+
+function stateBadge(state: HealthState): { dot: string; label: string; cls: string } {
+  switch (state) {
+    case "online":
+      return { dot: "🟢", label: "Online", cls: "text-success" };
+    case "unstable":
+      return { dot: "🟡", label: "Instável", cls: "text-warning" };
+    case "offline":
+      return { dot: "🔴", label: "Offline", cls: "text-destructive" };
+  }
 }
 
 const Admin = () => {
@@ -201,14 +217,18 @@ const Admin = () => {
       const { data } = await supabase.functions.invoke("check-server", {
         body: { urls: allowed.map((s) => s.server_url) },
       });
-      const results = (data as { results?: (HealthStatus & { url: string })[] } | null)?.results ?? [];
+      const results = (data as { results?: (Partial<HealthStatus> & { url: string })[] } | null)?.results ?? [];
       const map: Record<string, HealthStatus> = {};
       for (const r of results) {
+        const state: HealthState =
+          r.state ?? (r.online ? "online" : "offline");
         map[r.url] = {
-          online: r.online,
-          latency: r.latency,
+          state,
+          online: state === "online" || state === "unstable",
+          latency: r.latency ?? null,
           status: r.status ?? null,
-          checked_at: r.checked_at,
+          attempts: r.attempts,
+          checked_at: r.checked_at ?? new Date().toISOString(),
           error: r.error,
         };
       }
@@ -829,18 +849,32 @@ const Admin = () => {
                             }
                             return (
                               <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
-                                <span className={h.online ? "text-success" : "text-destructive"}>
-                                  ● {h.online ? "Online" : "Offline"}
-                                </span>
+                                {(() => {
+                                  const b = stateBadge(h.state);
+                                  return (
+                                    <span className={b.cls}>
+                                      {b.dot} {b.label}
+                                    </span>
+                                  );
+                                })()}
                                 <span className={latencyClass(h.latency)}>
                                   {h.latency != null ? `${h.latency} ms` : "—"}
                                 </span>
-                                {h.status != null && (
+                                {h.status != null ? (
                                   <span
                                     className={`px-1.5 py-0.5 rounded font-mono ${statusClass(h.status)}`}
                                     title="Código HTTP da resposta"
                                   >
                                     HTTP {h.status}
+                                  </span>
+                                ) : h.error ? (
+                                  <span className="px-1.5 py-0.5 rounded font-mono text-warning bg-warning/10">
+                                    {h.error === "timeout" ? "timeout" : "rede"}
+                                  </span>
+                                ) : null}
+                                {h.attempts === 2 && (
+                                  <span className="text-muted-foreground" title="Confirmado em 2 tentativas">
+                                    ×2
                                   </span>
                                 )}
                                 <span className="text-muted-foreground">
