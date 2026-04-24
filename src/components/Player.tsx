@@ -320,6 +320,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setLastReason(null);
       setStatus("connecting");
 
+      // Reset diagnóstico para novo ciclo
+      rootCauseLockedRef.current = false;
+      setRootCause("unknown");
+      setRootCauseDetail(null);
+      setLoadMethod("unknown");
+
       // Reset logs for the new setup cycle
       logsRef.current = [];
       firstFrameAtRef.current = null;
