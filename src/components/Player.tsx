@@ -341,6 +341,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         });
         setLoading(false);
         updateStatus("stream_error", "URL inválida");
+        setRootCauseOnce("url_invalid", "URL malformada");
         return;
       }
 
@@ -354,6 +355,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         });
         setLoading(false);
         updateStatus("codec_incompatible", `container ${ext}`);
+        setRootCauseOnce("codec_incompatible", `container ${ext}`);
         return;
       }
 
@@ -365,6 +367,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         });
         setLoading(false);
         updateStatus("stream_error", strategy.reason);
+        setRootCauseOnce("stream_error", strategy.reason);
         return;
       }
 
@@ -380,6 +383,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         setLoading(false);
         updateStatus("stream_no_data", reason);
         pushLog({ source: "diag", level: "error", label: "stream_no_data", details: reason });
+        // Classifica a causa raiz: fragLoadError vs manifest vazio.
+        if (/fragLoadError/i.test(reason)) {
+          setRootCauseOnce("frag_load_error", reason);
+        } else {
+          setRootCauseOnce("manifest_empty", reason);
+        }
         setError({
           title: "Sem vídeo no canal",
           description:
@@ -419,6 +428,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         setLoading(false);
         updateStatus("stall_timeout", reason);
         pushLog({ source: "diag", level: "warn", label: "bootstrap_timeout_12s", details: reason });
+        setRootCauseOnce("bootstrap_timeout", reason);
         setError({
           title: "Canal não respondeu",
           description:
@@ -442,7 +452,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           });
           if (cancelled) return;
           const safeSrc = tokenResp.url;
-          pushLog({ source: "net", level: "info", label: "token_ok", details: kind });
+          const method = detectLoadMethod(safeSrc);
+          setLoadMethod(method);
+          pushLog({ source: "net", level: "info", label: "token_ok", details: `${kind} via ${method}` });
+          console.log("[player] manifest_method:", method, { kind, host: extractUpstreamHost(src) });
 
           // Heartbeat (renew session lifecycle on backend every 45s)
           heartbeatRef.current = window.setInterval(() => {
