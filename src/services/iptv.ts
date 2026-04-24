@@ -545,11 +545,50 @@ type BrowserLoginOk = {
   data: LoginResponse;
   matchedBase: string;
 };
+
+/**
+ * Razões de falha do login direto via navegador.
+ *  - "auth_failed"     → auth=0 OU HTTP 401. Resposta legítima → SEM fallback.
+ *  - "server_response" → 403 / 5xx / non-JSON / sem user_info. Servidor
+ *                         respondeu negando ou com erro interno → SEM fallback.
+ *  - "mixed_content"   → app HTTPS + DNS HTTP. Browser bloqueia, edge consegue.
+ *  - "transport"       → CORS / network error / timeout. Edge pode ajudar.
+ */
+type BrowserLoginFailReason =
+  | "auth_failed"
+  | "server_response"
+  | "mixed_content"
+  | "transport";
+
 type BrowserLoginFail = {
   ok: false;
-  reason: "transport" | "auth_failed" | "mixed_content" | "non_json" | "http_error";
+  reason: BrowserLoginFailReason;
   detail?: string;
 };
+
+/** True quando a falha NÃO justifica tentar a edge function. */
+function isTerminalBrowserFail(r: BrowserLoginFail): boolean {
+  return r.reason === "auth_failed" || r.reason === "server_response";
+}
+
+function messageForTerminalFail(r: BrowserLoginFail): string {
+  if (r.reason === "auth_failed") return "Usuário ou senha inválidos";
+  // server_response
+  const detail = r.detail ?? "";
+  if (/^HTTP 403/.test(detail)) {
+    return "Servidor recusou o acesso (HTTP 403). Verifique seu plano ou IP.";
+  }
+  if (/^HTTP 5\d\d/.test(detail)) {
+    return `Servidor IPTV com erro interno (${detail}). Tente em alguns minutos.`;
+  }
+  if (/^HTTP 4\d\d/.test(detail)) {
+    return `Servidor respondeu ${detail}.`;
+  }
+  if (detail === "non_json" || detail === "sem user_info") {
+    return "Resposta inválida do servidor IPTV.";
+  }
+  return "Servidor IPTV recusou o login.";
+}
 
 async function tryBrowserLogin(
   serverBase: string,
@@ -581,25 +620,57 @@ async function tryBrowserLogin(
         cache: "no-store",
       });
       clearTimeout(timer);
+
+      // 401 → credenciais inválidas (resposta legítima). Encerra sem fallback.
+      if (res.status === 401) {
+        return { ok: false, reason: "auth_failed", detail: "HTTP 401" };
+      }
+      // 403 / 5xx → servidor respondeu negando ou com erro interno.
+      // Resposta legítima dele; a edge daria o mesmo resultado.
+      if (res.status === 403 || res.status >= 500) {
+        return {
+          ok: false,
+          reason: "server_response",
+          detail: `HTTP ${res.status}`,
+        };
+      }
       if (!res.ok) {
-        lastFail = { ok: false, reason: "http_error", detail: `HTTP ${res.status}` };
+        // Outros 4xx (404, 405, 429...) → resposta do servidor, não transporte.
+        lastFail = {
+          ok: false,
+          reason: "server_response",
+          detail: `HTTP ${res.status}`,
+        };
         continue;
       }
+
       const text = await res.text();
-      let data: any;
-      try { data = JSON.parse(text); } catch {
-        lastFail = { ok: false, reason: "non_json" };
+      let data: unknown;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        // Servidor respondeu, mas não é JSON Xtream → resposta dele.
+        lastFail = { ok: false, reason: "server_response", detail: "non_json" };
         continue;
       }
-      if (!data?.user_info) {
-        lastFail = { ok: false, reason: "non_json", detail: "sem user_info" };
+
+      const obj = data as { user_info?: { auth?: number | string } };
+      if (!obj?.user_info) {
+        lastFail = {
+          ok: false,
+          reason: "server_response",
+          detail: "sem user_info",
+        };
         continue;
       }
-      if (data.user_info.auth === 0) {
-        // Credenciais erradas: não adianta tentar fallback.
-        return { ok: false, reason: "auth_failed" };
+      if (Number(obj.user_info.auth) === 0) {
+        return { ok: false, reason: "auth_failed", detail: "auth=0" };
       }
-      return { ok: true, data: data as LoginResponse, matchedBase: base };
+      return {
+        ok: true,
+        data: data as LoginResponse,
+        matchedBase: base,
+      };
     } catch (err) {
       clearTimeout(timer);
       // TypeError: Failed to fetch → CORS, network, ou mixed content.
@@ -644,7 +715,6 @@ export async function iptvLogin(
     }
     candidates = validation.candidates ?? [];
   } catch (e) {
-    // Se a pré-validação falhar por rede/timeout, tenta direto pelo fluxo edge clássico.
     const msg = e instanceof Error ? e.message : "Falha na validação";
     if (/dns não autorizada|não autorizad|não tem acesso/i.test(msg)) {
       throw new Error(msg);
@@ -664,21 +734,33 @@ export async function iptvLogin(
     if (r.ok === true) {
       const durationMs = Date.now() - startedAt;
       console.log("[iptv] method: browser", { server: r.matchedBase, durationMs });
-      // Loga sucesso sem bloquear (best-effort).
       void logBrowserLoginEvent(r.matchedBase, creds.username, true, "browser_login_ok");
       return { ...r.data, server_url: r.matchedBase };
     }
-    const fail = r as BrowserLoginFail;
-    if (fail.reason === "auth_failed") {
-      // Senha errada: não adianta tentar via edge.
-      void logBrowserLoginEvent(base, creds.username, false, "credenciais inválidas");
-      throw new Error("Usuário ou senha inválidos");
+
+    // Falha terminal: servidor respondeu (auth_failed / server_response).
+    // Não tem por que tentar a edge — daria a mesma resposta.
+    if (isTerminalBrowserFail(r)) {
+      const message = messageForTerminalFail(r);
+      console.log("[iptv] method: browser", {
+        server: base,
+        result: "terminal_fail",
+        reason: r.reason,
+        detail: r.detail,
+      });
+      void logBrowserLoginEvent(base, creds.username, false, `${r.reason}:${r.detail ?? ""}`);
+      throw new Error(message);
     }
-    lastTransportFail = fail;
+
+    // Transporte (CORS / timeout / rede) ou mixed_content → guarda e tenta próximo.
+    lastTransportFail = r;
   }
 
-  // 3) Fallback: edge function (caminho atual, intacto).
+  // 3) Fallback: edge function. Só chega aqui se TODOS os candidatos falharam
+  //    por transporte (CORS / network / timeout / mixed-content).
   const reason = lastTransportFail?.reason ?? "all_failed";
+  const detail = lastTransportFail?.detail;
+  console.log("[iptv] method: edge", { trigger: reason, detail });
   return iptvLoginViaEdge(creds, startedAt, reason);
 }
 
@@ -694,7 +776,7 @@ async function iptvLoginViaEdge(
       "login",
     );
     const durationMs = Date.now() - startedAt;
-    console.log("[iptv] method: edge", { reason, durationMs });
+    console.log("[iptv] method: edge", { reason, durationMs, result: "ok" });
     return data;
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha no login";
