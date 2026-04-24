@@ -353,6 +353,16 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       try { hlsRef.current.destroy(); } catch { /* noop */ }
       hlsRef.current = null;
     }
+    if (mpegtsRef.current) {
+      try {
+        mpegtsRef.current.pause?.();
+        mpegtsRef.current.unload?.();
+        mpegtsRef.current.detachMediaElement?.();
+        mpegtsRef.current.destroy?.();
+      } catch { /* noop */ }
+      mpegtsRef.current = null;
+    }
+    mpegtsTriedM3u8Ref.current = false;
     if (v) {
       try {
         v.pause();
