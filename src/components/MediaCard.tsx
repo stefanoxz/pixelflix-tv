@@ -1,6 +1,7 @@
 import { forwardRef } from "react";
 import { Play, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { proxyImageUrl } from "@/services/iptv";
 
 interface MediaCardProps {
   title: string;
@@ -27,7 +28,7 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
       >
         {cover ? (
           <img
-            src={cover}
+            src={proxyImageUrl(cover)}
             alt={title}
             loading="lazy"
             onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}

@@ -976,6 +976,27 @@ export function proxyUrl(url: string): string {
   return `${FUNCTIONS_BASE}/stream-proxy?url=${encodeURIComponent(url)}`;
 }
 
+/**
+ * Reescreve URLs de imagem HTTP para passar por uma CDN HTTPS pública
+ * (images.weserv.nl) — necessário porque o app roda em HTTPS e o provedor
+ * IPTV serve `stream_icon` em HTTP, o que o navegador bloqueia como mixed
+ * content. Não usa nossa edge para não consumir cota com tráfego de imagem.
+ */
+export function proxyImageUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  // Já é HTTPS ou data: → passa direto.
+  if (/^(https:|data:)/i.test(trimmed)) return trimmed;
+  // Página em HTTP (dev local) → não precisa de proxy.
+  if (typeof window !== "undefined" && window.location.protocol !== "https:") {
+    return trimmed;
+  }
+  // HTTP em página HTTPS → reescreve via weserv (entende host+path sem protocolo).
+  const stripped = trimmed.replace(/^https?:\/\//i, "");
+  return `https://images.weserv.nl/?url=${encodeURIComponent(stripped)}`;
+}
+
 export type StreamKind = "playlist" | "segment";
 
 /**

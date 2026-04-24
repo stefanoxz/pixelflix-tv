@@ -4,7 +4,7 @@ import { Loader2, Play, Tv, Film, Clapperboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MediaCard } from "@/components/MediaCard";
 import { useIptv } from "@/context/IptvContext";
-import { getLiveStreams, getVodStreams, getSeries } from "@/services/iptv";
+import { getLiveStreams, getVodStreams, getSeries, proxyImageUrl } from "@/services/iptv";
 
 const Highlights = () => {
   const { session } = useIptv();
@@ -42,7 +42,7 @@ const Highlights = () => {
       <section className="relative h-[60vh] min-h-[420px] w-full overflow-hidden">
         {featured?.stream_icon && (
           <img
-            src={featured.stream_icon}
+            src={proxyImageUrl(featured.stream_icon)}
             alt={featured.name}
             className="absolute inset-0 h-full w-full object-cover opacity-40"
           />

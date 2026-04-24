@@ -10,6 +10,7 @@ import {
   getLiveCategories,
   getLiveStreams,
   buildLiveStreamUrl,
+  proxyImageUrl,
   type LiveStream,
 } from "@/services/iptv";
 
@@ -84,7 +85,7 @@ const Live = () => {
               rawUrl={rawLiveUrl ?? undefined}
               containerExt="m3u8"
               title={activeChannel?.name}
-              poster={activeChannel?.stream_icon}
+              poster={proxyImageUrl(activeChannel?.stream_icon)}
             />
           </div>
           <ChannelSidebar

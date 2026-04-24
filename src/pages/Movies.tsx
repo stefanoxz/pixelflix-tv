@@ -13,6 +13,7 @@ import {
   getVodStreams,
   buildVodStreamUrl,
   isBrowserPlayable,
+  proxyImageUrl,
   type VodStream,
 } from "@/services/iptv";
 import { Button } from "@/components/ui/button";
@@ -126,7 +127,7 @@ const Movies = () => {
               rawUrl={playingRawUrl ?? undefined}
               containerExt={playing.container_extension || "mp4"}
               title={playing.name}
-              poster={playing.stream_icon}
+              poster={proxyImageUrl(playing.stream_icon)}
             />
           </div>
         </div>
