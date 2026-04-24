@@ -505,11 +505,196 @@ async function invokeFn<T>(
 
 // =============================================================================
 
+// =============================================================================
+// Hybrid login: tenta direto do navegador (IP residencial passa por Cloudflare),
+// com fallback automático para a edge function quando CORS / rede / mixed-content
+// impedirem o fetch direto.
+// =============================================================================
+
+const BROWSER_LOGIN_TIMEOUT_MS = 6000;
+
+function buildClientVariants(serverBase: string): string[] {
+  const variants = new Set<string>();
+  const stripped = serverBase.trim().replace(/\/+$/, "");
+  let proto = "http";
+  let hostPort = stripped;
+  const m = stripped.match(/^(https?):\/\/(.+)$/i);
+  if (m) {
+    proto = m[1].toLowerCase();
+    hostPort = m[2];
+  }
+  hostPort = hostPort.replace(/\s+/g, "");
+  if (!hostPort) return [];
+  const hasPort = /:\d+$/.test(hostPort);
+  const host = hasPort ? hostPort.replace(/:\d+$/, "") : hostPort;
+  const candidates = [`${proto}://${hostPort}`];
+  if (!hasPort) {
+    candidates.push(`http://${host}:80`, `http://${host}:8080`, `https://${host}:443`);
+  }
+  for (const c of candidates) {
+    try {
+      new URL(c);
+      variants.add(c);
+    } catch { /* skip */ }
+  }
+  return [...variants];
+}
+
+type BrowserLoginOk = {
+  ok: true;
+  data: LoginResponse;
+  matchedBase: string;
+};
+type BrowserLoginFail = {
+  ok: false;
+  reason: "transport" | "auth_failed" | "mixed_content" | "non_json" | "http_error";
+  detail?: string;
+};
+
+async function tryBrowserLogin(
+  serverBase: string,
+  username: string,
+  password: string,
+): Promise<BrowserLoginOk | BrowserLoginFail> {
+  // Mixed content: app HTTPS + servidor HTTP → o browser vai bloquear sempre.
+  if (
+    typeof window !== "undefined" &&
+    window.location.protocol === "https:" &&
+    /^http:\/\//i.test(serverBase)
+  ) {
+    return { ok: false, reason: "mixed_content" };
+  }
+
+  const variants = buildClientVariants(serverBase);
+  let lastFail: BrowserLoginFail = { ok: false, reason: "transport" };
+
+  for (const base of variants) {
+    const url = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), BROWSER_LOGIN_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        signal: ctrl.signal,
+        // Sem headers customizados → evita preflight OPTIONS desnecessário.
+        credentials: "omit",
+        cache: "no-store",
+      });
+      clearTimeout(timer);
+      if (!res.ok) {
+        lastFail = { ok: false, reason: "http_error", detail: `HTTP ${res.status}` };
+        continue;
+      }
+      const text = await res.text();
+      let data: any;
+      try { data = JSON.parse(text); } catch {
+        lastFail = { ok: false, reason: "non_json" };
+        continue;
+      }
+      if (!data?.user_info) {
+        lastFail = { ok: false, reason: "non_json", detail: "sem user_info" };
+        continue;
+      }
+      if (data.user_info.auth === 0) {
+        // Credenciais erradas: não adianta tentar fallback.
+        return { ok: false, reason: "auth_failed" };
+      }
+      return { ok: true, data: data as LoginResponse, matchedBase: base };
+    } catch (err) {
+      clearTimeout(timer);
+      // TypeError: Failed to fetch → CORS, network, ou mixed content.
+      // AbortError → timeout.
+      const msg = err instanceof Error ? err.message : String(err);
+      lastFail = { ok: false, reason: "transport", detail: msg };
+      continue;
+    }
+  }
+  return lastFail;
+}
+
+async function logBrowserLoginEvent(
+  server: string,
+  username: string,
+  success: boolean,
+  reason?: string,
+): Promise<void> {
+  // Best-effort: não bloqueia o login se a edge falhar.
+  try {
+    await supabase.functions.invoke("iptv-login", {
+      body: { mode: "log", server, username, success, reason },
+    });
+  } catch { /* noop */ }
+}
+
 export async function iptvLogin(
   creds: IptvCredentials
 ): Promise<LoginResponse & { server_url?: string }> {
+  const startedAt = Date.now();
+
+  // 1) Pré-validar allowlist na edge (só lê o banco, não toca no painel).
+  let candidates: string[] = [];
   try {
-    return await invokeFn<LoginResponse & { server_url?: string }>("iptv-login", creds as unknown as Record<string, unknown>, "login");
+    const validation = await invokeFn<{ allowed: boolean; candidates?: string[]; error?: string }>(
+      "iptv-login",
+      { mode: "validate", server: creds.server },
+      "login",
+    );
+    if (!validation.allowed) {
+      throw new Error(validation.error || "DNS não autorizada");
+    }
+    candidates = validation.candidates ?? [];
+  } catch (e) {
+    // Se a pré-validação falhar por rede/timeout, tenta direto pelo fluxo edge clássico.
+    const msg = e instanceof Error ? e.message : "Falha na validação";
+    if (/dns não autorizada|não autorizad|não tem acesso/i.test(msg)) {
+      throw new Error(msg);
+    }
+    console.warn("[iptv] validate failed, falling back to edge login", msg);
+    return iptvLoginViaEdge(creds, startedAt, "validate_failed");
+  }
+
+  if (candidates.length === 0) {
+    throw new Error("Nenhuma DNS autorizada disponível");
+  }
+
+  // 2) Tentar cada candidato direto pelo navegador.
+  let lastTransportFail: BrowserLoginFail | null = null;
+  for (const base of candidates) {
+    const r = await tryBrowserLogin(base, creds.username, creds.password);
+    if (r.ok) {
+      const durationMs = Date.now() - startedAt;
+      console.log("[iptv] method: browser", { server: r.matchedBase, durationMs });
+      // Loga sucesso sem bloquear (best-effort).
+      void logBrowserLoginEvent(r.matchedBase, creds.username, true, "browser_login_ok");
+      return { ...r.data, server_url: r.matchedBase };
+    }
+    if (r.reason === "auth_failed") {
+      // Senha errada: não adianta tentar via edge.
+      void logBrowserLoginEvent(base, creds.username, false, "credenciais inválidas");
+      throw new Error("Usuário ou senha inválidos");
+    }
+    lastTransportFail = r;
+  }
+
+  // 3) Fallback: edge function (caminho atual, intacto).
+  const reason = lastTransportFail?.reason ?? "all_failed";
+  return iptvLoginViaEdge(creds, startedAt, reason);
+}
+
+async function iptvLoginViaEdge(
+  creds: IptvCredentials,
+  startedAt: number,
+  reason: string,
+): Promise<LoginResponse & { server_url?: string }> {
+  try {
+    const data = await invokeFn<LoginResponse & { server_url?: string }>(
+      "iptv-login",
+      creds as unknown as Record<string, unknown>,
+      "login",
+    );
+    const durationMs = Date.now() - startedAt;
+    console.log("[iptv] method: edge", { reason, durationMs });
+    return data;
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha no login";
     if (e instanceof TimeoutError || /timeout/i.test(msg)) {
