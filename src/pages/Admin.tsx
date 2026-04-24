@@ -255,6 +255,15 @@ const Admin = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
+  // Health check polling — apenas no tab "servers"
+  useEffect(() => {
+    if (tab !== "servers" || allowed.length === 0) return;
+    checkAllServers();
+    const t = setInterval(checkAllServers, 30_000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, allowed.length]);
+
   const allowServer = async (server_url: string, label?: string, notes?: string) => {
     try {
       await callAdmin("allow_server", { server_url, label, notes });
