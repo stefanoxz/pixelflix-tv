@@ -55,6 +55,27 @@ type LogEntry = {
   details?: string;
 };
 
+/** Por onde o manifest do canal foi carregado. */
+type LoadMethod = "browser" | "edge" | "unknown";
+
+/**
+ * Causa raiz da falha de reprodução, classificada para o painel de
+ * diagnóstico. Mantida separada de DiagnosticStatus para mensagem precisa.
+ */
+type RootCause =
+  | "ok"
+  | "manifest_empty"
+  | "frag_load_error"
+  | "codec_incompatible"
+  | "bootstrap_timeout"
+  | "mixed_content"
+  | "cors_blocked"
+  | "network_error"
+  | "token_error"
+  | "stream_error"
+  | "url_invalid"
+  | "unknown";
+
 const HLS_CONFIG: Partial<Hls["config"]> = {
   lowLatencyMode: true,
   enableWorker: true,
@@ -74,6 +95,65 @@ const STATUS_LABEL: Record<DiagnosticStatus, string> = {
   stream_error: "Erro no stream",
   stream_no_data: "Sem vídeo no canal",
 };
+
+const ROOT_CAUSE_LABEL: Record<RootCause, string> = {
+  ok: "Reproduzindo",
+  manifest_empty: "Manifest vazio / sem segmentos",
+  frag_load_error: "Falha ao baixar segmentos (fragLoadError)",
+  codec_incompatible: "Codec incompatível (HEVC/4K)",
+  bootstrap_timeout: "Timeout no bootstrap (12s)",
+  mixed_content: "Mixed content (HTTPS → HTTP bloqueado)",
+  cors_blocked: "CORS bloqueado pelo upstream",
+  network_error: "Erro de rede",
+  token_error: "Falha ao autorizar stream",
+  stream_error: "Erro genérico no stream",
+  url_invalid: "URL de stream inválida",
+  unknown: "Causa desconhecida",
+};
+
+const ROOT_CAUSE_HINT: Record<RootCause, string> = {
+  ok: "",
+  manifest_empty: "O servidor IPTV respondeu, mas o playlist veio vazio. Canal pode estar offline ou bloqueando o IP do edge.",
+  frag_load_error: "Manifest carregou mas os segmentos .ts retornam erro. Pode ser geo-bloqueio ou canal fora do ar.",
+  codec_incompatible: "Use VLC ou MX Player para esse canal (HEVC não roda no navegador).",
+  bootstrap_timeout: "Nenhum dado em 12s. Canal pode estar offline ou muito lento.",
+  mixed_content: "App é HTTPS mas o stream é HTTP. Nada a fazer no browser — abra no VLC.",
+  cors_blocked: "O upstream rejeitou o fetch do navegador. Fallback edge cobre esse caso.",
+  network_error: "Falha de conexão até o servidor. Verifique sua internet.",
+  token_error: "Backend não emitiu token. Veja o detalhe abaixo.",
+  stream_error: "O servidor abriu mas o stream falhou. Tente outro canal.",
+  url_invalid: "URL malformada. Verifique a credencial.",
+  unknown: "—",
+};
+
+const LOAD_METHOD_LABEL: Record<LoadMethod, string> = {
+  browser: "Browser (direto)",
+  edge: "Edge (proxy)",
+  unknown: "—",
+};
+
+const FUNCTIONS_BASE_HOST = (() => {
+  try {
+    return new URL(import.meta.env.VITE_SUPABASE_URL).host.toLowerCase();
+  } catch {
+    return "";
+  }
+})();
+
+function detectLoadMethod(safeSrc: string): LoadMethod {
+  try {
+    const host = new URL(safeSrc).host.toLowerCase();
+    if (FUNCTIONS_BASE_HOST && host === FUNCTIONS_BASE_HOST) return "edge";
+    return "browser";
+  } catch {
+    return "unknown";
+  }
+}
+
+function extractUpstreamHost(rawUrl?: string | null): string | null {
+  if (!rawUrl) return null;
+  try { return new URL(rawUrl).host; } catch { return null; }
+}
 
 const FRAG_LOAD_ERROR_THRESHOLD = 3;
 
@@ -111,6 +191,13 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
   const [status, setStatus] = useState<DiagnosticStatus>("connecting");
   const [lastReason, setLastReason] = useState<string | null>(null);
+
+  // Diagnóstico estendido (painel)
+  const [loadMethod, setLoadMethod] = useState<LoadMethod>("unknown");
+  const [rootCause, setRootCause] = useState<RootCause>("unknown");
+  const [rootCauseDetail, setRootCauseDetail] = useState<string | null>(null);
+  const rootCauseLockedRef = useRef(false);
+  const upstreamHost = useMemo(() => extractUpstreamHost(rawUrl ?? src), [rawUrl, src]);
 
   // Logs panel — buffered in refs to avoid re-renders when closed
   const logsRef = useRef<LogEntry[]>([]);
@@ -155,6 +242,24 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     reportStreamEvent("session_heartbeat", {
       url: src ?? undefined,
       meta: { diagnostic_status: next, reason: reason ?? lastReasonRef.current ?? null },
+    });
+  };
+
+  /**
+   * Define a causa raiz definitiva do canal. Bloqueia após o primeiro set
+   * para evitar que erros tardios sobrescrevam a classificação real.
+   * `ok` sempre é aceita (sucesso supera qualquer falha anterior).
+   */
+  const setRootCauseOnce = (cause: RootCause, detail?: string | null) => {
+    if (cause !== "ok" && rootCauseLockedRef.current) return;
+    rootCauseLockedRef.current = cause !== "ok";
+    setRootCause(cause);
+    setRootCauseDetail(detail ?? null);
+    pushLog({
+      source: "diag",
+      level: cause === "ok" ? "info" : "error",
+      label: `root_cause:${cause}`,
+      details: detail ?? undefined,
     });
   };
 
@@ -215,6 +320,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setLastReason(null);
       setStatus("connecting");
 
+      // Reset diagnóstico para novo ciclo
+      rootCauseLockedRef.current = false;
+      setRootCause("unknown");
+      setRootCauseDetail(null);
+      setLoadMethod("unknown");
+
       // Reset logs for the new setup cycle
       logsRef.current = [];
       firstFrameAtRef.current = null;
@@ -236,6 +347,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         });
         setLoading(false);
         updateStatus("stream_error", "URL inválida");
+        setRootCauseOnce("url_invalid", "URL malformada");
         return;
       }
 
@@ -249,6 +361,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         });
         setLoading(false);
         updateStatus("codec_incompatible", `container ${ext}`);
+        setRootCauseOnce("codec_incompatible", `container ${ext}`);
         return;
       }
 
@@ -260,6 +373,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         });
         setLoading(false);
         updateStatus("stream_error", strategy.reason);
+        setRootCauseOnce("stream_error", strategy.reason);
         return;
       }
 
@@ -275,6 +389,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         setLoading(false);
         updateStatus("stream_no_data", reason);
         pushLog({ source: "diag", level: "error", label: "stream_no_data", details: reason });
+        // Classifica a causa raiz: fragLoadError vs manifest vazio.
+        if (/fragLoadError/i.test(reason)) {
+          setRootCauseOnce("frag_load_error", reason);
+        } else {
+          setRootCauseOnce("manifest_empty", reason);
+        }
         setError({
           title: "Sem vídeo no canal",
           description:
@@ -314,6 +434,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         setLoading(false);
         updateStatus("stall_timeout", reason);
         pushLog({ source: "diag", level: "warn", label: "bootstrap_timeout_12s", details: reason });
+        setRootCauseOnce("bootstrap_timeout", reason);
         setError({
           title: "Canal não respondeu",
           description:
@@ -337,7 +458,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           });
           if (cancelled) return;
           const safeSrc = tokenResp.url;
-          pushLog({ source: "net", level: "info", label: "token_ok", details: kind });
+          const method = detectLoadMethod(safeSrc);
+          setLoadMethod(method);
+          pushLog({ source: "net", level: "info", label: "token_ok", details: `${kind} via ${method}` });
+          console.log("[player] manifest_method:", method, { kind, host: extractUpstreamHost(src) });
 
           // Heartbeat (renew session lifecycle on backend every 45s)
           heartbeatRef.current = window.setInterval(() => {
@@ -393,6 +517,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                   if (data.fatal) {
                     setLoading(false);
                     updateStatus("codec_incompatible", detail);
+                    setRootCauseOnce("codec_incompatible", detail);
                     setError({
                       title: "Codec incompatível",
                       description: "O canal usa codec não suportado pelo navegador (provavelmente HEVC/4K). Abra no VLC.",
@@ -465,6 +590,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                 }
                 setLoading(false);
                 updateStatus("stream_error", detail);
+                // Tipo da falha do hls.js → causa raiz
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                  setRootCauseOnce("network_error", detail);
+                } else {
+                  setRootCauseOnce("stream_error", detail);
+                }
                 setError({
                   title: "Falha ao carregar o stream",
                   description: "O canal pode estar offline ou instável. Tente novamente em alguns segundos.",
@@ -490,6 +621,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
             setLoading(false);
             updateStatus("stream_error", "navegador sem suporte HLS");
+            setRootCauseOnce("codec_incompatible", "navegador sem suporte HLS");
             setError({
               title: "Navegador incompatível",
               description: "Seu navegador não suporta HLS. Use Chrome, Firefox, Edge ou Safari.",
@@ -510,6 +642,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           const ratelimit = /Too many|429/i.test(msg);
           updateStatus("stream_error", msg);
           pushLog({ source: "net", level: "error", label: "token_error", details: msg });
+          setRootCauseOnce("token_error", msg);
           setError({
             title: blocked
               ? "Acesso temporariamente bloqueado"
@@ -588,6 +721,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         const ttff = setupStartRef.current ? Math.round(firstFrameAtRef.current - setupStartRef.current) : 0;
         pushLog({ source: "video", level: "info", label: "first_playing", details: `TTFF=${ttff}ms` });
         updateStatus("playback_started", null);
+        setRootCauseOnce("ok", `TTFF=${ttff}ms`);
         reportStreamEvent("stream_started", { url: src ?? undefined, meta: { trigger: "playing_event", ttff_ms: ttff } });
       } else if (status === "stall_timeout") {
         updateStatus("playback_started", "recuperado após stall");
@@ -618,6 +752,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setLastReason(reason);
       pushLog({ source: "video", level: "error", label: "error", details: reason });
       updateStatus(isCodec ? "codec_incompatible" : "stream_error", reason);
+      setRootCauseOnce(isCodec ? "codec_incompatible" : "stream_error", reason);
       setError({
         title: isCodec ? "Codec incompatível" : "Não foi possível reproduzir",
         description: isCodec
@@ -927,6 +1062,62 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                 <X className="h-3.5 w-3.5" />
               </Button>
             </div>
+          </div>
+
+          {/* Diagnóstico estruturado: causa raiz + método de carga */}
+          <div className="border-b px-3 py-2 text-[11px] space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Causa</span>
+              <span
+                className={cn(
+                  "font-semibold rounded px-1.5 py-0.5 border text-[10px] uppercase tracking-wide",
+                  rootCause === "ok"
+                    ? "bg-primary/15 text-primary border-primary/40"
+                    : rootCause === "unknown"
+                      ? "bg-muted text-muted-foreground border-border"
+                      : "bg-destructive/15 text-destructive border-destructive/40",
+                )}
+                title={rootCauseDetail ?? undefined}
+              >
+                {ROOT_CAUSE_LABEL[rootCause]}
+              </span>
+            </div>
+            {rootCause !== "ok" && rootCause !== "unknown" && (
+              <p className="text-muted-foreground leading-snug">
+                {ROOT_CAUSE_HINT[rootCause]}
+              </p>
+            )}
+            {rootCauseDetail && (
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-muted-foreground shrink-0">Detalhe</span>
+                <span className="font-mono text-right break-all" title={rootCauseDetail}>
+                  {rootCauseDetail}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Método</span>
+              <span
+                className={cn(
+                  "font-semibold rounded px-1.5 py-0.5 border text-[10px] uppercase tracking-wide",
+                  loadMethod === "browser"
+                    ? "bg-primary/15 text-primary border-primary/40"
+                    : loadMethod === "edge"
+                      ? "bg-secondary text-secondary-foreground border-border"
+                      : "bg-muted text-muted-foreground border-border",
+                )}
+              >
+                {LOAD_METHOD_LABEL[loadMethod]}
+              </span>
+            </div>
+            {upstreamHost && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Upstream</span>
+                <span className="font-mono truncate max-w-[60%] text-right" title={upstreamHost}>
+                  {upstreamHost}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="border-b px-3 py-2 text-[11px] grid grid-cols-1 gap-1">
