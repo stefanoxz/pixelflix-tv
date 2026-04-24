@@ -287,19 +287,28 @@ const Admin = () => {
       const { data } = await supabase.functions.invoke("check-server", {
         body: { urls: allowed.map((s) => s.server_url) },
       });
-      const results = (data as { results?: (Partial<HealthStatus> & { url: string })[] } | null)?.results ?? [];
+      const results = (data as { results?: (Partial<HealthStatus> & { url: string; reason?: HealthReason })[] } | null)?.results ?? [];
+      // Mapa server_url -> stream_broken (vindo do list_servers / admin-api)
+      const brokenMap = new Map<string, boolean>();
+      for (const s of allowed) brokenMap.set(s.server_url, !!s.stream_broken);
+
       const map: Record<string, HealthStatus> = {};
       for (const r of results) {
         const state: HealthState =
           r.state ?? (r.online ? "online" : "offline");
+        // Se admin-api sinalizou stream_broken, sobrepõe o reason (mesmo se ping deu online)
+        const reason: HealthReason | undefined = brokenMap.get(r.url)
+          ? "stream_broken"
+          : r.reason;
         map[r.url] = {
-          state,
+          state: brokenMap.get(r.url) && state === "online" ? "unstable" : state,
           online: state === "online" || state === "unstable",
           latency: r.latency ?? null,
           status: r.status ?? null,
           attempts: r.attempts,
           checked_at: r.checked_at ?? new Date().toISOString(),
           error: r.error,
+          reason,
         };
       }
       if (Object.keys(map).length > 0) {
