@@ -667,13 +667,14 @@ export async function iptvLogin(
       // Loga sucesso sem bloquear (best-effort).
       void logBrowserLoginEvent(r.matchedBase, creds.username, true, "browser_login_ok");
       return { ...r.data, server_url: r.matchedBase };
+    } else {
+      if (r.reason === "auth_failed") {
+        // Senha errada: não adianta tentar via edge.
+        void logBrowserLoginEvent(base, creds.username, false, "credenciais inválidas");
+        throw new Error("Usuário ou senha inválidos");
+      }
+      lastTransportFail = r;
     }
-    if (r.reason === "auth_failed") {
-      // Senha errada: não adianta tentar via edge.
-      void logBrowserLoginEvent(base, creds.username, false, "credenciais inválidas");
-      throw new Error("Usuário ou senha inválidos");
-    }
-    lastTransportFail = r;
   }
 
   // 3) Fallback: edge function (caminho atual, intacto).
