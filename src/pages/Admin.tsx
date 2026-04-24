@@ -14,6 +14,12 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -36,6 +42,7 @@ import {
   Activity as ActivityIcon,
   Ban,
   X,
+  Pencil,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
@@ -187,6 +194,27 @@ function stateBadge(state: HealthState): { dot: string; label: string; cls: stri
   }
 }
 
+function stateTooltip(state: HealthState): string {
+  switch (state) {
+    case "online":
+      return "Servidor respondeu OK (HTTP 2xx ou 401). Disponível para login.";
+    case "unstable":
+      return "Respondeu com aviso (HTTP 403, 5xx ou 1 timeout). Pode estar sob Cloudflare ou sobrecarregado.";
+    case "offline":
+      return "Sem resposta (erro de rede ou 2 timeouts seguidos). Login bloqueado.";
+  }
+}
+
+function httpTooltip(status: number): string {
+  if (status >= 200 && status < 300) return `HTTP ${status} OK — servidor respondeu normalmente.`;
+  if (status === 401) return "401 — autenticação requerida. Servidor está vivo (considerado online).";
+  if (status === 403) return "403 — bloqueado (geralmente Cloudflare). Servidor pode estar OK para o cliente.";
+  if (status === 404) return "404 — endpoint não encontrado nesse servidor.";
+  if (status >= 500 && status < 600) return `${status} — erro interno do servidor (sobrecarga ou falha).`;
+  return `HTTP ${status} — resposta inesperada do servidor.`;
+}
+
+
 const Admin = () => {
   const navigate = useNavigate();
 
@@ -206,11 +234,12 @@ const Admin = () => {
   const [newUrl, setNewUrl] = useState("");
   const [newLabel, setNewLabel] = useState("");
   const [newNotes, setNewNotes] = useState("");
+  const [editingServer, setEditingServer] = useState<AllowedServer | null>(null);
 
   const [health, setHealth] = useState<Record<string, HealthStatus>>({});
   const [healthLoading, setHealthLoading] = useState(false);
 
-  const checkAllServers = async () => {
+  const checkAllServers = async (manual = false) => {
     if (!allowed.length) return;
     setHealthLoading(true);
     try {
@@ -234,6 +263,28 @@ const Admin = () => {
       }
       if (Object.keys(map).length > 0) {
         setHealth((prev) => ({ ...prev, ...map }));
+      }
+
+      // Resumo do ping
+      const values = Object.values(map);
+      const total = values.length;
+      if (total > 0) {
+        const online = values.filter((h) => h.state === "online").length;
+        const unstable = values.filter((h) => h.state === "unstable").length;
+        const offline = values.filter((h) => h.state === "offline").length;
+        const hasIssues = unstable > 0 || offline > 0;
+        if (manual || hasIssues) {
+          if (!hasIssues) {
+            toast.success(`Ping concluído: ${online}/${total} servidores online`);
+          } else {
+            const parts = [`${online} online`];
+            if (unstable) parts.push(`${unstable} instáveis`);
+            if (offline) parts.push(`${offline} offline`);
+            const msg = `Ping concluído: ${parts.join(" · ")}`;
+            if (offline > 0) toast.error(msg);
+            else toast.warning(msg);
+          }
+        }
       }
     } catch {
       // silencioso — fallback "Verificando..." permanece
@@ -294,16 +345,18 @@ const Admin = () => {
   }, [tab, allowed.length]);
 
   const allowServer = async (server_url: string, label?: string, notes?: string) => {
+    const isEdit = !!editingServer;
     try {
       await callAdmin("allow_server", { server_url, label, notes });
-      toast.success("DNS autorizada");
+      toast.success(isEdit ? "DNS atualizada" : "DNS autorizada");
       setAddOpen(false);
+      setEditingServer(null);
       setNewUrl("");
       setNewLabel("");
       setNewNotes("");
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao autorizar");
+      toast.error(err instanceof Error ? err.message : isEdit ? "Erro ao atualizar" : "Erro ao autorizar");
     }
   };
 
@@ -782,7 +835,7 @@ const Admin = () => {
                 />
               </div>
               <Button
-                onClick={checkAllServers}
+                onClick={() => checkAllServers(true)}
                 variant="outline"
                 size="sm"
                 disabled={healthLoading || allowed.length === 0}
@@ -811,91 +864,150 @@ const Admin = () => {
                     </p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-border/50">
-                    {filteredAllowed.map((s) => (
-                      <div
-                        key={s.id}
-                        className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <ShieldCheck className="h-4 w-4 text-success shrink-0" />
-                            {s.label && (
-                              <span className="text-sm font-semibold">{s.label}</span>
-                            )}
-                            <span className="font-mono text-sm text-muted-foreground truncate">
-                              {s.server_url}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
-                            <span>{s.unique_users} usuários</span>
-                            <span className="text-success">{s.success_count} ok</span>
-                            <span className="text-destructive">{s.fail_count} falhas</span>
-                            {s.last_seen ? (
-                              <span>último uso há {formatRelative(s.last_seen)}</span>
-                            ) : (
-                              <span className="italic">nunca usado</span>
-                            )}
-                            {s.notes && <span>• {s.notes}</span>}
-                          </div>
-                          {(() => {
-                            const h = health[s.server_url];
-                            if (!h) {
+                  <TooltipProvider delayDuration={200}>
+                    <div className="divide-y divide-border/50">
+                      {filteredAllowed.map((s) => (
+                        <div
+                          key={s.id}
+                          className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <ShieldCheck className="h-4 w-4 text-success shrink-0" />
+                              {s.label && (
+                                <span className="text-sm font-semibold">{s.label}</span>
+                              )}
+                              <span className="font-mono text-sm text-muted-foreground truncate">
+                                {s.server_url}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
+                              <span>{s.unique_users} usuários</span>
+                              <span className="text-success">{s.success_count} ok</span>
+                              <span className="text-destructive">{s.fail_count} falhas</span>
+                              {s.last_seen ? (
+                                <span>último uso há {formatRelative(s.last_seen)}</span>
+                              ) : (
+                                <span className="italic">nunca usado</span>
+                              )}
+                              {s.notes && <span>• {s.notes}</span>}
+                            </div>
+                            {(() => {
+                              const h = health[s.server_url];
+                              if (!h) {
+                                return (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    Verificando ping…
+                                  </div>
+                                );
+                              }
                               return (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  Verificando ping…
+                                <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
+                                  {(() => {
+                                    const b = stateBadge(h.state);
+                                    return (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className={`${b.cls} cursor-help`}>
+                                            {b.dot} {b.label}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">
+                                          {stateTooltip(h.state)}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    );
+                                  })()}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className={`${latencyClass(h.latency)} cursor-help`}>
+                                        {h.latency != null ? `${h.latency} ms` : "—"}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                      Tempo de resposta. &lt;200ms ótimo · &lt;500ms aceitável · &gt;500ms lento.
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  {h.status != null ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span
+                                          className={`px-1.5 py-0.5 rounded font-mono cursor-help ${statusClass(h.status)}`}
+                                        >
+                                          HTTP {h.status}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs">
+                                        {httpTooltip(h.status)}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : h.error ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="px-1.5 py-0.5 rounded font-mono text-warning bg-warning/10 cursor-help">
+                                          {h.error === "timeout" ? "timeout" : "rede"}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs">
+                                        {h.error === "timeout"
+                                          ? "Servidor não respondeu em 5s. Pode estar lento ou inacessível."
+                                          : "Erro de rede (DNS, conexão recusada ou TLS). Servidor inacessível."}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : null}
+                                  {h.attempts === 2 && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="text-muted-foreground cursor-help">×2</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs">
+                                        Resultado confirmado em 2 tentativas (retry automático).
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="text-muted-foreground cursor-help">
+                                        último ping {formatTime(h.checked_at)}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                      Horário da última verificação. Auto-refresh a cada 30s.
+                                    </TooltipContent>
+                                  </Tooltip>
                                 </div>
                               );
-                            }
-                            return (
-                              <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
-                                {(() => {
-                                  const b = stateBadge(h.state);
-                                  return (
-                                    <span className={b.cls}>
-                                      {b.dot} {b.label}
-                                    </span>
-                                  );
-                                })()}
-                                <span className={latencyClass(h.latency)}>
-                                  {h.latency != null ? `${h.latency} ms` : "—"}
-                                </span>
-                                {h.status != null ? (
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded font-mono ${statusClass(h.status)}`}
-                                    title="Código HTTP da resposta"
-                                  >
-                                    HTTP {h.status}
-                                  </span>
-                                ) : h.error ? (
-                                  <span className="px-1.5 py-0.5 rounded font-mono text-warning bg-warning/10">
-                                    {h.error === "timeout" ? "timeout" : "rede"}
-                                  </span>
-                                ) : null}
-                                {h.attempts === 2 && (
-                                  <span className="text-muted-foreground" title="Confirmado em 2 tentativas">
-                                    ×2
-                                  </span>
-                                )}
-                                <span className="text-muted-foreground">
-                                  último ping {formatTime(h.checked_at)}
-                                </span>
-                              </div>
-                            );
-                          })()}
+                            })()}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingServer(s);
+                                setNewUrl(s.server_url);
+                                setNewLabel(s.label ?? "");
+                                setNewNotes(s.notes ?? "");
+                                setAddOpen(true);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Editar
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => removeServer(s.server_url)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Remover
+                            </Button>
+                          </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => removeServer(s.server_url)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Remover
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  </TooltipProvider>
                 )}
               </Card>
             </div>
@@ -951,12 +1063,27 @@ const Admin = () => {
         </Tabs>
       </main>
 
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      <Dialog
+        open={addOpen}
+        onOpenChange={(open) => {
+          setAddOpen(open);
+          if (!open) {
+            setEditingServer(null);
+            setNewUrl("");
+            setNewLabel("");
+            setNewNotes("");
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cadastrar DNS autorizada</DialogTitle>
+            <DialogTitle>
+              {editingServer ? "Editar DNS autorizada" : "Cadastrar DNS autorizada"}
+            </DialogTitle>
             <DialogDescription>
-              Apenas usuários cuja DNS esteja cadastrada aqui poderão logar na plataforma.
+              {editingServer
+                ? "Atualize o nome e as observações desta DNS. A URL não pode ser alterada."
+                : "Apenas usuários cuja DNS esteja cadastrada aqui poderão logar na plataforma."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -967,9 +1094,12 @@ const Admin = () => {
                 placeholder="http://exemplo.com:8080"
                 value={newUrl}
                 onChange={(e) => setNewUrl(e.target.value)}
+                disabled={!!editingServer}
               />
               <p className="text-xs text-muted-foreground">
-                Pode incluir ou omitir o "http://". Será normalizado.
+                {editingServer
+                  ? "URL não editável. Para mudar, remova e recadastre."
+                  : 'Pode incluir ou omitir o "http://". Será normalizado.'}
               </p>
             </div>
             <div className="space-y-1">
@@ -1001,8 +1131,17 @@ const Admin = () => {
               onClick={() => newUrl && allowServer(newUrl, newLabel || undefined, newNotes || undefined)}
               disabled={!newUrl}
             >
-              <Plus className="h-4 w-4 mr-2" />
-              Cadastrar
+              {editingServer ? (
+                <>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Salvar alterações
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Cadastrar
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
