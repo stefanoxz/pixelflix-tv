@@ -194,6 +194,27 @@ function stateBadge(state: HealthState): { dot: string; label: string; cls: stri
   }
 }
 
+function stateTooltip(state: HealthState): string {
+  switch (state) {
+    case "online":
+      return "Servidor respondeu OK (HTTP 2xx ou 401). Disponível para login.";
+    case "unstable":
+      return "Respondeu com aviso (HTTP 403, 5xx ou 1 timeout). Pode estar sob Cloudflare ou sobrecarregado.";
+    case "offline":
+      return "Sem resposta (erro de rede ou 2 timeouts seguidos). Login bloqueado.";
+  }
+}
+
+function httpTooltip(status: number): string {
+  if (status >= 200 && status < 300) return `HTTP ${status} OK — servidor respondeu normalmente.`;
+  if (status === 401) return "401 — autenticação requerida. Servidor está vivo (considerado online).";
+  if (status === 403) return "403 — bloqueado (geralmente Cloudflare). Servidor pode estar OK para o cliente.";
+  if (status === 404) return "404 — endpoint não encontrado nesse servidor.";
+  if (status >= 500 && status < 600) return `${status} — erro interno do servidor (sobrecarga ou falha).`;
+  return `HTTP ${status} — resposta inesperada do servidor.`;
+}
+
+
 const Admin = () => {
   const navigate = useNavigate();
 
