@@ -224,12 +224,71 @@ Deno.serve(async (req) => {
       return jsonResponse(400, { error: "Body inválido" }, corsHeaders);
     }
 
-    const { server, username, password } = body || {};
+    const { mode, server, username, password } = body || {};
+    const admin = getAdminClient();
+
+    // ---------------------------------------------------------------------
+    // Mode: "validate" — apenas confere allowlist e devolve candidatas.
+    // Usado pelo fluxo híbrido (browser-first) ANTES de tentar fetch direto.
+    // ---------------------------------------------------------------------
+    if (mode === "validate") {
+      let allowedRows: any[] | null = null;
+      try {
+        const result = await admin.from("allowed_servers").select("server_url");
+        if (result.error) throw result.error;
+        allowedRows = result.data;
+      } catch (err) {
+        console.error("[iptv-login] db error (validate)", err);
+        return jsonResponse(503, { error: "Serviço temporariamente indisponível" }, corsHeaders);
+      }
+      const allowedList = (allowedRows ?? []).map((r: any) => normalizeServer(r.server_url));
+      if (allowedList.length === 0) {
+        return jsonResponse(200, { allowed: false, error: NO_ACCESS_MSG, candidates: [] }, corsHeaders);
+      }
+      let candidates: string[] = [];
+      if (server) {
+        const baseUrl = String(server).trim().replace(/\/+$/, "");
+        const fullBase = /^https?:\/\//i.test(baseUrl) ? baseUrl : `http://${baseUrl}`;
+        const normalized = normalizeServer(fullBase);
+        const inputHost = hostKey(fullBase);
+        const match = allowedList.find((a) => a === normalized || hostKey(a) === inputHost);
+        if (!match) {
+          return jsonResponse(200, { allowed: false, error: NO_ACCESS_MSG, candidates: [] }, corsHeaders);
+        }
+        candidates = [match];
+      } else {
+        candidates = allowedList;
+      }
+      return jsonResponse(200, { allowed: true, candidates }, corsHeaders);
+    }
+
+    // ---------------------------------------------------------------------
+    // Mode: "log" — registra o resultado de um login que aconteceu via browser.
+    // Não autentica nada, só insere em login_events (best-effort).
+    // ---------------------------------------------------------------------
+    if (mode === "log") {
+      const { success: logSuccess, reason: logReason } = body || {};
+      if (!username || !server) {
+        return jsonResponse(400, { error: "log requer server e username" }, corsHeaders);
+      }
+      await logEvent({
+        server: String(server),
+        username: String(username),
+        success: !!logSuccess,
+        reason: logReason ? String(logReason) : (logSuccess ? "browser_login" : "browser_failed"),
+        ua,
+        ip,
+      });
+      return jsonResponse(200, { ok: true }, corsHeaders);
+    }
+
+    // ---------------------------------------------------------------------
+    // Default mode: login completo via edge (fallback do fluxo híbrido,
+    // ou fluxo único quando o cliente não usa estratégia browser).
+    // ---------------------------------------------------------------------
     if (!username || !password) {
       return jsonResponse(400, { error: "Informe usuário e senha" }, corsHeaders);
     }
-
-    const admin = getAdminClient();
 
     // Load allowlist
     let allowedRows: any[] | null = null;
