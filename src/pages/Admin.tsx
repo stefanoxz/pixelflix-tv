@@ -159,8 +159,16 @@ function latencyClass(ms: number | null): string {
 interface HealthStatus {
   online: boolean;
   latency: number | null;
+  status: number | null;
   checked_at: string;
   error?: string;
+}
+
+function statusClass(status: number | null): string {
+  if (status == null) return "text-muted-foreground bg-muted/40";
+  if (status >= 200 && status < 300) return "text-success bg-success/10";
+  if (status === 401 || status === 403) return "text-warning bg-warning/10";
+  return "text-destructive bg-destructive/10";
 }
 
 const Admin = () => {
@@ -199,6 +207,7 @@ const Admin = () => {
         map[r.url] = {
           online: r.online,
           latency: r.latency,
+          status: r.status ?? null,
           checked_at: r.checked_at,
           error: r.error,
         };
@@ -819,13 +828,21 @@ const Admin = () => {
                               );
                             }
                             return (
-                              <div className="flex items-center gap-3 mt-1 text-xs flex-wrap">
+                              <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
                                 <span className={h.online ? "text-success" : "text-destructive"}>
                                   ● {h.online ? "Online" : "Offline"}
                                 </span>
                                 <span className={latencyClass(h.latency)}>
                                   {h.latency != null ? `${h.latency} ms` : "—"}
                                 </span>
+                                {h.status != null && (
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded font-mono ${statusClass(h.status)}`}
+                                    title="Código HTTP da resposta"
+                                  >
+                                    HTTP {h.status}
+                                  </span>
+                                )}
                                 <span className="text-muted-foreground">
                                   último ping {formatTime(h.checked_at)}
                                 </span>
