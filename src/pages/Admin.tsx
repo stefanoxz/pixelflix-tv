@@ -828,13 +828,21 @@ const Admin = () => {
                               );
                             }
                             return (
-                              <div className="flex items-center gap-3 mt-1 text-xs flex-wrap">
+                              <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
                                 <span className={h.online ? "text-success" : "text-destructive"}>
                                   ● {h.online ? "Online" : "Offline"}
                                 </span>
                                 <span className={latencyClass(h.latency)}>
                                   {h.latency != null ? `${h.latency} ms` : "—"}
                                 </span>
+                                {h.status != null && (
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded font-mono ${statusClass(h.status)}`}
+                                    title="Código HTTP da resposta"
+                                  >
+                                    HTTP {h.status}
+                                  </span>
+                                )}
                                 <span className="text-muted-foreground">
                                   último ping {formatTime(h.checked_at)}
                                 </span>
