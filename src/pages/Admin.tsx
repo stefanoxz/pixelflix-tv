@@ -42,6 +42,7 @@ import {
   Activity as ActivityIcon,
   Ban,
   X,
+  Pencil,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
