@@ -262,6 +262,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       details: detail ?? undefined,
     });
   };
+
+  const clearBootstrapTimeout = () => {
     if (bootstrapTimeoutRef.current !== null) {
       window.clearTimeout(bootstrapTimeoutRef.current);
       bootstrapTimeoutRef.current = null;
