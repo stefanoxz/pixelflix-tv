@@ -245,7 +245,23 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     });
   };
 
-  const clearBootstrapTimeout = () => {
+  /**
+   * Define a causa raiz definitiva do canal. Bloqueia após o primeiro set
+   * para evitar que erros tardios sobrescrevam a classificação real.
+   * `ok` sempre é aceita (sucesso supera qualquer falha anterior).
+   */
+  const setRootCauseOnce = (cause: RootCause, detail?: string | null) => {
+    if (cause !== "ok" && rootCauseLockedRef.current) return;
+    rootCauseLockedRef.current = cause !== "ok";
+    setRootCause(cause);
+    setRootCauseDetail(detail ?? null);
+    pushLog({
+      source: "diag",
+      level: cause === "ok" ? "info" : "error",
+      label: `root_cause:${cause}`,
+      details: detail ?? undefined,
+    });
+  };
     if (bootstrapTimeoutRef.current !== null) {
       window.clearTimeout(bootstrapTimeoutRef.current);
       bootstrapTimeoutRef.current = null;
