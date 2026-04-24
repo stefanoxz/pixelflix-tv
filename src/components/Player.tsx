@@ -715,7 +715,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         const ttff = setupStartRef.current ? Math.round(firstFrameAtRef.current - setupStartRef.current) : 0;
         pushLog({ source: "video", level: "info", label: "first_playing", details: `TTFF=${ttff}ms` });
         updateStatus("playback_started", null);
-        reportStreamEvent("stream_started", { url: src ?? undefined, meta: { trigger: "playing_event", ttff_ms: ttff } });
+        setRootCauseOnce("ok", `TTFF=${ttff}ms`);
       } else if (status === "stall_timeout") {
         updateStatus("playback_started", "recuperado após stall");
         pushLog({ source: "diag", level: "info", label: "recovered_after_stall" });
