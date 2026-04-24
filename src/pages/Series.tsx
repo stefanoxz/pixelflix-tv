@@ -174,7 +174,7 @@ const SeriesPage = () => {
                         rawUrl={epUrl}
                         containerExt={playingEp.container_extension}
                         title={playingEp.title}
-                        poster={playingEp.info?.movie_image || openSeries.cover}
+                        poster={proxyImageUrl(playingEp.info?.movie_image || openSeries.cover)}
                         onClose={() => setPlayingEp(null)}
                       />
                     );
@@ -290,7 +290,7 @@ const SeriesPage = () => {
                                     <div className="h-16 w-28 shrink-0 rounded bg-secondary overflow-hidden flex items-center justify-center">
                                       {ep.info?.movie_image ? (
                                         <img
-                                          src={ep.info.movie_image}
+                                          src={proxyImageUrl(ep.info.movie_image)}
                                           alt={ep.title}
                                           className="h-full w-full object-cover"
                                           onError={(e) =>

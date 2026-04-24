@@ -42,7 +42,7 @@ const Highlights = () => {
       <section className="relative h-[60vh] min-h-[420px] w-full overflow-hidden">
         {featured?.stream_icon && (
           <img
-            src={featured.stream_icon}
+            src={proxyImageUrl(featured.stream_icon)}
             alt={featured.name}
             className="absolute inset-0 h-full w-full object-cover opacity-40"
           />

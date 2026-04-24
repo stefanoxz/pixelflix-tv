@@ -126,7 +126,7 @@ const Movies = () => {
               rawUrl={playingRawUrl ?? undefined}
               containerExt={playing.container_extension || "mp4"}
               title={playing.name}
-              poster={playing.stream_icon}
+              poster={proxyImageUrl(playing.stream_icon)}
             />
           </div>
         </div>
