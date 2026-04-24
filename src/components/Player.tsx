@@ -511,6 +511,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                   if (data.fatal) {
                     setLoading(false);
                     updateStatus("codec_incompatible", detail);
+                    setRootCauseOnce("codec_incompatible", detail);
                     setError({
                       title: "Codec incompatível",
                       description: "O canal usa codec não suportado pelo navegador (provavelmente HEVC/4K). Abra no VLC.",
@@ -583,6 +584,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                 }
                 setLoading(false);
                 updateStatus("stream_error", detail);
+                // Tipo da falha do hls.js → causa raiz
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                  setRootCauseOnce("network_error", detail);
+                } else {
+                  setRootCauseOnce("stream_error", detail);
+                }
                 setError({
                   title: "Falha ao carregar o stream",
                   description: "O canal pode estar offline ou instável. Tente novamente em alguns segundos.",
@@ -608,6 +615,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
             setLoading(false);
             updateStatus("stream_error", "navegador sem suporte HLS");
+            setRootCauseOnce("codec_incompatible", "navegador sem suporte HLS");
             setError({
               title: "Navegador incompatível",
               description: "Seu navegador não suporta HLS. Use Chrome, Firefox, Edge ou Safari.",
@@ -628,6 +636,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           const ratelimit = /Too many|429/i.test(msg);
           updateStatus("stream_error", msg);
           pushLog({ source: "net", level: "error", label: "token_error", details: msg });
+          setRootCauseOnce("token_error", msg);
           setError({
             title: blocked
               ? "Acesso temporariamente bloqueado"
