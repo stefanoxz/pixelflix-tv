@@ -1063,12 +1063,27 @@ const Admin = () => {
         </Tabs>
       </main>
 
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      <Dialog
+        open={addOpen}
+        onOpenChange={(open) => {
+          setAddOpen(open);
+          if (!open) {
+            setEditingServer(null);
+            setNewUrl("");
+            setNewLabel("");
+            setNewNotes("");
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cadastrar DNS autorizada</DialogTitle>
+            <DialogTitle>
+              {editingServer ? "Editar DNS autorizada" : "Cadastrar DNS autorizada"}
+            </DialogTitle>
             <DialogDescription>
-              Apenas usuários cuja DNS esteja cadastrada aqui poderão logar na plataforma.
+              {editingServer
+                ? "Atualize o nome e as observações desta DNS. A URL não pode ser alterada."
+                : "Apenas usuários cuja DNS esteja cadastrada aqui poderão logar na plataforma."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -1079,9 +1094,12 @@ const Admin = () => {
                 placeholder="http://exemplo.com:8080"
                 value={newUrl}
                 onChange={(e) => setNewUrl(e.target.value)}
+                disabled={!!editingServer}
               />
               <p className="text-xs text-muted-foreground">
-                Pode incluir ou omitir o "http://". Será normalizado.
+                {editingServer
+                  ? "URL não editável. Para mudar, remova e recadastre."
+                  : 'Pode incluir ou omitir o "http://". Será normalizado.'}
               </p>
             </div>
             <div className="space-y-1">
@@ -1113,8 +1131,17 @@ const Admin = () => {
               onClick={() => newUrl && allowServer(newUrl, newLabel || undefined, newNotes || undefined)}
               disabled={!newUrl}
             >
-              <Plus className="h-4 w-4 mr-2" />
-              Cadastrar
+              {editingServer ? (
+                <>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Salvar alterações
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Cadastrar
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
