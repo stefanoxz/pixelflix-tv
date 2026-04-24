@@ -5,6 +5,8 @@ import {
   type IptvSession,
 } from "./iptv-context";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllowedServers, isHostAllowed } from "@/services/iptv";
+import { toast } from "sonner";
 
 export { useIptv } from "./useIptv";
 
@@ -29,6 +31,28 @@ export function IptvProvider({ children }: { children: ReactNode }) {
     // Also drop the Supabase anon session so stream-token stops working.
     supabase.auth.signOut().catch(() => {});
   };
+
+  // Boot-time revalidation: if the saved session points to a DNS that is no
+  // longer in `allowed_servers`, drop it and force a fresh login. Prevents
+  // "ghost host" stuck in localStorage after the panel rotated DNS.
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    (async () => {
+      const allowed = await fetchAllowedServers();
+      if (cancelled || allowed.length === 0) return;
+      const base = session.creds.streamBase || session.creds.server || "";
+      if (!isHostAllowed(base, allowed)) {
+        toast.info("Sua DNS foi atualizada, faça login novamente.");
+        setSession(null);
+        supabase.auth.signOut().catch(() => {});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
