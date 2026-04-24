@@ -716,6 +716,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         pushLog({ source: "video", level: "info", label: "first_playing", details: `TTFF=${ttff}ms` });
         updateStatus("playback_started", null);
         setRootCauseOnce("ok", `TTFF=${ttff}ms`);
+        reportStreamEvent("stream_started", { url: src ?? undefined, meta: { trigger: "playing_event", ttff_ms: ttff } });
       } else if (status === "stall_timeout") {
         updateStatus("playback_started", "recuperado após stall");
         pushLog({ source: "diag", level: "info", label: "recovered_after_stall" });
@@ -745,6 +746,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setLastReason(reason);
       pushLog({ source: "video", level: "error", label: "error", details: reason });
       updateStatus(isCodec ? "codec_incompatible" : "stream_error", reason);
+      setRootCauseOnce(isCodec ? "codec_incompatible" : "stream_error", reason);
       setError({
         title: isCodec ? "Codec incompatível" : "Não foi possível reproduzir",
         description: isCodec
