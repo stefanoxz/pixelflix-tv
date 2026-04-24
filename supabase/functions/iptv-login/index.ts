@@ -36,8 +36,8 @@ const USER_AGENTS = [
 const NO_ACCESS_MSG =
   "Você não tem acesso a esta plataforma. Entre em contato com a sua revenda para liberar o seu servidor (DNS).";
 
-let _admin: ReturnType<typeof createClient> | null = null;
-function getAdminClient() {
+let _admin: any = null;
+function getAdminClient(): any {
   try {
     if (_admin) return _admin;
     const url = Deno.env.get("SUPABASE_URL");
