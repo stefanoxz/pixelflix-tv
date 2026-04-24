@@ -220,6 +220,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const videoRef = useRef<HTMLVideoElement>(null);
   useImperativeHandle(forwardedRef, () => videoRef.current as HTMLVideoElement);
   const hlsRef = useRef<Hls | null>(null);
+  // mpegts.js — tipado como any para evitar acoplar @types ao bundle.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mpegtsRef = useRef<any>(null);
+  const mpegtsTriedM3u8Ref = useRef(false);
   const heartbeatRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
   const fragLoadErrorCountRef = useRef(0);
