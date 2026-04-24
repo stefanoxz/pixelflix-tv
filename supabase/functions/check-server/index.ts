@@ -14,17 +14,27 @@ function json(data: unknown, status = 200) {
   });
 }
 
-interface PingResult {
-  url: string;
-  online: boolean;
+type State = "online" | "unstable" | "offline";
+
+interface Attempt {
+  state: State;
   latency: number | null;
   status: number | null;
-  error?: string;
+  error?: "timeout" | "network";
+}
+
+interface PingResult {
+  url: string;
+  state: State;
+  online: boolean; // compat: true se online OU unstable (servidor respondeu)
+  latency: number | null;
+  status: number | null;
+  attempts: number;
+  error?: "timeout" | "network";
   checked_at: string;
 }
 
-async function pingOne(url: string): Promise<PingResult> {
-  const checked_at = new Date().toISOString();
+async function singlePing(url: string): Promise<Attempt> {
   const target = url.replace(/\/+$/, "") + "/player_api.php";
   const start = Date.now();
   try {
@@ -32,7 +42,6 @@ async function pingOne(url: string): Promise<PingResult> {
       method: "HEAD",
       signal: AbortSignal.timeout(5000),
     });
-    // Alguns servidores Xtream não respondem HEAD (405/501) — fallback para GET
     if (res.status === 405 || res.status === 501) {
       res = await fetch(target, {
         method: "GET",
@@ -41,26 +50,72 @@ async function pingOne(url: string): Promise<PingResult> {
       try { await res.text(); } catch { /* ignore */ }
     }
     const latency = Date.now() - start;
-    return {
-      url,
-      // Servidor respondeu = está vivo (inclui 401/403 — auth ausente, mas online)
-      online: res.ok || res.status === 401 || res.status === 403,
-      latency,
-      status: res.status,
-      checked_at,
-    };
+    const s = res.status;
+    let state: State;
+    if ((s >= 200 && s < 300) || s === 401) state = "online";
+    else if (s === 403 || (s >= 500 && s < 600)) state = "unstable";
+    else state = "unstable"; // 404 e demais 4xx
+    return { state, latency, status: s };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const isTimeout = /timeout|timed out|aborted/i.test(message);
     return {
-      url,
-      online: false,
+      state: isTimeout ? "unstable" : "offline",
       latency: null,
       status: null,
       error: isTimeout ? "timeout" : "network",
+    };
+  }
+}
+
+const RANK: Record<State, number> = { online: 2, unstable: 1, offline: 0 };
+
+function combine(a: Attempt, b: Attempt): { state: State; pick: Attempt } {
+  // Caso especial: ambos timeout -> offline
+  if (a.error === "timeout" && b.error === "timeout") {
+    return { state: "offline", pick: { ...a, state: "offline" } };
+  }
+  // Caso especial: qualquer erro de rede + a outra não-online -> offline
+  const networkA = a.error === "network";
+  const networkB = b.error === "network";
+  if ((networkA || networkB) && !(a.state === "online" || b.state === "online")) {
+    return { state: "offline", pick: networkA ? a : b };
+  }
+  // Regra geral: melhor estado vence
+  const best = RANK[a.state] >= RANK[b.state] ? a : b;
+  return { state: best.state, pick: best };
+}
+
+async function pingOne(url: string): Promise<PingResult> {
+  const checked_at = new Date().toISOString();
+  const a1 = await singlePing(url);
+  if (a1.state === "online") {
+    return {
+      url,
+      state: "online",
+      online: true,
+      latency: a1.latency,
+      status: a1.status,
+      attempts: 1,
+      error: a1.error,
       checked_at,
     };
   }
+  const a2 = await singlePing(url);
+  const { state, pick } = combine(a1, a2);
+  // Latência: menor entre as bem-sucedidas
+  const latencies = [a1.latency, a2.latency].filter((n): n is number => typeof n === "number");
+  const latency = latencies.length ? Math.min(...latencies) : pick.latency;
+  return {
+    url,
+    state,
+    online: state === "online" || state === "unstable",
+    latency,
+    status: pick.status,
+    attempts: 2,
+    error: pick.error,
+    checked_at,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -95,7 +150,7 @@ Deno.serve(async (req) => {
 
     const urls = rawUrls
       .filter((u): u is string => typeof u === "string" && u.trim().length > 0)
-      .slice(0, 50); // safety cap
+      .slice(0, 50);
 
     const results = await Promise.all(urls.map(pingOne));
     return json({ results });

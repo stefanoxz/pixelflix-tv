@@ -156,10 +156,14 @@ function latencyClass(ms: number | null): string {
   return "text-destructive";
 }
 
+type HealthState = "online" | "unstable" | "offline";
+
 interface HealthStatus {
+  state: HealthState;
   online: boolean;
   latency: number | null;
   status: number | null;
+  attempts?: number;
   checked_at: string;
   error?: string;
 }
@@ -167,8 +171,20 @@ interface HealthStatus {
 function statusClass(status: number | null): string {
   if (status == null) return "text-muted-foreground bg-muted/40";
   if (status >= 200 && status < 300) return "text-success bg-success/10";
-  if (status === 401 || status === 403) return "text-warning bg-warning/10";
-  return "text-destructive bg-destructive/10";
+  if (status === 401) return "text-success bg-success/10";
+  if (status === 403 || (status >= 500 && status < 600)) return "text-warning bg-warning/10";
+  return "text-warning bg-warning/10";
+}
+
+function stateBadge(state: HealthState): { dot: string; label: string; cls: string } {
+  switch (state) {
+    case "online":
+      return { dot: "🟢", label: "Online", cls: "text-success" };
+    case "unstable":
+      return { dot: "🟡", label: "Instável", cls: "text-warning" };
+    case "offline":
+      return { dot: "🔴", label: "Offline", cls: "text-destructive" };
+  }
 }
 
 const Admin = () => {
