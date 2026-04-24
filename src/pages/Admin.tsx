@@ -145,6 +145,24 @@ function formatRelative(iso: string): string {
   return `${d}d`;
 }
 
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function latencyClass(ms: number | null): string {
+  if (ms == null) return "text-muted-foreground";
+  if (ms < 200) return "text-success";
+  if (ms < 500) return "text-warning";
+  return "text-destructive";
+}
+
+interface HealthStatus {
+  online: boolean;
+  latency: number | null;
+  checked_at: string;
+  error?: string;
+}
+
 const Admin = () => {
   const navigate = useNavigate();
 
@@ -164,6 +182,36 @@ const Admin = () => {
   const [newUrl, setNewUrl] = useState("");
   const [newLabel, setNewLabel] = useState("");
   const [newNotes, setNewNotes] = useState("");
+
+  const [health, setHealth] = useState<Record<string, HealthStatus>>({});
+  const [healthLoading, setHealthLoading] = useState(false);
+
+  const checkAllServers = async () => {
+    if (!allowed.length) return;
+    setHealthLoading(true);
+    try {
+      const { data } = await supabase.functions.invoke("check-server", {
+        body: { urls: allowed.map((s) => s.server_url) },
+      });
+      const results = (data as { results?: (HealthStatus & { url: string })[] } | null)?.results ?? [];
+      const map: Record<string, HealthStatus> = {};
+      for (const r of results) {
+        map[r.url] = {
+          online: r.online,
+          latency: r.latency,
+          checked_at: r.checked_at,
+          error: r.error,
+        };
+      }
+      if (Object.keys(map).length > 0) {
+        setHealth((prev) => ({ ...prev, ...map }));
+      }
+    } catch {
+      // silencioso — fallback "Verificando..." permanece
+    } finally {
+      setHealthLoading(false);
+    }
+  };
 
   const refresh = async () => {
     setLoading(true);
