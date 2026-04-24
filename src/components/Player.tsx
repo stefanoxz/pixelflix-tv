@@ -1362,6 +1362,59 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
             )}
           </div>
 
+          {/* Seletor de motor — apenas para canais ao vivo Xtream */}
+          {isLive && (
+            <div className="border-b px-3 py-2 text-[11px] space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Motor</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {ENGINE_LABEL[engine]}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1">
+                {(["hls", "mpegts", "external"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => handleEngineChange(opt)}
+                    aria-pressed={engine === opt}
+                    className={cn(
+                      "rounded border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+                      engine === opt
+                        ? "bg-primary/20 border-primary/50 text-primary"
+                        : "bg-background/60 border-border text-muted-foreground hover:bg-background/90",
+                    )}
+                  >
+                    {ENGINE_LABEL[opt]}
+                  </button>
+                ))}
+              </div>
+              {engine === "hls" &&
+                (rootCause === "frag_load_error" ||
+                  rootCause === "manifest_empty" ||
+                  rootCause === "codec_incompatible") && (
+                  <button
+                    type="button"
+                    onClick={() => handleEngineChange("mpegts")}
+                    className="w-full inline-flex items-center justify-center gap-1.5 rounded border border-primary/50 bg-primary/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary hover:bg-primary/25 transition-colors"
+                  >
+                    <Zap className="h-3 w-3" />
+                    Tente MPEG-TS direto
+                  </button>
+                )}
+              {engine === "mpegts" && rootCause !== "ok" && rootCause !== "unknown" && (
+                <button
+                  type="button"
+                  onClick={() => handleEngineChange("external")}
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded border border-border bg-background/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground hover:bg-background/90 transition-colors"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Abrir externo (VLC)
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="border-b px-3 py-2 text-[11px] grid grid-cols-1 gap-1">
             <div className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground">Setup → Manifest</span>
