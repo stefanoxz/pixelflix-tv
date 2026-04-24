@@ -833,7 +833,7 @@ const Admin = () => {
                 />
               </div>
               <Button
-                onClick={checkAllServers}
+                onClick={() => checkAllServers(true)}
                 variant="outline"
                 size="sm"
                 disabled={healthLoading || allowed.length === 0}
