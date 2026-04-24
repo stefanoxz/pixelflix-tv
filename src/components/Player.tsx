@@ -192,6 +192,13 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const [status, setStatus] = useState<DiagnosticStatus>("connecting");
   const [lastReason, setLastReason] = useState<string | null>(null);
 
+  // Diagnóstico estendido (painel)
+  const [loadMethod, setLoadMethod] = useState<LoadMethod>("unknown");
+  const [rootCause, setRootCause] = useState<RootCause>("unknown");
+  const [rootCauseDetail, setRootCauseDetail] = useState<string | null>(null);
+  const rootCauseLockedRef = useRef(false);
+  const upstreamHost = useMemo(() => extractUpstreamHost(rawUrl ?? src), [rawUrl, src]);
+
   // Logs panel — buffered in refs to avoid re-renders when closed
   const logsRef = useRef<LogEntry[]>([]);
   const setupStartRef = useRef(0);
