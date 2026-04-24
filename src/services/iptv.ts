@@ -661,20 +661,20 @@ export async function iptvLogin(
   let lastTransportFail: BrowserLoginFail | null = null;
   for (const base of candidates) {
     const r = await tryBrowserLogin(base, creds.username, creds.password);
-    if (r.ok) {
+    if (r.ok === true) {
       const durationMs = Date.now() - startedAt;
       console.log("[iptv] method: browser", { server: r.matchedBase, durationMs });
       // Loga sucesso sem bloquear (best-effort).
       void logBrowserLoginEvent(r.matchedBase, creds.username, true, "browser_login_ok");
       return { ...r.data, server_url: r.matchedBase };
-    } else {
-      if (r.reason === "auth_failed") {
-        // Senha errada: não adianta tentar via edge.
-        void logBrowserLoginEvent(base, creds.username, false, "credenciais inválidas");
-        throw new Error("Usuário ou senha inválidos");
-      }
-      lastTransportFail = r;
     }
+    const fail = r as BrowserLoginFail;
+    if (fail.reason === "auth_failed") {
+      // Senha errada: não adianta tentar via edge.
+      void logBrowserLoginEvent(base, creds.username, false, "credenciais inválidas");
+      throw new Error("Usuário ou senha inválidos");
+    }
+    lastTransportFail = fail;
   }
 
   // 3) Fallback: edge function (caminho atual, intacto).
