@@ -217,14 +217,18 @@ const Admin = () => {
       const { data } = await supabase.functions.invoke("check-server", {
         body: { urls: allowed.map((s) => s.server_url) },
       });
-      const results = (data as { results?: (HealthStatus & { url: string })[] } | null)?.results ?? [];
+      const results = (data as { results?: (Partial<HealthStatus> & { url: string })[] } | null)?.results ?? [];
       const map: Record<string, HealthStatus> = {};
       for (const r of results) {
+        const state: HealthState =
+          r.state ?? (r.online ? "online" : "offline");
         map[r.url] = {
-          online: r.online,
-          latency: r.latency,
+          state,
+          online: state === "online" || state === "unstable",
+          latency: r.latency ?? null,
           status: r.status ?? null,
-          checked_at: r.checked_at,
+          attempts: r.attempts,
+          checked_at: r.checked_at ?? new Date().toISOString(),
           error: r.error,
         };
       }
@@ -845,18 +849,32 @@ const Admin = () => {
                             }
                             return (
                               <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
-                                <span className={h.online ? "text-success" : "text-destructive"}>
-                                  ● {h.online ? "Online" : "Offline"}
-                                </span>
+                                {(() => {
+                                  const b = stateBadge(h.state);
+                                  return (
+                                    <span className={b.cls}>
+                                      {b.dot} {b.label}
+                                    </span>
+                                  );
+                                })()}
                                 <span className={latencyClass(h.latency)}>
                                   {h.latency != null ? `${h.latency} ms` : "—"}
                                 </span>
-                                {h.status != null && (
+                                {h.status != null ? (
                                   <span
                                     className={`px-1.5 py-0.5 rounded font-mono ${statusClass(h.status)}`}
                                     title="Código HTTP da resposta"
                                   >
                                     HTTP {h.status}
+                                  </span>
+                                ) : h.error ? (
+                                  <span className="px-1.5 py-0.5 rounded font-mono text-warning bg-warning/10">
+                                    {h.error === "timeout" ? "timeout" : "rede"}
+                                  </span>
+                                ) : null}
+                                {h.attempts === 2 && (
+                                  <span className="text-muted-foreground" title="Confirmado em 2 tentativas">
+                                    ×2
                                   </span>
                                 )}
                                 <span className="text-muted-foreground">
