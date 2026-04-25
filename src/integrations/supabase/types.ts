@@ -273,18 +273,21 @@ export type Database = {
           backdrop_url: string | null
           cache_key: string
           fetched_at: string
+          overview: string | null
           poster_url: string | null
         }
         Insert: {
           backdrop_url?: string | null
           cache_key: string
           fetched_at?: string
+          overview?: string | null
           poster_url?: string | null
         }
         Update: {
           backdrop_url?: string | null
           cache_key?: string
           fetched_at?: string
+          overview?: string | null
           poster_url?: string | null
         }
         Relationships: []
