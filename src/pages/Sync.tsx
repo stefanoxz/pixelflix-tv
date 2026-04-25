@@ -107,21 +107,23 @@ const Sync = () => {
 
     let anyError = false;
 
-    // Roda em paralelo — o queue global de iptv.ts limita a concorrência.
-    await Promise.all(
-      steps.map(async (step) => {
-        setStatuses((prev) => ({ ...prev, [step.key]: "loading" }));
-        try {
-          await step.run();
-          setStatuses((prev) => ({ ...prev, [step.key]: "done" }));
-        } catch (e) {
-          anyError = true;
-          const msg = e instanceof Error ? e.message : "Erro";
-          setErrors((prev) => ({ ...prev, [step.key]: msg }));
-          setStatuses((prev) => ({ ...prev, [step.key]: "error" }));
-        }
-      }),
-    );
+    // Roda em SÉRIE (não paralelo) — muitos painéis Xtream contam cada
+    // requisição HTTP como uma "conexão ativa". Disparar live+vod+series
+    // ao mesmo tempo (6 chamadas) estoura facilmente o limite de 2 telas
+    // e o painel devolve "Limite de telas atingido". Sequencial é mais lento
+    // mas evita falsos 429 MAX_CONNECTIONS em contas com poucas telas.
+    for (const step of steps) {
+      setStatuses((prev) => ({ ...prev, [step.key]: "loading" }));
+      try {
+        await step.run();
+        setStatuses((prev) => ({ ...prev, [step.key]: "done" }));
+      } catch (e) {
+        anyError = true;
+        const msg = e instanceof Error ? e.message : "Erro";
+        setErrors((prev) => ({ ...prev, [step.key]: msg }));
+        setStatuses((prev) => ({ ...prev, [step.key]: "error" }));
+      }
+    }
 
     if (anyError) {
       setHasError(true);
