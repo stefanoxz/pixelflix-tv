@@ -313,18 +313,53 @@ Deno.serve(async (req) => {
         .limit(5000);
       if (error) { console.error(error.message); return internalError(); }
 
-      type Bucket = "refused" | "reset" | "http_404" | "http_444" | "http_5xx" | "tls" | "timeout" | "dns" | "other";
+      type Bucket =
+        | "refused"
+        | "reset"
+        | "http_404"
+        | "http_444"
+        | "http_5xx"
+        | "tls"
+        | "cert_invalid"
+        | "timeout"
+        | "io_timeout"
+        | "dns"
+        | "no_route"
+        | "net_unreach"
+        | "protocol"
+        | "other";
       const classify = (reason: string | null): Bucket | null => {
         if (!reason) return "other";
         const r = reason.toLowerCase();
-        if (/connection refused|os error 111/.test(r)) return "refused";
-        if (/reset by peer|connection reset|os error 104/.test(r)) return "reset";
+
+        // HTTP status buckets first (most specific)
         if (/http\s*404|not found/.test(r)) return "http_404";
         if (/http\s*444/.test(r)) return "http_444";
-        if (/http\s*5\d\d/.test(r)) return "http_5xx";
-        if (/tls|ssl|certificate|handshake|unrecognisedname/.test(r)) return "tls";
+        if (/http\s*5\d\d|bad gateway|gateway timeout|service unavailable/.test(r)) return "http_5xx";
+
+        // Connection-level errors
+        if (/connection refused|os error 111|econnrefused/.test(r)) return "refused";
+        if (/reset by peer|connection reset|os error 104|econnreset/.test(r)) return "reset";
+
+        // Routing / network reachability
+        if (/no route to host|ehostunreach|os error 113/.test(r)) return "no_route";
+        if (/network is unreachable|enetunreach|os error 101/.test(r)) return "net_unreach";
+
+        // Certificate / TLS
+        if (/certificate verify failed|cert.*(expired|invalid|untrusted|unknown)|self.signed|x509|hostname mismatch|certificateerror/.test(r)) return "cert_invalid";
+        if (/tls|ssl|handshake|unrecognisedname|alert|wrong version number/.test(r)) return "tls";
+
+        // Protocol / parse
+        if (/invalid (status line|http response|chunked|content-length)|protocol error|malformed|unexpected eof|http parse/.test(r)) return "protocol";
+
+        // Timeouts (IO vs generic)
+        if (/i\/o timeout|read timeout|write timeout|recv timeout|send timeout|socket timeout/.test(r)) return "io_timeout";
         if (/timeout|timed out|deadline/.test(r)) return "timeout";
-        if (/dns|name resolution|getaddrinfo|nodename|no address/.test(r)) return "dns";
+
+        // DNS resolution
+        if (/dns|name resolution|getaddrinfo|nodename|no address|enotfound|name or service not known/.test(r)) return "dns";
+
+        // Fallback heuristics
         if (/não respondeu|server unreachable|unreach/.test(r)) return "refused";
         return "other";
       };
@@ -341,7 +376,9 @@ Deno.serve(async (req) => {
       };
       const map = new Map<string, Agg>();
       const buckets0 = (): Record<Bucket, number> => ({
-        refused: 0, reset: 0, http_404: 0, http_444: 0, http_5xx: 0, tls: 0, timeout: 0, dns: 0, other: 0,
+        refused: 0, reset: 0, http_404: 0, http_444: 0, http_5xx: 0,
+        tls: 0, cert_invalid: 0, timeout: 0, io_timeout: 0,
+        dns: 0, no_route: 0, net_unreach: 0, protocol: 0, other: 0,
       });
 
       for (const row of (data ?? []) as { server_url: string; success: boolean; reason: string | null; created_at: string }[]) {
