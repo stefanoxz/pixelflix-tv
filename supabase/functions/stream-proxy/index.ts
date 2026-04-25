@@ -336,6 +336,10 @@ Deno.serve(async (req) => {
           redirect: "follow",
           headers: upstreamHeaders,
           signal: AbortSignal.timeout(SEGMENT_FETCH_TIMEOUT_MS),
+          // half-duplex streaming: começa a entregar bytes assim que chegam,
+          // sem aguardar o corpo todo. Reduz TTFF do primeiro segmento.
+          // @ts-expect-error Deno fetch supports `duplex`.
+          duplex: "half",
         });
       } catch (err) {
         ipBump(ipKey, -1);
