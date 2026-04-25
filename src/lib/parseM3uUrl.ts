@@ -1,9 +1,14 @@
 /**
- * Extrai credenciais Xtream de uma URL M3U.
+ * Extrai credenciais Xtream de uma URL M3U / stream / API.
  *
  * Formatos suportados:
  *   http://server[:porta]/get.php?username=X&password=Y[&type=m3u_plus...]
+ *   http://server[:porta]/player_api.php?username=X&password=Y[&action=...]
  *   http://server[:porta]/playlist/<user>/<pass>/[m3u_plus|m3u|ts]
+ *   http://server[:porta]/live/<user>/<pass>/<id>.ts
+ *   http://server[:porta]/movie/<user>/<pass>/<id>.<ext>
+ *   http://server[:porta]/series/<user>/<pass>/<id>.<ext>
+ *   http://server[:porta]/<user>/<pass>/<id>           (Xtream legacy)
  *
  * Aceita o input com ou sem protocolo (assume http://) e tolera texto
  * adicional ao redor — busca a primeira URL plausível.
@@ -15,6 +20,8 @@ export type M3uCredentials = {
   server: string;
   username: string;
   password: string;
+  /** Path detectado, útil para o diagnóstico (ex: "/get.php", "/player_api.php"). */
+  path?: string;
 };
 
 const MAX_INPUT_LEN = 2000;
