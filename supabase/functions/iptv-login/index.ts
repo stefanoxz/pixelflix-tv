@@ -313,7 +313,7 @@ async function tryVariant(
   username: string,
   password: string,
 ): Promise<
-  | { ok: true; data: any; usedVariant: string }
+  | { ok: true; data: any; usedVariant: string; route: "direct" | "proxy" }
   | { ok: false; status: number; body: string; reason: string }
   | { ok: false; transportError: string }
 > {
@@ -323,11 +323,9 @@ async function tryVariant(
   for (let i = 0; i < uas.length; i++) {
     const r = await fetchOnce(url, uas[i]);
     if ("error" in r) {
-      // Erro de transporte — UA não muda nada. Aborta cedo.
       return { ok: false, transportError: r.error };
     }
-    const { res, body } = r;
-    // Anti-scraping → vale a pena tentar próximo UA.
+    const { res, body, route } = r;
     if (shouldRetryWithFallbackUa(res.status) && i < uas.length - 1) continue;
 
     if (res.status === 401) {
@@ -345,10 +343,9 @@ async function tryVariant(
     if (!data?.user_info || data.user_info.auth === 0) {
       return { ok: false, status: 401, body, reason: "credenciais inválidas" };
     }
-    return { ok: true, data, usedVariant: base };
+    return { ok: true, data, usedVariant: base, route };
   }
 
-  // unreachable, mas TS exige
   return { ok: false, transportError: "no_attempts" };
 }
 
