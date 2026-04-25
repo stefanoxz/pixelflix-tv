@@ -154,6 +154,16 @@ Deno.serve(async (req) => {
 
     const result = await fetchWithRetries(url);
     if (!result.ok) {
+      // 404/410 do painel: trate como "vazio" para a UI continuar viva.
+      // Para listas, devolve [] e status 200; para detalhes (ex: get_series_info),
+      // devolve null com status 200.
+      if (result.softNotFound) {
+        const emptyPayload = COLLECTION_ACTIONS.has(String(action)) ? [] : null;
+        return new Response(
+          JSON.stringify(emptyPayload),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
       return new Response(JSON.stringify({ error: `IPTV server error: ${result.reason}` }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
