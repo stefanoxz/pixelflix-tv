@@ -96,31 +96,63 @@ function classifyReason(reason: string): { code: string; message: string } {
   if (/credenc|invalid|auth=0|unauthor|401/.test(r)) {
     return { code: "INVALID_CREDENTIALS", message: "Usuário ou senha inválidos" };
   }
-  if (/timeout|timed out|deadline/.test(r)) {
-    return { code: "TIMEOUT", message: "Tempo esgotado ao contatar o servidor IPTV" };
+  if (/timeout|timed out|deadline|i\/o timeout/.test(r)) {
+    return {
+      code: "TIMEOUT",
+      message: "Tempo esgotado ao contatar o servidor IPTV. Servidor pode estar lento ou bloqueado.",
+    };
   }
-  // TLS/conexão recusada vem ANTES de DNS — o texto sanitizado contém
-  // "verifique a dns" mesmo quando o problema real é TLS/SNI.
-  if (/tls|ssl|certificate|handshake|unrecognisedname|fatal alert|connection refused|connection reset|connect: |unreach|http 5\d\d|http 444/.test(r)) {
+  // Connection refused = porta fechada / serviço offline. Mensagem específica
+  // para que o admin saiba que provavelmente é problema de protocolo/porta.
+  if (/connection refused|os error 111|econnrefused/.test(r)) {
     return {
       code: "SERVER_UNREACHABLE",
       message:
-        "Servidor IPTV recusou conexão (TLS/porta inválida). Confirme com sua revenda se a URL e a porta estão corretas.",
+        "Servidor recusou a conexão. A porta pode estar fechada — verifique se a DNS deve usar HTTP/HTTPS ou uma porta específica (ex: :8080).",
     };
   }
-  if (/getaddrinfo|name resolution|enotfound|nxdomain|^dns /.test(r)) {
+  // Reset by peer = geralmente UA bloqueado ou firewall ativo.
+  if (/connection reset|reset by peer|os error 104|econnreset/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message: "Servidor encerrou a conexão (possível bloqueio por User-Agent ou firewall).",
+    };
+  }
+  // TLS/cert: cair pra HTTP costuma resolver, mas isso é cadastro do admin.
+  if (/tls|ssl|certificate|handshake|unrecognisedname|fatal alert|cert.*invalid/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message: "Erro de certificado/TLS. Tente cadastrar a DNS como HTTP (sem 's') se o servidor não tiver SSL válido.",
+    };
+  }
+  if (/no route to host|ehostunreach/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message: "Sem rota até o servidor. DNS pode estar offline ou com firewall bloqueando.",
+    };
+  }
+  if (/getaddrinfo|name resolution|enotfound|nxdomain|^dns |name or service not known/.test(r)) {
     return {
       code: "DNS_ERROR",
-      message: "DNS do servidor IPTV não resolveu. Verifique o endereço.",
+      message: "Hostname não resolveu. Verifique se o endereço está correto.",
     };
   }
-  // "verifique a dns" sozinho é o texto sanitizado para qualquer falha de
-  // transporte — tratamos como servidor inacessível, não como erro de DNS.
-  if (/verifique a dns|servidor iptv não respondeu/.test(r)) {
+  if (/http\s*5\d\d|bad gateway|service unavailable/.test(r)) {
     return {
       code: "SERVER_UNREACHABLE",
-      message:
-        "Servidor IPTV não respondeu. Confirme com sua revenda se essa DNS/URL ainda está ativa.",
+      message: "Servidor IPTV retornou erro interno. Tente novamente em alguns minutos.",
+    };
+  }
+  if (/http\s*44[34]/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message: "Servidor recusou a requisição (provável bloqueio anti-scraping).",
+    };
+  }
+  if (/verifique a dns|servidor iptv não respondeu|unreach/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message: "Servidor IPTV não respondeu. Confirme com sua revenda se essa DNS ainda está ativa.",
     };
   }
   return { code: "UNKNOWN_ERROR", message: reason || "Erro desconhecido ao contatar o servidor" };
@@ -207,8 +239,16 @@ function buildVariants(serverBase: string, phase: Phase): string[] {
   const variants = new Set<string>();
   const stripped = serverBase.trim().replace(/\/+$/, "");
   let hostPort = stripped;
+  // Detectamos o esquema ORIGINAL cadastrado. Se admin cadastrou http://,
+  // priorizamos http; se https://, priorizamos https. Isso evita o bug
+  // do "Black" (bkpac.cc) que era cadastrado http mas só recebia tentativas
+  // https → connection refused na 443.
+  let originalScheme: "http" | "https" | null = null;
   const m = stripped.match(/^(https?):\/\/(.+)$/i);
-  if (m) hostPort = m[2];
+  if (m) {
+    originalScheme = m[1].toLowerCase() as "http" | "https";
+    hostPort = m[2];
+  }
   hostPort = hostPort.replace(/\s+/g, "");
   if (!hostPort) return [];
 
@@ -216,20 +256,38 @@ function buildVariants(serverBase: string, phase: Phase): string[] {
   const host = hasPort ? hostPort.replace(/:\d+$/, "") : hostPort;
 
   const candidates: string[] = [];
+  // Default: assume HTTP se nada foi declarado (IPTV é majoritariamente HTTP).
+  const primary = originalScheme ?? "http";
+  const secondary = primary === "http" ? "https" : "http";
+
   if (phase === "fast") {
-    candidates.push(`http://${hostPort}`);
+    // Schema PRIMÁRIO primeiro, em todas as portas razoáveis.
+    candidates.push(`${primary}://${hostPort}`);
     if (!hasPort) {
-      candidates.push(`http://${host}:80`, `http://${host}:8080`);
+      if (primary === "http") {
+        candidates.push(`http://${host}:80`, `http://${host}:8080`);
+      } else {
+        candidates.push(`https://${host}:443`);
+      }
     }
-    candidates.push(`https://${hostPort}`);
-    if (!hasPort) candidates.push(`https://${host}:443`);
-  } else {
+    // Schema SECUNDÁRIO depois — só como alternativa.
+    candidates.push(`${secondary}://${hostPort}`);
     if (!hasPort) {
+      if (secondary === "http") {
+        candidates.push(`http://${host}:80`, `http://${host}:8080`);
+      } else {
+        candidates.push(`https://${host}:443`);
+      }
+    }
+  } else {
+    // FASE 2 — portas IPTV exóticas, no schema primário.
+    if (!hasPort) {
+      const proto = primary;
       candidates.push(
-        `http://${host}:2052`,
-        `http://${host}:2082`,
-        `http://${host}:8880`,
-        `https://${host}:2095`,
+        `${proto}://${host}:2052`,
+        `${proto}://${host}:2082`,
+        `${proto}://${host}:8880`,
+        `${proto}://${host}:2095`,
       );
     }
   }
@@ -262,7 +320,7 @@ async function tryVariant(
   username: string,
   password: string,
 ): Promise<
-  | { ok: true; data: any }
+  | { ok: true; data: any; usedVariant: string }
   | { ok: false; status: number; body: string; reason: string }
   | { ok: false; transportError: string }
 > {
@@ -294,7 +352,7 @@ async function tryVariant(
     if (!data?.user_info || data.user_info.auth === 0) {
       return { ok: false, status: 401, body, reason: "credenciais inválidas" };
     }
-    return { ok: true, data };
+    return { ok: true, data, usedVariant: base };
   }
 
   // unreachable, mas TS exige
@@ -344,16 +402,10 @@ async function attemptLogin(
 
   const runVariants = async (vs: string[]) => {
     for (const base of vs) {
-      // HTTPS só vale tentar se nenhum HTTP respondeu — TLS upstream costuma
-      // mascarar a causa real e gerar eventos `tls`/`cert_invalid` no log.
-      if (anyHttpResponded && base.startsWith("https://")) continue;
-
       const r = await tryVariant(base, username, password);
 
       if ("transportError" in r) {
-        if (!isTlsOrConnectError(r.transportError) || !anyHttpResponded) {
-          lastReason = r.transportError;
-        }
+        lastReason = r.transportError;
         continue;
       }
       if (base.startsWith("http://")) anyHttpResponded = true;
@@ -374,7 +426,7 @@ async function attemptLogin(
   // FASE 1
   const r1 = await runVariants(phase1);
   if (r1?.ok) {
-    await markServerHealthy(admin, serverRow, r1, phase1);
+    await markServerHealthy(admin, serverRow, r1.usedVariant);
     return r1;
   }
   if (r1 && !r1.ok) {
@@ -388,7 +440,7 @@ async function attemptLogin(
     const phase2 = buildVariants(serverBase, "fallback");
     const r2 = await runVariants(phase2);
     if (r2?.ok) {
-      await markServerHealthy(admin, serverRow, r2, phase2);
+      await markServerHealthy(admin, serverRow, r2.usedVariant);
       return r2;
     }
     if (r2 && !r2.ok) {
@@ -397,11 +449,9 @@ async function attemptLogin(
     }
   }
 
-  // Falha total por transporte.
+  // Falha total por transporte. Preserva a mensagem original (refused/reset/tls)
+  // para o admin classificar corretamente no dashboard.
   await markServerFailure(admin, serverRow);
-  if (isTlsOrConnectError(lastReason)) {
-    lastReason = "servidor IPTV não respondeu (verifique a DNS)";
-  }
   return { ok: false as const, status: 502, reason: lastReason, body: lastBody };
 }
 
@@ -409,24 +459,14 @@ async function attemptLogin(
 async function markServerHealthy(
   admin: any,
   serverRow: { id?: string; last_working_variant?: string | null } | null,
-  result: { ok: true; data: any } & { variant?: string },
-  triedVariants: string[],
+  usedVariant: string,
 ) {
   if (!serverRow?.id) return;
-  // A "variante boa" é a primeira do array que efetivamente respondeu OK —
-  // como tryVariant não devolve isso, reusamos: o caller passa as triedVariants
-  // em ordem. A última tentada antes do return ok é a boa, mas não temos esse
-  // dado direto. Em vez disso, gravamos a 1ª da lista (que é a cache atual ou
-  // a 1ª da fase) — a próxima execução a confirma. Para não enganar, gravamos
-  // só se a cache atual está vazia ou foi a vencedora; senão apagamos a cache
-  // para reaprender.
-  void result;
-  const newCache = triedVariants[0];
   try {
     await admin
       .from("allowed_servers")
       .update({
-        last_working_variant: newCache ?? null,
+        last_working_variant: usedVariant,
         last_working_at: new Date().toISOString(),
         consecutive_failures: 0,
         unreachable_until: null,
