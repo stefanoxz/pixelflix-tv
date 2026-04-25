@@ -112,13 +112,11 @@ Deno.serve(async (req) => {
   const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!jwt) return json({ error: "Missing token" }, 401, cors);
 
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: `Bearer ${jwt}` } },
-    auth: { persistSession: false },
-  });
-  const { data: udata, error: uerr } = await userClient.auth.getUser();
-  if (uerr || !udata?.user) return json({ error: "Invalid session" }, 401, cors);
-  const userId = udata.user.id;
+  // Extrai user id direto do JWT — evita roundtrip ao /auth/v1/user a cada
+  // request. Players fazem dezenas de requests/min; o getUser anterior era
+  // a maior fonte de latência e cold-start nesta função.
+  const userId = extractUserIdFromJwt(jwt);
+  if (!userId) return json({ error: "Invalid session" }, 401, cors);
 
   // 2) Body
   let body: { url?: string; kind?: TokenKind; iptv_username?: string; mode?: TokenMode };
