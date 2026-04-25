@@ -230,6 +230,49 @@ Deno.serve(async (req) => {
       return ok({ events: data ?? [] });
     }
 
+    if (action === "list_user_reports") {
+      const limit = Math.min(Number(payload?.limit ?? 100), 500);
+      const hours = Math.min(Number(payload?.hours ?? 24 * 30), 24 * 90);
+      const since = new Date(Date.now() - hours * 60 * 60_000).toISOString();
+      const { data, error } = await admin
+        .from("stream_events")
+        .select("id, anon_user_id, meta, created_at, ip")
+        .eq("event_type", "user_report")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) { console.error(error.message); return internalError(); }
+      const reports = (data ?? []).map((r) => ({
+        id: r.id,
+        anon_user_id: r.anon_user_id,
+        created_at: r.created_at,
+        ip: maskIp(r.ip),
+        category: (r.meta as Record<string, unknown> | null)?.category ?? null,
+        description: (r.meta as Record<string, unknown> | null)?.description ?? null,
+        title: (r.meta as Record<string, unknown> | null)?.title ?? null,
+        upstream_host: (r.meta as Record<string, unknown> | null)?.upstream_host ?? null,
+        engine: (r.meta as Record<string, unknown> | null)?.engine ?? null,
+        load_method: (r.meta as Record<string, unknown> | null)?.load_method ?? null,
+        root_cause: (r.meta as Record<string, unknown> | null)?.root_cause ?? null,
+        last_reason: (r.meta as Record<string, unknown> | null)?.last_reason ?? null,
+        status: (r.meta as Record<string, unknown> | null)?.status ?? null,
+        user_agent: (r.meta as Record<string, unknown> | null)?.user_agent ?? null,
+        container_ext: (r.meta as Record<string, unknown> | null)?.container_ext ?? null,
+      }));
+      return ok({ reports });
+    }
+
+    if (action === "count_user_reports_24h") {
+      const since = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+      const { count, error } = await admin
+        .from("stream_events")
+        .select("id", { count: "exact", head: true })
+        .eq("event_type", "user_report")
+        .gte("created_at", since);
+      if (error) { console.error(error.message); return internalError(); }
+      return ok({ count: count ?? 0 });
+    }
+
     if (action === "allow_server") {
       const url = normalizeServer(String(payload?.server_url ?? ""));
       if (!url) return bad("URL do servidor é obrigatória");
