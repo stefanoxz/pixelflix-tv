@@ -1,48 +1,40 @@
-## Corrigir capas/sinopses ausentes no TMDB
+## Objetivo
 
-### Problema
+Melhorar a legibilidade do painel de episódios no diálogo de séries — com foco em fontes maiores e um seletor de temporadas mais visível e fácil de tocar.
 
-Investiguei o caso "Esgotado por Voce (2026)". O cache em `tmdb_image_cache` tem **duas entradas vazias** para esse título (`poster_url=null`, `backdrop_url=null`) — armazenadas há minutos. A edge function consultou o TMDB filtrando por `name + year=2026` e não achou nada, salvou o "vazio" e ficou preso por **30 dias** (TTL atual).
+## Mudanças visuais
 
-Causas prováveis do miss:
+### 1. Seletor de temporadas (botões "T1", "T2"…)
 
-1. **Filtro de ano restritivo demais.** Se o IPTV diz "(2026)" mas o TMDB tem outro ano de estreia (muito comum em pré-lançamentos / dublagens BR), a busca retorna 0.
-2. **Acentos.** "Voce" no IPTV vs "Você" no TMDB — `search` tolera, mas combinado com filtro de ano errado mata o resultado.
-3. **Sinopse também faltando.** Hoje o fallback só puxa imagem; quando a fonte IPTV não tem `plot`, fica "Sem sinopse disponível".
-4. **Cache de "miss" igual ao de "hit" (30 dias)** — entradas vazias antigas não tentam de novo.
+Hoje os botões são pequenos (`px-3 py-1.5`, `text-sm`) e o atual fica só com fundo azul sólido — sem rótulo claro nem destaque suficiente.
 
-### Plano
+- Adicionar um rótulo "Temporadas" acima dos botões (`text-base font-semibold text-foreground/80`).
+- Aumentar tamanho dos botões: `px-5 py-2.5`, `text-base font-bold`, cantos `rounded-lg`.
+- Botão ativo: fundo `bg-primary`, texto branco, `ring-2 ring-primary/40`, leve `scale-105` e sombra azul (`shadow-[0_0_0_3px_hsl(var(--primary)/0.25)]`) para realmente destacar.
+- Botão inativo: fundo `bg-secondary/60`, borda sutil `border border-border/60`, hover `bg-secondary` com leve `border-primary/40`.
+- Espaçamento entre botões aumentado (`gap-2.5`) e barra com leve separador inferior (`pb-3 border-b border-border/40`) para isolar visualmente do listão de episódios.
 
-**1. `supabase/functions/tmdb-image/index.ts`** — busca em cascata + sinopse:
+### 2. Cards de episódio
 
-- Limpar a query (remover sufixos como `(2026)`, `S01`, " - subtítulo").
-- Tentar 4 estratégias na ordem: (a) original+ano, (b) limpa+ano, (c) limpa SEM ano, (d) original SEM ano. Retornar no primeiro hit.
-- Ordenar resultados por `popularity` (desempata títulos comuns).
-- Buscar também `overview` (sinopse PT-BR) e devolver no payload. Se o `search` não trouxer `overview`, fazer um `GET /tv/{id}` complementar.
-- TTL de cache split: **30 dias** quando há hit, **1 dia** quando vazio (auto-retry).
+- Aumentar padding: `p-3` → `p-4`.
+- Thumbnail: `h-16 w-28` → `h-20 w-36` (maior e mais legível).
+- Título do episódio: `text-sm md:text-base` → `text-base md:text-lg font-semibold`.
+- Plot/sinopse do episódio: `text-xs md:text-sm` → `text-sm md:text-base`, mantendo `line-clamp-2`.
+- Badge de formato (MP4/MKV…): `text-[11px]` → `text-xs`, `px-2 py-0.5`.
+- Botão de play/external à direita: `h-9 w-9` → `h-11 w-11`, ícone `h-4 w-4` → `h-5 w-5`.
+- Aumentar `gap` interno do card de `gap-3` para `gap-4`.
 
-**2. Migration** — adicionar coluna `overview` ao cache e limpar entradas vazias antigas:
+### 3. Cabeçalho "Episódios"
 
-```sql
-ALTER TABLE public.tmdb_image_cache ADD COLUMN IF NOT EXISTS overview TEXT;
-DELETE FROM public.tmdb_image_cache 
-WHERE poster_url IS NULL AND backdrop_url IS NULL;
-```
+- Subir um pouco de hierarquia: `text-xl md:text-2xl` → `text-2xl md:text-3xl`, com `mb-4` para respirar antes do seletor.
 
-**3. `src/hooks/useTmdbFallback.ts`** — expor `overview` no tipo de retorno.
+### 4. Altura do scroll
 
-**4. `src/components/SeriesDetailsDialog.tsx` e `MovieDetailsDialog.tsx`** — quando `plot`/`info.plot` estiver vazio, usar `tmdb.overview` como fallback antes de mostrar "Sem sinopse disponível".
+- Manter `max-h-[50vh]` no scroll de episódios (com cards maiores ainda cabem ~3 itens visíveis confortavelmente em telas médias).
 
-### Resultado esperado
+## Arquivos afetados
 
-- "Esgotado por Voce (2026)" e similares vão buscar de novo no próximo `open` e provavelmente encontrar (uma das 4 tentativas vai bater).
-- Se realmente não existir no TMDB (conteúdo muito obscuro), o cache vazio expira em 24h em vez de 30 dias.
-- Sinopse passa a vir do TMDB quando o IPTV não fornece.
+- `src/components/library/SeriesEpisodesPanel.tsx` — seletor de temporadas + cards de episódio.
+- `src/components/SeriesDetailsDialog.tsx` — título "Episódios".
 
-### Arquivos alterados
-
-- `supabase/functions/tmdb-image/index.ts` (reescrito)
-- `src/hooks/useTmdbFallback.ts` (adiciona `overview`)
-- `src/components/SeriesDetailsDialog.tsx` (fallback de sinopse)
-- `src/components/MovieDetailsDialog.tsx` (fallback de sinopse)
-- Nova migration: coluna `overview` + limpeza de cache vazio
+Sem mudança de lógica, sem novas dependências, sem alterações no banco. Apenas ajustes de Tailwind para tamanho e destaque.
