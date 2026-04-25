@@ -420,9 +420,11 @@ const SeriesPage = () => {
               episodeNumber={nextEpisodeInfo?.episodeNumber ?? 0}
               coverFallback={playingEp.coverFallback}
               autoplaySeconds={10}
+              prefetchLeadSeconds={1.5}
               autoplayEnabled={autoplayPref.enabled}
               onAutoplayToggle={autoplayPref.toggle}
               onPlayNow={handlePlayNext}
+              onPrefetch={handlePrefetchNext}
               onCancel={() => setShowNextCard(false)}
             />
           </>
