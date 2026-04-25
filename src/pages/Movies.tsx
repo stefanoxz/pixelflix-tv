@@ -1,31 +1,37 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Loader2, X } from "lucide-react";
+import { Search, Loader2, X, Heart } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { MediaCard } from "@/components/MediaCard";
 import { CategoryFilter } from "@/components/CategoryFilter";
 import { Player } from "@/components/Player";
+import { MovieDetailsDialog } from "@/components/MovieDetailsDialog";
 import { useIptv } from "@/context/IptvContext";
 import {
   getVodCategories,
   getVodStreams,
   buildVodStreamUrl,
-  isBrowserPlayable,
   proxyImageUrl,
   type VodStream,
 } from "@/services/iptv";
 import { Button } from "@/components/ui/button";
+import { useFavorites } from "@/hooks/useFavorites";
+import { cn } from "@/lib/utils";
 
 const Movies = () => {
   const { session } = useIptv();
+  const navigate = useNavigate();
+  const location = useLocation();
   const creds = session!.creds;
 
-  const [activeCategory, setActiveCategory] = useState("all");
+  const [activeCategory, setActiveCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [details, setDetails] = useState<VodStream | null>(null);
   const [playing, setPlaying] = useState<VodStream | null>(null);
-  const [onlyCompatible, setOnlyCompatible] = useState(false);
+  const [showOnlyFavs, setShowOnlyFavs] = useState(false);
+
+  const { isFavorite, toggle, favorites } = useFavorites(creds.username, "vod");
 
   const { data: categories = [] } = useQuery({
     queryKey: ["vod-cats", creds.username],
@@ -36,15 +42,25 @@ const Movies = () => {
     queryFn: () => getVodStreams(creds),
   });
 
+  // Abrir item vindo de outra página (ex: Destaques) com state.openId
+  useEffect(() => {
+    const openId = (location.state as { openId?: number } | null)?.openId;
+    if (openId && movies.length) {
+      const m = movies.find((x) => x.stream_id === openId);
+      if (m) setDetails(m);
+      // limpa o state pra não reabrir após fechar
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.state, location.pathname, movies, navigate]);
+
   const filtered = useMemo(() => {
     return movies.filter((m) => {
       const matchCat = activeCategory === "all" || m.category_id === activeCategory;
       const matchSearch = !search || m.name.toLowerCase().includes(search.toLowerCase());
-      const matchCompat =
-        !onlyCompatible || isBrowserPlayable(m.container_extension, m.direct_source);
-      return matchCat && matchSearch && matchCompat;
+      const matchFav = !showOnlyFavs || favorites.has(m.stream_id);
+      return matchCat && matchSearch && matchFav;
     });
-  }, [movies, activeCategory, search, onlyCompatible]);
+  }, [movies, activeCategory, search, showOnlyFavs, favorites]);
 
   const playingRawUrl = playing
     ? buildVodStreamUrl(
@@ -62,7 +78,7 @@ const Movies = () => {
         <p className="text-sm text-muted-foreground mt-1">{movies.length} filmes na biblioteca</p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-md flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -72,19 +88,15 @@ const Movies = () => {
             className="pl-10 bg-secondary/50 border-border/50"
           />
         </div>
-        <div className="flex items-center gap-2">
-          <Switch
-            id="movies-only-compatible"
-            checked={onlyCompatible}
-            onCheckedChange={setOnlyCompatible}
-          />
-          <Label
-            htmlFor="movies-only-compatible"
-            className="text-xs text-muted-foreground cursor-pointer"
-          >
-            Apenas compatíveis com navegador
-          </Label>
-        </div>
+        <Button
+          variant={showOnlyFavs ? "default" : "outline"}
+          size="sm"
+          onClick={() => setShowOnlyFavs((v) => !v)}
+          className={cn("gap-2", showOnlyFavs && "bg-primary text-primary-foreground")}
+        >
+          <Heart className={cn("h-4 w-4", showOnlyFavs && "fill-current")} />
+          Favoritos {favorites.size > 0 && `(${favorites.size})`}
+        </Button>
       </div>
 
       <CategoryFilter
@@ -97,6 +109,12 @@ const Movies = () => {
         <div className="flex justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">
+          {showOnlyFavs
+            ? "Você ainda não favoritou nenhum filme."
+            : "Nenhum filme encontrado."}
+        </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {filtered.slice(0, 120).map((m) => (
@@ -105,11 +123,26 @@ const Movies = () => {
               title={m.name}
               cover={m.stream_icon}
               rating={m.rating_5based}
-              onClick={() => setPlaying(m)}
+              onClick={() => setDetails(m)}
+              isFavorite={isFavorite(m.stream_id)}
+              onToggleFavorite={() => toggle(m.stream_id)}
             />
           ))}
         </div>
       )}
+
+      <MovieDetailsDialog
+        open={!!details}
+        onOpenChange={(o) => !o && setDetails(null)}
+        movie={details}
+        creds={creds}
+        onPlay={(m) => {
+          setDetails(null);
+          setPlaying(m);
+        }}
+        isFavorite={details ? isFavorite(details.stream_id) : false}
+        onToggleFavorite={details ? () => toggle(details.stream_id) : undefined}
+      />
 
       {playing && (
         <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
