@@ -1,6 +1,6 @@
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Tv, Film, Clapperboard, User, LogOut, Sparkles, Menu, X } from "lucide-react";
-import logoSuperTech from "@/assets/logo-supertech.png";
+import logoSuperTech from "@/assets/logo-supertech.webp";
 import { useState } from "react";
 import { useIptv } from "@/context/IptvContext";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,9 @@ export function Header() {
             <img
               src={logoSuperTech}
               alt="SuperTech"
+              width={36}
+              height={36}
+              decoding="async"
               className="h-9 w-9 object-contain drop-shadow-[0_0_12px_hsl(var(--primary)/0.4)]"
             />
             <span className="text-xl font-bold tracking-tight">

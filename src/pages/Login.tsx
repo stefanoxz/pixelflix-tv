@@ -12,7 +12,7 @@ import { iptvLogin, resolveStreamBase } from "@/services/iptv";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { parseM3uUrl } from "@/lib/parseM3uUrl";
-import logoSuperTech from "@/assets/logo-supertech.png";
+import logoSuperTech from "@/assets/logo-supertech.webp";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -99,6 +99,10 @@ const Login = () => {
           <img
             src={logoSuperTech}
             alt="SuperTech"
+            width={96}
+            height={96}
+            fetchPriority="high"
+            decoding="async"
             className="mx-auto h-24 w-24 object-contain mb-4 drop-shadow-[0_0_24px_hsl(var(--primary)/0.45)]"
           />
           <h1 className="text-3xl font-bold tracking-tight">
