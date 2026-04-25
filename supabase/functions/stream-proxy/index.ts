@@ -418,10 +418,11 @@ Deno.serve(async (req) => {
     // Re-sign each segment URL with a new short-lived segment token bound to
     // the same user/ip/ua. We sign here (not via stream-token call) to avoid
     // round-tripping for every line.
+    const childMode = payload.m === "stream" ? "stream" : "redirect";
     const signSegment = async (abs: string): Promise<string> => {
       const exp = Math.floor(Date.now() / 1000) + SEGMENT_TTL_S;
       const tok = await signToken({
-        u: abs, e: exp, s: payload.s, i: payload.i, h: payload.h, n: newNonce(), k: "segment",
+        u: abs, e: exp, s: payload.s, i: payload.i, h: payload.h, n: newNonce(), k: "segment", m: childMode,
       });
       return `${PROXY_BASE}?t=${encodeURIComponent(tok)}`;
     };
@@ -452,7 +453,7 @@ Deno.serve(async (req) => {
         if (isNestedPlaylist) {
           const exp = Math.floor(Date.now() / 1000) + 60;
           const tok = await signToken({
-            u: abs, e: exp, s: payload.s, i: payload.i, h: payload.h, n: newNonce(), k: "playlist",
+            u: abs, e: exp, s: payload.s, i: payload.i, h: payload.h, n: newNonce(), k: "playlist", m: childMode,
           });
           out.push(`${PROXY_BASE}?t=${encodeURIComponent(tok)}`);
         } else {
