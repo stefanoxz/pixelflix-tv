@@ -896,24 +896,24 @@ async function iptvLoginViaEdge(
   startedAt: number,
   reason: string,
 ): Promise<LoginResponse & { server_url?: string }> {
-  const result = await invokeSafe<LoginResponse & { server_url?: string }>(
-    "iptv-login",
-    creds as unknown as Record<string, unknown>,
-    "login",
-  );
-  if (result.ok) {
+  const result: SafeResult<LoginResponse & { server_url?: string }> =
+    await invokeSafe<LoginResponse & { server_url?: string }>(
+      "iptv-login",
+      creds as unknown as Record<string, unknown>,
+      "login",
+    );
+  if (result.ok === true) {
     const durationMs = Date.now() - startedAt;
     console.log("[iptv] method: edge", { reason, durationMs, result: "ok" });
     return result.data;
   }
-  const { code, error } = result;
   console.log("[iptv] method: edge", {
     reason,
     result: "fail",
-    code,
-    error,
+    code: result.code,
+    error: result.error,
   });
-  throw new Error(messageForLoginCode(code, error));
+  throw new Error(messageForLoginCode(result.code, result.error));
 }
 
 export interface Episode {
