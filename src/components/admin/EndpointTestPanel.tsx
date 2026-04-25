@@ -442,10 +442,57 @@ export function EndpointTestPanel({ allowedServers }: Props) {
     }
   };
 
+  const resolve = async () => {
+    if (!serverUrl.trim()) return;
+    setResolving(true);
+    setResolveResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke<ResolveResult>("admin-api", {
+        body: {
+          action: "resolve_endpoint",
+          payload: {
+            server_url: serverUrl.trim(),
+            username: username.trim(),
+            password: password.trim(),
+            failure_code: result?.verdict?.code ?? "",
+          },
+        },
+      });
+      if (error) throw error;
+      if (!data) throw new Error("Resposta vazia");
+      setResolveResult(data);
+      if (data.best) {
+        toast.success(`Encontrada alternativa funcional: ${data.best.base}`);
+      } else if (data.candidates.length > 0) {
+        toast.info(`${data.candidates.length} variantes responderam — verifique os candidatos.`);
+      } else {
+        toast.warning("Nenhuma variante respondeu.");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao tentar resolver";
+      toast.error(msg);
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  const applyCandidate = (base: string) => {
+    setServerUrl(base);
+    setResolveResult(null);
+    toast.success("URL aplicada — clique em 'Executar diagnóstico' para revalidar.");
+  };
+
   const copyReport = async () => {
     if (!result) return;
     try {
-      await navigator.clipboard.writeText(buildReport(result));
+      const base = buildReport(result);
+      const extra = resolveResult
+        ? "\n\n-- Tentativa de resolução --\n" +
+          `Variantes testadas: ${resolveResult.variants_tested}\n` +
+          (resolveResult.best ? `Melhor: ${resolveResult.best.base} (score ${resolveResult.best.score})\n` : "Nenhum candidato funcional.\n") +
+          resolveResult.suggestions.map((s) => `• ${s}`).join("\n")
+        : "";
+      await navigator.clipboard.writeText(base + extra);
       toast.success("Relatório copiado");
     } catch {
       toast.error("Falha ao copiar");
