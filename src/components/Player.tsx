@@ -1771,6 +1771,18 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           >
             <Flag className="h-4 w-4" />
           </Button>
+          {onClose && (
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-9 w-9 bg-black/60 hover:bg-black/80 backdrop-blur border-0 text-white"
+              onClick={onClose}
+              title="Fechar (Esc)"
+              aria-label="Fechar player"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       )}
 
