@@ -854,6 +854,223 @@ const Admin = () => {
             </Card>
           </TabsContent>
 
+          <TabsContent value="dns-errors" className="space-y-6 mt-0">
+            {(() => {
+              const buckets: ErrorBucket[] = ["refused", "reset", "http_404", "http_444", "http_5xx", "tls", "timeout", "dns", "other"];
+              const totals = dnsErrors?.totals;
+              const failRate = totals && totals.total > 0
+                ? Math.round((totals.fail / totals.total) * 100)
+                : 0;
+              return (
+                <>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-sm text-muted-foreground">Janela:</span>
+                    {[1, 6, 24, 72, 168].map((h) => (
+                      <Button
+                        key={h}
+                        size="sm"
+                        variant={dnsErrorsHours === h ? "default" : "outline"}
+                        onClick={() => setDnsErrorsHours(h)}
+                      >
+                        {h < 24 ? `${h}h` : h === 24 ? "24h" : `${Math.round(h / 24)}d`}
+                      </Button>
+                    ))}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => refreshDnsErrors(dnsErrorsHours)}
+                      className="ml-auto"
+                    >
+                      <RefreshCw className="h-3 w-3 mr-2" />
+                      Atualizar agora
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <Card className="p-5 bg-gradient-card border-border/50">
+                      <div className="h-10 w-10 rounded-lg text-primary bg-primary/10 flex items-center justify-center mb-3">
+                        <Activity className="h-5 w-5" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">Tentativas</p>
+                      <p className="text-2xl font-bold mt-1">{totals?.total ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground mt-1">na janela</p>
+                    </Card>
+                    <Card className="p-5 bg-gradient-card border-border/50">
+                      <div className="h-10 w-10 rounded-lg text-success bg-success/10 flex items-center justify-center mb-3">
+                        <CheckCircle2 className="h-5 w-5" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">Sucessos</p>
+                      <p className="text-2xl font-bold mt-1">{totals?.success ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {totals && totals.total > 0
+                          ? `${Math.round((totals.success / totals.total) * 100)}%`
+                          : "—"}
+                      </p>
+                    </Card>
+                    <Card className="p-5 bg-gradient-card border-border/50">
+                      <div className="h-10 w-10 rounded-lg text-destructive bg-destructive/10 flex items-center justify-center mb-3">
+                        <XCircle className="h-5 w-5" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">Falhas</p>
+                      <p className="text-2xl font-bold mt-1">{totals?.fail ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{failRate}% do total</p>
+                    </Card>
+                    <Card className="p-5 bg-gradient-card border-border/50">
+                      <div className="h-10 w-10 rounded-lg text-warning bg-warning/10 flex items-center justify-center mb-3">
+                        <Server className="h-5 w-5" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">Servidores afetados</p>
+                      <p className="text-2xl font-bold mt-1">
+                        {dnsErrors?.servers.filter((s) => s.fail > 0).length ?? "—"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">com ≥1 falha</p>
+                    </Card>
+                  </div>
+
+                  <Card className="p-6 bg-gradient-card border-border/50">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-semibold">Distribuição global de erros</h2>
+                      <span className="flex items-center gap-1.5 text-xs text-success">
+                        <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+                        Tempo real (10s)
+                      </span>
+                    </div>
+                    {!totals || totals.fail === 0 ? (
+                      <p className="text-sm text-muted-foreground py-6 text-center">
+                        Sem falhas registradas na janela selecionada.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {buckets.map((b) => {
+                          const count = totals.buckets[b];
+                          if (count === 0) return null;
+                          const pct = (count / totals.fail) * 100;
+                          const meta = ERROR_BUCKET_META[b];
+                          return (
+                            <TooltipProvider key={b} delayDuration={150}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="space-y-1 cursor-help">
+                                    <div className="flex items-center justify-between text-sm">
+                                      <span className="font-medium">{meta.label}</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        {count} ({pct.toFixed(1)}%)
+                                      </span>
+                                    </div>
+                                    <div className="h-2 rounded-full bg-secondary/50 overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full ${meta.cls.split(" ")[0].replace("text-", "bg-")}`}
+                                        style={{ width: `${Math.max(pct, 2)}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>{meta.tip}</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </Card>
+
+                  <Card className="p-6 bg-gradient-card border-border/50">
+                    <h2 className="text-lg font-semibold mb-4">Por servidor (DNS)</h2>
+                    {!dnsErrors?.servers.length ? (
+                      <p className="text-sm text-muted-foreground py-6 text-center">
+                        Sem dados na janela selecionada.
+                      </p>
+                    ) : (
+                      <div className="divide-y divide-border/50">
+                        <div className="grid grid-cols-12 gap-3 px-2 py-2 text-xs font-medium text-muted-foreground">
+                          <div className="col-span-4">DNS</div>
+                          <div className="col-span-2 text-center">Tentativas</div>
+                          <div className="col-span-2 text-center">% falhas</div>
+                          <div className="col-span-4">Tipos de erro</div>
+                        </div>
+                        {dnsErrors.servers.map((s) => {
+                          const failPct = s.total > 0 ? (s.fail / s.total) * 100 : 0;
+                          const status: { label: string; cls: string; tip: string } =
+                            s.fail === 0 && s.success > 0
+                              ? { label: "OK", cls: "text-success bg-success/10", tip: "Sem falhas registradas." }
+                              : failPct >= 80
+                                ? { label: "Crítico", cls: "text-destructive bg-destructive/10", tip: "≥80% das tentativas falharam." }
+                                : failPct >= 30
+                                  ? { label: "Instável", cls: "text-warning bg-warning/10", tip: "Entre 30% e 80% de falhas." }
+                                  : { label: "OK", cls: "text-success bg-success/10", tip: "<30% de falhas." };
+                          const topBuckets = (Object.entries(s.buckets) as [ErrorBucket, number][])
+                            .filter(([, n]) => n > 0)
+                            .sort((a, b) => b[1] - a[1])
+                            .slice(0, 4);
+                          return (
+                            <div key={s.server_url} className="grid grid-cols-12 gap-3 px-2 py-3 items-center text-sm">
+                              <div className="col-span-4 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <TooltipProvider delayDuration={150}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${status.cls}`}>
+                                          {status.label}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{status.tip}</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <span className="font-mono text-xs truncate">{s.server_url}</span>
+                                </div>
+                                {s.last_error && (
+                                  <p className="text-[11px] text-muted-foreground truncate mt-1">
+                                    Último: {s.last_error.slice(0, 90)}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="col-span-2 text-center">
+                                <p className="font-medium">{s.total}</p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {s.success} ok · {s.fail} fail
+                                </p>
+                              </div>
+                              <div className="col-span-2 text-center">
+                                <p className={`font-bold ${failPct >= 80 ? "text-destructive" : failPct >= 30 ? "text-warning" : "text-success"}`}>
+                                  {failPct.toFixed(0)}%
+                                </p>
+                                <div className="h-1.5 rounded-full bg-secondary/50 overflow-hidden mt-1">
+                                  <div
+                                    className={failPct >= 80 ? "h-full bg-destructive" : failPct >= 30 ? "h-full bg-warning" : "h-full bg-success"}
+                                    style={{ width: `${failPct}%` }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="col-span-4 flex flex-wrap gap-1">
+                                {topBuckets.length === 0 ? (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                ) : topBuckets.map(([b, n]) => {
+                                  const meta = ERROR_BUCKET_META[b];
+                                  return (
+                                    <TooltipProvider key={b} delayDuration={150}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${meta.cls} cursor-help`}>
+                                            {meta.label} · {n}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>{meta.tip}</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </Card>
+                </>
+              );
+            })()}
+          </TabsContent>
+
           <TabsContent value="dashboard" className="space-y-6 mt-0">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {statCards.map((s) => {
