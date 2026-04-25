@@ -24,27 +24,11 @@ const ENGINE_LABEL: Record<PlaybackEngine, string> = {
   external: "Externo",
 };
 
-const ENGINE_STORAGE_PREFIX = "player.engine.host:";
 const MPEGTS_BOOTSTRAP_TIMEOUT_MS = 8_000;
 
 function safeHostFromUrl(u: string | null | undefined): string | null {
   if (!u) return null;
   try { return new URL(u).host.toLowerCase(); } catch { return null; }
-}
-
-function getPreferredEngine(host: string | null): PlaybackEngine | null {
-  if (!host) return null;
-  try {
-    const v = localStorage.getItem(`${ENGINE_STORAGE_PREFIX}${host}`);
-    if (v === "hls" || v === "mpegts" || v === "external") return v;
-  } catch { /* noop */ }
-  return null;
-}
-
-function setPreferredEngine(host: string | null, engine: PlaybackEngine) {
-  if (!host) return;
-  try { localStorage.setItem(`${ENGINE_STORAGE_PREFIX}${host}`, engine); }
-  catch { /* noop */ }
 }
 
 /** Detecta canal ao vivo Xtream: /live/<u>/<p>/<id>.m3u8 */
@@ -72,6 +56,8 @@ import {
   markHostSuccess,
   markHostFailure,
   shouldUseProxy,
+  getPreferredEngine,
+  setPreferredEngine,
   type PlaybackStrategy,
   type StreamMode,
 } from "@/services/iptv";
