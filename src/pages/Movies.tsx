@@ -34,9 +34,11 @@ const Movies = () => {
   const location = useLocation();
   const creds = session!.creds;
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
 
   const [activeCategory, setActiveCategory] = useState<string>(SPECIAL_ALL);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 250);
   const [activeId, setActiveId] = useState<number | undefined>();
   const [openMovie, setOpenMovie] = useState<VodStream | null>(null);
   const [playing, setPlaying] = useState<VodStream | null>(null);
