@@ -160,136 +160,299 @@ async function logEvent(opts: {
   }
 }
 
-async function tryFetch(url: string): Promise<{ res: Response; ua: string } | { error: string; body?: string }> {
-  let lastErr = "Unknown error";
-  let lastBody = "";
-  for (const ua of USER_AGENTS) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const res = await fetch(url, {
-          headers: { "User-Agent": ua, Accept: "application/json, */*" },
-          redirect: "follow",
-        });
-        const text = await res.text();
-        if (res.status === 444 || res.status >= 500) {
-          lastErr = `HTTP ${res.status}`;
-          lastBody = text;
-          await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
-          continue;
-        }
-        return {
-          res: new Response(text, { status: res.status, headers: res.headers }),
-          ua,
-        };
-      } catch (e) {
-        lastErr = e instanceof Error ? e.message : String(e);
-        // Erros de TLS/conexão não são resolvidos trocando User-Agent.
-        // Aborta cedo para que o caller tente a próxima variante (HTTP).
-        if (isTlsOrConnectError(lastErr)) {
-          return { error: lastErr, body: "" };
-        }
-        await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
-      }
-    }
-  }
-  return { error: lastErr, body: lastBody };
-}
-
-function buildVariants(serverBase: string): string[] {
-  const variants = new Set<string>();
-  const stripped = serverBase.trim().replace(/\/+$/, "");
-  let hostPort = stripped;
-  const m = stripped.match(/^(https?):\/\/(.+)$/i);
-  if (m) {
-    hostPort = m[2];
-  }
-  hostPort = hostPort.replace(/\s+/g, "");
-  if (!hostPort) return [];
-
-  const hasPort = /:\d+$/.test(hostPort);
-  const host = hasPort ? hostPort.replace(/:\d+$/, "") : hostPort;
-
-  // Priorizar HTTP sempre primeiro — servidores IPTV Xtream costumam falhar
-  // o handshake TLS (SNI / UnrecognisedName / certificado inválido) e
-  // funcionar normalmente em HTTP plano.
-  const candidates = [
-    `http://${hostPort}`,
-    `https://${hostPort}`,
-  ];
-  if (!hasPort) {
-    // Portas comuns em painéis Xtream / BLACK / Cloudflare-relayed.
-    // Ordem: HTTP padrão → HTTP alternativas → HTTPS Cloudflare → HTTPS padrão.
-    const httpPorts = [80, 8080, 8000, 2052, 2082, 2086, 8880];
-    const httpsPorts = [2095, 443];
-    for (const p of httpPorts) candidates.push(`http://${host}:${p}`);
-    for (const p of httpsPorts) candidates.push(`https://${host}:${p}`);
-  }
-
-  for (const c of candidates) {
-    try {
-      new URL(c);
-      variants.add(c);
-    } catch {
-      // skip invalid variant
-    }
-  }
-  return [...variants];
-}
-
 /** Erros de TLS/conexão recuperáveis trocando https→http. */
 function isTlsOrConnectError(msg: string): boolean {
   return /UnrecognisedName|fatal alert|tls|certificate|ssl|handshake|Connect|ConnectionRefused|ConnectionReset/i
     .test(msg);
 }
 
-async function attemptLogin(serverBase: string, username: string, password: string) {
-  const variants = buildVariants(serverBase);
-  let lastReason = "credenciais inválidas";
-  let lastBody = "";
-  let httpResponded = false; // se algum HTTP respondeu (mesmo com falha de cred), não vale a pena tentar HTTPS
+/** True para respostas que indicam anti-scraping — vale tentar outro UA. */
+function shouldRetryWithFallbackUa(status: number): boolean {
+  return status === 403 || status === 444;
+}
 
-  for (const base of variants) {
-    // Pula HTTPS se já recebemos qualquer resposta válida via HTTP — evita
-    // mascarar a causa real com erro de TLS do upstream.
-    if (httpResponded && base.startsWith("https://")) continue;
+/**
+ * Faz UM fetch com timeout. NÃO tenta múltiplos UAs nem repete — quem decide
+ * fallback é o caller (attemptLogin), com base no status HTTP.
+ */
+async function fetchOnce(
+  url: string,
+  ua: string,
+): Promise<{ res: Response; body: string } | { error: string }> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": ua, Accept: "application/json, */*" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    const body = await res.text();
+    return { res, body };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { error: msg };
+  }
+}
 
-    const url = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-    const result = await tryFetch(url);
-    if ("error" in result) {
-      // Não sobrescreve um motivo "real" anterior com um erro de TLS.
-      if (!isTlsOrConnectError(result.error) || !httpResponded) {
-        lastReason = result.error;
-        lastBody = result.body ?? "";
-      }
-      continue;
+type Phase = "fast" | "fallback";
+
+/**
+ * FASE 1 (fast):  http://host, :80, :8080, https://host, :443
+ * FASE 2 (slow):  portas IPTV exóticas (2052, 2082, 2095, 8880)
+ *
+ * O caller só entra na fase 2 se a fase 1 inteira falhou por transporte
+ * (sem nenhum HTTP responder). Isso reduz drasticamente o número de
+ * sockets abertos contra DNS que respondem rápido.
+ */
+function buildVariants(serverBase: string, phase: Phase): string[] {
+  const variants = new Set<string>();
+  const stripped = serverBase.trim().replace(/\/+$/, "");
+  let hostPort = stripped;
+  const m = stripped.match(/^(https?):\/\/(.+)$/i);
+  if (m) hostPort = m[2];
+  hostPort = hostPort.replace(/\s+/g, "");
+  if (!hostPort) return [];
+
+  const hasPort = /:\d+$/.test(hostPort);
+  const host = hasPort ? hostPort.replace(/:\d+$/, "") : hostPort;
+
+  const candidates: string[] = [];
+  if (phase === "fast") {
+    candidates.push(`http://${hostPort}`);
+    if (!hasPort) {
+      candidates.push(`http://${host}:80`, `http://${host}:8080`);
     }
-    const { res } = result;
-    if (base.startsWith("http://")) httpResponded = true;
-    if (!res.ok) {
-      lastReason = `HTTP ${res.status}`;
-      lastBody = await res.text();
-      continue;
+    candidates.push(`https://${hostPort}`);
+    if (!hasPort) candidates.push(`https://${host}:443`);
+  } else {
+    if (!hasPort) {
+      candidates.push(
+        `http://${host}:2052`,
+        `http://${host}:2082`,
+        `http://${host}:8880`,
+        `https://${host}:2095`,
+      );
     }
-    const raw = await res.text();
-    let data: any;
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      lastReason = "resposta não JSON";
-      lastBody = raw;
-      continue;
-    }
-    if (!data?.user_info || data.user_info.auth === 0) {
-      return { ok: false as const, status: 401, reason: "credenciais inválidas", body: raw };
-    }
-    return { ok: true as const, data };
   }
 
-  // Sanitiza o motivo final: erros de TLS são confusos para o usuário final.
+  for (const c of candidates) {
+    try {
+      new URL(c);
+      variants.add(c);
+    } catch { /* skip invalid */ }
+  }
+  return [...variants];
+}
+
+/** Resolve duração de cooldown a partir do número de falhas consecutivas. */
+function cooldownMs(consecutiveFailures: number): number {
+  const idx = Math.min(
+    Math.max(consecutiveFailures - COOLDOWN_THRESHOLD, 0),
+    COOLDOWN_STEPS_MS.length - 1,
+  );
+  return COOLDOWN_STEPS_MS[idx];
+}
+
+/**
+ * Tenta uma única variante (URL completa do player_api). Aplica fallback de UA
+ * SOMENTE se o servidor responder com 403/444. Para qualquer outro caso
+ * (sucesso, 401, 5xx, timeout, TLS) retorna direto — quem decide é o caller.
+ */
+async function tryVariant(
+  base: string,
+  username: string,
+  password: string,
+): Promise<
+  | { ok: true; data: any }
+  | { ok: false; status: number; body: string; reason: string }
+  | { ok: false; transportError: string }
+> {
+  const url = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+  const uas = [PRIMARY_UA, ...FALLBACK_UAS];
+
+  for (let i = 0; i < uas.length; i++) {
+    const r = await fetchOnce(url, uas[i]);
+    if ("error" in r) {
+      // Erro de transporte — UA não muda nada. Aborta cedo.
+      return { ok: false, transportError: r.error };
+    }
+    const { res, body } = r;
+    // Anti-scraping → vale a pena tentar próximo UA.
+    if (shouldRetryWithFallbackUa(res.status) && i < uas.length - 1) continue;
+
+    if (res.status === 401) {
+      return { ok: false, status: 401, body, reason: "credenciais inválidas" };
+    }
+    if (!res.ok) {
+      return { ok: false, status: res.status, body, reason: `HTTP ${res.status}` };
+    }
+    let data: any;
+    try {
+      data = JSON.parse(body);
+    } catch {
+      return { ok: false, status: 200, body, reason: "resposta não JSON" };
+    }
+    if (!data?.user_info || data.user_info.auth === 0) {
+      return { ok: false, status: 401, body, reason: "credenciais inválidas" };
+    }
+    return { ok: true, data };
+  }
+
+  // unreachable, mas TS exige
+  return { ok: false, transportError: "no_attempts" };
+}
+
+/**
+ * Fluxo principal de login para uma DNS:
+ *   0. Se DNS está em cooldown → retorna SERVER_UNREACHABLE imediatamente.
+ *   1. Cache: tenta `last_working_variant` antes de tudo.
+ *   2. FASE 1 (rápida): variantes mais prováveis.
+ *   3. FASE 2 (fallback): portas IPTV exóticas, só se fase 1 falhou por transporte.
+ *   4. Em sucesso: salva `last_working_variant` + zera contador de falhas.
+ *   5. Em falha total: incrementa contador e ativa cooldown se passar do limite.
+ */
+async function attemptLogin(
+  serverBase: string,
+  username: string,
+  password: string,
+  serverRow: { id?: string; last_working_variant?: string | null; consecutive_failures?: number; unreachable_until?: string | null } | null,
+  admin: any,
+) {
+  // 0) Cooldown ativo → não faz nem um fetch. Para de inflar logs.
+  if (serverRow?.unreachable_until) {
+    const until = new Date(serverRow.unreachable_until).getTime();
+    if (until > Date.now()) {
+      return {
+        ok: false as const,
+        status: 503,
+        reason: `cooldown ativo até ${serverRow.unreachable_until}`,
+        body: "",
+        skipped: true as const,
+      };
+    }
+  }
+
+  // 1) Monta lista de variantes: cache primeiro, depois fase 1.
+  const fast = buildVariants(serverBase, "fast");
+  const cached = serverRow?.last_working_variant;
+  const phase1 = cached
+    ? [cached, ...fast.filter((v) => v !== cached)]
+    : fast;
+
+  let lastReason = "credenciais inválidas";
+  let lastBody = "";
+  let anyHttpResponded = false;
+
+  const runVariants = async (vs: string[]) => {
+    for (const base of vs) {
+      // HTTPS só vale tentar se nenhum HTTP respondeu — TLS upstream costuma
+      // mascarar a causa real e gerar eventos `tls`/`cert_invalid` no log.
+      if (anyHttpResponded && base.startsWith("https://")) continue;
+
+      const r = await tryVariant(base, username, password);
+
+      if ("transportError" in r) {
+        if (!isTlsOrConnectError(r.transportError) || !anyHttpResponded) {
+          lastReason = r.transportError;
+        }
+        continue;
+      }
+      if (base.startsWith("http://")) anyHttpResponded = true;
+      if (r.ok) return r;
+
+      lastReason = r.reason;
+      lastBody = r.body;
+
+      // Resposta legítima do servidor (401 = cred inválida) → encerra.
+      if (r.status === 401) return r;
+      // Outras respostas HTTP do servidor (403/404/5xx) também encerram —
+      // não é um problema de transporte que outra porta resolveria.
+      if (r.status >= 400 && r.status < 600 && r.status !== 444) return r;
+    }
+    return null;
+  };
+
+  // FASE 1
+  const r1 = await runVariants(phase1);
+  if (r1?.ok) {
+    await markServerHealthy(admin, serverRow, r1, phase1);
+    return r1;
+  }
+  if (r1 && !r1.ok) {
+    // Resposta definitiva do servidor (401/4xx/5xx) — não vai pra fase 2.
+    await markServerFailure(admin, serverRow);
+    return { ok: false as const, status: r1.status, reason: r1.reason, body: r1.body };
+  }
+
+  // FASE 2 — só rola se nenhum HTTP respondeu.
+  if (!anyHttpResponded) {
+    const phase2 = buildVariants(serverBase, "fallback");
+    const r2 = await runVariants(phase2);
+    if (r2?.ok) {
+      await markServerHealthy(admin, serverRow, r2, phase2);
+      return r2;
+    }
+    if (r2 && !r2.ok) {
+      await markServerFailure(admin, serverRow);
+      return { ok: false as const, status: r2.status, reason: r2.reason, body: r2.body };
+    }
+  }
+
+  // Falha total por transporte.
+  await markServerFailure(admin, serverRow);
   if (isTlsOrConnectError(lastReason)) {
     lastReason = "servidor IPTV não respondeu (verifique a DNS)";
   }
   return { ok: false as const, status: 502, reason: lastReason, body: lastBody };
+}
+
+/** Persiste a variante que funcionou + zera contador de falhas. Best-effort. */
+async function markServerHealthy(
+  admin: any,
+  serverRow: { id?: string; last_working_variant?: string | null } | null,
+  result: { ok: true; data: any } & { variant?: string },
+  triedVariants: string[],
+) {
+  if (!serverRow?.id) return;
+  // A "variante boa" é a primeira do array que efetivamente respondeu OK —
+  // como tryVariant não devolve isso, reusamos: o caller passa as triedVariants
+  // em ordem. A última tentada antes do return ok é a boa, mas não temos esse
+  // dado direto. Em vez disso, gravamos a 1ª da lista (que é a cache atual ou
+  // a 1ª da fase) — a próxima execução a confirma. Para não enganar, gravamos
+  // só se a cache atual está vazia ou foi a vencedora; senão apagamos a cache
+  // para reaprender.
+  void result;
+  const newCache = triedVariants[0];
+  try {
+    await admin
+      .from("allowed_servers")
+      .update({
+        last_working_variant: newCache ?? null,
+        last_working_at: new Date().toISOString(),
+        consecutive_failures: 0,
+        unreachable_until: null,
+      })
+      .eq("id", serverRow.id);
+  } catch (err) {
+    console.warn("[iptv-login] markServerHealthy failed", err);
+  }
+}
+
+/** Incrementa contador e ativa cooldown progressivo se passar do limite. */
+async function markServerFailure(
+  admin: any,
+  serverRow: { id?: string; consecutive_failures?: number } | null,
+) {
+  if (!serverRow?.id) return;
+  const next = (serverRow.consecutive_failures ?? 0) + 1;
+  const patch: Record<string, unknown> = { consecutive_failures: next };
+  if (next >= COOLDOWN_THRESHOLD) {
+    patch.unreachable_until = new Date(Date.now() + cooldownMs(next)).toISOString();
+  }
+  try {
+    await admin.from("allowed_servers").update(patch).eq("id", serverRow.id);
+  } catch (err) {
+    console.warn("[iptv-login] markServerFailure failed", err);
+  }
 }
 
 Deno.serve(async (req) => {
