@@ -782,6 +782,15 @@ const Admin = () => {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
+          <TabsContent value="endpoint-test" className="space-y-6 mt-0">
+            <EndpointTestPanel
+              allowedServers={allowed.map((s) => ({
+                server_url: s.server_url,
+                label: s.label,
+              }))}
+            />
+          </TabsContent>
+
           <TabsContent value="monitoring" className="space-y-6 mt-0">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <Card className="p-5 bg-gradient-card border-border/50">
