@@ -50,12 +50,10 @@ export function SeriesDetailsDialog({
 
   const info = data?.info;
   const cover = info?.cover || series.cover;
-  const backdrop = Array.isArray(info?.backdrop_path)
-    ? info!.backdrop_path[0]
-    : (info?.backdrop_path as string | undefined) || cover;
+  const backdrop = cover;
   const releaseDate = series.releaseDate || info?.releaseDate;
   const year = releaseDate ? releaseDate.slice(0, 4) : null;
-  const ratingNum = series.rating_5based || (info?.rating_5based ?? 0);
+  const ratingNum = series.rating_5based || 0;
   const plot = series.plot || info?.plot;
   const cast = series.cast || info?.cast;
   const director = series.director || info?.director;
