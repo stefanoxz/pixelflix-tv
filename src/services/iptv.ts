@@ -959,16 +959,26 @@ async function iptvLoginViaEdge(
   startedAt: number,
   reason: string,
 ): Promise<LoginResponse & { server_url?: string }> {
+  const speedPromise = runQuickSpeedProbe(2500);
   const result: SafeResult<LoginResponse & { server_url?: string }> =
     await invokeSafe<LoginResponse & { server_url?: string }>(
       "iptv-login",
       creds as unknown as Record<string, unknown>,
       "login",
     );
+  const durationMs = Date.now() - startedAt;
+  const speed_kbps = await speedPromise.catch(() => null);
+
   if (result.ok === true) {
-    const durationMs = Date.now() - startedAt;
     const route = (result.data as any)?.route ?? "direct";
     console.log("[iptv] method: edge", { reason, durationMs, route, result: "ok" });
+    void reportDiagnostic({
+      outcome: "success",
+      username: creds.username,
+      server_url: (result.data as any)?.server_url ?? creds.server ?? null,
+      duration_ms: durationMs,
+      speed_kbps,
+    });
     return result.data;
   }
   console.log("[iptv] method: edge", {
@@ -976,6 +986,16 @@ async function iptvLoginViaEdge(
     result: "fail",
     code: result.code,
     error: result.error,
+  });
+  const outcome: "timeout" | "fail" =
+    result.code === "TIMEOUT" || result.code === "OFFLINE" ? "timeout" : "fail";
+  void reportDiagnostic({
+    outcome,
+    username: creds.username,
+    server_url: creds.server ?? null,
+    client_error: `${result.code}: ${result.error}`.slice(0, 480),
+    duration_ms: durationMs,
+    speed_kbps,
   });
   throw new Error(messageForLoginCode(result.code, result.error));
 }
