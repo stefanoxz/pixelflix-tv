@@ -766,6 +766,7 @@ const Admin = () => {
                 : tab === "users" ? "Usuários"
                 : tab === "endpoint-test" ? "Testar endpoint"
                 : tab === "client-diagnostics" ? "Diagnóstico de clientes"
+                : tab === "pending-signups" ? "Novos cadastros"
                 : "DNS / Servidores"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
