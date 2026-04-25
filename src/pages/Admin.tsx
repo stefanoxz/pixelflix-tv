@@ -141,8 +141,13 @@ type ErrorBucket =
   | "http_444"
   | "http_5xx"
   | "tls"
+  | "cert_invalid"
   | "timeout"
+  | "io_timeout"
   | "dns"
+  | "no_route"
+  | "net_unreach"
+  | "protocol"
   | "other";
 
 interface DnsErrorServer {
@@ -192,22 +197,47 @@ const ERROR_BUCKET_META: Record<ErrorBucket, { label: string; cls: string; tip: 
   http_5xx: {
     label: "HTTP 5xx",
     cls: "text-warning bg-warning/10",
-    tip: "Erro interno do servidor (sobrecarga ou falha).",
+    tip: "Erro interno do servidor (sobrecarga, 502/503/504).",
   },
   tls: {
     label: "TLS / SSL",
     cls: "text-warning bg-warning/10",
-    tip: "Falha de TLS/SSL (certificado, handshake, UnrecognisedName).",
+    tip: "Falha de TLS/SSL (handshake, UnrecognisedName, alert).",
+  },
+  cert_invalid: {
+    label: "Certificado inválido",
+    cls: "text-destructive bg-destructive/10",
+    tip: "Certificate verify failed: expirado, autoassinado ou hostname inválido.",
   },
   timeout: {
     label: "Timeout",
     cls: "text-warning bg-warning/10",
     tip: "Servidor não respondeu no tempo limite.",
   },
+  io_timeout: {
+    label: "I/O timeout",
+    cls: "text-warning bg-warning/10",
+    tip: "Tempo limite em leitura/escrita do socket (read/write timeout).",
+  },
   dns: {
     label: "DNS off",
     cls: "text-destructive bg-destructive/10",
     tip: "Domínio não resolveu (DNS inválido ou removido).",
+  },
+  no_route: {
+    label: "No route to host",
+    cls: "text-destructive bg-destructive/10",
+    tip: "Sem rota até o host (EHOSTUNREACH). IP inválido ou bloqueado.",
+  },
+  net_unreach: {
+    label: "Rede inacessível",
+    cls: "text-destructive bg-destructive/10",
+    tip: "Network is unreachable (ENETUNREACH). Problema de roteamento.",
+  },
+  protocol: {
+    label: "Protocolo inválido",
+    cls: "text-warning bg-warning/10",
+    tip: "Resposta HTTP malformada (parse error, EOF inesperado).",
   },
   other: {
     label: "Outros",
