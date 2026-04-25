@@ -132,8 +132,29 @@ type RootCause =
 const HLS_CONFIG: Partial<Hls["config"]> = {
   lowLatencyMode: true,
   enableWorker: true,
-  maxBufferLength: 30,
-  maxMaxBufferLength: 60,
+  // Buffer alvo no início — começa a tocar com pouco buffer, não com 30s.
+  maxBufferLength: 12,
+  maxMaxBufferLength: 30,
+  maxBufferSize: 30 * 1000 * 1000,
+  // Live: ficar próximo do edge.
+  liveSyncDurationCount: 2,
+  liveMaxLatencyDurationCount: 6,
+  // Otimizações de TTFF
+  startLevel: 0,                // começa pelo menor bitrate (instantâneo), ABR sobe depois
+  startFragPrefetch: true,      // pré-busca o próximo fragmento já no manifest
+  backBufferLength: 0,          // não acumula histórico — libera memória pro start
+  maxBufferHole: 0.1,           // tolera pequenos gaps sem stall
+  highBufferWatchdogPeriod: 1,  // reage rápido a stalls
+  // Timeouts mais curtos do que os defaults (~20s).
+  manifestLoadingTimeOut: 8_000,
+  manifestLoadingMaxRetry: 2,
+  manifestLoadingRetryDelay: 500,
+  levelLoadingTimeOut: 8_000,
+  levelLoadingMaxRetry: 2,
+  levelLoadingRetryDelay: 500,
+  fragLoadingTimeOut: 12_000,
+  fragLoadingMaxRetry: 4,
+  fragLoadingRetryDelay: 500,
 };
 
 const HEARTBEAT_INTERVAL_MS = 45_000;
@@ -767,6 +788,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
               hls.once(Hls.Events.MEDIA_ATTACHED, () => {
                 if (cancelled) return;
                 pushLog({ source: "hls", level: "info", label: "media_attached" });
+                // Play antecipado: dispara `play()` antes do manifest parsear.
+                // O navegador aguarda dados sem custo extra e renderiza o
+                // primeiro frame assim que o segmento chega.
+                if (autoPlay) video.play().catch(() => {});
                 try { hls.loadSource(safeSrc); } catch (e) {
                   const msg = `loadSource falhou: ${(e as Error).message}`;
                   lastReasonRef.current = msg;
@@ -782,8 +807,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                 lastReasonRef.current = "manifest carregado";
                 setLastReason("manifest carregado");
                 pushLog({ source: "hls", level: "info", label: "manifest_parsed" });
-                if (autoPlay) video.play().catch(() => {});
-                // NB: don't touch loading or status here — wait for real `playing`.
+                // play() já foi disparado em MEDIA_ATTACHED.
               });
 
               hls.on(Hls.Events.ERROR, (_evt, data: ErrorData) => {
