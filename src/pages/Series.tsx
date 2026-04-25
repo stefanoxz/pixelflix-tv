@@ -261,6 +261,42 @@ const SeriesPage = () => {
     });
   }, [nextEpisodeInfo, playingEp]);
 
+  // Prefetch do próximo episódio (token + warm-up TCP/TLS) ~1.5s antes do
+  // autoplay disparar, para reduzir latência ao trocar automaticamente.
+  const prefetchAbortRef = useRef<AbortController | null>(null);
+  const handlePrefetchNext = useCallback(() => {
+    if (!nextEpisodeInfo) return;
+    const ep = nextEpisodeInfo.ep;
+    const url = buildSeriesEpisodeUrl(
+      creds,
+      ep.id,
+      ep.container_extension,
+      ep.direct_source,
+    );
+    if (!url) return;
+    // Cancela qualquer prefetch anterior (ex: usuário cancelou e voltou).
+    prefetchAbortRef.current?.abort();
+    const ac = new AbortController();
+    prefetchAbortRef.current = ac;
+    const ext = normalizeExt(ep.container_extension);
+    const kind = ext === "m3u8" ? "playlist" : "segment";
+    void primeStreamToken({
+      url,
+      kind,
+      iptvUsername: creds.username,
+      mode: "redirect",
+      signal: ac.signal,
+    });
+  }, [nextEpisodeInfo, creds]);
+
+  // Aborta prefetch se o card fechar sem disparar autoplay.
+  useEffect(() => {
+    if (!showNextCard) {
+      prefetchAbortRef.current?.abort();
+      prefetchAbortRef.current = null;
+    }
+  }, [showNextCard]);
+
   const epUrl = playingEp
     ? buildSeriesEpisodeUrl(
         creds,
