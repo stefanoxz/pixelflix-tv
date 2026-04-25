@@ -1290,7 +1290,17 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       if (stallTimeoutRef.current === null) {
         stallTimeoutRef.current = window.setTimeout(() => {
           updateStatus("stall_timeout", lastReasonRef.current || "BUFFER_STALLED_ERROR");
-          pushLog({ source: "diag", level: "error", label: "stall_timeout_8s", details: lastReasonRef.current ?? undefined });
+          pushLog({
+            source: "diag",
+            level: "error",
+            label: "stall_timeout",
+            details: `${Math.round(STALL_TIMEOUT_MS / 1000)}s — ${lastReasonRef.current ?? "no reason"}`,
+            meta: {
+              ...captureNetMeta(),
+              fragErrors: fragLoadErrorCountRef.current,
+              fatalRetries: retryCountRef.current,
+            },
+          });
         }, STALL_TIMEOUT_MS);
       }
     };
@@ -1305,7 +1315,17 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       if (stallTimeoutRef.current === null) {
         stallTimeoutRef.current = window.setTimeout(() => {
           updateStatus("stall_timeout", "BUFFER_STALLED_ERROR");
-          pushLog({ source: "diag", level: "error", label: "stall_timeout_8s", details: "BUFFER_STALLED_ERROR" });
+          pushLog({
+            source: "diag",
+            level: "error",
+            label: "stall_timeout",
+            details: `${Math.round(STALL_TIMEOUT_MS / 1000)}s — BUFFER_STALLED_ERROR`,
+            meta: {
+              ...captureNetMeta(),
+              fragErrors: fragLoadErrorCountRef.current,
+              fatalRetries: retryCountRef.current,
+            },
+          });
         }, STALL_TIMEOUT_MS);
       }
     };
