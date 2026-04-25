@@ -749,6 +749,7 @@ const Admin = () => {
                 : tab === "monitoring" ? "Monitoramento"
                 : tab === "dns-errors" ? "Erros por DNS"
                 : tab === "users" ? "Usuários"
+                : tab === "endpoint-test" ? "Testar endpoint"
                 : "DNS / Servidores"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
@@ -756,6 +757,7 @@ const Admin = () => {
                 : tab === "monitoring" ? "Sessões ativas, consumo e bloqueios — atualiza a cada 10s"
                 : tab === "dns-errors" ? "Distribuição de falhas por servidor — atualiza a cada 10s"
                 : tab === "users" ? "Quem está acessando a plataforma"
+                : tab === "endpoint-test" ? "Diagnóstico de uma DNS específica — exibe se a resposta veio direto ou via proxy"
                 : "Cadastre as DNS autorizadas. Sem cadastro prévio, o cliente não consegue logar."}
             </p>
           </div>
