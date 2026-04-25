@@ -1441,7 +1441,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         updateStatus("playback_started", null);
         setRootCauseOnce("ok", `TTFF=${ttff}ms`);
         markHostSuccess(rawUrl ?? src);
-        setPreferredEngine(safeHostFromUrl(rawUrl ?? src), engine);
+        if (engine === "hls" || engine === "mpegts") setPreferredEngine(rawUrl ?? src, engine);
         reportStreamEvent("stream_started", { url: src ?? undefined, meta: { trigger: "playing_event", ttff_ms: ttff } });
       } else if (status === "stall_timeout") {
         updateStatus("playback_started", "recuperado após stall");
@@ -1466,7 +1466,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         }
         updateStatus("playback_started", null);
         markHostSuccess(rawUrl ?? src);
-        setPreferredEngine(safeHostFromUrl(rawUrl ?? src), engine);
+        if (engine === "hls" || engine === "mpegts") setPreferredEngine(rawUrl ?? src, engine);
       }
     };
     const onError = () => {
@@ -1542,7 +1542,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
   const handleEngineChange = (next: PlaybackEngine) => {
     if (next === engine) return;
-    setPreferredEngine(safeHostFromUrl(rawUrl ?? src), next);
+    if (next === "hls" || next === "mpegts") setPreferredEngine(rawUrl ?? src, next);
     pushLog({ source: "diag", level: "info", label: "engine_change", details: `${engine} → ${next}` });
     console.log("[player] engine_change:", engine, "→", next);
     setError(null);
