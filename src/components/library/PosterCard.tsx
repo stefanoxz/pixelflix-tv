@@ -2,6 +2,7 @@ import { forwardRef, memo, useState } from "react";
 import { Heart, Star, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { proxyImageUrl } from "@/services/iptv";
+import { useTmdbFallback } from "@/hooks/useTmdbFallback";
 
 export interface PosterItem {
   id: number;
@@ -11,6 +12,8 @@ export interface PosterItem {
   rating?: number;
   /** Host upstream do conteúdo — usado para checar a marca de incompatibilidade. */
   host?: string | null;
+  /** Tipo de mídia para o fallback TMDB. */
+  kind?: "movie" | "series";
 }
 
 interface Props {
@@ -37,6 +40,22 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
   // Capas em ~150px exibidas → pedimos 300px de largura (retina) em WebP.
   const cover = item.cover ? proxyImageUrl(item.cover, { w: 300, h: 450, q: 70 }) : null;
 
+  // Fallback TMDB: só dispara quando não há cover OU quando a imagem original
+  // falhou. Isso evita inundar a edge function com requests para grids gigantes.
+  const needsFallback = !item.cover || imgFailed;
+  const { data: tmdb } = useTmdbFallback({
+    type: item.kind ?? "movie",
+    hasCover: !needsFallback,
+    name: item.title,
+    year: item.year,
+  });
+  const fallbackCover = tmdb?.poster
+    ? proxyImageUrl(tmdb.poster, { w: 300, h: 450, q: 70 })
+    : null;
+
+  const finalCover = imgFailed ? fallbackCover : cover ?? fallbackCover;
+  const showPlaceholder = !finalCover;
+
   return (
     <div className="relative group">
       <button
@@ -55,16 +74,20 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
         )}
         aria-label={item.title}
       >
-        {cover && !imgFailed ? (
+        {!showPlaceholder ? (
           <img
-            src={cover}
+            src={finalCover}
             alt={item.title}
             loading="lazy"
             decoding="async"
             width={200}
             height={300}
             className="h-full w-full object-cover"
-            onError={() => setImgFailed(true)}
+            onError={() => {
+              // Se a capa original falhar e ainda não temos fallback, marca falha
+              // pra disparar o lookup TMDB no próximo render.
+              if (!imgFailed) setImgFailed(true);
+            }}
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center p-3 text-center text-[11px] text-muted-foreground bg-gradient-to-br from-secondary to-secondary/40">
@@ -130,6 +153,7 @@ export const PosterCard = memo(PosterCardImpl, (prev, next) => {
     prev.item.title === next.item.title &&
     prev.item.year === next.item.year &&
     prev.item.rating === next.item.rating &&
+    prev.item.kind === next.item.kind &&
     prev.active === next.active &&
     prev.isFavorite === next.isFavorite &&
     prev.incompatible === next.incompatible &&
