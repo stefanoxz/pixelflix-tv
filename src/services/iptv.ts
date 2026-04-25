@@ -451,6 +451,14 @@ class TimeoutError extends Error {
   constructor() { super("timeout"); this.name = "TimeoutError"; }
 }
 
+export class MaxConnectionsError extends Error {
+  code = "MAX_CONNECTIONS" as const;
+  constructor(message = "Limite de telas atingido") {
+    super(message);
+    this.name = "MaxConnectionsError";
+  }
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(() => reject(new TimeoutError()), ms);
@@ -463,6 +471,9 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 function classifyError(e: unknown): "timeout" | "network" | "transient" | "other" {
   if (e instanceof TimeoutError) return "timeout";
+  // Erros lógicos do servidor (limite de telas, credenciais inválidas, etc.)
+  // não devem ser retentados nem classificados como "network".
+  if (e instanceof MaxConnectionsError) return "other";
   const msg = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
   // Transient runtime: 503/502/504 do gateway Supabase ou cold start.
   // Tratamos separado para dar mais retries + backoff maior.
@@ -494,7 +505,25 @@ async function invokeFn<T>(
   const attempt = async (): Promise<T> => {
     const exec = async () => {
       const { data, error } = await supabase.functions.invoke(name, { body });
-      if (error) throw new Error(error.message || `Falha em ${name}`);
+      // Quando o edge devolve 4xx/5xx com JSON, supabase-js coloca a resposta
+      // em `error.context.response`. Tentamos extrair o JSON pra detectar
+      // códigos conhecidos (ex.: MAX_CONNECTIONS) antes de jogar erro genérico.
+      if (error) {
+        let parsed: { error?: string; code?: string } | null = null;
+        try {
+          const resp = (error as { context?: { response?: Response } })?.context?.response;
+          if (resp) parsed = await resp.clone().json().catch(() => null);
+        } catch { /* ignore */ }
+        if (parsed?.code === "MAX_CONNECTIONS") {
+          throw new MaxConnectionsError(parsed.error || "Limite de telas atingido");
+        }
+        throw new Error(parsed?.error || error.message || `Falha em ${name}`);
+      }
+      if ((data as { code?: string })?.code === "MAX_CONNECTIONS") {
+        throw new MaxConnectionsError(
+          (data as { error?: string })?.error || "Limite de telas atingido",
+        );
+      }
       if ((data as { error?: string })?.error) {
         throw new Error((data as { error: string }).error);
       }
