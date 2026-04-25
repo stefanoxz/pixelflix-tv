@@ -115,13 +115,14 @@ export const connectivityConfig = {
   reconnectConcurrency: 2,
   normalConcurrency: 4,
   // Per-operation timeouts (ms)
-  timeoutLogin: 10_000,
+  timeoutLogin: 12_000,
   timeoutToken: 5_000,
-  timeoutData: 7_000,
-  // Retry budget
-  retriesLogin: 1,
+  timeoutData: 8_000,
+  // Retry budget — login agora aceita mais tentativas pra absorver
+  // cold starts (503 SUPABASE_EDGE_RUNTIME_ERROR no preflight).
+  retriesLogin: 3,
   retriesToken: 1,
-  retriesData: 1,
+  retriesData: 2,
 };
 
 export function setConnectivityConfig(partial: Partial<typeof connectivityConfig>) {
@@ -463,7 +464,13 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 function classifyError(e: unknown): "timeout" | "network" | "other" {
   if (e instanceof TimeoutError) return "timeout";
   const msg = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
-  if (/network|failed to fetch|networkerror|fetch failed|load failed/.test(msg)) return "network";
+  if (
+    /network|failed to fetch|networkerror|fetch failed|load failed|failed to send a request|edge function|503|502|504|temporarily unavailable|boot_error|edge_runtime/.test(
+      msg,
+    )
+  ) {
+    return "network";
+  }
   return "other";
 }
 
@@ -502,8 +509,10 @@ async function invokeFn<T>(
       const cls = classifyError(e);
       noteRequestFailure(cls);
       if (cls === "other" || i === maxRetries) break;
-      // Small backoff
-      await new Promise((r) => setTimeout(r, 250 * (i + 1)));
+      // Backoff exponencial com jitter (250 → 500 → 1000 → 2000ms +/-30%)
+      const base = 250 * Math.pow(2, i);
+      const jitter = base * (0.7 + Math.random() * 0.6);
+      await new Promise((r) => setTimeout(r, jitter));
       recordTelemetry("request_retry", { fn: name, attempt: i + 1, kind: cls });
     }
   }
@@ -526,9 +535,13 @@ export type SafeResult<T> =
 
 /** Detecta o erro transitório do runtime do Supabase Edge (cold start / 503). */
 function isEdgeRuntimeTransient(status: number | undefined, code: string, error: string): boolean {
-  if (status !== 503) return false;
   const blob = `${code} ${error}`.toUpperCase();
-  return /SUPABASE_EDGE_RUNTIME_ERROR|TEMPORARILY UNAVAILABLE|BOOT_ERROR/.test(blob);
+  // 503/502/504 do gateway, ou mensagens conhecidas de cold start / falha de envio
+  if (status === 503 || status === 502 || status === 504) return true;
+  if (/SUPABASE_EDGE_RUNTIME_ERROR|TEMPORARILY UNAVAILABLE|BOOT_ERROR|FAILED TO SEND A REQUEST|FAILED TO FETCH|NETWORK_ERROR/.test(blob)) {
+    return true;
+  }
+  return false;
 }
 
 export async function invokeSafe<T = unknown>(
@@ -544,8 +557,8 @@ export async function invokeSafe<T = unknown>(
 
   // Retry transparente APENAS para 503 do runtime do Supabase (cold start).
   // Outros erros (4xx, timeouts reais, falha de rede) NÃO retentam.
-  const MAX_RUNTIME_RETRIES = 2;
-  const RUNTIME_BACKOFFS_MS = [500, 1500];
+  const MAX_RUNTIME_RETRIES = 3;
+  const RUNTIME_BACKOFFS_MS = [400, 1000, 2500];
 
   const attempt = async (): Promise<SafeResult<T>> => {
     try {
