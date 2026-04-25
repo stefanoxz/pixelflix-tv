@@ -37,27 +37,37 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
     return <p className="text-sm text-muted-foreground italic pt-2">Nenhum episódio disponível.</p>;
   }
 
+  const activeKey = active || seasons[0];
+
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="pt-2 space-y-4">
-        <div className="flex flex-wrap gap-2">
-          {seasons.map((sk) => (
-            <button
-              key={sk}
-              onClick={() => setActive(sk)}
-              className={cn(
-                "px-3 py-1.5 rounded-md text-sm font-semibold transition-smooth",
-                (active || seasons[0]) === sk
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-secondary text-foreground/80 hover:bg-secondary/70",
-              )}
-            >
-              T{sk}
-            </button>
-          ))}
+      <div className="pt-2 space-y-5">
+        <div className="space-y-2 pb-3 border-b border-border/40">
+          <p className="text-base font-semibold text-foreground/80">
+            Temporadas
+          </p>
+          <div className="flex flex-wrap gap-2.5">
+            {seasons.map((sk) => {
+              const isActive = activeKey === sk;
+              return (
+                <button
+                  key={sk}
+                  onClick={() => setActive(sk)}
+                  className={cn(
+                    "px-5 py-2.5 rounded-lg text-base font-bold transition-smooth border",
+                    isActive
+                      ? "bg-primary text-primary-foreground border-primary scale-105 shadow-[0_0_0_3px_hsl(var(--primary)/0.25)]"
+                      : "bg-secondary/60 text-foreground/80 border-border/60 hover:bg-secondary hover:border-primary/40",
+                  )}
+                >
+                  T{sk}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+        <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-1">
           {current.map((ep) => {
             const ext = ep.container_extension;
             const external = isExternalOnly(ext, ep.direct_source);
@@ -65,17 +75,17 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
             return (
               <div
                 key={ep.id}
-                className="flex gap-3 items-center p-3 rounded-lg bg-card hover:bg-secondary/40 border border-border/40 transition-smooth"
+                className="flex gap-4 items-center p-4 rounded-lg bg-card hover:bg-secondary/40 border border-border/40 transition-smooth"
               >
                 <button
                   type="button"
                   onClick={() => (external ? onCopyExternal(ep) : onPlay(ep))}
-                  className="flex gap-3 items-center flex-1 min-w-0 text-left"
+                  className="flex gap-4 items-center flex-1 min-w-0 text-left"
                 >
-                  <div className="h-16 w-28 shrink-0 rounded-md bg-secondary overflow-hidden flex items-center justify-center">
+                  <div className="h-20 w-36 shrink-0 rounded-md bg-secondary overflow-hidden flex items-center justify-center">
                     {ep.info?.movie_image ? (
                       <img
-                        src={proxyImageUrl(ep.info.movie_image, { w: 224, h: 128, q: 75 })}
+                        src={proxyImageUrl(ep.info.movie_image, { w: 288, h: 160, q: 75 })}
                         alt=""
                         loading="lazy"
                         decoding="async"
@@ -83,18 +93,18 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
                         onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                       />
                     ) : (
-                      <Play className="h-5 w-5 text-muted-foreground" />
+                      <Play className="h-6 w-6 text-muted-foreground" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm md:text-base font-semibold text-foreground truncate">
+                      <p className="text-base md:text-lg font-semibold text-foreground truncate">
                         {ep.episode_num}. {ep.title}
                       </p>
                       <span
                         title={badge.tooltip}
                         className={cn(
-                          "text-[11px] font-bold px-1.5 py-0.5 rounded border tracking-wide",
+                          "text-xs font-bold px-2 py-0.5 rounded border tracking-wide",
                           toneClasses[badge.tone],
                         )}
                       >
@@ -102,7 +112,7 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
                       </span>
                     </div>
                     {ep.info?.plot && (
-                      <p className="text-xs md:text-sm text-muted-foreground line-clamp-2 mt-1 leading-snug">
+                      <p className="text-sm md:text-base text-muted-foreground line-clamp-2 mt-1 leading-snug">
                         {ep.info.plot}
                       </p>
                     )}
@@ -114,17 +124,17 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-9 w-9 shrink-0"
+                        className="h-11 w-11 shrink-0"
                         onClick={() => onCopyExternal(ep)}
                       >
-                        <ExternalLink className="h-4 w-4" />
+                        <ExternalLink className="h-5 w-5" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Copiar link para player externo</TooltipContent>
                   </Tooltip>
                 ) : (
-                  <div className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full bg-primary/15 text-primary">
-                    <Play className="h-4 w-4 fill-current" />
+                  <div className="h-11 w-11 shrink-0 flex items-center justify-center rounded-full bg-primary/15 text-primary">
+                    <Play className="h-5 w-5 fill-current" />
                   </div>
                 )}
               </div>
