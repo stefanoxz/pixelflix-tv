@@ -602,6 +602,22 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         });
       };
 
+      // Loadeddata watchdog (6s): se o manifest carregou mas nenhum frame
+      // chegou, é assinatura típica de bloqueio de IP/hotlink no upstream.
+      // Ativa o proxy de bytes pra esse host antes do bootstrap de 12s — só
+      // quando ainda estamos em modo redirect e nunca tentamos restart.
+      loadeddataWatchdogRef.current = window.setTimeout(() => {
+        if (cancelled) return;
+        if (playbackStartedRef.current) return;
+        if (segmentModeRef.current === "stream") return;
+        if (proxyAutoRestartedRef.current) return;
+        // Só age se o manifest realmente chegou — evita falso positivo em
+        // conexão lenta onde nem o manifest entrou ainda (esse caso é do
+        // bootstrap watchdog).
+        if (!manifestReadyRef.current) return;
+        tryActivateProxyAndRestart("no_loadeddata_6s");
+      }, LOADEDDATA_WATCHDOG_MS);
+
       // Bootstrap watchdog: must reach `playing`/`loadeddata` within 12s.
       bootstrapTimeoutRef.current = window.setTimeout(() => {
         if (cancelled) return;
