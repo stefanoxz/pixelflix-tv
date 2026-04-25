@@ -86,6 +86,14 @@ const Movies = () => {
     return filteredMovies;
   }, [filteredMovies, activeCategory]);
 
+  const upstreamHost = useMemo(() => {
+    try {
+      return new URL(creds.streamBase || creds.server).host;
+    } catch {
+      return null;
+    }
+  }, [creds.server, creds.streamBase]);
+
   const items: PosterItem[] = useMemo(
     () =>
       sortedMovies.map((m) => {
@@ -97,9 +105,10 @@ const Movies = () => {
           cover: m.stream_icon,
           rating: m.rating_5based,
           year: yearMatch ? yearMatch[1] : undefined,
+          host: upstreamHost,
         };
       }),
-    [sortedMovies],
+    [sortedMovies, upstreamHost],
   );
 
   // Quando filtros mudam, reseta o ativo
@@ -275,6 +284,8 @@ function PlayerOverlay({
           containerExt={playing.container_extension || "mp4"}
           title={playing.name}
           poster={proxyImageUrl(playing.stream_icon)}
+          streamId={playing.stream_id}
+          contentKind="movie"
         />
       </div>
     </div>

@@ -1,7 +1,8 @@
 import { forwardRef, useState } from "react";
-import { Heart, Star } from "lucide-react";
+import { Heart, Star, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { proxyImageUrl } from "@/services/iptv";
+import { useIsIncompatible } from "@/hooks/useIsIncompatible";
 
 export interface PosterItem {
   id: number;
@@ -9,6 +10,8 @@ export interface PosterItem {
   cover?: string | null;
   year?: string | number;
   rating?: number;
+  /** Host upstream do conteúdo — usado pra checar marca de incompatibilidade. */
+  host?: string | null;
 }
 
 interface Props {
@@ -29,6 +32,7 @@ export const PosterCard = forwardRef<HTMLButtonElement, Props>(function PosterCa
 ) {
   const [imgFailed, setImgFailed] = useState(false);
   const cover = item.cover ? proxyImageUrl(item.cover) : null;
+  const incompatible = useIsIncompatible(item.host, item.id);
 
   return (
     <div className="relative group">
@@ -74,6 +78,18 @@ export const PosterCard = forwardRef<HTMLButtonElement, Props>(function PosterCa
           <div className="absolute top-1.5 left-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-black/65 backdrop-blur-sm text-[10px] text-white font-medium">
             <Star className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
             {item.rating.toFixed(1)}
+          </div>
+        )}
+
+        {incompatible && (
+          <div
+            className="absolute inset-0 bg-black/55 flex items-end justify-center pb-10 pointer-events-none"
+            aria-hidden
+          >
+            <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-destructive/90 text-destructive-foreground text-[10px] font-semibold shadow-lg">
+              <AlertTriangle className="h-3 w-3" />
+              Incompatível
+            </div>
           </div>
         )}
       </button>

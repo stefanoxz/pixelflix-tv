@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 import { Flag, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,7 +58,7 @@ interface Props {
   snapshot: ReportSnapshot;
 }
 
-export function ReportProblemDialog({ open, onOpenChange, snapshot }: Props) {
+export const ReportProblemDialog = forwardRef<HTMLDivElement, Props>(function ReportProblemDialog({ open, onOpenChange, snapshot }, _ref) {
   const [category, setCategory] = useState<ReportCategory>("buffering");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -191,4 +191,4 @@ export function ReportProblemDialog({ open, onOpenChange, snapshot }: Props) {
       </DialogContent>
     </Dialog>
   );
-}
+});

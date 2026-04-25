@@ -271,6 +271,8 @@ const SeriesPage = () => {
                 playingEp.ep.info?.movie_image || playingEp.coverFallback || "",
               )}
               onClose={() => setPlayingEp(null)}
+              streamId={playingEp.ep.id}
+              contentKind="episode"
             />
           </div>
         </div>
