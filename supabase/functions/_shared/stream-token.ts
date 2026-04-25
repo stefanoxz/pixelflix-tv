@@ -36,6 +36,7 @@ async function getKey(): Promise<CryptoKey> {
 }
 
 export type TokenKind = "playlist" | "segment";
+export type TokenMode = "redirect" | "stream";
 
 export interface TokenPayload {
   u: string; // url
@@ -45,6 +46,8 @@ export interface TokenPayload {
   h: string; // ua hash
   n: string; // nonce
   k: TokenKind; // kind
+  /** Optional. Default "redirect". When "stream", the proxy pipes upstream bytes instead of 302. */
+  m?: TokenMode;
 }
 
 export async function signToken(p: TokenPayload): Promise<string> {

@@ -14,6 +14,7 @@ import {
   uaHash,
   urlHash,
   type TokenKind,
+  type TokenMode,
 } from "../_shared/stream-token.ts";
 
 const ALLOWED_SUFFIXES = [".lovable.app", ".lovableproject.com", ".lovable.dev"];
@@ -104,7 +105,7 @@ Deno.serve(async (req) => {
   const userId = udata.user.id;
 
   // 2) Body
-  let body: { url?: string; kind?: TokenKind; iptv_username?: string };
+  let body: { url?: string; kind?: TokenKind; iptv_username?: string; mode?: TokenMode };
   try {
     body = await req.json();
   } catch {
@@ -112,6 +113,7 @@ Deno.serve(async (req) => {
   }
   const target = (body.url || "").trim();
   const kind: TokenKind = body.kind === "segment" ? "segment" : "playlist";
+  const mode: TokenMode = body.mode === "stream" ? "stream" : "redirect";
   if (!target || !/^https?:\/\//i.test(target)) {
     return json({ error: "Invalid url" }, 400, cors);
   }
@@ -233,9 +235,10 @@ Deno.serve(async (req) => {
     h: uah,
     n: nonce,
     k: kind,
+    m: mode,
   });
 
-  await logEvent(userId, "token_issued", ip, ua, target, { kind });
+  await logEvent(userId, "token_issued", ip, ua, target, { kind, mode });
 
   const proxied = `${PROXY_BASE}?t=${encodeURIComponent(token)}`;
   return json({ url: proxied, expires_at: exp }, 200, cors);
