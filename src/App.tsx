@@ -9,6 +9,9 @@ import { Header } from "@/components/Header";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import Login from "./pages/Login";
+// Sync é importada de forma direta (não-lazy) para evitar o flash
+// do spinner do Suspense entre o login e a tela de sincronização.
+import Sync from "./pages/Sync";
 
 // Lazy-load non-landing routes to reduce initial bundle size.
 // Each route exposes a `preload*` helper so the Sync screen can prefetch
@@ -25,7 +28,6 @@ const Live = lazy(liveLoader);
 const Movies = lazy(moviesLoader);
 const SeriesPage = lazy(seriesLoader);
 const Account = lazy(accountLoader);
-const Sync = lazy(() => import("./pages/Sync"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 const AdminResetPassword = lazy(() => import("./pages/AdminResetPassword"));
 const Admin = lazy(() => import("./pages/Admin"));
