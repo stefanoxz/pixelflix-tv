@@ -749,6 +749,7 @@ const Admin = () => {
             <h1 className="text-3xl font-bold">
               {tab === "dashboard" ? "Dashboard"
                 : tab === "monitoring" ? "Monitoramento"
+                : tab === "reports" ? "Reportes de usuários"
                 : tab === "dns-errors" ? "Erros por DNS"
                 : tab === "users" ? "Usuários"
                 : tab === "endpoint-test" ? "Testar endpoint"
@@ -757,6 +758,7 @@ const Admin = () => {
             <p className="text-sm text-muted-foreground mt-1">
               {tab === "dashboard" ? "Visão geral em tempo real"
                 : tab === "monitoring" ? "Sessões ativas, consumo e bloqueios — atualiza a cada 10s"
+                : tab === "reports" ? "Problemas relatados pelos usuários direto do player"
                 : tab === "dns-errors" ? "Distribuição de falhas por servidor — atualiza a cada 10s"
                 : tab === "users" ? "Quem está acessando a plataforma"
                 : tab === "endpoint-test" ? "Diagnóstico de uma DNS específica — exibe se a resposta veio direto ou via proxy"
