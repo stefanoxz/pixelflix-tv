@@ -1,110 +1,146 @@
 ## Objetivo
 
-Refinar visualmente os modais de **Detalhes do Filme** (`MovieDetailsDialog.tsx`) e **Detalhes da Série** (`SeriesDetailsDialog.tsx`) inspirado nas referências enviadas, mantendo **100% do design system atual** do webplayer (cores HSL existentes, gradiente primário azul→roxo, dark theme, raios e sombras já definidos).
+Implementar o efeito **"Spotlight de capa"** nos modais de Filmes e Séries: quando o usuário abre um conteúdo, o fundo da página fica bem escurecido e a **capa do título aparece em destaque integrada ao backdrop**, como se fosse um "ato cinematográfico". Mantendo 100% a fidelidade do nosso design system (azul primário, gradientes, cards arredondados refinados).
 
-Sem alterar nenhuma lógica funcional (queries, fallback TMDB, favoritos, player, episódios). Apenas a camada visual.
+Inspirado nas referências, mas refinado — não copiado.
+
+---
+
+## Como vai funcionar visualmente
+
+### Modal de Filme (referência: imagem 18)
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  [PÁGINA ESCURECIDA AO FUNDO ~95% black]                    │
+│                                                              │
+│   ┌──────────────────────────────────────────────────────┐  │
+│   │ ▓▓▓▓▓▓▓▓▓│ TÍTULO DO FILME (2025)              [X] │  │
+│   │ ▓ CAPA  ▓│ ╭──────────────────────────╮              │  │
+│   │ ▓ HERO  ▓│ │ 📅2025  🎬Terror  ⭐8.0 │              │  │
+│   │ ▓ FULL  ▓│ ╰──────────────────────────╯              │  │
+│   │ ▓ HEIGHT▓│ ╭──────────────────────────╮              │  │
+│   │ ▓▓▓▓▓▓▓▓▓│ │ 🎥 Direção: ...          │              │  │
+│   │  fade →  │ │ 👥 Elenco:  ...          │              │  │
+│   │          │ ╰──────────────────────────╯              │  │
+│   │          │ 🎬 Sinopse                                 │  │
+│   │          │ Texto....                                  │  │
+│   │          │ [▶ Assistir]  [♥ Favoritar]               │  │
+│   └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **Overlay** mais escuro (`bg-black/90` + `backdrop-blur-sm`) em vez do `bg-black/80` atual
+- **Capa em coluna esquerda full-height** dentro do modal — ocupa toda altura, com fade radial pra direita
+- **Backdrop horizontal removido** (substituído pela capa lateral)
+- Conteúdo (título, chips, sinopse, botões) na coluna direita, mantendo todo o refino visual já feito
+- Em mobile (sem espaço lateral): volta o layout atual (backdrop em cima + capa pequena), garantindo legibilidade
+
+### Modal de Série (referência: imagem 19)
+
+Mesma estrutura, mas com a seção de **episódios abaixo** da área principal — exatamente como já está hoje, só que agora também com a capa lateral em destaque na parte superior.
 
 ---
 
 ## Mudanças visuais
 
-### 1. Barra de metadados em "chips" (linha única arredondada)
+### 1. Overlay escurecido + blur sutil
 
-Substituir a linha solta de `rating · ano · duração · gênero` por uma barra única estilo pill com divisões internas e ícones grandes:
+Atualizar `DialogOverlay` apenas no `MovieDetailsDialog` e `SeriesDetailsDialog` via override de classe:
+- Adicionar `bg-black/90 backdrop-blur-sm` (override) no overlay específico desses modais
 
-```text
-┌────────────────────────────────────────────────────────┐
-│  📅 2025   🎬 Terror, Thriller   🕐 1h 50m   ⭐ 8.0    │
-└────────────────────────────────────────────────────────┘
+Como o `Dialog` do shadcn não expõe diretamente o overlay via `DialogContent`, vamos usar estes modais com `DialogPortal` + `DialogOverlay` customizados (já temos exportados no `dialog.tsx`). **Sem editar o `dialog.tsx` global** — apenas compor manualmente.
+
+### 2. Capa lateral (desktop ≥ md)
+
+Substituir o backdrop horizontal por uma **coluna esquerda full-height** com a capa do filme:
+
+```tsx
+<div className="hidden md:block relative w-[42%] max-w-[420px] shrink-0">
+  <img src={proxyImageUrl(cover, { w: 600, h: 900, q: 85 })} 
+       className="absolute inset-0 h-full w-full object-cover" />
+  {/* Fade gradient pra direita pra integrar com o conteúdo */}
+  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-card/40 to-card" />
+</div>
 ```
 
-- Container: `bg-secondary/60 border border-border/60 rounded-2xl px-5 py-3`
-- Cada item: `flex items-center gap-2 text-sm font-medium`
-- Ícones `lucide-react` em **18px** (`h-[18px] w-[18px]`) com cor `text-primary` (azul do tema)
-- Separadores verticais sutis `divide-x divide-border/40` entre os blocos
-- Filmes: `Calendar` (ano), `Film` (gênero), `Clock` (duração), `Star` (rating amarelo)
-- Séries: `Calendar` (data), `Tv` (temporadas), `Layers` (episódios), `Film` (gênero), `Star` (rating)
+- Capa ocupa altura total do modal
+- `bg-gradient-to-r from-transparent ... to-card` faz a fusão suave com a área de conteúdo
+- Sem moldura — a capa "sangra" pra dentro do modal
 
-### 2. Bloco de Direção / Elenco em card destacado
+### 3. Layout do modal — flex horizontal
 
-Substituir o texto inline por um card com ícones grandes na lateral esquerda:
-
-```text
-┌─────────────────────────────────────────────────────────┐
-│  🎥  Direção:   Jason Blum, C. Robert Cargill...        │
-│  👥  Elenco:    Ethan Hawke, Mason Thames, Madeleine... │
-└─────────────────────────────────────────────────────────┘
+Refazer o layout principal de:
+```tsx
+// hoje: grid vertical com backdrop em cima
+<div className="grid grid-cols-1 md:grid-cols-[180px,1fr]">
 ```
 
-- Container: `bg-secondary/40 border border-border/50 rounded-2xl p-4 space-y-3`
-- Layout grid `[auto,1fr] gap-3 items-start`
-- Ícones `Video` e `Users` em **20px**, cor `text-muted-foreground`
-- Labels em `font-semibold text-foreground/90`
-- Conteúdo em `text-foreground/75 leading-relaxed`
-
-### 3. Sinopse com título iconado
-
-Adicionar cabeçalho "Sinopse" com ícone de claquete (`Clapperboard` ou `Film`):
-
-```text
-🎬 Sinopse
-Quatro anos após escapar de The Grabber...
+Para:
+```tsx
+// novo: flex horizontal com capa sangrando à esquerda
+<div className="flex flex-col md:flex-row min-h-[560px]">
+  <CapaSpotlight />        {/* desktop only */}
+  <ConteúdoDireita />      {/* sempre */}
+</div>
 ```
 
-- `flex items-center gap-2` + `Clapperboard` 20px em `text-primary`
-- Título: `text-base font-bold`
-- Texto da sinopse com `text-base leading-relaxed text-foreground/85` (sem `line-clamp` no modal — já que tem espaço)
+### 4. Mobile: fallback elegante
 
-### 4. Botão "Assistir" maior e com ícone destacado
+Em telas `< md`:
+- Mantém o backdrop horizontal no topo (como hoje)
+- Capa pequena flutuando + conteúdo abaixo
+- Garante boa leitura sem espremer nada
 
-Trocar o botão atual por uma versão mais polida:
-- `size="lg"` com `h-12 px-8 text-base font-semibold`
-- Ícone `Play` em **20px** com `fill-current`
-- Mantém `bg-gradient-primary shadow-glow` (já no design system)
-- Adicionar `rounded-full` pra match com a referência
+### 5. Tamanho do modal
 
-### 5. Botão fechar maior e mais visível
+Aumentar largura máxima para `max-w-5xl` (de `max-w-4xl`), sem altura fixa — `max-h-[92vh]` continua. A capa ocupar a esquerda exige um pouco mais de respiro horizontal.
 
-- O `X` do `DialogContent` continua existindo (vem do shadcn), mas vamos garantir tamanho maior via override local: `[&>button]:h-10 [&>button]:w-10 [&>button]:rounded-full [&>button]:bg-black/60 [&>button]:backdrop-blur`
-- Ícone interno do `X` herdado fica em ~20px
+### 6. Refino do conteúdo direito
 
-### 6. Tipografia do título
+Tudo que já refinamos antes (chips, cards de credits/sinopse, botão pill) **fica intacto** — só ganha mais respiro porque a coluna direita tem `padding` próprio (`px-6 md:px-8 py-8`).
 
-- Aumentar para `text-3xl md:text-4xl font-extrabold uppercase tracking-tight`
-- Cor sólida `text-foreground` (sem gradiente — mantém legibilidade)
-- Mantém quebra natural
+### 7. Séries — capa lateral termina antes dos episódios
 
-### 7. Séries — seção "Temporadas / Episódios"
+Para o `SeriesDetailsDialog`, a coluna lateral da capa cobre apenas o **bloco superior** (título + meta + sinopse + botão). A seção de "Episódios" continua **full-width abaixo** com cabeçalho `ListVideo` icon — exatamente como referência da imagem 19.
 
-Refinar somente o cabeçalho da seção de episódios:
-- Título "Episódios" vira `flex items-center gap-2` com ícone `ListVideo` em 22px (cor `text-primary`)
-- Mantém o `SeriesEpisodesPanel` existente intacto (não tocar em sua lógica de tabs/temporadas)
+```tsx
+<div className="flex flex-col md:flex-row">
+  <CapaSpotlight />
+  <BlocoSuperior />
+</div>
+<div className="px-4 md:px-8 pb-6">
+  <h3>Episódios</h3>
+  <SeriesEpisodesPanel ... />
+</div>
+```
 
 ---
 
 ## O que NÃO muda
 
-- Lógica de `useQuery`, fallback TMDB, favoritos, marcação incompatível, `onPlay`, `onPlayEpisode`, `onCopyExternal`
-- `SeriesEpisodesPanel.tsx` (apenas o título acima dele)
-- `PreviewPanel.tsx`, `MediaCard.tsx`, `PosterGrid.tsx` e qualquer outro componente
-- Cores do tema (`--primary` azul continua), gradientes (`bg-gradient-primary`), sombras, raios
-- Estrutura de rotas, contexto, autenticação
-- Aviso de "conteúdo incompatível" (mesmo visual atual, apenas reposicionado dentro do novo layout)
+- Lógica de queries, fallback TMDB, favoritos, marcação incompatível, `onPlay`, `onPlayEpisode`, `onCopyExternal`
+- `SeriesEpisodesPanel.tsx` (intacto)
+- `dialog.tsx` global do shadcn (não tocaremos)
+- Cores do design system (azul primário, gradientes, sombras)
+- Outros modais e componentes
 
 ---
 
 ## Arquivos editados
 
-1. `src/components/MovieDetailsDialog.tsx` — refinar layout (chips, card credits, botões, título)
-2. `src/components/SeriesDetailsDialog.tsx` — mesmo refino + chip extra de temporadas/episódios e cabeçalho "Episódios" com ícone
+1. `src/components/MovieDetailsDialog.tsx` — novo layout flex com capa lateral, overlay customizado
+2. `src/components/SeriesDetailsDialog.tsx` — mesma estrutura + bloco de episódios full-width abaixo
 
-Nenhum arquivo novo. Nenhuma dependência nova (todos os ícones já existem em `lucide-react`).
+Nenhum arquivo novo. Nenhuma dependência nova.
 
 ---
 
 ## Detalhes técnicos
 
-- Ícones novos importados de `lucide-react`: `Calendar`, `Film`, `Clock`, `Tv`, `Layers`, `Video`, `Users`, `Clapperboard`, `ListVideo`
-- Tudo via classes Tailwind usando tokens semânticos (`bg-secondary`, `border-border`, `text-primary`, `text-foreground`) — zero cores hardcoded
-- Responsivo mantido: chips quebram em múltiplas linhas no mobile (`flex flex-wrap gap-3`)
-- Acessibilidade preservada: `DialogTitle` e `DialogDescription` `sr-only` continuam
+- Imports adicionais nos dois modais: `DialogPortal`, `DialogOverlay` do `@/components/ui/dialog`
+- Compor manualmente o `<DialogPortal><DialogOverlay className="bg-black/90 backdrop-blur-sm" /><DialogPrimitive.Content>...` — isso permite escurecer só esses modais
+- Usar `proxyImageUrl(cover, { w: 600, h: 900, q: 85 })` pra capa lateral em alta qualidade
+- Fade radial via gradiente Tailwind (`bg-gradient-to-r from-transparent via-card/40 to-card`)
+- Aspect ratio da capa preservado com `object-cover` + altura `h-full`
+- Acessibilidade: `DialogTitle`/`Description` `sr-only` mantidos
