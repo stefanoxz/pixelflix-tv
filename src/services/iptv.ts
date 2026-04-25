@@ -471,6 +471,9 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 function classifyError(e: unknown): "timeout" | "network" | "transient" | "other" {
   if (e instanceof TimeoutError) return "timeout";
+  // Erros lógicos do servidor (limite de telas, credenciais inválidas, etc.)
+  // não devem ser retentados nem classificados como "network".
+  if (e instanceof MaxConnectionsError) return "other";
   const msg = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
   // Transient runtime: 503/502/504 do gateway Supabase ou cold start.
   // Tratamos separado para dar mais retries + backoff maior.
