@@ -209,7 +209,7 @@ function shouldRetryWithFallbackUa(status: number): boolean {
 async function fetchOnce(
   url: string,
   ua: string,
-): Promise<{ res: Response; body: string } | { error: string }> {
+): Promise<{ res: Response; body: string; route: "direct" | "proxy" } | { error: string }> {
   try {
     const res = await proxiedFetch(url, {
       headers: { "User-Agent": ua, Accept: "application/json, */*" },
@@ -217,7 +217,9 @@ async function fetchOnce(
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     const body = await res.text();
-    return { res, body };
+    // @ts-ignore - tag injetada por proxiedFetch
+    const route = (res._iptvRoute as "direct" | "proxy") ?? "direct";
+    return { res, body, route };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { error: msg };
@@ -311,7 +313,7 @@ async function tryVariant(
   username: string,
   password: string,
 ): Promise<
-  | { ok: true; data: any; usedVariant: string }
+  | { ok: true; data: any; usedVariant: string; route: "direct" | "proxy" }
   | { ok: false; status: number; body: string; reason: string }
   | { ok: false; transportError: string }
 > {
@@ -321,11 +323,9 @@ async function tryVariant(
   for (let i = 0; i < uas.length; i++) {
     const r = await fetchOnce(url, uas[i]);
     if ("error" in r) {
-      // Erro de transporte — UA não muda nada. Aborta cedo.
       return { ok: false, transportError: r.error };
     }
-    const { res, body } = r;
-    // Anti-scraping → vale a pena tentar próximo UA.
+    const { res, body, route } = r;
     if (shouldRetryWithFallbackUa(res.status) && i < uas.length - 1) continue;
 
     if (res.status === 401) {
@@ -343,10 +343,9 @@ async function tryVariant(
     if (!data?.user_info || data.user_info.auth === 0) {
       return { ok: false, status: 401, body, reason: "credenciais inválidas" };
     }
-    return { ok: true, data, usedVariant: base };
+    return { ok: true, data, usedVariant: base, route };
   }
 
-  // unreachable, mas TS exige
   return { ok: false, transportError: "no_attempts" };
 }
 
@@ -645,10 +644,13 @@ Deno.serve(async (req) => {
     for (const row of candidateRows) {
       const r = await attemptLogin(row.server_url, username, password, row, admin);
       if (r.ok) {
-        await logEvent({ server: row.server_url, username, success: true, ua, ip });
+        // @ts-ignore - route só existe no caminho ok
+        const route: "direct" | "proxy" = (r as any).route ?? "direct";
+        await logEvent({ server: row.server_url, username, success: true, reason: `route=${route}`, ua, ip });
+        console.log(`[iptv-login] SUCCESS server=${row.server_url} route=${route}`);
         return jsonResponse(
           200,
-          { success: true, ...r.data, server_url: row.server_url, allowed_servers: allowedList },
+          { success: true, ...r.data, server_url: row.server_url, allowed_servers: allowedList, route },
           corsHeaders,
         );
       }
