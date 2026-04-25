@@ -26,6 +26,7 @@ import { DnsErrorTrendChart } from "@/components/admin/DnsErrorTrendChart";
 import { ServerProbeDialog } from "@/components/admin/ServerProbeDialog";
 import { EndpointTestPanel } from "@/components/admin/EndpointTestPanel";
 import { UserReportsPanel } from "@/components/admin/UserReportsPanel";
+import ClientDiagnosticsPanel from "@/components/admin/ClientDiagnosticsPanel";
 import {
   Users,
   UserCheck,
