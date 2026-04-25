@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeAdminApi } from "@/lib/adminApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -105,8 +105,7 @@ export default function ClientDiagnosticsPanel() {
       if (outcome !== "all") body.outcome = outcome;
       if (usernameFilter.trim()) body.username = usernameFilter.trim();
       if (serverFilter.trim()) body.server_url = serverFilter.trim();
-      const { data, error: invErr } = await supabase.functions.invoke("admin-api", { body });
-      if (invErr) throw invErr;
+      const data = await invokeAdminApi<{ rows?: DiagRow[]; summary?: Summary }>("client_diagnostics_list", body);
       setRows((data as any)?.rows ?? []);
       setSummary((data as any)?.summary ?? null);
     } catch (e: any) {

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeAdminApi } from "@/lib/adminApi";
 import { DnsErrorTrendChart } from "@/components/admin/DnsErrorTrendChart";
 import { ServerProbeDialog } from "@/components/admin/ServerProbeDialog";
 import { EndpointTestPanel } from "@/components/admin/EndpointTestPanel";
@@ -300,27 +301,8 @@ const SERVER_PALETTE = [
   "hsl(180 70% 50%)",
 ];
 
-const TRANSIENT_EDGE_ERROR = /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR|failed to fetch|network/i;
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 async function callAdmin<T>(action: string, payload?: Record<string, unknown>, retries = 2): Promise<T> {
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
-    try {
-      const { data, error } = await supabase.functions.invoke("admin-api", {
-        body: { action, payload },
-      });
-      if (error) throw new Error(error.message);
-      if ((data as any)?.error) throw new Error((data as any).error);
-      return data as T;
-    } catch (error) {
-      lastError = error;
-      const message = error instanceof Error ? error.message : String(error);
-      if (attempt >= retries || !TRANSIENT_EDGE_ERROR.test(message)) break;
-      await wait(450 * (attempt + 1));
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error("Falha ao carregar dados");
+  return invokeAdminApi<T>(action, payload, retries);
 }
 
 function formatRelative(iso: string): string {
