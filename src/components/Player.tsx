@@ -498,10 +498,43 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
       setLoading(true);
 
+      /**
+       * Try activating segment-proxy mode for this host and restart the player.
+       * Returns true if the restart was scheduled (caller should bail out of
+       * the current error path); false if we are already in stream mode or
+       * already restarted once (avoid loops).
+       */
+      const tryActivateProxyAndRestart = (reason: string): boolean => {
+        if (segmentModeRef.current === "stream") return false;
+        if (proxyAutoRestartedRef.current) return false;
+        const url = rawUrl ?? src;
+        if (!markHostProxyRequired(url, reason)) return false;
+        proxyAutoRestartedRef.current = true;
+        pushLog({
+          source: "diag",
+          level: "warn",
+          label: "proxy_required_activated",
+          details: reason,
+        });
+        clearBootstrapTimeout();
+        clearStallTimeout();
+        // Show a discreet loading state during automatic restart.
+        setError(null);
+        setLoading(true);
+        updateStatus("connecting", `proxy auto: ${reason}`);
+        // Trigger the setup effect again — segmentModeRef is read fresh from
+        // localStorage inside runSetup.
+        setRetryNonce((n) => n + 1);
+        return true;
+      };
+
       // Helper: finalize as "stream sem dados" (single classification path).
       const finalizeStreamNoData = (reason: string) => {
         if (cancelled) return;
         if (playbackStartedRef.current) return;
+        // First: try to recover by activating segment proxy automatically.
+        if (tryActivateProxyAndRestart(reason)) return;
+
         setLoading(false);
         updateStatus("stream_no_data", reason);
         pushLog({ source: "diag", level: "error", label: "stream_no_data", details: reason });
@@ -524,7 +557,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         try { if (src) upstreamHost = new URL(src).host; } catch { /* noop */ }
         reportStreamEvent("stream_error", {
           url: src,
-          meta: { type: "stream_no_data", reason, host: upstreamHost },
+          meta: { type: "stream_no_data", reason, host: upstreamHost, mode: segmentModeRef.current },
         });
       };
 
