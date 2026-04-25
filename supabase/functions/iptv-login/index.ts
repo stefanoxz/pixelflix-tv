@@ -288,7 +288,7 @@ async function tryVariant(
   username: string,
   password: string,
 ): Promise<
-  | { ok: true; data: any }
+  | { ok: true; data: any; usedVariant: string }
   | { ok: false; status: number; body: string; reason: string }
   | { ok: false; transportError: string }
 > {
@@ -320,7 +320,7 @@ async function tryVariant(
     if (!data?.user_info || data.user_info.auth === 0) {
       return { ok: false, status: 401, body, reason: "credenciais inválidas" };
     }
-    return { ok: true, data };
+    return { ok: true, data, usedVariant: base };
   }
 
   // unreachable, mas TS exige
