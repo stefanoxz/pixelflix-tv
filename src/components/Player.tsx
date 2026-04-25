@@ -275,6 +275,9 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     }
     const pref = getPreferredEngine(safeHostFromUrl(rawUrl ?? src)) ?? "hls";
     setEngine(pref);
+    // Channel changed → reset the per-session proxy auto-restart guard so the
+    // new channel gets its own opportunity to fall back to proxy.
+    proxyAutoRestartedRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [upstreamHost, isLive]);
 
