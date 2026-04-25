@@ -54,6 +54,10 @@ const EXP_SKEW_MS = 2_000;
 // (user, ip/24, ua) — aligned with SEGMENT_TTL_S so hls.js retries within the
 // token's own lifetime are not falsely rejected.
 const NONCE_REPLAY_WINDOW_MS = 30_000;
+// Per-segment upstream timeout when streaming bytes through the edge.
+const SEGMENT_FETCH_TIMEOUT_MS = 8_000;
+// Cap concurrent streamed segments per client IP /24 to avoid abuse.
+const MAX_STREAM_CONCURRENCY_PER_IP = 6;
 
 // In-memory per-IP failure tracking (best-effort, per worker)
 const ipFailures = new Map<string, { count: number; first: number; until?: number }>();
@@ -75,6 +79,15 @@ function isIpBlocked(ip: string): boolean {
     return false;
   }
   return true;
+}
+
+// Per-IP /24 in-flight streamed-segment counter (best-effort, per worker).
+const ipInFlight = new Map<string, number>();
+function ipBump(prefix: string, delta: number) {
+  const cur = ipInFlight.get(prefix) ?? 0;
+  const next = Math.max(0, cur + delta);
+  if (next === 0) ipInFlight.delete(prefix);
+  else ipInFlight.set(prefix, next);
 }
 
 function normalizeServer(url: string) {
@@ -274,25 +287,107 @@ Deno.serve(async (req) => {
       return await rejectToken(ip, ua, "private_host", cors, payload.s, payload.u);
     }
 
-    // ----- segment / chave / VOD: 302 redirect — NO BYTES through proxy -----
+    // ----- segment -----
     if (payload.k === "segment") {
       // Suspicious IP-jump check
       checkSuspiciousIp(payload.s, ip, ua).catch(() => {});
-      // Lightweight, sampled telemetry: log delivered segments so we can see
-      // what actually reaches the player (vs. just what's issued).
-      // Sample at ~5% to avoid bloating stream_events.
+
+      const mode = payload.m === "stream" ? "stream" : "redirect";
+
+      // Sampled telemetry
       if (Math.random() < 0.05) {
         logEvent(payload.s, "segment_request", ip, ua, payload.u, {
-          host: decoded.host,
+          host: decoded.host, mode,
         }).catch(() => {});
       }
-      return new Response(null, {
-        status: 302,
-        headers: {
-          ...cors,
-          Location: payload.u,
-          "Cache-Control": "no-store",
-        },
+
+      // Default: 302 to upstream — no bytes through proxy.
+      if (mode !== "stream") {
+        return new Response(null, {
+          status: 302,
+          headers: { ...cors, Location: payload.u, "Cache-Control": "no-store" },
+        });
+      }
+
+      // STREAM mode: pipe bytes through the edge to bypass hotlink/IP blocks.
+      const ipKey = payload.i || ip;
+      const inFlight = ipInFlight.get(ipKey) ?? 0;
+      if (inFlight >= MAX_STREAM_CONCURRENCY_PER_IP) {
+        return new Response("Too many concurrent segments", {
+          status: 429,
+          headers: { ...cors, "Retry-After": "2" },
+        });
+      }
+      ipBump(ipKey, 1);
+
+      // Forward Range header so the player can do partial fetches.
+      const upstreamHeaders: Record<string, string> = {
+        "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
+        Referer: `${decoded.protocol}//${decoded.host}/`,
+        Accept: "*/*",
+      };
+      const range = req.headers.get("range");
+      if (range) upstreamHeaders["Range"] = range;
+
+      let upstream: Response;
+      try {
+        upstream = await fetch(payload.u, {
+          method: "GET",
+          redirect: "follow",
+          headers: upstreamHeaders,
+          signal: AbortSignal.timeout(SEGMENT_FETCH_TIMEOUT_MS),
+        });
+      } catch (err) {
+        ipBump(ipKey, -1);
+        const reason = err instanceof Error ? err.message : "fetch_failed";
+        return new Response(`Upstream fetch failed: ${reason}`, {
+          status: 502,
+          headers: { ...cors, "Content-Type": "text/plain" },
+        });
+      }
+
+      // Copy a strict allow-list of headers from upstream.
+      const outHeaders: Record<string, string> = { ...cors, "Cache-Control": "no-store" };
+      const allowList = ["content-type", "content-length", "content-range", "accept-ranges"];
+      for (const name of allowList) {
+        const v = upstream.headers.get(name);
+        if (v) outHeaders[name] = v;
+      }
+      if (!outHeaders["content-type"]) outHeaders["content-type"] = "video/mp2t";
+      if (!outHeaders["accept-ranges"]) outHeaders["accept-ranges"] = "bytes";
+
+      // Wrap body so we can decrement the in-flight counter when the stream ends.
+      const origBody = upstream.body;
+      let outBody: ReadableStream<Uint8Array> | null = origBody;
+      if (origBody) {
+        const reader = origBody.getReader();
+        outBody = new ReadableStream<Uint8Array>({
+          async pull(controller) {
+            try {
+              const { done, value } = await reader.read();
+              if (done) {
+                controller.close();
+                ipBump(ipKey, -1);
+                return;
+              }
+              controller.enqueue(value);
+            } catch (e) {
+              try { controller.error(e); } catch { /* noop */ }
+              ipBump(ipKey, -1);
+            }
+          },
+          cancel() {
+            try { reader.cancel(); } catch { /* noop */ }
+            ipBump(ipKey, -1);
+          },
+        });
+      } else {
+        ipBump(ipKey, -1);
+      }
+
+      return new Response(outBody, {
+        status: upstream.status, // 200 or 206 (Partial Content)
+        headers: outHeaders,
       });
     }
 
@@ -323,10 +418,11 @@ Deno.serve(async (req) => {
     // Re-sign each segment URL with a new short-lived segment token bound to
     // the same user/ip/ua. We sign here (not via stream-token call) to avoid
     // round-tripping for every line.
+    const childMode = payload.m === "stream" ? "stream" : "redirect";
     const signSegment = async (abs: string): Promise<string> => {
       const exp = Math.floor(Date.now() / 1000) + SEGMENT_TTL_S;
       const tok = await signToken({
-        u: abs, e: exp, s: payload.s, i: payload.i, h: payload.h, n: newNonce(), k: "segment",
+        u: abs, e: exp, s: payload.s, i: payload.i, h: payload.h, n: newNonce(), k: "segment", m: childMode,
       });
       return `${PROXY_BASE}?t=${encodeURIComponent(tok)}`;
     };
@@ -357,7 +453,7 @@ Deno.serve(async (req) => {
         if (isNestedPlaylist) {
           const exp = Math.floor(Date.now() / 1000) + 60;
           const tok = await signToken({
-            u: abs, e: exp, s: payload.s, i: payload.i, h: payload.h, n: newNonce(), k: "playlist",
+            u: abs, e: exp, s: payload.s, i: payload.i, h: payload.h, n: newNonce(), k: "playlist", m: childMode,
           });
           out.push(`${PROXY_BASE}?t=${encodeURIComponent(tok)}`);
         } else {

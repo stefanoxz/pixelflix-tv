@@ -59,7 +59,10 @@ import {
   normalizeExt,
   requestStreamToken,
   reportStreamEvent,
+  getHostProxyMode,
+  markHostProxyRequired,
   type PlaybackStrategy,
+  type StreamMode,
 } from "@/services/iptv";
 import { useIptv } from "@/context/IptvContext";
 import { cn } from "@/lib/utils";
@@ -227,6 +230,11 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const heartbeatRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
   const fragLoadErrorCountRef = useRef(0);
+  // Tracks the current segment delivery mode for this play session.
+  // Starts as "redirect"; flips to "stream" once the host is marked.
+  const segmentModeRef = useRef<StreamMode>("redirect");
+  // Guard so we only auto-restart once per session when activating proxy.
+  const proxyAutoRestartedRef = useRef(false);
 
   // Watchdog timers
   const bootstrapTimeoutRef = useRef<number | null>(null);
@@ -267,6 +275,9 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     }
     const pref = getPreferredEngine(safeHostFromUrl(rawUrl ?? src)) ?? "hls";
     setEngine(pref);
+    // Channel changed → reset the per-session proxy auto-restart guard so the
+    // new channel gets its own opportunity to fall back to proxy.
+    proxyAutoRestartedRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [upstreamHost, isLive]);
 
@@ -401,6 +412,17 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setLastReason(null);
       setStatus("connecting");
 
+      // Resolve segment mode from per-host cache. If host was previously marked
+      // as proxy_required, we already start in "stream" mode without waiting
+      // for failure.
+      segmentModeRef.current = getHostProxyMode(rawUrl ?? src);
+      pushLog({
+        source: "diag",
+        level: "info",
+        label: "segment_proxy_mode",
+        details: segmentModeRef.current,
+      });
+
       // Reset diagnóstico para novo ciclo
       rootCauseLockedRef.current = false;
       setRootCause("unknown");
@@ -479,10 +501,43 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
       setLoading(true);
 
+      /**
+       * Try activating segment-proxy mode for this host and restart the player.
+       * Returns true if the restart was scheduled (caller should bail out of
+       * the current error path); false if we are already in stream mode or
+       * already restarted once (avoid loops).
+       */
+      const tryActivateProxyAndRestart = (reason: string): boolean => {
+        if (segmentModeRef.current === "stream") return false;
+        if (proxyAutoRestartedRef.current) return false;
+        const url = rawUrl ?? src;
+        if (!markHostProxyRequired(url, reason)) return false;
+        proxyAutoRestartedRef.current = true;
+        pushLog({
+          source: "diag",
+          level: "warn",
+          label: "proxy_required_activated",
+          details: reason,
+        });
+        clearBootstrapTimeout();
+        clearStallTimeout();
+        // Show a discreet loading state during automatic restart.
+        setError(null);
+        setLoading(true);
+        updateStatus("connecting", `proxy auto: ${reason}`);
+        // Trigger the setup effect again — segmentModeRef is read fresh from
+        // localStorage inside runSetup.
+        setRetryNonce((n) => n + 1);
+        return true;
+      };
+
       // Helper: finalize as "stream sem dados" (single classification path).
       const finalizeStreamNoData = (reason: string) => {
         if (cancelled) return;
         if (playbackStartedRef.current) return;
+        // First: try to recover by activating segment proxy automatically.
+        if (tryActivateProxyAndRestart(reason)) return;
+
         setLoading(false);
         updateStatus("stream_no_data", reason);
         pushLog({ source: "diag", level: "error", label: "stream_no_data", details: reason });
@@ -505,7 +560,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         try { if (src) upstreamHost = new URL(src).host; } catch { /* noop */ }
         reportStreamEvent("stream_error", {
           url: src,
-          meta: { type: "stream_no_data", reason, host: upstreamHost },
+          meta: { type: "stream_no_data", reason, host: upstreamHost, mode: segmentModeRef.current },
         });
       };
 
@@ -552,13 +607,14 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
             url: src,
             kind,
             iptvUsername: session?.creds.username,
+            mode: segmentModeRef.current,
           });
           if (cancelled) return;
           const safeSrc = tokenResp.url;
           const method = detectLoadMethod(safeSrc);
           setLoadMethod(method);
-          pushLog({ source: "net", level: "info", label: "token_ok", details: `${kind} via ${method}` });
-          console.log("[player] manifest_method:", method, { kind, host: extractUpstreamHost(src) });
+          pushLog({ source: "net", level: "info", label: "token_ok", details: `${kind} via ${method} mode=${segmentModeRef.current}` });
+          console.log("[player] manifest_method:", method, { kind, host: extractUpstreamHost(src), mode: segmentModeRef.current });
 
           // Heartbeat (renew session lifecycle on backend every 45s)
           heartbeatRef.current = window.setInterval(() => {
@@ -781,8 +837,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                     manifestReadyRef.current &&
                     fragLoadErrorCountRef.current >= FRAG_LOAD_ERROR_THRESHOLD
                   ) {
-                    setLoading(false);
                     const reason = "fragLoadError + no frames";
+                    try { hls.stopLoad(); } catch { /* noop */ }
+                    // Auto-activate segment proxy if not yet tried.
+                    if (tryActivateProxyAndRestart(reason)) return;
+
+                    setLoading(false);
                     updateStatus("stream_no_data", reason);
                     pushLog({ source: "diag", level: "error", label: "stream_no_data", details: reason });
                     setError({
@@ -798,9 +858,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                     try { if (src) upstreamHost = new URL(src).host; } catch { /* noop */ }
                     reportStreamEvent("stream_error", {
                       url: src,
-                      meta: { type: "stream_no_data", reason, host: upstreamHost },
+                      meta: { type: "stream_no_data", reason, host: upstreamHost, mode: segmentModeRef.current },
                     });
-                    try { hls.stopLoad(); } catch { /* noop */ }
                     return;
                   }
                   // Not yet at threshold — let HLS retry naturally.
