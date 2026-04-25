@@ -1122,12 +1122,13 @@ Deno.serve(async (req) => {
           url += `?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
         }
         const t0 = Date.now();
+        const probeTimeout = Math.min(PER_PROBE_TIMEOUT, Math.max(800, remaining()));
         try {
           const res = await proxiedFetch(url, {
             method: "GET",
             headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
             redirect: "follow",
-            signal: AbortSignal.timeout(PER_PROBE_TIMEOUT),
+            signal: AbortSignal.timeout(probeTimeout),
           });
           // @ts-ignore tag
           const route = (res as Response & { _iptvRoute?: "direct" | "proxy" })._iptvRoute ?? "direct";
