@@ -551,6 +551,51 @@ export function EndpointTestPanel({ allowedServers }: Props) {
           </p>
         </div>
 
+        <div className="space-y-1.5 p-3 rounded-md bg-primary/5 border border-primary/20">
+          <Label htmlFor="paste-url" className="flex items-center gap-1.5 text-xs">
+            <Link2 className="h-3.5 w-3.5 text-primary" />
+            Colar URL M3U / Xtream (opcional)
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              id="paste-url"
+              placeholder="http://servidor.com/get.php?username=...&password=..."
+              value={pasteUrl}
+              maxLength={2000}
+              onChange={(e) => setPasteUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  applyPastedUrl();
+                }
+              }}
+              className="font-mono text-xs"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => applyPastedUrl()}
+              disabled={!pasteUrl.trim()}
+            >
+              <Wand2 className="h-3.5 w-3.5 mr-1.5" />
+              Extrair
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={pasteFromClipboard}
+              title="Colar da área de transferência"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Aceita: <code>get.php</code>, <code>player_api.php</code>, <code>/playlist/u/p</code>, <code>/live/u/p/id.ts</code>. Servidor, usuário, senha e caminho serão preenchidos automaticamente.
+          </p>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="test-server">Servidor</Label>
