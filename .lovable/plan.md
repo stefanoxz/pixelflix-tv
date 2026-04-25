@@ -1,203 +1,138 @@
-# Aprendizado por host + escolha automática de engine
+# Diagnóstico aprimorado para DNS IPTV inativas
 
-Adicionar duas camadas de inteligência no Player IPTV — sem mexer em backend, token, TTL de proxy ou anti-loop.
-
----
-
-## PARTE 1 — Estatísticas por host (`src/services/iptv.ts`)
-
-Adicionar após `clearHostProxyMode` (~linha 1365):
-
-```ts
-const HOST_STATS_PREFIX = "iptv.host.stats:";
-const MAX_SCORE = 10;
-const DECAY_WINDOW = 24 * 60 * 60 * 1000; // 24h
-
-export interface HostStats {
-  success: number;
-  fail: number;
-  lastFailAt?: number;
-  lastSuccessAt?: number;
-}
-
-// Helpers internos: applyDecay, saveHostStats (com clamp em MAX_SCORE)
-
-export function getHostStats(url): HostStats { ... }
-export function markHostSuccess(url): void { ... }
-export function markHostFailure(url, reason?): void {
-  // Filtro: só conta se reason inclui frag|no_data|network|rst
-}
-export function shouldUseProxy(url): boolean {
-  return stats.success - stats.fail <= -2;
-}
-```
-
-Detalhes:
-- Reusa `hostFromUrl()` interno do arquivo (recebe URL completa, extrai hostname).
-- **Decay**: a cada `getHostStats`, se passou >24h da última falha/sucesso, decrementa 1 daquele contador. Garante que histórico antigo perde peso.
-- **Clamp**: `success`/`fail` nunca passam de 10 (evita explosão e mantém recuperação rápida).
-- **Filtro de falha real**: `markHostFailure` só conta se o reason mencionar `frag`, `no_data`, `network`, ou `rst` — assim erros de codec/usuário não pesam.
-- **Threshold `≤ -2`**: precisa 2 falhas líquidas a mais que sucessos antes de forçar proxy (mais conservador que `< -1`).
+Três camadas **puramente aditivas**: nenhuma quebra, nenhum fluxo existente alterado, apenas campos novos no JSON de resposta.
 
 ---
 
-## PARTE 2 — Engine preference reutilizando o que já existe
+## Camada 1 — Detectar "origin Cloudflare sem backend Xtream" no diagnóstico
 
-**O Player já tem** `getPreferredEngine`/`setPreferredEngine` em `Player.tsx:35-48` usando a chave `player.engine.host:<host>`. Para evitar duplicação e manter retrocompatibilidade, **vou reusar essas funções** em vez de criar `iptv.engine.host:` novos em `iptv.ts`.
+**Arquivo:** `supabase/functions/admin-api/index.ts` (action `test_endpoint`)
 
-A spec pede `EnginePreference = "hls" | "mpegts"`, mas o Player suporta também `"external"`. Solução: as funções existentes já retornam `PlaybackEngine | null`, e o subconjunto `"hls" | "mpegts"` é compatível — basta usá-las nos novos pontos de integração.
+Após o cálculo do `verdict` atual (linhas ~1136–1192), e antes do `return ok({ ... })` (linha ~1196), inserir uma heurística aditiva que produz um campo novo `extra_warning` **sem alterar `verdict`**:
 
-**Nada novo em `iptv.ts` para engine.** A engine continua em `Player.tsx`.
+```ts
+// Heurística adicional: Cloudflare na frente + 404 em tudo + nenhum JSON Xtream
+// = origin provavelmente desligado/removido. NÃO substitui o verdict.
+let extra_warning: { code: string; message: string } | null = null;
+const cfMarker = probes.some((p) =>
+  (p.headers.server ?? "").toLowerCase().includes("cloudflare") ||
+  Boolean(p.headers["cf-ray"])
+);
+const httpProbes = probes.filter((p) => p.status !== null);
+const all404 = httpProbes.length > 0 && httpProbes.every((p) => p.status === 404);
+const noXtreamPayload = !xtream && probes.every((p) => !(p.body_preview ?? "").includes("user_info"));
+if (cfMarker && all404 && noXtreamPayload) {
+  extra_warning = {
+    code: "origin_suspect",
+    message:
+      "Servidor responde via Cloudflare mas todas as rotas Xtream retornam 404. " +
+      "O backend IPTV provavelmente foi desligado/removido. Solicite uma DNS atualizada ao provedor.",
+  };
+}
+```
+
+E acrescentar `extra_warning` no objeto retornado:
+
+```ts
+return ok({
+  // ... todos os campos existentes ...
+  extra_warning,   // <- NOVO, pode ser null
+});
+```
+
+**UI (opcional, mesma camada):** em `src/components/admin/EndpointTestPanel.tsx`, adicionar um pequeno banner abaixo do `VerdictCard` quando `result.extra_warning` existir. Se eu não fizer isso, o campo simplesmente fica disponível no JSON e no relatório copiável.
 
 ---
 
-## PARTE 3 — Integração no Player (`src/components/Player.tsx`)
+## Camada 2 — Aviso não-bloqueante no `allow_server`
 
-### 3a. Imports (linhas 64-75)
+**Arquivo:** `supabase/functions/admin-api/index.ts` (action `allow_server`, linhas ~400–409)
 
-Adicionar `markHostSuccess`, `markHostFailure`, `shouldUseProxy` aos imports de `@/services/iptv`.
-
-### 3b. Decisão inicial de proxy (linha 623)
-
-Substituir:
+Antes do `upsert`, fazer uma sondagem rápida (HEAD em `/player_api.php`, timeout 4 s, best-effort). O resultado **nunca bloqueia** o cadastro — só anexa um campo `warning` ao retorno:
 
 ```ts
-segmentModeRef.current = getHostProxyMode(rawUrl ?? src);
-```
-
-por:
-
-```ts
-const decisionUrl = rawUrl ?? src;
-segmentModeRef.current = shouldUseProxy(decisionUrl)
-  ? "stream"
-  : getHostProxyMode(decisionUrl);
-```
-
-Engine: a inicialização e re-sincronização por host já existem (linhas 384-400) usando `getPreferredEngine` local — **continuam funcionando como estão**, e agora ganham um novo ponto de gravação automática (3c e 3d abaixo).
-
-### 3c. Marcar sucesso (em `onPlaying` e `onLoadedData`, ~linhas 1407-1442)
-
-Dentro do bloco `if (wasFirst) { ... }` das duas funções, adicionar:
-
-```ts
-markHostSuccess(rawUrl ?? src);
-setPreferredEngine(safeHostFromUrl(rawUrl ?? src), engine);
-```
-
-`wasFirst` garante que só conta uma vez por sessão de play. A gravação da engine **persiste a engine que efetivamente funcionou** — assim, se o usuário (ou o fallback automático de 3e) mudou para mpegts e o canal voltou a tocar, mpegts vira o default desse host.
-
-### 3d. Marcar falha em `tryActivateProxyAndRestart` (~linhas 727-749)
-
-Adicionar antes de `markHostProxyRequired`:
-
-```ts
-const url = rawUrl ?? src;
-markHostFailure(url, reason);
-if (!markHostProxyRequired(url, reason)) return false;
-```
-
-`reason` aqui é uma das strings: `"no_loadeddata_6s"`, `"fragLoadError + no frames"`, ou similares — todas casam com o filtro de `markHostFailure`.
-
-### 3e. Fallback automático HLS → MPEG-TS (antes de ativar proxy)
-
-Em `tryActivateProxyAndRestart`, **antes** de marcar proxy required, dar uma chance ao motor mpegts:
-
-```ts
-const tryActivateProxyAndRestart = (reason: string): boolean => {
-  if (segmentModeRef.current === "stream") return false;
-  if (proxyAutoRestartedRef.current) return false;
-
-  const url = rawUrl ?? src;
-
-  // Em canais ao vivo, antes de ir pro proxy, tentar trocar HLS → MPEG-TS
-  // (uma única vez). Se o host já tem mpegts como preferência, pula direto.
-  if (
-    isLive &&
-    engine === "hls" &&
-    !engineAutoSwitchedRef.current
-  ) {
-    engineAutoSwitchedRef.current = true;
-    markHostFailure(url, reason);
-    setPreferredEngine(safeHostFromUrl(url), "mpegts");
-    pushLog({
-      source: "diag",
-      level: "warn",
-      label: "engine_auto_switch",
-      details: `hls → mpegts (${reason})`,
-    });
-    setEngine("mpegts");
-    setError(null);
-    setLoading(true);
-    updateStatus("connecting", `engine auto: ${reason}`);
-    return true; // bloqueia o caller para não cair no setError
+let warning: string | null = null;
+try {
+  const probeUrl = `${url}/player_api.php`;
+  const res = await proxiedFetch(probeUrl, {
+    method: "HEAD",
+    headers: { "User-Agent": "VLC/3.0.20 LibVLC/3.0.20" },
+    signal: AbortSignal.timeout(4000),
+  });
+  const isCf = (res.headers.get("server") ?? "").toLowerCase().includes("cloudflare")
+            || !!res.headers.get("cf-ray");
+  if (res.status === 404 && isCf) {
+    warning = "Servidor responde via Cloudflare mas /player_api.php retorna 404. Pode estar inativo.";
   }
+} catch { /* sondagem é best-effort, ignora falhas */ }
 
-  // Caminho original: ativa proxy
-  markHostFailure(url, reason);
-  if (!markHostProxyRequired(url, reason)) return false;
-  proxyAutoRestartedRef.current = true;
-  // ... resto inalterado
-};
+const { error } = await admin.from("allowed_servers").upsert(
+  { server_url: url, label, notes }, { onConflict: "server_url" });
+if (error) { console.error(error.message); return internalError(); }
+return ok({ ok: true, server_url: url, warning });
 ```
 
-Adicionar o ref novo no topo do componente (próximo a `proxyAutoRestartedRef`):
+Frontend já trata o retorno; campo extra `warning` é opcional para exibir um toast informativo. **Cadastro continua sempre permitido.**
+
+---
+
+## Camada 3 — Hint amigável no `iptv-login`
+
+**Arquivo:** `supabase/functions/iptv-login/index.ts`
+
+Adicionar um helper que detecta o padrão "404 + corpo curto não-JSON" e devolve uma string de hint:
 
 ```ts
-const engineAutoSwitchedRef = useRef(false);
+function maybeOriginSuspectHint(status: number | undefined, body: string | undefined): string | null {
+  if (status !== 404) return null;
+  const b = (body ?? "").trim();
+  if (!b || b.length > 200) return null;
+  // 404 com corpo minúsculo / texto puro = típico de Cloudflare sem origin Xtream
+  try { JSON.parse(b); return null; } catch { /* não é JSON, segue */ }
+  return "O servidor respondeu mas não parece ser um endpoint Xtream válido. " +
+         "Sua DNS pode estar desatualizada — peça uma nova ao provedor.";
+}
 ```
 
-E **resetar** no listener de troca de canal (linha ~398, junto com `proxyAutoRestartedRef.current = false`):
+E usá-lo nos dois pontos onde já se devolve erro com `reason`/`body` (linha ~593 no `m3u_register` e linha ~780–781 no fluxo default), passando o hint como campo `extra` do `errorResponse`:
 
 ```ts
-engineAutoSwitchedRef.current = false;
+// m3u_register (linha ~592–593)
+const { code, message } = classifyReason(r.reason);
+const hint = maybeOriginSuspectHint(r.status, r.body);
+return errorResponse(code, message, corsHeaders, { reason: r.reason, ...(hint ? { hint } : {}) });
+
+// default mode (linha ~780–781)
+const { code, message } = classifyReason(lastReason);
+// captura o último body do loop — declarar `let lastBody = ""` e atualizar dentro do for
+const hint = maybeOriginSuspectHint(undefined, lastBody);
+return errorResponse(code, message, corsHeaders, { reason: lastReason, ...(hint ? { hint } : {}) });
 ```
 
-Isso garante:
-- 1 troca de engine + 1 ativação de proxy por sessão de play (no máximo).
-- Se mpegts funcionar → engine fica salva pelo bloco de sucesso (3c) e próximas sessões iniciam direto em mpegts.
-- Se mpegts também falhar → cai no caminho do proxy normalmente.
+Para o fluxo default precisamos preservar `lastBody` no loop (já existe `lastReason`). Adição mínima: declarar `let lastBody = ""` no escopo do loop e setar `lastBody = r.body ?? ""` quando `!r.ok`.
+
+**HTTP status, código de erro e mensagem principal continuam idênticos.** Só ganha um campo opcional `hint` no JSON.
 
 ---
 
 ## O que NÃO muda
 
-- `getHostProxyMode` / `markHostProxyRequired` / cache de 30min do `PROXY_HOST_PREFIX`
-- `proxyAutoRestartedRef` e anti-loop de proxy
-- `LOADEDDATA_WATCHDOG_MS` (4s) e `FRAG_LOAD_ERROR_THRESHOLD` (1)
-- Edge functions (`stream-token`, `stream-proxy`, `iptv-login`)
-- Banco, autenticação, UI, dropdown manual de engine
-- `getPreferredEngine`/`setPreferredEngine` locais em `Player.tsx` (continuam usando `player.engine.host:`)
+- Fluxo de auth, proxy, fallback de UA, fallback de portas, allowlist
+- Banco de dados (sem migration)
+- Player, stream-proxy, stream-token
+- Qualquer status HTTP de qualquer função
+- Qualquer mensagem `error` ou `code` existente
 
----
+## Detalhes técnicos
 
-## Comportamento esperado
+- Sondagem do `allow_server` usa `proxiedFetch` (já importado) e tem timeout de 4 s — não trava o cadastro.
+- `extra_warning` e `hint` são `null`/`undefined` por padrão — clientes antigos ignoram.
+- A heurística `origin_suspect` só dispara quando **todas** as condições batem (Cloudflare + 100% 404 + zero `user_info`), evitando falso positivo em servidores legítimos que retornam 404 esporádico.
+- Nenhuma alteração em `supabase/config.toml`. Edge functions reimplantam automaticamente.
 
-| Cenário | 1ª sessão | Após aprendizado |
-|---|---|---|
-| Servidor "bom" | HLS direto | HLS direto |
-| Servidor que falha em HLS mas funciona em MPEG-TS | HLS → auto-switch para mpegts → toca | **MPEG-TS direto** |
-| Servidor bloqueado (bkpac.cc) | HLS → mpegts (falha) → proxy → toca | **MPEG-TS** + **proxy** desde o start |
-| Servidor que melhora | mpegts/proxy persistem | Após decay 24h + sucessos, volta para HLS direto |
+## Resultado
 
----
-
-## Riscos & mitigação
-
-- **Engine "external"** (escolha manual): preservada — o auto-switch só age quando `engine === "hls"` e ignora "external".
-- **Falsos positivos de falha**: filtro de reason em `markHostFailure` + threshold `≤ -2` + decay 24h.
-- **Loop engine ↔ proxy**: `engineAutoSwitchedRef` e `proxyAutoRestartedRef` separados garantem 1 tentativa de cada por sessão.
-- **Quota localStorage**: ~80 bytes por entry de stats + ~10 bytes por entry de engine. 100 hosts = ~10KB.
-
----
-
-## Arquivos modificados
-
-- `src/services/iptv.ts` — adicionar ~80 linhas após `clearHostProxyMode` (HostStats + helpers)
-- `src/components/Player.tsx` — 6 edições pequenas:
-  1. Imports (+ 3 nomes de iptv.ts)
-  2. `engineAutoSwitchedRef` novo (próximo a `proxyAutoRestartedRef`)
-  3. Reset desse ref no listener de troca de canal
-  4. Decisão inicial de proxy (linha 623) considera `shouldUseProxy`
-  5. `markHostSuccess` + `setPreferredEngine` em `onPlaying`/`onLoadedData`
-  6. Auto-switch de engine + `markHostFailure` em `tryActivateProxyAndRestart`
+- Painel admin mostra **causa real** do problema (DNS sem origin) em vez de "unknown".
+- Admin recebe alerta ao cadastrar uma DNS suspeita, mas pode prosseguir.
+- Usuário final vê uma dica útil quando a DNS dele virou um 404-Cloudflare.
+- Zero risco de regressão.

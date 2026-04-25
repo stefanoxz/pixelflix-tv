@@ -402,10 +402,29 @@ Deno.serve(async (req) => {
       if (!url) return bad("URL do servidor é obrigatória");
       const label = (payload?.label as string | undefined)?.slice(0, 120) ?? null;
       const notes = (payload?.notes as string | undefined)?.slice(0, 500) ?? null;
+
+      // Sondagem best-effort: detecta DNS que responde via Cloudflare mas não
+      // tem backend Xtream ativo. NUNCA bloqueia o cadastro — só emite warning.
+      let warning: string | null = null;
+      try {
+        const probeUrl = `${url}/player_api.php`;
+        const res = await proxiedFetch(probeUrl, {
+          method: "HEAD",
+          headers: { "User-Agent": "VLC/3.0.20 LibVLC/3.0.20" },
+          signal: AbortSignal.timeout(4000),
+        });
+        const isCf = (res.headers.get("server") ?? "").toLowerCase().includes("cloudflare")
+                  || !!res.headers.get("cf-ray");
+        if (res.status === 404 && isCf) {
+          warning = "Servidor responde via Cloudflare mas /player_api.php retorna 404. Pode estar inativo.";
+        }
+        try { await res.body?.cancel(); } catch { /* noop */ }
+      } catch { /* sondagem é best-effort, ignora falhas */ }
+
       const { error } = await admin.from("allowed_servers").upsert(
         { server_url: url, label, notes }, { onConflict: "server_url" });
       if (error) { console.error(error.message); return internalError(); }
-      return ok({ ok: true, server_url: url });
+      return ok({ ok: true, server_url: url, warning });
     }
 
     if (action === "remove_server") {
@@ -1191,6 +1210,25 @@ Deno.serve(async (req) => {
         return { level: "warn", code: "unknown", message: "Não foi possível determinar saúde com certeza." };
       })();
 
+      // Heurística adicional (NÃO substitui o verdict): Cloudflare na frente
+      // + 404 em todas as sondas + nenhum payload Xtream = origin desligado.
+      let extra_warning: { code: string; message: string } | null = null;
+      const cfMarker = probes.some((p) =>
+        ((p.headers.server ?? p.headers.Server ?? "") as string).toLowerCase().includes("cloudflare") ||
+        Boolean(p.headers["cf-ray"] ?? p.headers["CF-RAY"])
+      );
+      const httpProbes = probes.filter((p) => p.status !== null);
+      const all404 = httpProbes.length > 0 && httpProbes.every((p) => p.status === 404);
+      const noXtreamPayload = !xtream && probes.every((p) => !(p.body_preview ?? "").includes("user_info"));
+      if (cfMarker && all404 && noXtreamPayload) {
+        extra_warning = {
+          code: "origin_suspect",
+          message:
+            "Servidor responde via Cloudflare mas todas as rotas Xtream retornam 404. " +
+            "O backend IPTV provavelmente foi desligado/removido. Solicite uma DNS atualizada ao provedor.",
+        };
+      }
+
       // Resposta retro-compatível: campos antigos + novos
       const primary = probes.find((p) => p.name === "auth")!;
       return ok({
@@ -1213,6 +1251,7 @@ Deno.serve(async (req) => {
         xtream,
         probes,
         route_comparison,
+        extra_warning,
       });
     }
 
