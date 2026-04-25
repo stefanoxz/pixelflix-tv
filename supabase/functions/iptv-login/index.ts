@@ -207,8 +207,16 @@ function buildVariants(serverBase: string, phase: Phase): string[] {
   const variants = new Set<string>();
   const stripped = serverBase.trim().replace(/\/+$/, "");
   let hostPort = stripped;
+  // Detectamos o esquema ORIGINAL cadastrado. Se admin cadastrou http://,
+  // priorizamos http; se https://, priorizamos https. Isso evita o bug
+  // do "Black" (bkpac.cc) que era cadastrado http mas só recebia tentativas
+  // https → connection refused na 443.
+  let originalScheme: "http" | "https" | null = null;
   const m = stripped.match(/^(https?):\/\/(.+)$/i);
-  if (m) hostPort = m[2];
+  if (m) {
+    originalScheme = m[1].toLowerCase() as "http" | "https";
+    hostPort = m[2];
+  }
   hostPort = hostPort.replace(/\s+/g, "");
   if (!hostPort) return [];
 
@@ -216,20 +224,38 @@ function buildVariants(serverBase: string, phase: Phase): string[] {
   const host = hasPort ? hostPort.replace(/:\d+$/, "") : hostPort;
 
   const candidates: string[] = [];
+  // Default: assume HTTP se nada foi declarado (IPTV é majoritariamente HTTP).
+  const primary = originalScheme ?? "http";
+  const secondary = primary === "http" ? "https" : "http";
+
   if (phase === "fast") {
-    candidates.push(`http://${hostPort}`);
+    // Schema PRIMÁRIO primeiro, em todas as portas razoáveis.
+    candidates.push(`${primary}://${hostPort}`);
     if (!hasPort) {
-      candidates.push(`http://${host}:80`, `http://${host}:8080`);
+      if (primary === "http") {
+        candidates.push(`http://${host}:80`, `http://${host}:8080`);
+      } else {
+        candidates.push(`https://${host}:443`);
+      }
     }
-    candidates.push(`https://${hostPort}`);
-    if (!hasPort) candidates.push(`https://${host}:443`);
-  } else {
+    // Schema SECUNDÁRIO depois — só como alternativa.
+    candidates.push(`${secondary}://${hostPort}`);
     if (!hasPort) {
+      if (secondary === "http") {
+        candidates.push(`http://${host}:80`, `http://${host}:8080`);
+      } else {
+        candidates.push(`https://${host}:443`);
+      }
+    }
+  } else {
+    // FASE 2 — portas IPTV exóticas, no schema primário.
+    if (!hasPort) {
+      const proto = primary;
       candidates.push(
-        `http://${host}:2052`,
-        `http://${host}:2082`,
-        `http://${host}:8880`,
-        `https://${host}:2095`,
+        `${proto}://${host}:2052`,
+        `${proto}://${host}:2082`,
+        `${proto}://${host}:8880`,
+        `${proto}://${host}:2095`,
       );
     }
   }
