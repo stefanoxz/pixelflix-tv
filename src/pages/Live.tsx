@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Loader2, Tv, Menu } from "lucide-react";
 import { Input } from "@/components/ui/input";
