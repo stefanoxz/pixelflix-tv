@@ -92,6 +92,34 @@ export function IptvProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  // Prefetch silencioso do catálogo no boot quando há sessão e o cache
+  // ainda não tem dados frescos. Não bloqueia render. Respeita o queue
+  // global de iptv.ts (concorrência limitada).
+  useEffect(() => {
+    if (!session?.creds) return;
+    const creds = session.creds;
+    const username = creds.username;
+    const stale = 30 * 60 * 1000;
+    const gc = 24 * 60 * 60 * 1000;
+    const prefetchIfStale = (key: unknown[], fn: () => Promise<unknown>) => {
+      const state = queryClient.getQueryState(key);
+      const isFresh =
+        state?.dataUpdatedAt &&
+        Date.now() - state.dataUpdatedAt < stale &&
+        state.status === "success";
+      if (isFresh) return;
+      queryClient
+        .prefetchQuery({ queryKey: key, queryFn: fn, staleTime: stale, gcTime: gc })
+        .catch(() => {
+          /* silencioso — páginas farão fetch normal se necessário */
+        });
+    };
+    prefetchIfStale(["vod-cats", username], () => getVodCategories(creds));
+    prefetchIfStale(["vod-streams", username], () => getVodStreams(creds));
+    prefetchIfStale(["series-cats", username], () => getSeriesCategories(creds));
+    prefetchIfStale(["series", username], () => getSeries(creds));
+  }, [session?.creds]);
+
   return (
     <IptvContext.Provider value={{ session, setSession, logout }}>
       {children}
