@@ -643,11 +643,93 @@ export function EndpointTestPanel({ allowedServers }: Props) {
               <span>•</span>
               <span>modo: <code>{result.mode ?? "—"}</code></span>
             </div>
-            <Button size="sm" variant="outline" onClick={copyReport}>
-              <Copy className="h-3.5 w-3.5 mr-1.5" />
-              Copiar relatório
-            </Button>
+            <div className="flex items-center gap-2">
+              {result.verdict && result.verdict.level !== "ok" && (
+                <Button size="sm" variant="default" onClick={resolve} disabled={resolving}>
+                  {resolving ? (
+                    <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Investigando…</>
+                  ) : (
+                    <><Wrench className="h-3.5 w-3.5 mr-1.5" />Tentar resolver</>
+                  )}
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={copyReport}>
+                <Copy className="h-3.5 w-3.5 mr-1.5" />
+                Copiar relatório
+              </Button>
+            </div>
           </div>
+
+          {resolveResult && (
+            <Card className="p-4 bg-gradient-card border-border/50 space-y-3">
+              <div className="flex items-center gap-2">
+                <Wrench className="h-4 w-4 text-primary" />
+                <h4 className="font-semibold text-sm">Resolução automática</h4>
+                <span className="text-xs text-muted-foreground ml-auto">
+                  {resolveResult.variants_tested} variantes testadas
+                </span>
+              </div>
+
+              {resolveResult.suggestions.length > 0 && (
+                <div className="space-y-1.5">
+                  {resolveResult.suggestions.map((s, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs p-2 rounded bg-muted/30">
+                      <Lightbulb className="h-3.5 w-3.5 text-warning mt-0.5 shrink-0" />
+                      <span>{s}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {resolveResult.candidates.length > 0 ? (
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] uppercase text-muted-foreground">
+                    Candidatos funcionais (ordenados por qualidade)
+                  </Label>
+                  {resolveResult.candidates.slice(0, 8).map((c, i) => {
+                    const isBest = i === 0;
+                    const isAuthOk = c.is_xtream && (c.xtream_auth === 1 || c.xtream_auth === "1");
+                    return (
+                      <div
+                        key={`${c.base}-${i}`}
+                        className={cn(
+                          "flex items-center gap-2 p-2 rounded border text-xs",
+                          isBest
+                            ? "border-success/40 bg-success/5"
+                            : "border-border/40 bg-muted/20",
+                        )}
+                      >
+                        <code className="font-mono flex-1 truncate">{c.base}</code>
+                        <RouteBadge route={c.route} />
+                        <StatusPill status={c.status} error={c.error} />
+                        {isAuthOk && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-success/15 text-success border border-success/30">
+                            Xtream ✓
+                          </span>
+                        )}
+                        <span className="text-muted-foreground tabular-nums w-12 text-right">
+                          {c.latency_ms}ms
+                        </span>
+                        <Button
+                          size="sm"
+                          variant={isBest ? "default" : "outline"}
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => applyCandidate(c.base)}
+                        >
+                          Aplicar
+                          <ArrowRight className="h-3 w-3 ml-1" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground p-3 rounded bg-muted/20 text-center">
+                  Nenhuma variante respondeu. Servidor parece totalmente offline para esta região.
+                </div>
+              )}
+            </Card>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {result.xtream && <XtreamCard x={result.xtream} />}
