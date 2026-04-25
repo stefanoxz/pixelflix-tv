@@ -331,12 +331,16 @@ Deno.serve(async (req) => {
 
       let upstream: Response;
       try {
-        upstream = await fetch(payload.u, {
+        // half-duplex streaming: começa a entregar bytes assim que chegam,
+        // sem aguardar o corpo todo. Reduz TTFF do primeiro segmento.
+        const fetchInit: RequestInit & { duplex?: string } = {
           method: "GET",
           redirect: "follow",
           headers: upstreamHeaders,
           signal: AbortSignal.timeout(SEGMENT_FETCH_TIMEOUT_MS),
-        });
+          duplex: "half",
+        };
+        upstream = await fetch(payload.u, fetchInit);
       } catch (err) {
         ipBump(ipKey, -1);
         const reason = err instanceof Error ? err.message : "fetch_failed";
