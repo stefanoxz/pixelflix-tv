@@ -69,8 +69,10 @@ export function SeriesDetailsDialog({
         <div className="relative h-40 md:h-56 w-full overflow-hidden">
           {backdrop && (
             <img
-              src={proxyImageUrl(backdrop)}
+              src={proxyImageUrl(backdrop, { w: 900, q: 75 })}
               alt=""
+              loading="eager"
+              decoding="async"
               className="absolute inset-0 h-full w-full object-cover"
               onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
             />
