@@ -17,6 +17,10 @@ export type Database = {
       active_sessions: {
         Row: {
           anon_user_id: string
+          content_id: string | null
+          content_kind: string | null
+          content_started_at: string | null
+          content_title: string | null
           id: string
           ip: string | null
           iptv_username: string | null
@@ -26,6 +30,10 @@ export type Database = {
         }
         Insert: {
           anon_user_id: string
+          content_id?: string | null
+          content_kind?: string | null
+          content_started_at?: string | null
+          content_title?: string | null
           id?: string
           ip?: string | null
           iptv_username?: string | null
@@ -35,6 +43,10 @@ export type Database = {
         }
         Update: {
           anon_user_id?: string
+          content_id?: string | null
+          content_kind?: string | null
+          content_started_at?: string | null
+          content_title?: string | null
           id?: string
           ip?: string | null
           iptv_username?: string | null
@@ -318,6 +330,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      evict_idle_sessions: { Args: never; Returns: number }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

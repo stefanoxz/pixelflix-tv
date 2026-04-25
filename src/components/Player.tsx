@@ -466,6 +466,15 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     return getPlaybackStrategy(containerExt, rawUrl || src);
   }, [src, rawUrl, containerExt]);
 
+  // Snapshot do conteúdo atual para enviar junto dos heartbeats — alimenta o
+  // painel de monitoramento ("o que o usuário está assistindo agora").
+  const buildContentMeta = (extra?: Record<string, unknown>) => ({
+    content_kind: contentKind ?? null,
+    content_title: title ?? null,
+    content_id: streamId != null ? String(streamId) : null,
+    ...(extra ?? {}),
+  });
+
   const updateStatus = (next: DiagnosticStatus, reason?: string | null) => {
     setStatus(next);
     if (reason !== undefined) {
@@ -474,7 +483,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     }
     reportStreamEvent("session_heartbeat", {
       url: src ?? undefined,
-      meta: { diagnostic_status: next, reason: reason ?? lastReasonRef.current ?? null },
+      meta: buildContentMeta({ diagnostic_status: next, reason: reason ?? lastReasonRef.current ?? null }),
     });
   };
 
@@ -880,7 +889,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
           // Heartbeat (renew session lifecycle on backend every 45s)
           heartbeatRef.current = window.setInterval(() => {
-            reportStreamEvent("session_heartbeat");
+            reportStreamEvent("session_heartbeat", { url: src ?? undefined, meta: buildContentMeta() });
           }, HEARTBEAT_INTERVAL_MS);
 
           // Motor MPEG-TS para canais ao vivo Xtream.
@@ -1505,7 +1514,15 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [copyTarget, src]);
 
-  useEffect(() => () => teardown(), []);
+  // Quando o player desmonta (usuário fechou e voltou ao menu), marca a
+  // sessão como ociosa para o painel de monitoramento e habilita o
+  // auto-kick por inatividade após 60min.
+  useEffect(() => () => {
+    teardown();
+    reportStreamEvent("session_heartbeat", {
+      meta: { content_kind: "idle", content_title: null, content_id: null },
+    });
+  }, []);
 
   const handleCopy = async () => {
     const target = error?.copyUrl || copyTarget;

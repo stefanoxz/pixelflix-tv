@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
         admin.from("allowed_servers").select("id, server_url, label, notes, created_at"),
         admin.from("stream_events").select("meta").eq("event_type", "stream_error").gte("created_at", fiveMinAgo).limit(1000),
         admin.from("login_events").select("id, username, server_url, success, reason, created_at").order("created_at", { ascending: false }).limit(eventsLimit),
-        admin.from("active_sessions").select("anon_user_id, iptv_username, ip, started_at, last_seen_at").gt("last_seen_at", cutoff).order("started_at", { ascending: false }).limit(200),
+        admin.from("active_sessions").select("anon_user_id, iptv_username, ip, started_at, last_seen_at, content_kind, content_title, content_id, content_started_at").gt("last_seen_at", cutoff).order("started_at", { ascending: false }).limit(200),
         admin.from("user_blocks").select("anon_user_id, blocked_until, reason, created_at").gt("blocked_until", new Date().toISOString()).order("blocked_until", { ascending: false }),
         admin.from("stream_events").select("id, anon_user_id, event_type, ip, meta, created_at").gte("created_at", since24h).in("event_type", ["stream_error", "token_rejected", "rate_limited", "user_blocked", "suspicious_pattern"]).order("created_at", { ascending: false }).limit(50),
         admin.from("stream_events").select("ip").eq("event_type", "token_rejected").gte("created_at", since24h),
@@ -181,9 +181,10 @@ Deno.serve(async (req) => {
         server_url: url, last_seen: s.last_seen, total_logins: s.total_logins, success_count: s.success_count, fail_count: s.fail_count, unique_users: s.users.size,
       }));
 
-      const sessionsList = (sessions.data ?? []).map((s: { anon_user_id: string; iptv_username: string | null; ip: string | null; started_at: string; last_seen_at: string }) => ({
+      const sessionsList = (sessions.data ?? []).map((s: { anon_user_id: string; iptv_username: string | null; ip: string | null; started_at: string; last_seen_at: string; content_kind: string | null; content_title: string | null; content_id: string | null; content_started_at: string | null }) => ({
         anon_user_id: s.anon_user_id, iptv_username: s.iptv_username, ip_masked: maskIp(s.ip), started_at: s.started_at,
         last_seen_at: s.last_seen_at, duration_s: Math.floor((Date.now() - new Date(s.started_at).getTime()) / 1000),
+        content_kind: s.content_kind, content_title: s.content_title, content_id: s.content_id, content_started_at: s.content_started_at,
       }));
       const ipCounts = new Map<string, number>();
       for (const r of (topRej.data ?? []) as { ip: string | null }[]) if (r.ip) ipCounts.set(r.ip, (ipCounts.get(r.ip) ?? 0) + 1);
@@ -441,19 +442,23 @@ Deno.serve(async (req) => {
       const since24h = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
 
       const [sessions, blocks, recentErrors, topRej] = await Promise.all([
-        admin.from("active_sessions").select("anon_user_id, iptv_username, ip, started_at, last_seen_at").gt("last_seen_at", cutoff).order("started_at", { ascending: false }).limit(200),
+        admin.from("active_sessions").select("anon_user_id, iptv_username, ip, started_at, last_seen_at, content_kind, content_title, content_id, content_started_at").gt("last_seen_at", cutoff).order("started_at", { ascending: false }).limit(200),
         admin.from("user_blocks").select("anon_user_id, blocked_until, reason, created_at").gt("blocked_until", new Date().toISOString()).order("blocked_until", { ascending: false }),
         admin.from("stream_events").select("id, anon_user_id, event_type, ip, meta, created_at").gte("created_at", since24h).in("event_type", ["stream_error", "token_rejected", "rate_limited", "user_blocked", "suspicious_pattern"]).order("created_at", { ascending: false }).limit(50),
         admin.from("stream_events").select("ip").eq("event_type", "token_rejected").gte("created_at", since24h),
       ]);
 
-      const sessionsList = (sessions.data ?? []).map((s: { anon_user_id: string; iptv_username: string | null; ip: string | null; started_at: string; last_seen_at: string }) => ({
+      const sessionsList = (sessions.data ?? []).map((s: { anon_user_id: string; iptv_username: string | null; ip: string | null; started_at: string; last_seen_at: string; content_kind: string | null; content_title: string | null; content_id: string | null; content_started_at: string | null }) => ({
         anon_user_id: s.anon_user_id,
         iptv_username: s.iptv_username,
         ip_masked: maskIp(s.ip),
         started_at: s.started_at,
         last_seen_at: s.last_seen_at,
         duration_s: Math.floor((Date.now() - new Date(s.started_at).getTime()) / 1000),
+        content_kind: s.content_kind,
+        content_title: s.content_title,
+        content_id: s.content_id,
+        content_started_at: s.content_started_at,
       }));
 
       // Top IPs by token_rejected
