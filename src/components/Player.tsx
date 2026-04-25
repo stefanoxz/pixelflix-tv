@@ -388,10 +388,56 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     catch { /* noop */ }
   }, [logsPanelOpen]);
 
+  /**
+   * Captura um snapshot leve do `<video>` para anexar a logs. Tudo é
+   * opcional e protegido contra elementos não montados.
+   */
+  const captureVideoMeta = (): LogMeta => {
+    const v = videoRef.current;
+    if (!v) return {};
+    let be: number | undefined;
+    let bAhead: number | undefined;
+    try {
+      const buf = v.buffered;
+      if (buf.length > 0) {
+        be = buf.end(buf.length - 1);
+        bAhead = Math.max(0, be - v.currentTime);
+      }
+    } catch { /* noop */ }
+    return {
+      ct: Number.isFinite(v.currentTime) ? +v.currentTime.toFixed(2) : undefined,
+      be: be !== undefined ? +be.toFixed(2) : undefined,
+      bAhead: bAhead !== undefined ? +bAhead.toFixed(2) : undefined,
+      rs: v.readyState,
+      ns: v.networkState,
+      p: v.paused,
+    };
+  };
+
+  /**
+   * Snapshot da Network Information API (Chrome/Edge). Útil pra correlacionar
+   * stalls com queda de qualidade da conexão (ex: 4g → 3g).
+   */
+  const captureNetMeta = (): LogMeta => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = (navigator as any).connection;
+    if (!c) return {};
+    return {
+      net: typeof c.effectiveType === "string" ? c.effectiveType : undefined,
+      rtt: typeof c.rtt === "number" ? c.rtt : undefined,
+      dl: typeof c.downlink === "number" ? c.downlink : undefined,
+    };
+  };
+
   const pushLog = (entry: Omit<LogEntry, "t" | "tRel">) => {
     const t = performance.now();
     const tRel = setupStartRef.current ? t - setupStartRef.current : 0;
-    logsRef.current.push({ ...entry, t, tRel });
+    // Mescla auto-snapshot de vídeo + meta explícito do chamador (este último vence).
+    const autoMeta = captureVideoMeta();
+    const meta = { ...autoMeta, ...(entry.meta ?? {}) };
+    // Só anexa se houver algo útil
+    const finalMeta = Object.keys(meta).length > 0 ? meta : undefined;
+    logsRef.current.push({ ...entry, t, tRel, meta: finalMeta });
     if (logsRef.current.length > 200) logsRef.current.shift();
     if (logsPanelOpenRef.current) setLogsVersion((v) => v + 1);
   };
