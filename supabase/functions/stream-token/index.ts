@@ -79,11 +79,38 @@ const TTL_SEGMENT_S = 45;
 
 const PROXY_BASE = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/stream-proxy`;
 
+// ===== Caches em memória (per-worker) =====
+// Bloqueios mudam raramente; SELECT por request adiciona ~150-300ms ao
+// caminho crítico. Cache curto (30s) é seguro: usuário bloqueado vê
+// rejeição até ~30s depois — bem abaixo do TTL do token (30min).
+type BlockCacheEntry = { until: number; blockedUntil: string | null };
+const blockCache = new Map<string, BlockCacheEntry>();
+const BLOCK_CACHE_TTL_MS = 30_000;
+
+// Counter local (per-worker) com upsert opportunistic. Persiste no DB mas
+// não bloqueia o response — perdas em cold-start do worker são aceitáveis
+// (rate limit é eventualmente consistente). Resetamos no minuto novo.
+type CounterEntry = { winStart: string; req: number; seg: number };
+const counterCache = new Map<string, CounterEntry>();
+
 function json(body: unknown, status: number, cors: Record<string, string>, extra: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...cors, "Content-Type": "application/json", ...extra },
   });
+}
+
+// Roda promises em background sem bloquear o response. Em Deno Deploy /
+// Supabase Edge isso é suportado via EdgeRuntime.waitUntil quando
+// disponível; cai pra .catch silencioso quando não.
+// deno-lint-ignore no-explicit-any
+const _edge: any = (globalThis as any).EdgeRuntime;
+function background(p: Promise<unknown>) {
+  if (_edge && typeof _edge.waitUntil === "function") {
+    try { _edge.waitUntil(p); return; } catch { /* fallthrough */ }
+  }
+  // Fallback: deixa rodar; suprime rejeição não-tratada.
+  p.catch(() => { /* swallow */ });
 }
 
 async function logEvent(
