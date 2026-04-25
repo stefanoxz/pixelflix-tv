@@ -551,6 +551,125 @@ Deno.serve(async (req) => {
     }
 
     // ---------------------------------------------------------------------
+    // Mode: "m3u_register" — login via URL M3U que pode AUTO-CADASTRAR a DNS.
+    // Pula a checagem de allowlist; só cadastra se o Xtream autenticar com
+    // user_info válido (auth=1). Servidores inválidos NUNCA entram na lista.
+    // ---------------------------------------------------------------------
+    if (mode === "m3u_register") {
+      if (!server || !username || !password) {
+        return errorResponse(
+          "BAD_REQUEST",
+          "m3u_register requer server, username e password",
+          corsHeaders,
+        );
+      }
+      const baseUrl = String(server).trim().replace(/\/+$/, "");
+      const fullBase = /^https?:\/\//i.test(baseUrl) ? baseUrl : `http://${baseUrl}`;
+
+      // Verifica se já está cadastrada (informativo — não bloqueia).
+      let existingRow: { id: string; last_working_variant: string | null; consecutive_failures: number; unreachable_until: string | null } | null = null;
+      try {
+        const { data: existing } = await admin
+          .from("allowed_servers")
+          .select("id, server_url, last_working_variant, consecutive_failures, unreachable_until")
+          .eq("server_url", normalizeServer(fullBase))
+          .maybeSingle();
+        if (existing) {
+          existingRow = {
+            id: existing.id,
+            last_working_variant: existing.last_working_variant ?? null,
+            consecutive_failures: existing.consecutive_failures ?? 0,
+            unreachable_until: existing.unreachable_until ?? null,
+          };
+        }
+      } catch (err) {
+        console.warn("[iptv-login] m3u_register: lookup failed", err);
+      }
+
+      const r = await attemptLogin(fullBase, username, password, existingRow, admin);
+      if (!r.ok) {
+        await logEvent({ server: fullBase, username, success: false, reason: `m3u_register:${r.reason}`, ua, ip });
+        const { code, message } = classifyReason(r.reason);
+        return errorResponse(code, message, corsHeaders, { reason: r.reason });
+      }
+
+      // @ts-ignore - usedVariant existe no caminho ok
+      const usedVariant: string = (r as any).usedVariant ?? fullBase;
+      const normalizedUsed = normalizeServer(usedVariant);
+
+      let autoRegistered = false;
+      if (!existingRow) {
+        // Decide o label: server_info.url do Xtream → fallback hostname.
+        let label: string | null = null;
+        try {
+          const infoUrl = (r.data?.server_info?.url as string | undefined)?.trim();
+          if (infoUrl) {
+            label = infoUrl.replace(/^https?:\/\//i, "").replace(/\/+$/, "").slice(0, 120);
+          }
+        } catch { /* noop */ }
+        if (!label) {
+          try {
+            label = new URL(normalizedUsed).hostname.slice(0, 120);
+          } catch {
+            label = normalizedUsed.replace(/^https?:\/\//i, "").slice(0, 120);
+          }
+        }
+        try {
+          const { error: upErr } = await admin.from("allowed_servers").upsert(
+            {
+              server_url: normalizedUsed,
+              label,
+              notes: "Auto-cadastrado via login M3U",
+              last_working_variant: usedVariant,
+              last_working_at: new Date().toISOString(),
+              consecutive_failures: 0,
+              unreachable_until: null,
+            },
+            { onConflict: "server_url" },
+          );
+          if (upErr) {
+            console.error("[iptv-login] m3u_register upsert error", upErr.message);
+          } else {
+            autoRegistered = true;
+          }
+        } catch (err) {
+          console.error("[iptv-login] m3u_register upsert exception", err);
+        }
+      }
+
+      // Lista atualizada de allowed (para o cliente cachear/usar).
+      let allowedList: string[] = [];
+      try {
+        const { data: rows } = await admin.from("allowed_servers").select("server_url");
+        allowedList = (rows ?? []).map((r: { server_url: string }) => normalizeServer(r.server_url));
+      } catch { /* noop */ }
+
+      // @ts-ignore - route existe no caminho ok
+      const route: "direct" | "proxy" = (r as any).route ?? "direct";
+      await logEvent({
+        server: normalizedUsed,
+        username,
+        success: true,
+        reason: autoRegistered ? "m3u_auto_register" : `m3u_login route=${route}`,
+        ua,
+        ip,
+      });
+      console.log(`[iptv-login] M3U_REGISTER server=${normalizedUsed} route=${route} auto_registered=${autoRegistered}`);
+      return jsonResponse(
+        200,
+        {
+          success: true,
+          ...r.data,
+          server_url: normalizedUsed,
+          allowed_servers: allowedList,
+          route,
+          auto_registered: autoRegistered,
+        },
+        corsHeaders,
+      );
+    }
+
+    // ---------------------------------------------------------------------
     // Mode: "log" — registra o resultado de um login que aconteceu via browser.
     // Não autentica nada, só insere em login_events (best-effort).
     // ---------------------------------------------------------------------
