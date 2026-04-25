@@ -48,25 +48,26 @@ export function SeriesDetailsDialog({
     gcTime: 1000 * 60 * 30,
   });
 
+  const info = data?.info;
+  const sourceCover = info?.cover || series?.cover;
+  const releaseDate = series?.releaseDate || info?.releaseDate;
+  const year = releaseDate ? releaseDate.slice(0, 4) : null;
+
+  // Fallback TMDB — chamado SEMPRE (antes de qualquer return) pra preservar a ordem dos hooks.
+  const { data: tmdb } = useTmdbFallback({
+    type: "series",
+    hasCover: !!sourceCover || !series,
+    name: series?.name,
+    year: year ?? undefined,
+  });
+
   if (!series) return null;
 
-  const info = data?.info;
-  const sourceCover = info?.cover || series.cover;
-  const releaseDate = series.releaseDate || info?.releaseDate;
-  const year = releaseDate ? releaseDate.slice(0, 4) : null;
   const ratingNum = series.rating_5based || 0;
   const plot = series.plot || info?.plot;
   const cast = series.cast || info?.cast;
   const director = series.director || info?.director;
   const genre = series.genre || info?.genre;
-
-  // Fallback TMDB quando a fonte IPTV não retorna capa.
-  const { data: tmdb } = useTmdbFallback({
-    type: "series",
-    hasCover: !!sourceCover,
-    name: series.name,
-    year: year ?? undefined,
-  });
   const cover = sourceCover || tmdb?.poster || null;
   const backdrop = tmdb?.backdrop || cover;
 
