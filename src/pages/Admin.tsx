@@ -161,9 +161,20 @@ interface DnsErrorServer {
   buckets: Record<ErrorBucket, number>;
 }
 
+interface DnsErrorSeriesPoint {
+  t: string;
+  total: number;
+  success: number;
+  fail: number;
+  refused: number; reset: number; http_404: number; http_444: number; http_5xx: number;
+  tls: number; cert_invalid: number; timeout: number; io_timeout: number;
+  dns: number; no_route: number; net_unreach: number; protocol: number; other: number;
+}
+
 interface DnsErrorOverview {
   since: string;
   hours: number;
+  step_ms?: number;
   totals: {
     total: number;
     success: number;
@@ -171,6 +182,8 @@ interface DnsErrorOverview {
     buckets: Record<ErrorBucket, number>;
   };
   servers: DnsErrorServer[];
+  series?: DnsErrorSeriesPoint[];
+  per_server_series?: { server_url: string; points: DnsErrorSeriesPoint[] }[];
 }
 
 const ERROR_BUCKET_META: Record<ErrorBucket, { label: string; cls: string; tip: string }> = {
