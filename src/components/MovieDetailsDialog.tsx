@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Heart, Loader2, Play, Star, X } from "lucide-react";
+import { AlertTriangle, Heart, Loader2, Play, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
