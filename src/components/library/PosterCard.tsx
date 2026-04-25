@@ -1,7 +1,8 @@
 import { forwardRef, useState } from "react";
-import { Heart, Star } from "lucide-react";
+import { Heart, Star, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { proxyImageUrl } from "@/services/iptv";
+import { useIsIncompatible } from "@/hooks/useIsIncompatible";
 
 export interface PosterItem {
   id: number;
@@ -9,6 +10,8 @@ export interface PosterItem {
   cover?: string | null;
   year?: string | number;
   rating?: number;
+  /** Host upstream do conteúdo — usado pra checar marca de incompatibilidade. */
+  host?: string | null;
 }
 
 interface Props {
