@@ -268,6 +268,27 @@ export type Database = {
         }
         Relationships: []
       }
+      tmdb_image_cache: {
+        Row: {
+          backdrop_url: string | null
+          cache_key: string
+          fetched_at: string
+          poster_url: string | null
+        }
+        Insert: {
+          backdrop_url?: string | null
+          cache_key: string
+          fetched_at?: string
+          poster_url?: string | null
+        }
+        Update: {
+          backdrop_url?: string | null
+          cache_key?: string
+          fetched_at?: string
+          poster_url?: string | null
+        }
+        Relationships: []
+      }
       usage_counters: {
         Row: {
           anon_user_id: string
