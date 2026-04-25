@@ -94,6 +94,12 @@ function errorResponse(
 /** Mapeia uma string de motivo (vinda de attemptLogin) para um código padronizado. */
 function classifyReason(reason: string): { code: string; message: string } {
   const r = (reason || "").toLowerCase();
+  if (/max_connections|limite de telas/.test(r)) {
+    return {
+      code: "MAX_CONNECTIONS",
+      message: "Limite de telas atingido nesta conta. Feche outras conexões e tente novamente.",
+    };
+  }
   if (/credenc|invalid|auth=0|unauthor|401/.test(r)) {
     return { code: "INVALID_CREDENTIALS", message: "Usuário ou senha inválidos" };
   }
