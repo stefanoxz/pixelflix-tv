@@ -410,6 +410,43 @@ export function EndpointTestPanel({ allowedServers }: Props) {
   const [resolving, setResolving] = useState(false);
   const [resolveResult, setResolveResult] = useState<ResolveResult | null>(null);
 
+  const applyPastedUrl = (raw?: string) => {
+    const input = (raw ?? pasteUrl).trim();
+    if (!input) {
+      toast.error("Cole uma URL primeiro");
+      return;
+    }
+    if (input.length > 2000) {
+      toast.error("URL muito longa");
+      return;
+    }
+    const parsed = parseM3uUrl(input);
+    if (!parsed) {
+      toast.error("Formato não reconhecido (esperado get.php, player_api.php, /playlist/u/p ou /live/u/p/id)");
+      return;
+    }
+    setServerUrl(parsed.server);
+    setUsername(parsed.username);
+    setPassword(parsed.password);
+    if (parsed.path) setPath(parsed.path);
+    setPasteUrl("");
+    toast.success(`Extraído: ${parsed.server} (user: ${parsed.username})`);
+  };
+
+  const pasteFromClipboard = async () => {
+    try {
+      const txt = await navigator.clipboard.readText();
+      if (!txt) {
+        toast.error("Área de transferência vazia");
+        return;
+      }
+      setPasteUrl(txt);
+      applyPastedUrl(txt);
+    } catch {
+      toast.error("Sem permissão para ler a área de transferência");
+    }
+  };
+
   const run = async () => {
     if (!serverUrl.trim()) {
       toast.error("Informe a URL do servidor");
