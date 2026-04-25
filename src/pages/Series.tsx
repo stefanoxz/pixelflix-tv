@@ -5,6 +5,7 @@ import { Tv2 } from "lucide-react";
 import { toast } from "sonner";
 import { Player } from "@/components/Player";
 import { PlayerOverlay } from "@/components/PlayerOverlay";
+import { NextEpisodeCard } from "@/components/series/NextEpisodeCard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { LibraryTopBar } from "@/components/library/LibraryTopBar";
 import { CategoryRail, type RailCategory } from "@/components/library/CategoryRail";
@@ -15,6 +16,7 @@ import { SeriesDetailsDialog } from "@/components/SeriesDetailsDialog";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useAutoplayPreference } from "@/hooks/useAutoplayPreference";
 import { useIptv } from "@/context/IptvContext";
 import {
   buildSeriesEpisodeUrl,
@@ -24,6 +26,7 @@ import {
   proxyImageUrl,
   type Episode,
   type Series,
+  type SeriesInfo,
 } from "@/services/iptv";
 
 const SPECIAL_ALL = "all";
