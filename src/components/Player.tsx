@@ -958,15 +958,31 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
                 if (!data.fatal) return;
 
-                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCountRef.current < 3) {
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCountRef.current < HLS_FATAL_NETWORK_RETRY_LIMIT) {
                   retryCountRef.current += 1;
+                  const delay = Math.min(
+                    HLS_FATAL_RETRY_MAX_DELAY_MS,
+                    HLS_FATAL_RETRY_BASE_DELAY_MS * retryCountRef.current,
+                  );
+                  pushLog({
+                    source: "diag",
+                    level: "warn",
+                    label: "hls_network_recover",
+                    details: `${retryCountRef.current}/${HLS_FATAL_NETWORK_RETRY_LIMIT} in ${delay}ms`,
+                  });
                   setTimeout(() => {
                     try { hls.startLoad(); } catch { /* noop */ }
-                  }, 2000 * retryCountRef.current);
+                  }, delay);
                   return;
                 }
-                if (data.type === Hls.ErrorTypes.MEDIA_ERROR && retryCountRef.current < 3) {
+                if (data.type === Hls.ErrorTypes.MEDIA_ERROR && retryCountRef.current < HLS_FATAL_MEDIA_RETRY_LIMIT) {
                   retryCountRef.current += 1;
+                  pushLog({
+                    source: "diag",
+                    level: "warn",
+                    label: "hls_media_recover",
+                    details: `${retryCountRef.current}/${HLS_FATAL_MEDIA_RETRY_LIMIT}`,
+                  });
                   try { hls.recoverMediaError(); return; } catch { /* fallthrough */ }
                 }
                 setLoading(false);
