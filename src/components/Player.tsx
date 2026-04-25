@@ -1078,6 +1078,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       clearBootstrapTimeout();
       clearStallTimeout();
       clearLoadeddataWatchdog();
+      if (wasFirst) {
+        firstFrameAtRef.current = performance.now();
         const ttff = setupStartRef.current ? Math.round(firstFrameAtRef.current - setupStartRef.current) : 0;
         pushLog({ source: "video", level: "info", label: "first_playing", details: `TTFF=${ttff}ms` });
         updateStatus("playback_started", null);
@@ -1096,6 +1098,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       clearBootstrapTimeout();
       clearStallTimeout();
       clearLoadeddataWatchdog();
+      const ttff = setupStartRef.current
+        ? Math.round(performance.now() - setupStartRef.current)
         : 0;
       pushLog({ source: "video", level: "info", label: "loadeddata", details: `TTFF=${ttff}ms` });
       if (wasFirst) {
