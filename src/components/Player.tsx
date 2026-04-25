@@ -466,6 +466,15 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     return getPlaybackStrategy(containerExt, rawUrl || src);
   }, [src, rawUrl, containerExt]);
 
+  // Snapshot do conteúdo atual para enviar junto dos heartbeats — alimenta o
+  // painel de monitoramento ("o que o usuário está assistindo agora").
+  const buildContentMeta = (extra?: Record<string, unknown>) => ({
+    content_kind: contentKind ?? null,
+    content_title: title ?? null,
+    content_id: streamId != null ? String(streamId) : null,
+    ...(extra ?? {}),
+  });
+
   const updateStatus = (next: DiagnosticStatus, reason?: string | null) => {
     setStatus(next);
     if (reason !== undefined) {
@@ -474,7 +483,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     }
     reportStreamEvent("session_heartbeat", {
       url: src ?? undefined,
-      meta: { diagnostic_status: next, reason: reason ?? lastReasonRef.current ?? null },
+      meta: buildContentMeta({ diagnostic_status: next, reason: reason ?? lastReasonRef.current ?? null }),
     });
   };
 
