@@ -118,7 +118,7 @@ export function NextEpisodeCard({
       role="dialog"
       aria-label="Próximo episódio"
     >
-      <div className="rounded-2xl border border-border/60 bg-card/85 backdrop-blur-md shadow-elegant overflow-hidden">
+      <div className="rounded-2xl border border-border/60 bg-card/85 backdrop-blur-md shadow-2xl overflow-hidden">
         <div className="flex gap-3 p-3">
           {/* Thumb */}
           <div className="relative shrink-0 w-32 md:w-36 aspect-video rounded-lg overflow-hidden bg-secondary">
@@ -195,7 +195,7 @@ export function NextEpisodeCard({
             <Button
               size="sm"
               onClick={onPlayNow}
-              className="bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-elegant"
+              className="bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-2xl"
             >
               {autoplayEnabled ? (
                 <FastForward className="h-4 w-4 mr-1" />
