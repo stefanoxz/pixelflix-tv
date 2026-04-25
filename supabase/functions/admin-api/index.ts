@@ -421,7 +421,88 @@ Deno.serve(async (req) => {
       }
 
       const servers = Array.from(map.values()).sort((a, b) => b.fail - a.fail);
-      return ok({ since, hours, totals, servers });
+
+      // ---- Time series ----
+      const stepMs = hours <= 6 ? 15 * 60_000
+        : hours <= 24 ? 60 * 60_000
+        : hours <= 72 ? 3 * 60 * 60_000
+        : 6 * 60 * 60_000;
+
+      const sinceMs = Date.now() - hours * 60 * 60_000;
+      const startMs = Math.floor(sinceMs / stepMs) * stepMs;
+      const endMs = Math.ceil(Date.now() / stepMs) * stepMs;
+      const slots: number[] = [];
+      for (let t = startMs; t <= endMs; t += stepMs) slots.push(t);
+
+      type SeriesPoint = {
+        t: string;
+        total: number;
+        success: number;
+        fail: number;
+      } & Record<Bucket, number>;
+
+      const emptyPoint = (t: number): SeriesPoint => ({
+        t: new Date(t).toISOString(),
+        total: 0, success: 0, fail: 0,
+        refused: 0, reset: 0, http_404: 0, http_444: 0, http_5xx: 0,
+        tls: 0, cert_invalid: 0, timeout: 0, io_timeout: 0,
+        dns: 0, no_route: 0, net_unreach: 0, protocol: 0, other: 0,
+      } as SeriesPoint);
+
+      const globalSeries: SeriesPoint[] = slots.map(emptyPoint);
+      const slotIndex = (ts: string) => {
+        const ms = Date.parse(ts);
+        if (isNaN(ms)) return -1;
+        const idx = Math.floor((ms - startMs) / stepMs);
+        return idx >= 0 && idx < globalSeries.length ? idx : -1;
+      };
+
+      const topServers = [...map.values()]
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 6)
+        .map((s) => s.server_url);
+      const perServer = new Map<string, SeriesPoint[]>(
+        topServers.map((u) => [u, slots.map(emptyPoint)]),
+      );
+
+      for (const row of (data ?? []) as { server_url: string; success: boolean; reason: string | null; created_at: string }[]) {
+        const idx = slotIndex(row.created_at);
+        if (idx < 0) continue;
+        const g = globalSeries[idx];
+        g.total += 1;
+        if (row.success) g.success += 1;
+        else {
+          g.fail += 1;
+          const b = classify(row.reason);
+          if (b) g[b] += 1;
+        }
+        const ps = perServer.get(row.server_url);
+        if (ps) {
+          const p = ps[idx];
+          p.total += 1;
+          if (row.success) p.success += 1;
+          else {
+            p.fail += 1;
+            const b = classify(row.reason);
+            if (b) p[b] += 1;
+          }
+        }
+      }
+
+      const perServerSeries = topServers.map((u) => ({
+        server_url: u,
+        points: perServer.get(u)!,
+      }));
+
+      return ok({
+        since,
+        hours,
+        step_ms: stepMs,
+        totals,
+        servers,
+        series: globalSeries,
+        per_server_series: perServerSeries,
+      });
     }
 
     if (action === "top_consumers") {
