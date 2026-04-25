@@ -97,6 +97,15 @@ async function fetchWithRetries(url: string, attemptsPerUa = 1): Promise<
         }
 
         if (SOFT_NOT_FOUND_STATUSES.has(res.status)) {
+          // Tenta ler o corpo: muitos painéis devolvem "LIMITE DE TELAS" /
+          // "MAX CONNECTIONS REACHED" com 401/403. Detectamos para
+          // sinalizar à UI em vez de devolver lista vazia silenciosa.
+          let bodyText = "";
+          try { bodyText = (await res.text()).slice(0, 200); } catch { /* ignore */ }
+          const upper = bodyText.toUpperCase();
+          if (/LIMITE DE TELAS|MAX[_ ]?CONNECTIONS|TOO MANY CONNECTIONS|CONEX[ÃA]O/.test(upper)) {
+            return { ok: false, status: 429, reason: "MAX_CONNECTIONS" };
+          }
           return { ok: false, status: res.status, reason: `HTTP ${res.status}`, softNotFound: true };
         }
 
