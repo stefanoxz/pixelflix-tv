@@ -87,11 +87,29 @@ function classifyReason(reason: string): { code: string; message: string } {
   if (/timeout|timed out|deadline/.test(r)) {
     return { code: "TIMEOUT", message: "Tempo esgotado ao contatar o servidor IPTV" };
   }
-  if (/dns|getaddrinfo|name resolution|enotfound|verifique a dns/.test(r)) {
-    return { code: "DNS_ERROR", message: "DNS do servidor IPTV não resolveu" };
+  // TLS/conexão recusada vem ANTES de DNS — o texto sanitizado contém
+  // "verifique a dns" mesmo quando o problema real é TLS/SNI.
+  if (/tls|ssl|certificate|handshake|unrecognisedname|fatal alert|connection refused|connection reset|connect: |unreach|http 5\d\d|http 444/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message:
+        "Servidor IPTV recusou conexão (TLS/porta inválida). Confirme com sua revenda se a URL e a porta estão corretas.",
+    };
   }
-  if (/tls|ssl|certificate|handshake|unrecognisedname|fatal alert|connect|refused|reset|unreach|http 5\d\d|http 444/.test(r)) {
-    return { code: "SERVER_UNREACHABLE", message: "Servidor IPTV não respondeu. Verifique a DNS ou porta da URL." };
+  if (/getaddrinfo|name resolution|enotfound|nxdomain|^dns /.test(r)) {
+    return {
+      code: "DNS_ERROR",
+      message: "DNS do servidor IPTV não resolveu. Verifique o endereço.",
+    };
+  }
+  // "verifique a dns" sozinho é o texto sanitizado para qualquer falha de
+  // transporte — tratamos como servidor inacessível, não como erro de DNS.
+  if (/verifique a dns|servidor iptv não respondeu/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message:
+        "Servidor IPTV não respondeu. Confirme com sua revenda se essa DNS/URL ainda está ativa.",
+    };
   }
   return { code: "UNKNOWN_ERROR", message: reason || "Erro desconhecido ao contatar o servidor" };
 }
