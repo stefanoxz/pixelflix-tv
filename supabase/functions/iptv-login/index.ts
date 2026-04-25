@@ -209,7 +209,7 @@ function shouldRetryWithFallbackUa(status: number): boolean {
 async function fetchOnce(
   url: string,
   ua: string,
-): Promise<{ res: Response; body: string } | { error: string }> {
+): Promise<{ res: Response; body: string; route: "direct" | "proxy" } | { error: string }> {
   try {
     const res = await proxiedFetch(url, {
       headers: { "User-Agent": ua, Accept: "application/json, */*" },
@@ -217,7 +217,9 @@ async function fetchOnce(
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     const body = await res.text();
-    return { res, body };
+    // @ts-ignore - tag injetada por proxiedFetch
+    const route = (res._iptvRoute as "direct" | "proxy") ?? "direct";
+    return { res, body, route };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { error: msg };
