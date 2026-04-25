@@ -59,7 +59,10 @@ const USER_AGENTS = [
 const TRANSIENT_STATUSES = new Set([408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 530, 444]);
 // Upstream "soft-not-found": painel respondeu mas o endpoint/conta sumiu.
 // Tratamos como resposta vazia para não quebrar a UI (evita blank screen).
-const SOFT_NOT_FOUND_STATUSES = new Set([404, 410]);
+// 401/403: painel bloqueou a conta/IP nesse endpoint específico.
+// 404/410: endpoint/recurso inexistente.
+// Em todos os casos, devolvemos payload vazio para manter a UI viva.
+const SOFT_NOT_FOUND_STATUSES = new Set([401, 403, 404, 410]);
 // Actions que retornam coleção (lista) — quando o painel responde 404/410,
 // é seguro devolver `[]`. Para outras actions, devolvemos `null`.
 const COLLECTION_ACTIONS = new Set([
