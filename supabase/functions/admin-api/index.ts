@@ -301,6 +301,92 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ---------- DNS ERROR ANALYTICS ----------
+    if (action === "dns_errors") {
+      const hours = Math.min(Math.max(Number(payload?.hours ?? 24), 1), 168);
+      const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+      const { data, error } = await admin
+        .from("login_events")
+        .select("server_url, success, reason, created_at")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(5000);
+      if (error) { console.error(error.message); return internalError(); }
+
+      type Bucket = "refused" | "reset" | "http_404" | "http_444" | "http_5xx" | "tls" | "timeout" | "dns" | "other";
+      const classify = (reason: string | null): Bucket | null => {
+        if (!reason) return "other";
+        const r = reason.toLowerCase();
+        if (/connection refused|os error 111/.test(r)) return "refused";
+        if (/reset by peer|connection reset|os error 104/.test(r)) return "reset";
+        if (/http\s*404|not found/.test(r)) return "http_404";
+        if (/http\s*444/.test(r)) return "http_444";
+        if (/http\s*5\d\d/.test(r)) return "http_5xx";
+        if (/tls|ssl|certificate|handshake|unrecognisedname/.test(r)) return "tls";
+        if (/timeout|timed out|deadline/.test(r)) return "timeout";
+        if (/dns|name resolution|getaddrinfo|nodename|no address/.test(r)) return "dns";
+        if (/não respondeu|server unreachable|unreach/.test(r)) return "refused";
+        return "other";
+      };
+
+      type Agg = {
+        server_url: string;
+        total: number;
+        success: number;
+        fail: number;
+        last_seen: string | null;
+        last_error: string | null;
+        last_error_at: string | null;
+        buckets: Record<Bucket, number>;
+      };
+      const map = new Map<string, Agg>();
+      const buckets0 = (): Record<Bucket, number> => ({
+        refused: 0, reset: 0, http_404: 0, http_444: 0, http_5xx: 0, tls: 0, timeout: 0, dns: 0, other: 0,
+      });
+
+      for (const row of (data ?? []) as { server_url: string; success: boolean; reason: string | null; created_at: string }[]) {
+        if (!map.has(row.server_url)) {
+          map.set(row.server_url, {
+            server_url: row.server_url,
+            total: 0, success: 0, fail: 0,
+            last_seen: row.created_at,
+            last_error: null,
+            last_error_at: null,
+            buckets: buckets0(),
+          });
+        }
+        const a = map.get(row.server_url)!;
+        a.total += 1;
+        if (row.success) a.success += 1;
+        else {
+          a.fail += 1;
+          const b = classify(row.reason);
+          if (b) a.buckets[b] += 1;
+          if (!a.last_error) {
+            a.last_error = row.reason;
+            a.last_error_at = row.created_at;
+          }
+        }
+      }
+
+      // Totals across all servers
+      const totals = {
+        total: 0, success: 0, fail: 0,
+        buckets: buckets0(),
+      };
+      for (const a of map.values()) {
+        totals.total += a.total;
+        totals.success += a.success;
+        totals.fail += a.fail;
+        for (const k of Object.keys(a.buckets) as Bucket[]) {
+          totals.buckets[k] += a.buckets[k];
+        }
+      }
+
+      const servers = Array.from(map.values()).sort((a, b) => b.fail - a.fail);
+      return ok({ since, hours, totals, servers });
+    }
+
     if (action === "top_consumers") {
       const since24h = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
       const { data, error } = await admin
