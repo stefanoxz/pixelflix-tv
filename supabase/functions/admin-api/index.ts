@@ -1248,7 +1248,10 @@ Deno.serve(async (req) => {
 
       return ok({
         original: { scheme: originalScheme, port: originalPort, base: `${originalScheme}://${host}${originalPort && originalPort !== (originalScheme === "https" ? "443" : "80") ? ":" + originalPort : ""}` },
-        variants_tested: limited.length,
+        variants_tested: results.length,
+        variants_planned: limited.length,
+        aborted_by_budget: aborted,
+        elapsed_ms: Date.now() - startedAt,
         results: results.map(({ ...r }) => r),
         candidates: candidates.map(({ _score, ...r }) => ({ ...r, score: Math.round(_score) })),
         best: best ? { base: best.base, scheme: best.scheme, port: best.port, score: Math.round(best._score) } : null,
