@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ReportProblemDialog, type ReportSnapshot } from "@/components/ReportProblemDialog";
+import { markIncompatible, hostFromUrl } from "@/lib/incompatibleContent";
 
 /**
  * Motor de reprodução para canais ao vivo.
