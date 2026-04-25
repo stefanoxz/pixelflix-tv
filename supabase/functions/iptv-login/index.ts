@@ -283,11 +283,20 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return jsonResponse(400, { error: "Body inválido" }, corsHeaders);
+      return errorResponse("BAD_REQUEST", "Body inválido", corsHeaders);
     }
 
     const { mode, server, username, password } = body || {};
-    const admin = getAdminClient();
+    let admin: any;
+    try {
+      admin = getAdminClient();
+    } catch {
+      return errorResponse(
+        "SERVICE_UNAVAILABLE",
+        "Configuração do servidor ausente",
+        corsHeaders,
+      );
+    }
 
     // ---------------------------------------------------------------------
     // Mode: "validate" — apenas confere allowlist e devolve candidatas.
@@ -301,7 +310,11 @@ Deno.serve(async (req) => {
         allowedRows = result.data;
       } catch (err) {
         console.error("[iptv-login] db error (validate)", err);
-        return jsonResponse(503, { error: "Serviço temporariamente indisponível" }, corsHeaders);
+        return errorResponse(
+          "SERVICE_UNAVAILABLE",
+          "Serviço temporariamente indisponível",
+          corsHeaders,
+        );
       }
       const allowedList = (allowedRows ?? []).map((r: any) => normalizeServer(r.server_url));
       if (allowedList.length === 0) {
@@ -331,7 +344,11 @@ Deno.serve(async (req) => {
     if (mode === "log") {
       const { success: logSuccess, reason: logReason } = body || {};
       if (!username || !server) {
-        return jsonResponse(400, { error: "log requer server e username" }, corsHeaders);
+        return errorResponse(
+          "BAD_REQUEST",
+          "log requer server e username",
+          corsHeaders,
+        );
       }
       await logEvent({
         server: String(server),
@@ -349,7 +366,7 @@ Deno.serve(async (req) => {
     // ou fluxo único quando o cliente não usa estratégia browser).
     // ---------------------------------------------------------------------
     if (!username || !password) {
-      return jsonResponse(400, { error: "Informe usuário e senha" }, corsHeaders);
+      return errorResponse("BAD_REQUEST", "Informe usuário e senha", corsHeaders);
     }
 
     // Load allowlist
@@ -360,14 +377,18 @@ Deno.serve(async (req) => {
       allowedRows = result.data;
     } catch (err) {
       console.error("[iptv-login] db error", err);
-      return jsonResponse(503, { error: "Serviço temporariamente indisponível" }, corsHeaders);
+      return errorResponse(
+        "SERVICE_UNAVAILABLE",
+        "Serviço temporariamente indisponível",
+        corsHeaders,
+      );
     }
 
     const allowedList = (allowedRows ?? []).map((r: any) => normalizeServer(r.server_url));
 
     if (allowedList.length === 0) {
       await logEvent({ server: server ?? "-", username, success: false, reason: "nenhuma DNS cadastrada", ua, ip });
-      return jsonResponse(403, { error: NO_ACCESS_MSG }, corsHeaders);
+      return errorResponse("NOT_ALLOWED", NO_ACCESS_MSG, corsHeaders);
     }
 
     // If client sent a server, validate it's in allowlist; otherwise try all allowed servers
@@ -380,7 +401,7 @@ Deno.serve(async (req) => {
       const match = allowedList.find((a) => a === normalized || hostKey(a) === inputHost);
       if (!match) {
         await logEvent({ server: fullBase, username, success: false, reason: "DNS não autorizada", ua, ip });
-        return jsonResponse(403, { error: NO_ACCESS_MSG }, corsHeaders);
+        return errorResponse("NOT_ALLOWED", NO_ACCESS_MSG, corsHeaders);
       }
       candidates = [match];
     } else {
@@ -395,7 +416,7 @@ Deno.serve(async (req) => {
         await logEvent({ server: base, username, success: true, ua, ip });
         return jsonResponse(
           200,
-          { ...r.data, server_url: base, allowed_servers: allowedList },
+          { success: true, ...r.data, server_url: base, allowed_servers: allowedList },
           corsHeaders,
         );
       }
@@ -403,13 +424,20 @@ Deno.serve(async (req) => {
       await logEvent({ server: base, username, success: false, reason: r.reason, ua, ip });
     }
 
-    return jsonResponse(401, { error: `Usuário ou senha inválidos (${lastReason})` }, corsHeaders);
+    const { code, message } = classifyReason(lastReason);
+    return errorResponse(code, message, corsHeaders, { reason: lastReason });
   } catch (err) {
     console.error("[iptv-login] fatal", err);
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg === "MISSING_ENV") {
-      return jsonResponse(500, { error: "Configuração do servidor ausente" }, corsHeaders);
-    }
-    return jsonResponse(500, { error: "Erro interno do servidor" }, corsHeaders);
+    // Erros inesperados → 500 com JSON estruturado (cliente também trata).
+    return new Response(
+      JSON.stringify({
+        success: false,
+        code: "UNKNOWN_ERROR",
+        error: "Erro interno do servidor",
+        detail: msg,
+      }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 });
