@@ -74,9 +74,15 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    const { data: userData, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !userData?.user) return unauthorized("Sessão inválida");
-    const user = userData.user;
+    // Valida o JWT via getClaims (compatível com o sistema de signing keys
+    // do Supabase). getUser() pode falhar 401 mesmo com token válido em
+    // alguns boots do worker — getClaims é o caminho oficial.
+    const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(jwt);
+    if (claimsErr || !claimsData?.claims?.sub) {
+      console.error("[admin-api] claims check failed", claimsErr?.message);
+      return unauthorized("Sessão inválida");
+    }
+    const user = { id: claimsData.claims.sub as string, email: (claimsData.claims.email as string | undefined) ?? null };
 
     const { data: isAdmin, error: roleErr } = await admin.rpc("has_role", {
       _user_id: user.id,
