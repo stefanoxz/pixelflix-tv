@@ -1,127 +1,96 @@
-## Objetivo
+## Diagnóstico — onde está lento e por quê
 
-Replicar o layout do print (estilo IBO Pro) em Filmes/Séries — rail vertical de categorias + **grid de pôsteres** (não mais lista compacta + preview lateral) — com topbar (voltar, título, relógio/data). Adicionar controles **±10s** e **velocidade de reprodução** no Player, otimizados para **mobile/web**. Adicionar **botão "Reportar problema"** no Player que envia o relato para o painel admin.
+Rodei uma análise completa em `Movies.tsx`, `Series.tsx`, `PosterGrid`, `PosterCard`, dialogs de detalhes, `services/iptv.ts` e setup do React Query. Lighthouse desktop dá 99/100, então **rede inicial está ok**. A lentidão percebida no uso real (mobile/scroll/abrir filme) vem de outro lado:
+
+### 1. Grid sem virtualização e re-renders pesados
+`PosterGrid` renderiza **todos os filmes/séries de uma vez** (podem ser 2.000+ pôsteres). Mesmo com `loading="lazy"`, cada `PosterCard`:
+- chama `useState` + `useIsIncompatible` (`useEffect` + 2 `addEventListener` por card) → centenas de listeners no `window`,
+- não é memoizado (`React.memo`), então qualquer mudança de busca/seta re-renderiza tudo,
+- `useEffect` no grid faz `scrollIntoView` a cada mudança de `activeId` (acionado também ao filtrar).
+
+Resultado em celular: scroll travado, busca digitando com lag, listeners empilhando.
+
+### 2. Busca sem debounce
+`onSearchChange` atualiza estado a cada tecla → `filteredMovies`/`items` recalculam → grid inteiro re-renderiza a cada caractere. Em listas grandes isso engasga, principalmente no mobile.
+
+### 3. Capas sem dimensões / sem CDN otimizada
+`<img>` dos pôsteres não tem `width`/`height` → causa shifts e layout extra. `proxyImageUrl` (weserv.nl) é chamada **sem parâmetros de redimensionamento**: estamos baixando a capa em tamanho original (geralmente 600×900 ou maior) só pra exibir num quadrado de ~140px. Em uma grade com 100 capas isso é **muitos MB desnecessários**.
+
+### 4. Sinopses lentas porque dependem da edge a cada abertura
+`getVodInfo` / `getSeriesInfo` vão sempre pela edge function `iptv-categories`. Tem `staleTime: 5min` no React Query, mas:
+- não tem `gcTime` longo → ao trocar de filme e voltar, refetch,
+- não tem prefetch ao **focar** o card (no desktop dá pra começar a buscar antes do clique),
+- não tem cache cross-sessão (recarregou a página, perde tudo).
+
+### 5. `host` recalculado por item
+Em `Movies.tsx` `upstreamHost` é `useMemo`, mas é passado a cada `PosterItem`, fazendo `items` ser uma nova array sempre que `upstreamHost` muda (raro) — ok. Mas `useIsIncompatible` em todo card adiciona 2 event listeners no `window` por card. Para 1.500 cards = 3.000 listeners.
+
+### 6. Warning React no `SeriesEpisodesPanel`
+Console mostra: *"Function components cannot be given refs ... Check render method of SeriesEpisodesPanel"*. O `<TooltipTrigger asChild>` está envolvendo um `<span>`/`<Button>`, mas a árvore real reclama que algum filho não aceita ref. Precisa identificar o trigger problemático e garantir que o filho direto seja um elemento DOM (ou wrappar em `forwardRef`).
+
+### 7. Cache HTTP do bundle
+Lighthouse aponta `index.js` e `index.css` com `Cache TTL = 0`. É controlado pela infraestrutura do Lovable; não dá pra mexer pelo código, mas vale registrar (não é ação nossa).
 
 ---
 
-## 1) Filmes / Séries — layout estilo IBO
+## O que vou fazer
 
-### Topbar (novo componente `LibraryTopBar`)
-- Esquerda: botão **voltar** (ícone seta) + ícone do app + título da seção (Filmes / Séries).
-- Direita: relógio em tempo real (HH:MM) + data abreviada (Sáb., 25/04).
-- Mobile: relógio compacto; voltar leva ao Início (`/`).
+### A. Virtualizar a grade de pôsteres
+Adicionar **`@tanstack/react-virtual`** no `PosterGrid`. Renderizar só as linhas visíveis + buffer. Mantém grid responsivo (3→7 colunas) calculando `colCount` a partir da largura do container. Ganho esperado: **scroll fluido com 5.000+ itens**, sem lag de filtragem.
 
-### Layout principal (substitui o atual 3-col com PreviewPanel)
+### B. Memoizar `PosterCard` e remover listeners por card
+- Envolver `PosterCard` em `React.memo` com comparação rasa.
+- Substituir `useIsIncompatible` por **uma única inscrição global** no `PosterGrid` que carrega o `Set` de chaves marcadas e propaga via prop. Os cards apenas leem `props.incompatible` (sem `useEffect`).
+- Resultado: zero listeners por card, re-renders só quando o item realmente muda.
+
+### C. Debounce na busca (250 ms)
+Já existe `useDebouncedValue` no projeto. Aplicar em `Movies.tsx`, `Series.tsx` e `Live.tsx`. O `<Input>` continua respondendo na hora; o filtro pesado roda com 250ms de atraso.
+
+### D. Capas otimizadas pela CDN
+Mudar `proxyImageUrl` (ou criar `posterThumbUrl`) para passar `?w=300&h=450&fit=cover&output=webp&q=75` no weserv. Para o `MovieDetailsDialog` usar `?w=600`. Reduz tráfego de imagens em 5-10x e acelera primeiro paint do grid.
+
+Adicionar `width`/`height` no `<img>` do pôster para reservar espaço (sem shift).
+
+### E. Cache persistente e prefetch dos detalhes
+- Subir `gcTime` para 30 min nas queries de `vod-info` e `series-info`.
+- **Prefetch on hover/focus**: ao passar o mouse no `PosterCard` (desktop) ou ao mudar `activeId` por teclado, disparar `queryClient.prefetchQuery(["vod-info", id])`. Quando o usuário clicar, sinopse já está pronta.
+- Persistir cache de detalhes em `sessionStorage` via `persistQueryClient` (só pras chaves de info, não pras listas grandes).
+
+### F. Corrigir warning ref do `SeriesEpisodesPanel`
+Investigar qual `TooltipTrigger asChild` está reclamando (provavelmente o `<span>` do badge ou o `<Button>` com `onClick`). Garantir que o filho aceite ref. Sem warning = sem renderização extra de validação em dev.
+
+### G. Pequenas limpezas
+- Remover `scrollIntoView` em todo mudança de `activeId` quando ele veio do clique do mouse (só fazer em navegação por teclado).
+- `useGridKeyboardNav`: garantir handlers estáveis com `useCallback`.
+
+---
+
+## Detalhes técnicos (resumido)
+
 ```text
-┌────────────────────────────────────────────────────────────┐
-│  ←  [Filmes]                            03:04  Sáb., 25/04 │
-├──────────────┬─────────────────────────────────────────────┤
-│ ▶ EM ALTA    │ [poster][poster][poster][poster][poster][p] │
-│ □ Lançament. │ [poster][poster][poster][poster][poster][p] │
-│ □ Netflix  ›│ [poster][poster][poster][poster][poster][p] │
-│ □ HBO Max  ›│                                              │
-│ □ Prime    ›│                                              │
-└──────────────┴─────────────────────────────────────────────┘
-```
-- **Rail esquerda**: continua usando `CategoryRail` (já existente). Itens com ícone de pasta + chevron à direita; o ativo recebe ícone de "play" / destaque azul. Mostrar contagem só em Favoritos. Largura: 240px desktop; **drawer (Sheet) no mobile**, aberto por botão de filtro na topbar.
-- **Conteúdo central**: novo componente `PosterGrid` que troca o `TitleList`+`PreviewPanel` por uma grade responsiva de pôsteres com hover/foco overlay (título + ano embaixo), igual ao print:
-  - Mobile: `grid-cols-3` (gap 2)
-  - sm: `grid-cols-4`, md: `grid-cols-5`, lg: `grid-cols-6`, xl: `grid-cols-7`
-  - Cada card: `aspect-[2/3]`, capa (proxied), gradiente bottom com nome + ano, badge de favorito no canto, foco visível para teclado/TV.
-  - Virtualização: usar `useWindowVirtualizer` do `@tanstack/react-virtual` por linhas para listas grandes (>200).
-- **Detalhes**: ao clicar em um pôster, abre o `MovieDetailsDialog` existente (já mostra sinopse, elenco, botão "Assistir"). Mantém comportamento de duplo-clique = play direto.
-- Busca: input continua no topo do grid, com placeholder "Buscar filme...".
+PosterGrid
+├── useVirtualizer({ count: rows, estimateSize, overscan: 4 })
+├── ResizeObserver → colCount (3..7)
+├── useIncompatibleSet(host) → Set<key> (1 listener)
+└── memo(PosterCard) recebe { item, active, isFavorite, incompatible }
 
-### Componentes a criar
-- `src/components/library/LibraryTopBar.tsx`
-- `src/components/library/PosterGrid.tsx`
-- `src/components/library/PosterCard.tsx`
-- `src/components/library/MobileCategoryDrawer.tsx`
+services/iptv.ts
+└── proxyImageUrl(url, { w, h, q })  // weserv params
 
-### Componentes alterados / removidos do uso em Filmes/Séries
-- `LibraryShell` continua existindo, mas Movies/Series passam a usar layout próprio mais simples (rail + grid). `PreviewPanel` e `TitleList` deixam de ser usados nessas duas páginas (mantidos no repo por compat, mas sem importar).
-- `Movies.tsx` e `Series.tsx` reescritos para o novo layout (rail + PosterGrid + dialog).
-- Para Séries, ao abrir o pôster, exibe um `SeriesDetailsDialog` novo (espelho do `MovieDetailsDialog`, com seleção de temporada/episódio reaproveitando a lógica do `SeriesEpisodesPanel`).
-
-### Navegação por teclado/TV
-Continuar usando `useGridKeyboardNav` adaptado para grid 2D:
-- ↑/↓ → linha acima/abaixo (n colunas)
-- ←/→ → coluna anterior/próxima
-- Enter → abre dialog
-- `/` → foca busca
-- `f` → favorita o card focado
-
----
-
-## 2) Player — controles ±10s, velocidade e reportar problema
-
-Adicionar **overlay customizado** sobre o `<video>` (mantém `controls` nativo como fallback em fullscreen). Barra inferior translúcida visível em hover/touch:
-
-```text
-[⏮ -10s] [▶/⏸] [+10s ⏭]   ───────●───────   1x ▾   🚩 Reportar
+Movies.tsx / Series.tsx
+├── searchDebounced = useDebouncedValue(search, 250)
+├── filtered = useMemo(... searchDebounced ...)
+└── onCardHover(id) → queryClient.prefetchQuery(["vod-info", id])
 ```
 
-### Implementação no `Player.tsx`
-- Novo estado `playbackRate` (1, persistido em `localStorage` `player.rate`). Aplica via `videoRef.current.playbackRate`. DropdownMenu shadcn com 0.5x, 0.75x, **1x**, 1.25x, 1.5x, 1.75x, 2x.
-- Botões `seek(-10)` / `seek(+10)` que ajustam `currentTime`. Desabilitados quando `isLive` (canais ao vivo).
-- Atalhos de teclado: `←`/`→` ±10s, `Espaço` play/pause, `>`/`<` velocidade.
-- Botão **🚩 Reportar problema** abre `ReportProblemDialog` (novo).
-- Mobile: barra com botões maiores (touch ≥44px), gap maior; toggle de visibilidade ao tocar no vídeo (hide após 3s).
-- Manter o painel `Logs` e o card de diagnóstico atuais.
-
-### `ReportProblemDialog` (novo componente)
-- Campos: título do conteúdo (auto-preenchido), categoria (Select: "Não carrega", "Trava/buffering", "Áudio fora de sincronia", "Sem áudio", "Sem legenda", "Outro"), descrição (Textarea opcional).
-- Snapshot técnico anexado automaticamente: `url` (raw), `engine`, `rootCause`, `lastReason`, `loadMethod`, `containerExt`, `userAgent`, último heartbeat, host upstream.
-- Envia via `reportStreamEvent` (já existe em `services/iptv.ts`) com `event_type = "user_report"` e `meta = { category, description, snapshot }`. Não exige nova tabela — reaproveita `stream_events` existente.
+Pacotes novos: `@tanstack/react-virtual` (já compatível com o React Query 5 do projeto). Sem outras deps.
 
 ---
 
-## 3) Painel Admin — aba "Reportes de usuários"
+## O que NÃO vou mexer
 
-- Nova aba no `Admin.tsx`: **"Reportes"**.
-- Lista paginada dos últimos `stream_events` com `event_type = 'user_report'` (consulta via edge `admin-api` — adicionar handler `list_user_reports`).
-- Colunas: data, usuário, host upstream, categoria, descrição, ações (ver detalhes em Dialog com snapshot técnico completo + link para abrir o `ServerProbeDialog` daquele host).
-- Filtros: período (24h / 7d / 30d), categoria, busca por usuário/host.
-- Badge de "novos" no menu lateral: contagem de reports nas últimas 24h.
+- Player / lógica de stream / edge functions (já está estável; foco do pedido é navegação/capas/sinopse).
+- Bundle splitting adicional (App.tsx já lazy-load todas as rotas; ganho marginal).
+- Cache HTTP do bundle (controlado pela infra do Lovable).
 
-### Backend (edge `admin-api`)
-- Adicionar ação `list_user_reports` (SELECT em `stream_events` filtrando `event_type = 'user_report'`, ordenado por `created_at DESC`, com paginação).
-- Adicionar ação `count_user_reports_24h` para o badge.
-- Sem migração de schema (usa `stream_events.meta` JSONB existente).
-
----
-
-## Arquivos
-
-**Criar**
-- `src/components/library/LibraryTopBar.tsx`
-- `src/components/library/PosterGrid.tsx`
-- `src/components/library/PosterCard.tsx`
-- `src/components/library/MobileCategoryDrawer.tsx`
-- `src/components/SeriesDetailsDialog.tsx`
-- `src/components/ReportProblemDialog.tsx`
-- `src/components/admin/UserReportsPanel.tsx`
-- `src/hooks/useClock.ts` (HH:MM + data ptBR, atualiza a cada 30s)
-
-**Editar**
-- `src/pages/Movies.tsx` — novo layout (rail + topbar + PosterGrid + MovieDetailsDialog)
-- `src/pages/Series.tsx` — idem com SeriesDetailsDialog
-- `src/components/Player.tsx` — overlay com ±10s, velocidade, atalhos, botão reportar
-- `src/pages/Admin.tsx` — nova aba "Reportes" + badge
-- `supabase/functions/admin-api/index.ts` — handlers `list_user_reports` / `count_user_reports_24h`
-
-**Mantidos sem alteração** (não mais usados em Filmes/Séries, mas seguem disponíveis)
-- `src/components/library/PreviewPanel.tsx`
-- `src/components/library/TitleList.tsx`, `TitleListItem.tsx`
-- `src/components/library/SeriesEpisodesPanel.tsx` (será reusado dentro de `SeriesDetailsDialog`)
-
----
-
-## Notas de UX mobile-web (prioridade)
-- Topbar fixa (sticky top-0, z-30), backdrop blur.
-- Rail vira drawer lateral via `Sheet` no mobile, acessível por botão "filtro" na topbar.
-- Pôsteres com `aspect-[2/3]` e `loading="lazy"` para economizar dados.
-- Player: barra de controles sempre tocável (touch targets ≥44px), gestos: tap-duplo nas laterais = ±10s (estilo YouTube/Netflix).
-- Diálogo de reportar problema com botões grandes e categorias rapidamente selecionáveis.
-
-Aguardando sua aprovação para implementar.
+Pronto para implementar?
