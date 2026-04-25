@@ -50,10 +50,14 @@ const Movies = () => {
   const { data: categories = [] } = useQuery({
     queryKey: ["vod-cats", creds.username],
     queryFn: () => getVodCategories(creds),
+    staleTime: 30 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   });
-  const { data: movies = [] } = useQuery({
+  const { data: movies = [], isLoading: moviesLoading } = useQuery({
     queryKey: ["vod-streams", creds.username],
     queryFn: () => getVodStreams(creds),
+    staleTime: 30 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   });
 
   // Deep-link de Destaques / Conta
@@ -224,6 +228,7 @@ const Movies = () => {
         <section className="flex flex-col min-h-0">
           <PosterGrid
             items={items}
+            isLoading={moviesLoading}
             activeId={activeId}
             isFavorite={isFavorite}
             onActiveChange={setActiveId}

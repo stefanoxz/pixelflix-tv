@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Loader2, Search } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PosterCard, type PosterItem } from "./PosterCard";
 import { useIncompatibleKeys } from "@/hooks/useIncompatibleKeys";
 
@@ -24,6 +25,8 @@ interface Props {
   pageSize?: number;
   /** Quantos itens adicionar a cada vez que o sentinela entrar em view. */
   pageIncrement?: number;
+  /** Se true e items vazio, renderiza skeletons em vez de mensagem vazia. */
+  isLoading?: boolean;
 }
 
 // Mapeia largura do container → colunas (mesmo do tailwind grid antigo).
@@ -60,6 +63,7 @@ export function PosterGrid({
   totalLabel,
   pageSize = 120,
   pageIncrement = 60,
+  isLoading = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -199,9 +203,23 @@ export function PosterGrid({
       </div>
 
       {items.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6 text-center">
-          {emptyMessage}
-        </div>
+        isLoading ? (
+          <div
+            className="flex-1 overflow-hidden grid gap-2 md:gap-3 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7"
+            aria-label="Carregando catálogo"
+          >
+            {Array.from({ length: 18 }).map((_, i) => (
+              <Skeleton
+                key={i}
+                className="w-full aspect-[2/3] rounded-md"
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6 text-center">
+            {emptyMessage}
+          </div>
+        )
       ) : (
         <div
           ref={containerRef}

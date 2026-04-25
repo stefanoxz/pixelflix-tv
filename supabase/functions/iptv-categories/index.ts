@@ -54,12 +54,11 @@ const USER_AGENTS = [
   "VLC/3.0.20 LibVLC/3.0.20",
   "IPTVSmarters/1.0",
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Lavf/58.76.100",
 ];
 
 const TRANSIENT_STATUSES = new Set([408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 530, 444]);
 
-async function fetchWithRetries(url: string, attemptsPerUa = 2): Promise<{ ok: true; data: unknown } | { ok: false; status: number; reason: string }> {
+async function fetchWithRetries(url: string, attemptsPerUa = 1): Promise<{ ok: true; data: unknown } | { ok: false; status: number; reason: string }> {
   let lastStatus = 0;
   let lastReason = "Unknown error";
 
