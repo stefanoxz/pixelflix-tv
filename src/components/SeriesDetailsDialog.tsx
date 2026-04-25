@@ -91,8 +91,10 @@ export function SeriesDetailsDialog({
           <div className="aspect-[2/3] w-28 md:w-full rounded-lg overflow-hidden bg-secondary shadow-card shrink-0">
             {cover ? (
               <img
-                src={proxyImageUrl(cover)}
+                src={proxyImageUrl(cover, { w: 400, h: 600, q: 80 })}
                 alt={series.name}
+                loading="eager"
+                decoding="async"
                 className="h-full w-full object-cover"
                 onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")}
               />
