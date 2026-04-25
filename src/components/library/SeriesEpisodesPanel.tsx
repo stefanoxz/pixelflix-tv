@@ -34,21 +34,21 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
   const current = active && episodesBySeason[active] ? episodesBySeason[active] : episodesBySeason[seasons[0]] || [];
 
   if (seasons.length === 0) {
-    return <p className="text-xs text-muted-foreground italic pt-2">Nenhum episódio disponível.</p>;
+    return <p className="text-sm text-muted-foreground italic pt-2">Nenhum episódio disponível.</p>;
   }
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="pt-2 space-y-3">
-        <div className="flex flex-wrap gap-1.5">
+      <div className="pt-2 space-y-4">
+        <div className="flex flex-wrap gap-2">
           {seasons.map((sk) => (
             <button
               key={sk}
               onClick={() => setActive(sk)}
               className={cn(
-                "px-2.5 py-1 rounded text-xs font-medium transition-smooth",
+                "px-3 py-1.5 rounded-md text-sm font-semibold transition-smooth",
                 (active || seasons[0]) === sk
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-primary text-primary-foreground shadow-sm"
                   : "bg-secondary text-foreground/80 hover:bg-secondary/70",
               )}
             >
@@ -57,7 +57,7 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
           ))}
         </div>
 
-        <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
           {current.map((ep) => {
             const ext = ep.container_extension;
             const external = isExternalOnly(ext, ep.direct_source);
@@ -65,17 +65,17 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
             return (
               <div
                 key={ep.id}
-                className="flex gap-2 items-center p-2 rounded-md bg-card hover:bg-secondary/40 border border-border/40 transition-smooth"
+                className="flex gap-3 items-center p-3 rounded-lg bg-card hover:bg-secondary/40 border border-border/40 transition-smooth"
               >
                 <button
                   type="button"
                   onClick={() => (external ? onCopyExternal(ep) : onPlay(ep))}
-                  className="flex gap-2 items-center flex-1 min-w-0 text-left"
+                  className="flex gap-3 items-center flex-1 min-w-0 text-left"
                 >
-                  <div className="h-12 w-20 shrink-0 rounded bg-secondary overflow-hidden flex items-center justify-center">
+                  <div className="h-16 w-28 shrink-0 rounded-md bg-secondary overflow-hidden flex items-center justify-center">
                     {ep.info?.movie_image ? (
                       <img
-                        src={proxyImageUrl(ep.info.movie_image, { w: 160, h: 96, q: 70 })}
+                        src={proxyImageUrl(ep.info.movie_image, { w: 224, h: 128, q: 75 })}
                         alt=""
                         loading="lazy"
                         decoding="async"
@@ -83,18 +83,18 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
                         onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                       />
                     ) : (
-                      <Play className="h-4 w-4 text-muted-foreground" />
+                      <Play className="h-5 w-5 text-muted-foreground" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="text-xs font-medium text-foreground truncate">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm md:text-base font-semibold text-foreground truncate">
                         {ep.episode_num}. {ep.title}
                       </p>
                       <span
                         title={badge.tooltip}
                         className={cn(
-                          "text-[9px] font-semibold px-1 py-0.5 rounded border tracking-wide",
+                          "text-[11px] font-bold px-1.5 py-0.5 rounded border tracking-wide",
                           toneClasses[badge.tone],
                         )}
                       >
@@ -102,7 +102,7 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
                       </span>
                     </div>
                     {ep.info?.plot && (
-                      <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
+                      <p className="text-xs md:text-sm text-muted-foreground line-clamp-2 mt-1 leading-snug">
                         {ep.info.plot}
                       </p>
                     )}
@@ -114,16 +114,18 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-7 w-7 shrink-0"
+                        className="h-9 w-9 shrink-0"
                         onClick={() => onCopyExternal(ep)}
                       >
-                        <ExternalLink className="h-3 w-3" />
+                        <ExternalLink className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Copiar link para player externo</TooltipContent>
                   </Tooltip>
                 ) : (
-                  <Play className="h-3.5 w-3.5 text-primary shrink-0 mr-1" />
+                  <div className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full bg-primary/15 text-primary">
+                    <Play className="h-4 w-4 fill-current" />
+                  </div>
                 )}
               </div>
             );

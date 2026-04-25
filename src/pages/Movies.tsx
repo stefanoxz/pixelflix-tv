@@ -111,6 +111,7 @@ const Movies = () => {
           rating: m.rating_5based,
           year: yearMatch ? yearMatch[1] : undefined,
           host: upstreamHost,
+          kind: "movie" as const,
         };
       }),
     [sortedMovies, upstreamHost],

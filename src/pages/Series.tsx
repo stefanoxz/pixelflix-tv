@@ -102,6 +102,7 @@ const SeriesPage = () => {
           title: yearMatch ? s.name.replace(/\s*\(\d{4}\)\s*$/, "") : s.name,
           cover: s.cover,
           rating: s.rating_5based,
+          kind: "series" as const,
           year: yearMatch
             ? yearMatch[1]
             : s.releaseDate
