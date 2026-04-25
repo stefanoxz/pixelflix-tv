@@ -38,6 +38,9 @@ export function Header() {
             <img
               src={logoSuperTech}
               alt="SuperTech"
+              width={36}
+              height={36}
+              decoding="async"
               className="h-9 w-9 object-contain drop-shadow-[0_0_12px_hsl(var(--primary)/0.4)]"
             />
             <span className="text-xl font-bold tracking-tight">
