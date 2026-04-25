@@ -461,11 +461,16 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-function classifyError(e: unknown): "timeout" | "network" | "other" {
+function classifyError(e: unknown): "timeout" | "network" | "transient" | "other" {
   if (e instanceof TimeoutError) return "timeout";
   const msg = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
+  // Transient runtime: 503/502/504 do gateway Supabase ou cold start.
+  // Tratamos separado para dar mais retries + backoff maior.
+  if (/503|502|504|temporarily unavailable|supabase_edge_runtime_error|boot_error|edge_runtime/.test(msg)) {
+    return "transient";
+  }
   if (
-    /network|failed to fetch|networkerror|fetch failed|load failed|failed to send a request|edge function|503|502|504|temporarily unavailable|boot_error|edge_runtime/.test(
+    /network|failed to fetch|networkerror|fetch failed|load failed|failed to send a request|edge function/.test(
       msg,
     )
   ) {
@@ -484,7 +489,7 @@ async function invokeFn<T>(
     throw new Error("Sem conexão com a internet");
   }
   const timeout = timeoutFor(kind);
-  const maxRetries = retriesFor(kind);
+  const baseRetries = retriesFor(kind);
 
   const attempt = async (): Promise<T> => {
     const exec = async () => {
@@ -499,7 +504,11 @@ async function invokeFn<T>(
   };
 
   let lastErr: unknown;
-  for (let i = 0; i <= maxRetries; i++) {
+  // Para erros transitórios (503 do edge runtime), permitimos mais tentativas
+  // do que o padrão da kind, com backoff maior.
+  const TRANSIENT_EXTRA_RETRIES = 4;
+  let i = 0;
+  while (true) {
     try {
       const out = await attempt();
       noteRequestSuccess();
@@ -507,13 +516,16 @@ async function invokeFn<T>(
     } catch (e) {
       lastErr = e;
       const cls = classifyError(e);
-      noteRequestFailure(cls);
-      if (cls === "other" || i === maxRetries) break;
-      // Backoff exponencial com jitter (250 → 500 → 1000 → 2000ms +/-30%)
-      const base = 250 * Math.pow(2, i);
+      noteRequestFailure(cls === "transient" ? "network" : cls);
+      const maxForThisError = cls === "transient" ? baseRetries + TRANSIENT_EXTRA_RETRIES : baseRetries;
+      if (cls === "other" || i >= maxForThisError) break;
+      // Backoff: transitórios começam mais alto (500ms) para dar tempo ao runtime acordar.
+      const startMs = cls === "transient" ? 500 : 250;
+      const base = startMs * Math.pow(2, i);
       const jitter = base * (0.7 + Math.random() * 0.6);
-      await new Promise((r) => setTimeout(r, jitter));
+      await new Promise((r) => setTimeout(r, Math.min(jitter, 5000)));
       recordTelemetry("request_retry", { fn: name, attempt: i + 1, kind: cls });
+      i++;
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error("Falha desconhecida");
