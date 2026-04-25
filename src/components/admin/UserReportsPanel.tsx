@@ -45,6 +45,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   no_audio: "Sem áudio",
   no_subtitle: "Sem legenda",
   wrong_content: "Conteúdo errado",
+  codec_incompatible_auto: "Codec incompatível (auto)",
   other: "Outro",
 };
 
@@ -55,6 +56,7 @@ const CATEGORY_TONE: Record<string, string> = {
   no_audio: "bg-purple-500/15 text-purple-400 border-purple-500/30",
   no_subtitle: "bg-blue-500/15 text-blue-400 border-blue-500/30",
   wrong_content: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  codec_incompatible_auto: "bg-rose-500/15 text-rose-400 border-rose-500/30",
   other: "bg-muted text-muted-foreground border-border",
 };
 
