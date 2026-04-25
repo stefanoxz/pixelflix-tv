@@ -314,13 +314,22 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Active session upsert.
+      // Active session upsert. Guarda também o servidor IPTV (DNS) que o usuário está
+      // usando, para o painel admin mostrar de qual provedor vem o stream.
+      let serverOrigin: string | null = null;
+      try {
+        const u = new URL(target);
+        serverOrigin = `${u.protocol}//${u.host}`.toLowerCase();
+      } catch {
+        serverOrigin = null;
+      }
       await admin.from("active_sessions").upsert(
         {
           anon_user_id: userId,
           iptv_username: iptvUser,
           ip,
           ua_hash: uah,
+          server_url: serverOrigin,
           last_seen_at: new Date().toISOString(),
         },
         { onConflict: "anon_user_id" },
