@@ -40,9 +40,25 @@ function corsFor(req: Request): Record<string, string> {
 }
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+// Singleton: criar client por request causa cold-start frequente e contribui
+// para 503 SUPABASE_EDGE_RUNTIME_ERROR sob carga.
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+// Decodifica JWT sem validar criptograficamente (só pega `sub`).
+// O Supabase Gateway já valida o JWT antes da requisição chegar aqui (verify_jwt=true).
+function extractUserIdFromJwt(token: string): string | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
+    );
+    return typeof payload?.sub === "string" ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
 
 const MAX_SESSIONS = 2;
 const RATE_REQ_PER_MIN = 60;
