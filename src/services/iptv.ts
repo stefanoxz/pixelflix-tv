@@ -1,4 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
+import {
+  reportDiagnostic,
+  runQuickSpeedProbe,
+  classifyOutcome,
+} from "@/lib/clientDiagnostics";
 
 export interface IptvCredentials {
   server?: string;
