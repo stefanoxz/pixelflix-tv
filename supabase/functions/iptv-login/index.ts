@@ -604,7 +604,8 @@ Deno.serve(async (req) => {
       if (!r.ok) {
         await logEvent({ server: fullBase, username, success: false, reason: `m3u_register:${r.reason}`, ua, ip });
         const { code, message } = classifyReason(r.reason);
-        return errorResponse(code, message, corsHeaders, { reason: r.reason });
+        const hint = maybeOriginSuspectHint((r as { status?: number }).status, (r as { body?: string }).body);
+        return errorResponse(code, message, corsHeaders, { reason: r.reason, ...(hint ? { hint } : {}) });
       }
 
       // @ts-ignore - usedVariant existe no caminho ok
@@ -774,6 +775,8 @@ Deno.serve(async (req) => {
 
     // Try each candidate server until one authenticates
     let lastReason = "credenciais inválidas";
+    let lastStatus: number | undefined;
+    let lastBody = "";
     for (const row of candidateRows) {
       const r = await attemptLogin(row.server_url, username, password, row, admin);
       if (r.ok) {
@@ -788,11 +791,14 @@ Deno.serve(async (req) => {
         );
       }
       lastReason = r.reason;
+      lastStatus = (r as { status?: number }).status;
+      lastBody = (r as { body?: string }).body ?? "";
       await logEvent({ server: row.server_url, username, success: false, reason: r.reason, ua, ip });
     }
 
     const { code, message } = classifyReason(lastReason);
-    return errorResponse(code, message, corsHeaders, { reason: lastReason });
+    const hint = maybeOriginSuspectHint(lastStatus, lastBody);
+    return errorResponse(code, message, corsHeaders, { reason: lastReason, ...(hint ? { hint } : {}) });
   } catch (err) {
     console.error("[iptv-login] fatal", err);
     const msg = err instanceof Error ? err.message : String(err);
