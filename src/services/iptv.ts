@@ -998,6 +998,60 @@ export function proxyImageUrl(url: string | null | undefined): string {
 }
 
 export type StreamKind = "playlist" | "segment";
+export type StreamMode = "redirect" | "stream";
+
+// =============================================================================
+// Per-host proxy mode cache (localStorage). Activated only after real failure.
+// =============================================================================
+const PROXY_HOST_PREFIX = "iptv.proxy.host:";
+const PROXY_HOST_TTL_MS = 30 * 60_000; // 30 min
+
+interface ProxyHostEntry {
+  mode: StreamMode;
+  expiresAt: number;
+  reason?: string;
+}
+
+function hostFromUrl(url?: string | null): string | null {
+  if (!url) return null;
+  try { return new URL(url).host.toLowerCase(); } catch { return null; }
+}
+
+export function getHostProxyMode(url: string | null | undefined): StreamMode {
+  const host = hostFromUrl(url);
+  if (!host) return "redirect";
+  try {
+    const raw = localStorage.getItem(`${PROXY_HOST_PREFIX}${host}`);
+    if (!raw) return "redirect";
+    const entry = JSON.parse(raw) as ProxyHostEntry;
+    if (!entry || typeof entry.expiresAt !== "number") return "redirect";
+    if (Date.now() > entry.expiresAt) {
+      localStorage.removeItem(`${PROXY_HOST_PREFIX}${host}`);
+      return "redirect";
+    }
+    return entry.mode === "stream" ? "stream" : "redirect";
+  } catch { return "redirect"; }
+}
+
+export function markHostProxyRequired(url: string | null | undefined, reason: string): boolean {
+  const host = hostFromUrl(url);
+  if (!host) return false;
+  try {
+    const entry: ProxyHostEntry = {
+      mode: "stream",
+      expiresAt: Date.now() + PROXY_HOST_TTL_MS,
+      reason,
+    };
+    localStorage.setItem(`${PROXY_HOST_PREFIX}${host}`, JSON.stringify(entry));
+    return true;
+  } catch { return false; }
+}
+
+export function clearHostProxyMode(url: string | null | undefined): void {
+  const host = hostFromUrl(url);
+  if (!host) return;
+  try { localStorage.removeItem(`${PROXY_HOST_PREFIX}${host}`); } catch { /* noop */ }
+}
 
 /**
  * Asks the backend for a signed, short-lived stream URL.
@@ -1007,6 +1061,7 @@ export async function requestStreamToken(params: {
   url: string;
   kind: StreamKind;
   iptvUsername?: string;
+  mode?: StreamMode;
 }): Promise<{ url: string; expires_at: number }> {
   return invokeFn<{ url: string; expires_at: number }>(
     "stream-token",
@@ -1014,6 +1069,7 @@ export async function requestStreamToken(params: {
       url: params.url,
       kind: params.kind,
       iptv_username: params.iptvUsername,
+      mode: params.mode ?? "redirect",
     },
     "token",
   );
