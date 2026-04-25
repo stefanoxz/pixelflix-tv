@@ -1063,7 +1063,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setLoading(false);
       clearBootstrapTimeout();
       clearStallTimeout();
-      pushLog({ source: "video", level: "info", label: "loadeddata" });
+      const ttff = setupStartRef.current
+        ? Math.round(performance.now() - setupStartRef.current)
+        : 0;
+      pushLog({ source: "video", level: "info", label: "loadeddata", details: `TTFF=${ttff}ms` });
       if (wasFirst) {
         if (firstFrameAtRef.current === null) {
           firstFrameAtRef.current = performance.now();
