@@ -54,6 +54,10 @@ const EXP_SKEW_MS = 2_000;
 // (user, ip/24, ua) — aligned with SEGMENT_TTL_S so hls.js retries within the
 // token's own lifetime are not falsely rejected.
 const NONCE_REPLAY_WINDOW_MS = 30_000;
+// Per-segment upstream timeout when streaming bytes through the edge.
+const SEGMENT_FETCH_TIMEOUT_MS = 8_000;
+// Cap concurrent streamed segments per client IP /24 to avoid abuse.
+const MAX_STREAM_CONCURRENCY_PER_IP = 6;
 
 // In-memory per-IP failure tracking (best-effort, per worker)
 const ipFailures = new Map<string, { count: number; first: number; until?: number }>();
@@ -75,6 +79,15 @@ function isIpBlocked(ip: string): boolean {
     return false;
   }
   return true;
+}
+
+// Per-IP /24 in-flight streamed-segment counter (best-effort, per worker).
+const ipInFlight = new Map<string, number>();
+function ipBump(prefix: string, delta: number) {
+  const cur = ipInFlight.get(prefix) ?? 0;
+  const next = Math.max(0, cur + delta);
+  if (next === 0) ipInFlight.delete(prefix);
+  else ipInFlight.set(prefix, next);
 }
 
 function normalizeServer(url: string) {
