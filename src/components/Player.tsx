@@ -734,7 +734,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         ) {
           engineAutoSwitchedRef.current = true;
           markHostFailure(url, reason);
-          setPreferredEngine(safeHostFromUrl(url), "mpegts");
+          setPreferredEngine(url, "mpegts");
           pushLog({
             source: "diag",
             level: "warn",
