@@ -535,9 +535,13 @@ export type SafeResult<T> =
 
 /** Detecta o erro transitório do runtime do Supabase Edge (cold start / 503). */
 function isEdgeRuntimeTransient(status: number | undefined, code: string, error: string): boolean {
-  if (status !== 503) return false;
   const blob = `${code} ${error}`.toUpperCase();
-  return /SUPABASE_EDGE_RUNTIME_ERROR|TEMPORARILY UNAVAILABLE|BOOT_ERROR/.test(blob);
+  // 503/502/504 do gateway, ou mensagens conhecidas de cold start / falha de envio
+  if (status === 503 || status === 502 || status === 504) return true;
+  if (/SUPABASE_EDGE_RUNTIME_ERROR|TEMPORARILY UNAVAILABLE|BOOT_ERROR|FAILED TO SEND A REQUEST|FAILED TO FETCH|NETWORK_ERROR/.test(blob)) {
+    return true;
+  }
+  return false;
 }
 
 export async function invokeSafe<T = unknown>(
@@ -553,8 +557,8 @@ export async function invokeSafe<T = unknown>(
 
   // Retry transparente APENAS para 503 do runtime do Supabase (cold start).
   // Outros erros (4xx, timeouts reais, falha de rede) NÃO retentam.
-  const MAX_RUNTIME_RETRIES = 2;
-  const RUNTIME_BACKOFFS_MS = [500, 1500];
+  const MAX_RUNTIME_RETRIES = 3;
+  const RUNTIME_BACKOFFS_MS = [400, 1000, 2500];
 
   const attempt = async (): Promise<SafeResult<T>> => {
     try {
