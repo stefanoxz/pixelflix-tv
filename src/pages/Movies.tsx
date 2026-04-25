@@ -275,6 +275,8 @@ function PlayerOverlay({
           containerExt={playing.container_extension || "mp4"}
           title={playing.name}
           poster={proxyImageUrl(playing.stream_icon)}
+          streamId={playing.stream_id}
+          contentKind="movie"
         />
       </div>
     </div>
