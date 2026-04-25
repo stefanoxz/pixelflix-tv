@@ -59,6 +59,43 @@ function jsonResponse(status: number, body: unknown, cors: Record<string, string
   });
 }
 
+/**
+ * Resposta de erro PADRONIZADA — sempre HTTP 200 + JSON.
+ * Frontend nunca vê isso como "edge function returned 4xx/5xx".
+ *
+ * code: INVALID_CREDENTIALS | SERVER_UNREACHABLE | DNS_ERROR | TIMEOUT |
+ *       NOT_ALLOWED | BAD_REQUEST | SERVICE_UNAVAILABLE | UNKNOWN_ERROR
+ */
+function errorResponse(
+  code: string,
+  error: string,
+  cors: Record<string, string>,
+  extra: Record<string, unknown> = {},
+) {
+  return new Response(
+    JSON.stringify({ success: false, code, error, ...extra }),
+    { status: 200, headers: { ...cors, "Content-Type": "application/json" } },
+  );
+}
+
+/** Mapeia uma string de motivo (vinda de attemptLogin) para um código padronizado. */
+function classifyReason(reason: string): { code: string; message: string } {
+  const r = (reason || "").toLowerCase();
+  if (/credenc|invalid|auth=0|unauthor|401/.test(r)) {
+    return { code: "INVALID_CREDENTIALS", message: "Usuário ou senha inválidos" };
+  }
+  if (/timeout|timed out|deadline/.test(r)) {
+    return { code: "TIMEOUT", message: "Tempo esgotado ao contatar o servidor IPTV" };
+  }
+  if (/dns|getaddrinfo|name resolution|enotfound|verifique a dns/.test(r)) {
+    return { code: "DNS_ERROR", message: "DNS do servidor IPTV não resolveu" };
+  }
+  if (/tls|ssl|certificate|handshake|unrecognisedname|fatal alert|connect|refused|reset|unreach|http 5\d\d|http 444/.test(r)) {
+    return { code: "SERVER_UNREACHABLE", message: "Servidor IPTV não respondeu. Verifique a DNS ou porta da URL." };
+  }
+  return { code: "UNKNOWN_ERROR", message: reason || "Erro desconhecido ao contatar o servidor" };
+}
+
 function normalizeServer(url: string) {
   let u = url.trim().toLowerCase();
   if (!/^https?:\/\//.test(u)) u = `http://${u}`;
