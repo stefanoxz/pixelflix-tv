@@ -865,57 +865,87 @@ const Admin = () => {
             <Card className="p-6 bg-gradient-card border-border/50">
               <h2 className="text-lg font-semibold mb-1">Sessões ativas</h2>
               <p className="text-xs text-muted-foreground mb-4">
-                Sessões ociosas há mais de 60min são encerradas automaticamente.
+                Mostra quem está online agora, qual servidor IPTV está usando e o
+                que está assistindo (atualizado a cada 45s pelo player). Sessões
+                ociosas há mais de 60min são encerradas automaticamente.
               </p>
               {!monitoring?.active_sessions.length ? (
                 <p className="text-sm text-muted-foreground py-8 text-center">Ninguém online no momento.</p>
               ) : (
-                <div className="divide-y divide-border/50">
-                  <div className="grid grid-cols-12 gap-3 px-2 py-2 text-xs font-medium text-muted-foreground">
-                    <div className="col-span-2">Usuário IPTV</div>
-                    <div className="col-span-2">IP</div>
-                    <div className="col-span-4">Assistindo</div>
-                    <div className="col-span-1">No conteúdo</div>
-                    <div className="col-span-1">Online</div>
-                    <div className="col-span-2 text-right">Ação</div>
-                  </div>
-                  {monitoring.active_sessions.map((s) => {
-                    const kindLabel: Record<string, string> = {
-                      live: "🔴 Ao vivo",
-                      movie: "🎬 Filme",
-                      episode: "📺 Série",
-                      idle: "💤 Webplayer ocioso",
-                    };
-                    const label = s.content_kind ? kindLabel[s.content_kind] ?? s.content_kind : "—";
-                    const titleText = s.content_kind === "idle"
-                      ? "Sem reprodução"
-                      : (s.content_title || "Sem título");
-                    const contentMin = s.content_started_at
-                      ? Math.max(0, Math.floor((Date.now() - new Date(s.content_started_at).getTime()) / 60000))
-                      : null;
-                    return (
-                      <div key={s.anon_user_id} className="grid grid-cols-12 gap-3 px-2 py-3 items-center text-sm">
-                        <div className="col-span-2 font-medium truncate">{s.iptv_username || "—"}</div>
-                        <div className="col-span-2 font-mono text-xs text-muted-foreground">{s.ip_masked}</div>
-                        <div className="col-span-4 truncate">
-                          <div className="text-xs text-muted-foreground">{label}</div>
-                          <div className="truncate" title={titleText}>{titleText}</div>
-                        </div>
-                        <div className="col-span-1 text-xs text-muted-foreground">
-                          {contentMin != null ? `${contentMin}min` : "—"}
-                        </div>
-                        <div className="col-span-1 text-xs text-muted-foreground">
-                          {Math.floor(s.duration_s / 60)}min
-                        </div>
-                        <div className="col-span-2 text-right">
-                          <Button size="sm" variant="outline" onClick={() => evictSession(s.anon_user_id)}>
-                            <X className="h-3 w-3 mr-1" />Encerrar
-                          </Button>
-                        </div>
+                <TooltipProvider delayDuration={150}>
+                  <div className="divide-y divide-border/50">
+                    <div className="grid grid-cols-14 gap-3 px-2 py-2 text-xs font-medium text-muted-foreground">
+                      <div className="col-span-2">Usuário IPTV</div>
+                      <div className="col-span-2">Servidor (DNS)</div>
+                      <div className="col-span-2">IP</div>
+                      <div className="col-span-3">Assistindo</div>
+                      <div className="col-span-2 flex items-center gap-1">
+                        Tempo no conteúdo
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button type="button" className="text-muted-foreground/70 hover:text-muted-foreground">
+                              <HelpCircle className="h-3 w-3" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            Há quanto tempo o usuário está assistindo a este
+                            conteúdo específico (zera quando ele troca de
+                            canal/filme/episódio).
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="col-span-1">Online</div>
+                      <div className="col-span-2 text-right">Ação</div>
+                    </div>
+                    {monitoring.active_sessions.map((s) => {
+                      const kindLabel: Record<string, string> = {
+                        live: "🔴 Ao vivo",
+                        movie: "🎬 Filme",
+                        episode: "📺 Série",
+                        idle: "💤 Webplayer ocioso",
+                      };
+                      const label = s.content_kind
+                        ? kindLabel[s.content_kind] ?? s.content_kind
+                        : "🕒 Navegando no app";
+                      const titleText = !s.content_kind
+                        ? "Ainda não iniciou nenhuma reprodução"
+                        : s.content_kind === "idle"
+                          ? "Sem reprodução"
+                          : (s.content_title || "Sem título");
+                      const contentMin = s.content_started_at
+                        ? Math.max(0, Math.floor((Date.now() - new Date(s.content_started_at).getTime()) / 60000))
+                        : null;
+                      let serverHost: string | null = null;
+                      if (s.server_url) {
+                        try { serverHost = new URL(s.server_url).host; } catch { serverHost = s.server_url; }
+                      }
+                      return (
+                        <div key={s.anon_user_id} className="grid grid-cols-14 gap-3 px-2 py-3 items-center text-sm">
+                          <div className="col-span-2 font-medium truncate">{s.iptv_username || "—"}</div>
+                          <div className="col-span-2 font-mono text-xs text-muted-foreground truncate" title={s.server_url ?? undefined}>
+                            {serverHost ?? "—"}
+                          </div>
+                          <div className="col-span-2 font-mono text-xs text-muted-foreground">{s.ip_masked}</div>
+                          <div className="col-span-3 truncate">
+                            <div className="text-xs text-muted-foreground">{label}</div>
+                            <div className="truncate" title={titleText}>{titleText}</div>
+                          </div>
+                          <div className="col-span-2 text-xs text-muted-foreground">
+                            {contentMin != null ? `${contentMin}min` : "—"}
+                          </div>
+                          <div className="col-span-1 text-xs text-muted-foreground">
+                            {Math.floor(s.duration_s / 60)}min
+                          </div>
+                          <div className="col-span-2 text-right">
+                            <Button size="sm" variant="outline" onClick={() => evictSession(s.anon_user_id)}>
+                              <X className="h-3 w-3 mr-1" />Encerrar
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </TooltipProvider>
               )}
             </Card>
 
