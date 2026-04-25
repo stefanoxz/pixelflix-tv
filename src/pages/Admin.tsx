@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -139,6 +139,15 @@ interface TopConsumer {
   iptv_username: string;
   requests: number;
   segments: number;
+}
+
+interface AdminBundle {
+  stats: Stats;
+  users: AdminUser[];
+  servers: { allowed: AllowedServer[]; pending: PendingServer[] };
+  events: AdminEvent[];
+  monitoring: MonitoringOverview;
+  top_consumers: TopConsumer[];
 }
 
 type ErrorBucket =
@@ -428,6 +437,7 @@ function reasonInfo(reason: HealthReason | undefined): { label: string; tooltip:
 
 const Admin = () => {
   const navigate = useNavigate();
+  const refreshInFlight = useRef(false);
 
   const [tab, setTab] = useState("dashboard");
   const [stats, setStats] = useState<Stats | null>(null);
@@ -517,26 +527,18 @@ const Admin = () => {
   };
 
   const refresh = async () => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
     setLoading(true);
     try {
-      // Evita disparar 6 cold starts simultâneos no admin-api, que pode causar 503 transitório.
-      const s = await callAdmin<Stats>("stats");
-      const sv = await callAdmin<{ allowed: AllowedServer[]; pending: PendingServer[] }>("list_servers");
-      const [u, e] = await Promise.all([
-        callAdmin<{ users: AdminUser[] }>("list_users"),
-        callAdmin<{ events: AdminEvent[] }>("recent_events", { limit: 50 }),
-      ]);
-      const [mo, tc] = await Promise.all([
-        callAdmin<MonitoringOverview>("monitoring_overview"),
-        callAdmin<{ consumers: TopConsumer[] }>("top_consumers"),
-      ]);
-      setStats(s);
-      setUsers(u.users);
-      setAllowed(sv.allowed);
-      setPending(sv.pending);
-      setEvents(e.events);
-      setMonitoring(mo);
-      setTopConsumers(tc.consumers);
+      const bundle = await callAdmin<AdminBundle>("dashboard_bundle", { eventsLimit: 50 });
+      setStats(bundle.stats);
+      setUsers(bundle.users);
+      setAllowed(bundle.servers.allowed);
+      setPending(bundle.servers.pending);
+      setEvents(bundle.events);
+      setMonitoring(bundle.monitoring);
+      setTopConsumers(bundle.top_consumers);
     } catch (err) {
       if (signingOut) return;
       const msg = err instanceof Error ? err.message : "Falha ao carregar dados";
@@ -549,6 +551,7 @@ const Admin = () => {
       toast.error(msg);
     } finally {
       setLoading(false);
+      refreshInFlight.current = false;
     }
   };
 
