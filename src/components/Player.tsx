@@ -826,11 +826,13 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                 segmentModeRef.current === "stream"
                   ? {
                       ...HLS_CONFIG,
-                      maxBufferLength: 20,
-                      liveSyncDurationCount: 3,
-                      liveMaxLatencyDurationCount: 8,
-                      maxBufferHole: 0.3,
-                      fragLoadingMaxRetry: 6,
+                      maxBufferLength: 30,
+                      maxMaxBufferLength: 90,
+                      liveSyncDurationCount: 4,
+                      liveMaxLatencyDurationCount: 12,
+                      maxBufferHole: 0.8,
+                      levelLoadingMaxRetry: 10,
+                      fragLoadingMaxRetry: 10,
                     }
                   : HLS_CONFIG;
               const hls = new Hls(hlsConfig);
@@ -862,6 +864,16 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                 setLastReason("manifest carregado");
                 pushLog({ source: "hls", level: "info", label: "manifest_parsed" });
                 // play() já foi disparado em MEDIA_ATTACHED.
+              });
+
+              hls.on(Hls.Events.LEVEL_LOADED, () => {
+                if (cancelled) return;
+                if (retryCountRef.current > 0) retryCountRef.current = 0;
+              });
+
+              hls.on(Hls.Events.FRAG_LOADED, () => {
+                if (cancelled) return;
+                if (fragLoadErrorCountRef.current > 0) fragLoadErrorCountRef.current = 0;
               });
 
               hls.on(Hls.Events.ERROR, (_evt, data: ErrorData) => {
