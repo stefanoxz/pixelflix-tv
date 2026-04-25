@@ -116,6 +116,11 @@ async function tryFetch(url: string): Promise<{ res: Response; ua: string } | { 
         };
       } catch (e) {
         lastErr = e instanceof Error ? e.message : String(e);
+        // Erros de TLS/conexão não são resolvidos trocando User-Agent.
+        // Aborta cedo para que o caller tente a próxima variante (HTTP).
+        if (isTlsOrConnectError(lastErr)) {
+          return { error: lastErr, body: "" };
+        }
         await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
       }
     }
