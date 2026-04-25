@@ -26,11 +26,6 @@ const ENGINE_LABEL: Record<PlaybackEngine, string> = {
 
 const MPEGTS_BOOTSTRAP_TIMEOUT_MS = 8_000;
 
-function safeHostFromUrl(u: string | null | undefined): string | null {
-  if (!u) return null;
-  try { return new URL(u).host.toLowerCase(); } catch { return null; }
-}
-
 /** Detecta canal ao vivo Xtream: /live/<u>/<p>/<id>.m3u8 */
 function isLiveXtreamUrl(url: string | null | undefined): boolean {
   if (!url) return false;
