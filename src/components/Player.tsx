@@ -162,7 +162,10 @@ const HLS_CONFIG: Partial<Hls["config"]> = {
 
 const HEARTBEAT_INTERVAL_MS = 45_000;
 const BOOTSTRAP_TIMEOUT_MS = 12_000;
-const STALL_TIMEOUT_MS = 8_000;
+// Aumentado para 20s: o HLS.js leva até ~15s tentando recuperar level/frag
+// load errors não-fatais (8 retries com backoff). Se matarmos antes, o usuário
+// vê erro mesmo quando o player ainda ia se recuperar sozinho.
+const STALL_TIMEOUT_MS = 20_000;
 /**
  * Janela curta para detectar bloqueios de IP/hotlink em provedores como
  * `bkpac.cc`: se o manifest carregou mas nenhum byte de vídeo chegou em
@@ -869,11 +872,15 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
               hls.on(Hls.Events.LEVEL_LOADED, () => {
                 if (cancelled) return;
                 if (retryCountRef.current > 0) retryCountRef.current = 0;
+                // Sucesso de rede: cancela o watchdog de stall (HLS está vivo).
+                clearStallTimeout();
               });
 
               hls.on(Hls.Events.FRAG_LOADED, () => {
                 if (cancelled) return;
                 if (fragLoadErrorCountRef.current > 0) fragLoadErrorCountRef.current = 0;
+                // Fragmento chegou: cancela o watchdog de stall.
+                clearStallTimeout();
               });
 
               hls.on(Hls.Events.ERROR, (_evt, data: ErrorData) => {
