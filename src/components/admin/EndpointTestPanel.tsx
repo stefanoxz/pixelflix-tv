@@ -23,6 +23,9 @@ import {
   ChevronRight,
   Copy,
   Activity,
+  Wrench,
+  ArrowRight,
+  Lightbulb,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -179,10 +182,17 @@ function ProbeRow({ probe }: { probe: Probe }) {
   const count = meta?.count as number | undefined;
   return (
     <div className="border border-border/50 rounded-md bg-muted/20">
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 p-2.5 text-left hover:bg-muted/30 rounded-md transition-colors"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((v) => !v);
+          }
+        }}
+        className="w-full flex items-center gap-2 p-2.5 text-left hover:bg-muted/30 rounded-md transition-colors cursor-pointer select-none"
       >
         {open ? (
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -198,7 +208,7 @@ function ProbeRow({ probe }: { probe: Probe }) {
         <span className="text-xs text-muted-foreground tabular-nums w-14 text-right">
           {probe.latency_ms}ms
         </span>
-      </button>
+      </div>
       {open && (
         <div className="px-3 pb-3 pt-1 space-y-2 text-xs border-t border-border/40">
           <div className="space-y-1">
@@ -358,6 +368,30 @@ function buildReport(r: TestResult): string {
   return lines.join("\n");
 }
 
+interface ResolveCandidate {
+  base: string;
+  scheme: "http" | "https";
+  port: string;
+  label: string;
+  status: number | null;
+  latency_ms: number;
+  route: "direct" | "proxy" | null;
+  is_xtream: boolean;
+  xtream_auth: number | string | null;
+  xtream_status: string | null;
+  error: string | null;
+  score: number;
+}
+
+interface ResolveResult {
+  original: { scheme: string; port: string; base: string };
+  variants_tested: number;
+  candidates: ResolveCandidate[];
+  best: { base: string; scheme: string; port: string; score: number } | null;
+  suggestions: string[];
+  proxy_configured: boolean;
+}
+
 export function EndpointTestPanel({ allowedServers }: Props) {
   const [serverUrl, setServerUrl] = useState("");
   const [path, setPath] = useState("/player_api.php");
@@ -369,6 +403,8 @@ export function EndpointTestPanel({ allowedServers }: Props) {
   const [compareRoutes, setCompareRoutes] = useState(true);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<TestResult | null>(null);
+  const [resolving, setResolving] = useState(false);
+  const [resolveResult, setResolveResult] = useState<ResolveResult | null>(null);
 
   const run = async () => {
     if (!serverUrl.trim()) {
@@ -377,6 +413,7 @@ export function EndpointTestPanel({ allowedServers }: Props) {
     }
     setLoading(true);
     setResult(null);
+    setResolveResult(null);
     try {
       const { data, error } = await supabase.functions.invoke<TestResult>("admin-api", {
         body: {
@@ -405,10 +442,57 @@ export function EndpointTestPanel({ allowedServers }: Props) {
     }
   };
 
+  const resolve = async () => {
+    if (!serverUrl.trim()) return;
+    setResolving(true);
+    setResolveResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke<ResolveResult>("admin-api", {
+        body: {
+          action: "resolve_endpoint",
+          payload: {
+            server_url: serverUrl.trim(),
+            username: username.trim(),
+            password: password.trim(),
+            failure_code: result?.verdict?.code ?? "",
+          },
+        },
+      });
+      if (error) throw error;
+      if (!data) throw new Error("Resposta vazia");
+      setResolveResult(data);
+      if (data.best) {
+        toast.success(`Encontrada alternativa funcional: ${data.best.base}`);
+      } else if (data.candidates.length > 0) {
+        toast.info(`${data.candidates.length} variantes responderam — verifique os candidatos.`);
+      } else {
+        toast.warning("Nenhuma variante respondeu.");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao tentar resolver";
+      toast.error(msg);
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  const applyCandidate = (base: string) => {
+    setServerUrl(base);
+    setResolveResult(null);
+    toast.success("URL aplicada — clique em 'Executar diagnóstico' para revalidar.");
+  };
+
   const copyReport = async () => {
     if (!result) return;
     try {
-      await navigator.clipboard.writeText(buildReport(result));
+      const base = buildReport(result);
+      const extra = resolveResult
+        ? "\n\n-- Tentativa de resolução --\n" +
+          `Variantes testadas: ${resolveResult.variants_tested}\n` +
+          (resolveResult.best ? `Melhor: ${resolveResult.best.base} (score ${resolveResult.best.score})\n` : "Nenhum candidato funcional.\n") +
+          resolveResult.suggestions.map((s) => `• ${s}`).join("\n")
+        : "";
+      await navigator.clipboard.writeText(base + extra);
       toast.success("Relatório copiado");
     } catch {
       toast.error("Falha ao copiar");
@@ -559,11 +643,93 @@ export function EndpointTestPanel({ allowedServers }: Props) {
               <span>•</span>
               <span>modo: <code>{result.mode ?? "—"}</code></span>
             </div>
-            <Button size="sm" variant="outline" onClick={copyReport}>
-              <Copy className="h-3.5 w-3.5 mr-1.5" />
-              Copiar relatório
-            </Button>
+            <div className="flex items-center gap-2">
+              {result.verdict && result.verdict.level !== "ok" && (
+                <Button size="sm" variant="default" onClick={resolve} disabled={resolving}>
+                  {resolving ? (
+                    <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Investigando…</>
+                  ) : (
+                    <><Wrench className="h-3.5 w-3.5 mr-1.5" />Tentar resolver</>
+                  )}
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={copyReport}>
+                <Copy className="h-3.5 w-3.5 mr-1.5" />
+                Copiar relatório
+              </Button>
+            </div>
           </div>
+
+          {resolveResult && (
+            <Card className="p-4 bg-gradient-card border-border/50 space-y-3">
+              <div className="flex items-center gap-2">
+                <Wrench className="h-4 w-4 text-primary" />
+                <h4 className="font-semibold text-sm">Resolução automática</h4>
+                <span className="text-xs text-muted-foreground ml-auto">
+                  {resolveResult.variants_tested} variantes testadas
+                </span>
+              </div>
+
+              {resolveResult.suggestions.length > 0 && (
+                <div className="space-y-1.5">
+                  {resolveResult.suggestions.map((s, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs p-2 rounded bg-muted/30">
+                      <Lightbulb className="h-3.5 w-3.5 text-warning mt-0.5 shrink-0" />
+                      <span>{s}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {resolveResult.candidates.length > 0 ? (
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] uppercase text-muted-foreground">
+                    Candidatos funcionais (ordenados por qualidade)
+                  </Label>
+                  {resolveResult.candidates.slice(0, 8).map((c, i) => {
+                    const isBest = i === 0;
+                    const isAuthOk = c.is_xtream && (c.xtream_auth === 1 || c.xtream_auth === "1");
+                    return (
+                      <div
+                        key={`${c.base}-${i}`}
+                        className={cn(
+                          "flex items-center gap-2 p-2 rounded border text-xs",
+                          isBest
+                            ? "border-success/40 bg-success/5"
+                            : "border-border/40 bg-muted/20",
+                        )}
+                      >
+                        <code className="font-mono flex-1 truncate">{c.base}</code>
+                        <RouteBadge route={c.route} />
+                        <StatusPill status={c.status} error={c.error} />
+                        {isAuthOk && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-success/15 text-success border border-success/30">
+                            Xtream ✓
+                          </span>
+                        )}
+                        <span className="text-muted-foreground tabular-nums w-12 text-right">
+                          {c.latency_ms}ms
+                        </span>
+                        <Button
+                          size="sm"
+                          variant={isBest ? "default" : "outline"}
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => applyCandidate(c.base)}
+                        >
+                          Aplicar
+                          <ArrowRight className="h-3 w-3 ml-1" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground p-3 rounded bg-muted/20 text-center">
+                  Nenhuma variante respondeu. Servidor parece totalmente offline para esta região.
+                </div>
+              )}
+            </Card>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {result.xtream && <XtreamCard x={result.xtream} />}

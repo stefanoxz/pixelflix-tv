@@ -1049,6 +1049,201 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Tenta resolver automaticamente uma falha de comunicação testando variantes
+    // (esquema http/https, portas comuns, com/sem credenciais e via proxy).
+    if (action === "resolve_endpoint") {
+      const rawUrl = String(payload?.server_url ?? "").trim();
+      if (!rawUrl) return bad("server_url obrigatório");
+      const username = payload?.username ? String(payload.username) : "";
+      const password = payload?.password ? String(payload.password) : "";
+      const failureCode = String(payload?.failure_code ?? "").trim();
+      const TEST_UA = "VLC/3.0.20 LibVLC/3.0.20";
+      const PER_PROBE_TIMEOUT = 4000;
+
+      // 1) Parse base
+      let parsed: URL | null = null;
+      try {
+        const withProto = /^https?:\/\//i.test(rawUrl) ? rawUrl : `http://${rawUrl}`;
+        parsed = new URL(withProto);
+      } catch {
+        return bad("URL inválida");
+      }
+
+      // 2) Gera variantes (host fixo, varia esquema/porta)
+      const host = parsed.hostname;
+      const originalScheme = parsed.protocol.replace(":", "") as "http" | "https";
+      const originalPort = parsed.port || (originalScheme === "https" ? "443" : "80");
+
+      const HTTP_PORTS = ["80", "8080", "8000", "2052", "2086", "2095"];
+      const HTTPS_PORTS = ["443", "8443", "2053", "2083", "2096"];
+
+      const variants: { scheme: "http" | "https"; port: string; base: string; label: string }[] = [];
+      const seen = new Set<string>();
+      const push = (scheme: "http" | "https", port: string, label: string) => {
+        const key = `${scheme}://${host}:${port}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const isDefault = (scheme === "http" && port === "80") || (scheme === "https" && port === "443");
+        const base = isDefault ? `${scheme}://${host}` : `${scheme}://${host}:${port}`;
+        variants.push({ scheme, port, base, label });
+      };
+
+      // ordem: original primeiro, depois alternativas razoáveis
+      push(originalScheme, originalPort, "original");
+      const otherScheme = originalScheme === "http" ? "https" : "http";
+      push(otherScheme, originalPort, "troca-esquema");
+      for (const p of HTTP_PORTS) push("http", p, `http:${p}`);
+      for (const p of HTTPS_PORTS) push("https", p, `https:${p}`);
+
+      // limita custo: máx 12 variantes
+      const limited = variants.slice(0, 12);
+
+      type VariantResult = {
+        base: string;
+        scheme: "http" | "https";
+        port: string;
+        label: string;
+        status: number | null;
+        latency_ms: number;
+        route: "direct" | "proxy" | null;
+        is_xtream: boolean;
+        xtream_auth: number | string | null;
+        xtream_status: string | null;
+        error: string | null;
+      };
+
+      const probeVariant = async (v: { scheme: "http" | "https"; port: string; base: string; label: string }): Promise<VariantResult> => {
+        let url = `${v.base}/player_api.php`;
+        if (username || password) {
+          url += `?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+        }
+        const t0 = Date.now();
+        try {
+          const res = await proxiedFetch(url, {
+            method: "GET",
+            headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
+            redirect: "follow",
+            signal: AbortSignal.timeout(PER_PROBE_TIMEOUT),
+          });
+          // @ts-ignore tag
+          const route = (res as Response & { _iptvRoute?: "direct" | "proxy" })._iptvRoute ?? "direct";
+          const text = await res.text();
+          let isXtream = false;
+          let xAuth: number | string | null = null;
+          let xStatus: string | null = null;
+          try {
+            const j = JSON.parse(text);
+            if (j?.user_info) {
+              isXtream = true;
+              xAuth = j.user_info.auth ?? null;
+              xStatus = j.user_info.status ?? null;
+            }
+          } catch { /* not json */ }
+          return {
+            base: v.base,
+            scheme: v.scheme,
+            port: v.port,
+            label: v.label,
+            status: res.status,
+            latency_ms: Date.now() - t0,
+            route,
+            is_xtream: isXtream,
+            xtream_auth: xAuth,
+            xtream_status: xStatus,
+            error: null,
+          };
+        } catch (err) {
+          return {
+            base: v.base,
+            scheme: v.scheme,
+            port: v.port,
+            label: v.label,
+            status: null,
+            latency_ms: Date.now() - t0,
+            route: null,
+            is_xtream: false,
+            xtream_auth: null,
+            xtream_status: null,
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      };
+
+      // Roda em paralelo (chunks de 6 para não estourar)
+      const results: VariantResult[] = [];
+      for (let i = 0; i < limited.length; i += 6) {
+        const batch = limited.slice(i, i + 6);
+        const r = await Promise.all(batch.map(probeVariant));
+        results.push(...r);
+      }
+
+      // Classifica candidatos
+      const score = (r: VariantResult): number => {
+        if (r.is_xtream && (r.xtream_auth === 1 || r.xtream_auth === "1")) return 100 - Math.min(50, r.latency_ms / 100);
+        if (r.is_xtream) return 60 - Math.min(30, r.latency_ms / 100);
+        if (r.status && r.status >= 200 && r.status < 300) return 50 - Math.min(25, r.latency_ms / 100);
+        if (r.status === 401 || r.status === 403) return 30;
+        if (r.status && r.status < 500) return 20;
+        if (r.status) return 10;
+        return 0;
+      };
+
+      const candidates = results
+        .map((r) => ({ ...r, _score: score(r) }))
+        .filter((r) => r._score > 0)
+        .sort((a, b) => b._score - a._score);
+
+      // Sugestões textuais
+      const suggestions: string[] = [];
+      const best = candidates[0];
+
+      if (failureCode === "geo_blocked" || candidates.some((c) => c.route === "proxy")) {
+        if (isProxyEnabled()) {
+          suggestions.push("Proxy está configurado: requisições já fazem fallback automático quando o IP do Supabase é bloqueado. Nenhuma ação manual necessária.");
+        } else {
+          suggestions.push("Configure o secret IPTV_PROXY_URL para habilitar fallback automático via proxy quando o servidor bloquear o IP do Supabase.");
+        }
+      }
+
+      if (failureCode === "bad_credentials") {
+        suggestions.push("Credenciais foram rejeitadas pelo servidor. Confirme usuário/senha sem espaços extras. O servidor pode também ter bloqueado o IP por excesso de tentativas.");
+      }
+
+      if (failureCode === "account_expired") {
+        suggestions.push("A conta Xtream expirou. Renove com o provedor — não há fix técnico no app.");
+      }
+
+      if (failureCode === "account_inactive") {
+        suggestions.push("A conta está com status diferente de 'Active' (banida/desativada). Não há fix técnico — contate o provedor.");
+      }
+
+      if (failureCode === "stream_failed") {
+        suggestions.push("API responde mas a entrega de stream falha. Servidor pode estar saturado. Tente novamente em alguns minutos ou peça ao provedor para liberar mais conexões simultâneas.");
+      }
+
+      if (best && best.base !== `${originalScheme}://${host}${originalPort && originalPort !== (originalScheme === "https" ? "443" : "80") ? ":" + originalPort : ""}`) {
+        if (best.is_xtream && (best.xtream_auth === 1 || best.xtream_auth === "1")) {
+          suggestions.push(`Encontrada URL alternativa funcional: ${best.base} — atualize a DNS cadastrada para esse endereço.`);
+        } else if (best.status && best.status >= 200 && best.status < 300) {
+          suggestions.push(`Endpoint alternativo respondeu HTTP ${best.status} em ${best.base}. Confirme com credenciais.`);
+        }
+      }
+
+      if (!best) {
+        suggestions.push("Nenhuma variante respondeu. Servidor parece totalmente offline para esta região. Aguarde ou contate o provedor.");
+      }
+
+      return ok({
+        original: { scheme: originalScheme, port: originalPort, base: `${originalScheme}://${host}${originalPort && originalPort !== (originalScheme === "https" ? "443" : "80") ? ":" + originalPort : ""}` },
+        variants_tested: limited.length,
+        results: results.map(({ ...r }) => r),
+        candidates: candidates.map(({ _score, ...r }) => ({ ...r, score: Math.round(_score) })),
+        best: best ? { base: best.base, scheme: best.scheme, port: best.port, score: Math.round(best._score) } : null,
+        suggestions,
+        proxy_configured: isProxyEnabled(),
+      });
+    }
+
     return bad("Ação inválida");
   } catch (e) {
     console.error("[admin-api] unhandled", e);
