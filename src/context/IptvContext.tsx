@@ -5,7 +5,15 @@ import {
   type IptvSession,
 } from "./iptv-context";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchAllowedServers, isHostAllowed } from "@/services/iptv";
+import {
+  fetchAllowedServers,
+  isHostAllowed,
+  getVodCategories,
+  getVodStreams,
+  getSeriesCategories,
+  getSeries,
+} from "@/services/iptv";
+import { queryClient } from "@/main";
 import { toast } from "sonner";
 
 export { useIptv } from "./useIptv";
