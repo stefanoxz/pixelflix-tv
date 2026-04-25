@@ -567,10 +567,12 @@ Deno.serve(async (req) => {
       return errorResponse("BAD_REQUEST", "Informe usuário e senha", corsHeaders);
     }
 
-    // Load allowlist
+    // Load allowlist (com colunas de cache/cooldown)
     let allowedRows: any[] | null = null;
     try {
-      const result = await admin.from("allowed_servers").select("server_url");
+      const result = await admin
+        .from("allowed_servers")
+        .select("id, server_url, last_working_variant, consecutive_failures, unreachable_until");
       if (result.error) throw result.error;
       allowedRows = result.data;
     } catch (err) {
@@ -582,7 +584,21 @@ Deno.serve(async (req) => {
       );
     }
 
-    const allowedList = (allowedRows ?? []).map((r: any) => normalizeServer(r.server_url));
+    type ServerRow = {
+      id: string;
+      server_url: string;
+      last_working_variant: string | null;
+      consecutive_failures: number;
+      unreachable_until: string | null;
+    };
+    const allRows: ServerRow[] = (allowedRows ?? []).map((r: any) => ({
+      id: r.id,
+      server_url: normalizeServer(r.server_url),
+      last_working_variant: r.last_working_variant ?? null,
+      consecutive_failures: r.consecutive_failures ?? 0,
+      unreachable_until: r.unreachable_until ?? null,
+    }));
+    const allowedList = allRows.map((r) => r.server_url);
 
     if (allowedList.length === 0) {
       await logEvent({ server: server ?? "-", username, success: false, reason: "nenhuma DNS cadastrada", ua, ip });
@@ -590,36 +606,41 @@ Deno.serve(async (req) => {
     }
 
     // If client sent a server, validate it's in allowlist; otherwise try all allowed servers
-    let candidates: string[] = [];
+    let candidateRows: ServerRow[] = [];
     if (server) {
       const baseUrl = String(server).trim().replace(/\/+$/, "");
       const fullBase = /^https?:\/\//i.test(baseUrl) ? baseUrl : `http://${baseUrl}`;
       const normalized = normalizeServer(fullBase);
       const inputHost = hostKey(fullBase);
-      const match = allowedList.find((a) => a === normalized || hostKey(a) === inputHost);
+      const match = allRows.find(
+        (r) => r.server_url === normalized || hostKey(r.server_url) === inputHost,
+      );
       if (!match) {
         await logEvent({ server: fullBase, username, success: false, reason: "DNS não autorizada", ua, ip });
         return errorResponse("NOT_ALLOWED", NO_ACCESS_MSG, corsHeaders);
       }
-      candidates = [match];
+      candidateRows = [match];
     } else {
-      candidates = allowedList;
+      candidateRows = allRows;
     }
 
     // Try each candidate server until one authenticates
     let lastReason = "credenciais inválidas";
-    for (const base of candidates) {
-      const r = await attemptLogin(base, username, password);
+    for (const row of candidateRows) {
+      const r = await attemptLogin(row.server_url, username, password, row, admin);
       if (r.ok) {
-        await logEvent({ server: base, username, success: true, ua, ip });
+        await logEvent({ server: row.server_url, username, success: true, ua, ip });
         return jsonResponse(
           200,
-          { success: true, ...r.data, server_url: base, allowed_servers: allowedList },
+          { success: true, ...r.data, server_url: row.server_url, allowed_servers: allowedList },
           corsHeaders,
         );
       }
       lastReason = r.reason;
-      await logEvent({ server: base, username, success: false, reason: r.reason, ua, ip });
+      // Em cooldown: NÃO loga (a ideia é justamente parar de poluir o dashboard).
+      if (!("skipped" in r && r.skipped)) {
+        await logEvent({ server: row.server_url, username, success: false, reason: r.reason, ua, ip });
+      }
     }
 
     const { code, message } = classifyReason(lastReason);
