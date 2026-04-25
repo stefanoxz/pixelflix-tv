@@ -1,6 +1,6 @@
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Tv, Film, Clapperboard, User, LogOut, Sparkles, Menu, X } from "lucide-react";
-import logoSuperTech from "@/assets/logo-supertech.png";
+import logoSuperTech from "@/assets/logo-supertech.webp";
 import { useState } from "react";
 import { useIptv } from "@/context/IptvContext";
 import { Button } from "@/components/ui/button";
