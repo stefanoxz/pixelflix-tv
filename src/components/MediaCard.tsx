@@ -1,5 +1,5 @@
-import { forwardRef } from "react";
-import { Play, Star } from "lucide-react";
+import { forwardRef, type MouseEvent } from "react";
+import { Heart, Play, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { proxyImageUrl } from "@/services/iptv";
 
@@ -9,12 +9,21 @@ interface MediaCardProps {
   rating?: number | string;
   onClick?: () => void;
   aspect?: "poster" | "landscape";
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
 }
 
 export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
-  ({ title, cover, rating, onClick, aspect = "poster" }, ref) => {
+  ({ title, cover, rating, onClick, aspect = "poster", isFavorite, onToggleFavorite }, ref) => {
     const ratingNum = typeof rating === "string" ? parseFloat(rating) : rating;
     const showRating = ratingNum && !isNaN(ratingNum) && ratingNum > 0;
+    const showFav = typeof onToggleFavorite === "function";
+
+    const handleFav = (e: MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      onToggleFavorite?.();
+    };
 
     return (
       <button
@@ -47,6 +56,35 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
             <Play className="h-5 w-5 text-primary-foreground fill-current ml-0.5" />
           </div>
         </div>
+
+        {showFav && (
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+            onClick={handleFav}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleFavorite?.();
+              }
+            }}
+            className={cn(
+              "absolute top-2 left-2 h-8 w-8 rounded-full bg-black/60 backdrop-blur flex items-center justify-center transition-smooth",
+              "md:opacity-0 md:group-hover:opacity-100",
+              isFavorite && "md:opacity-100",
+              "hover:bg-black/80 cursor-pointer",
+            )}
+          >
+            <Heart
+              className={cn(
+                "h-4 w-4 transition-smooth",
+                isFavorite ? "fill-primary text-primary" : "text-white",
+              )}
+            />
+          </span>
+        )}
 
         {showRating && (
           <div className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/70 backdrop-blur px-2 py-0.5 text-xs">
