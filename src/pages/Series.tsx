@@ -335,27 +335,59 @@ const SeriesPage = () => {
         onPlayEpisode={(ep) => {
           // Mantém `openSeries` definido — quando o player fechar,
           // o diálogo da série reaparece automaticamente (condição `&& !playingEp`).
-          setPlayingEp({ ep, coverFallback: openSeries?.cover });
+          if (!openSeries) return;
+          setShowNextCard(false);
+          setPlayingEp({
+            ep,
+            seriesId: openSeries.series_id,
+            coverFallback: openSeries.cover,
+          });
         }}
         onCopyExternal={handleCopyExternal}
         isFavorite={openSeries ? isFavorite(openSeries.series_id) : false}
         onToggleFavorite={openSeries ? () => toggle(openSeries.series_id) : undefined}
       />
 
-      <PlayerOverlay open={!!(playingEp && epUrl)} onClose={() => setPlayingEp(null)}>
+      <PlayerOverlay
+        open={!!(playingEp && epUrl)}
+        onClose={() => {
+          setShowNextCard(false);
+          setPlayingEp(null);
+        }}
+      >
         {playingEp && epUrl && (
-          <Player
-            src={epUrl}
-            rawUrl={epUrl}
-            containerExt={playingEp.ep.container_extension}
-            title={playingEp.ep.title}
-            poster={proxyImageUrl(
-              playingEp.ep.info?.movie_image || playingEp.coverFallback || "",
-            )}
-            onClose={() => setPlayingEp(null)}
-            streamId={playingEp.ep.id}
-            contentKind="episode"
-          />
+          <>
+            <Player
+              // Forçar remontagem ao trocar de episódio garante reset limpo de hls/mpegts.
+              key={String(playingEp.ep.id)}
+              src={epUrl}
+              rawUrl={epUrl}
+              containerExt={playingEp.ep.container_extension}
+              title={playingEp.ep.title}
+              poster={proxyImageUrl(
+                playingEp.ep.info?.movie_image || playingEp.coverFallback || "",
+              )}
+              onClose={() => {
+                setShowNextCard(false);
+                setPlayingEp(null);
+              }}
+              streamId={playingEp.ep.id}
+              contentKind="episode"
+              onEnded={handleEpisodeEnded}
+            />
+            <NextEpisodeCard
+              open={showNextCard && !!nextEpisodeInfo}
+              episode={nextEpisodeInfo?.ep ?? null}
+              season={nextEpisodeInfo?.season ?? 0}
+              episodeNumber={nextEpisodeInfo?.episodeNumber ?? 0}
+              coverFallback={playingEp.coverFallback}
+              autoplaySeconds={10}
+              autoplayEnabled={autoplayPref.enabled}
+              onAutoplayToggle={autoplayPref.toggle}
+              onPlayNow={handlePlayNext}
+              onCancel={() => setShowNextCard(false)}
+            />
+          </>
         )}
       </PlayerOverlay>
     </div>
