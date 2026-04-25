@@ -1,8 +1,7 @@
-import { forwardRef, useState } from "react";
+import { forwardRef, memo, useState } from "react";
 import { Heart, Star, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { proxyImageUrl } from "@/services/iptv";
-import { useIsIncompatible } from "@/hooks/useIsIncompatible";
 
 export interface PosterItem {
   id: number;
@@ -10,7 +9,7 @@ export interface PosterItem {
   cover?: string | null;
   year?: string | number;
   rating?: number;
-  /** Host upstream do conteúdo — usado pra checar marca de incompatibilidade. */
+  /** Host upstream do conteúdo — usado para checar a marca de incompatibilidade. */
   host?: string | null;
 }
 
@@ -18,21 +17,25 @@ interface Props {
   item: PosterItem;
   active?: boolean;
   isFavorite?: boolean;
+  /** Marcado como incompatível (HEVC/4K que falhou antes). Vem do grid. */
+  incompatible?: boolean;
   onClick: () => void;
+  onHover?: () => void;
   onToggleFavorite?: () => void;
 }
 
 /**
- * Card de pôster (aspect 2:3) estilo Netflix/IBO. Mostra capa, gradiente
- * inferior com nome/ano, badge de favorito e indicador de rating.
+ * Card de pôster (aspect 2:3) estilo Netflix/IBO. Memoizado — só
+ * re-renderiza quando `item.id`, `active`, `isFavorite` ou `incompatible`
+ * mudam. A marca de incompatibilidade vem por prop (sem listener por card).
  */
-export const PosterCard = forwardRef<HTMLButtonElement, Props>(function PosterCard(
-  { item, active, isFavorite, onClick, onToggleFavorite },
+const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
+  { item, active, isFavorite, incompatible, onClick, onHover, onToggleFavorite },
   ref,
 ) {
   const [imgFailed, setImgFailed] = useState(false);
-  const cover = item.cover ? proxyImageUrl(item.cover) : null;
-  const incompatible = useIsIncompatible(item.host, item.id);
+  // Capas em ~150px exibidas → pedimos 300px de largura (retina) em WebP.
+  const cover = item.cover ? proxyImageUrl(item.cover, { w: 300, h: 450, q: 70 }) : null;
 
   return (
     <div className="relative group">
@@ -40,6 +43,8 @@ export const PosterCard = forwardRef<HTMLButtonElement, Props>(function PosterCa
         ref={ref}
         type="button"
         onClick={onClick}
+        onMouseEnter={onHover}
+        onFocus={onHover}
         data-active={active}
         className={cn(
           "block w-full aspect-[2/3] rounded-md overflow-hidden bg-secondary/60 relative",
@@ -55,6 +60,9 @@ export const PosterCard = forwardRef<HTMLButtonElement, Props>(function PosterCa
             src={cover}
             alt={item.title}
             loading="lazy"
+            decoding="async"
+            width={200}
+            height={300}
             className="h-full w-full object-cover"
             onError={() => setImgFailed(true)}
           />
@@ -64,7 +72,6 @@ export const PosterCard = forwardRef<HTMLButtonElement, Props>(function PosterCa
           </div>
         )}
 
-        {/* Gradient + título sempre visível na parte de baixo */}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-2 pt-6">
           <p className="text-[11px] md:text-xs font-semibold text-white leading-tight line-clamp-2 drop-shadow">
             {item.title}
@@ -113,5 +120,21 @@ export const PosterCard = forwardRef<HTMLButtonElement, Props>(function PosterCa
         </button>
       )}
     </div>
+  );
+});
+
+export const PosterCard = memo(PosterCardImpl, (prev, next) => {
+  return (
+    prev.item.id === next.item.id &&
+    prev.item.cover === next.item.cover &&
+    prev.item.title === next.item.title &&
+    prev.item.year === next.item.year &&
+    prev.item.rating === next.item.rating &&
+    prev.active === next.active &&
+    prev.isFavorite === next.isFavorite &&
+    prev.incompatible === next.incompatible &&
+    prev.onClick === next.onClick &&
+    prev.onHover === next.onHover &&
+    prev.onToggleFavorite === next.onToggleFavorite
   );
 });
