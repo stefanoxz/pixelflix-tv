@@ -70,10 +70,17 @@ export function parseM3uUrl(input: string): M3uCredentials | null {
   if (/\/get\.php\/?$/i.test(path)) {
     const username = url.searchParams.get("username")?.trim();
     const password = url.searchParams.get("password") ?? "";
-    if (username && password) return { server, username, password };
+    if (username && password) return { server, username, password, path: "/get.php" };
   }
 
-  // Variante 2: /playlist/<user>/<pass>/<type>
+  // Variante 2: player_api.php?username=X&password=Y
+  if (/\/player_api\.php\/?$/i.test(path)) {
+    const username = url.searchParams.get("username")?.trim();
+    const password = url.searchParams.get("password") ?? "";
+    if (username && password) return { server, username, password, path: "/player_api.php" };
+  }
+
+  // Variante 3: /playlist/<user>/<pass>/<type>
   const pl = path.match(
     /\/playlist\/([^/]+)\/([^/]+)(?:\/(?:m3u_plus|m3u|ts))?\/?$/i,
   );
@@ -81,7 +88,36 @@ export function parseM3uUrl(input: string): M3uCredentials | null {
     try {
       const username = decodeURIComponent(pl[1]).trim();
       const password = decodeURIComponent(pl[2]);
-      if (username && password) return { server, username, password };
+      if (username && password) return { server, username, password, path: "/get.php" };
+    } catch {
+      /* fallthrough */
+    }
+  }
+
+  // Variante 4: /live/<user>/<pass>/<id>.<ext> (e movie/series)
+  const stream = path.match(
+    /\/(?:live|movie|series)\/([^/]+)\/([^/]+)\/[^/]+$/i,
+  );
+  if (stream) {
+    try {
+      const username = decodeURIComponent(stream[1]).trim();
+      const password = decodeURIComponent(stream[2]);
+      if (username && password) return { server, username, password, path: "/player_api.php" };
+    } catch {
+      /* fallthrough */
+    }
+  }
+
+  // Variante 5: Xtream legacy /<user>/<pass>/<id> (path com 3 segmentos)
+  const legacy = path.match(/^\/([^/]+)\/([^/]+)\/[^/]+\/?$/);
+  if (legacy && !/^(playlist|live|movie|series|get\.php|player_api\.php)$/i.test(legacy[1])) {
+    try {
+      const username = decodeURIComponent(legacy[1]).trim();
+      const password = decodeURIComponent(legacy[2]);
+      // heurística: usuário/senha Xtream costumam ser alfanuméricos (não conter "." ou "/")
+      if (username && password && !/[./\\@:]/.test(username)) {
+        return { server, username, password, path: "/player_api.php" };
+      }
     } catch {
       /* fallthrough */
     }
