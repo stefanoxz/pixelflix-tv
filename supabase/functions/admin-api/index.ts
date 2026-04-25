@@ -1058,7 +1058,10 @@ Deno.serve(async (req) => {
       const password = payload?.password ? String(payload.password) : "";
       const failureCode = String(payload?.failure_code ?? "").trim();
       const TEST_UA = "VLC/3.0.20 LibVLC/3.0.20";
-      const PER_PROBE_TIMEOUT = 4000;
+      const PER_PROBE_TIMEOUT = 2500;
+      const GLOBAL_BUDGET_MS = 18000;
+      const startedAt = Date.now();
+      const remaining = () => Math.max(0, GLOBAL_BUDGET_MS - (Date.now() - startedAt));
 
       // 1) Parse base
       let parsed: URL | null = null;
@@ -1074,8 +1077,9 @@ Deno.serve(async (req) => {
       const originalScheme = parsed.protocol.replace(":", "") as "http" | "https";
       const originalPort = parsed.port || (originalScheme === "https" ? "443" : "80");
 
-      const HTTP_PORTS = ["80", "8080", "8000", "2052", "2086", "2095"];
-      const HTTPS_PORTS = ["443", "8443", "2053", "2083", "2096"];
+      // Conjunto reduzido para não saturar o worker em hosts inalcançáveis
+      const HTTP_PORTS = ["80", "8080", "8000"];
+      const HTTPS_PORTS = ["443", "8443"];
 
       const variants: { scheme: "http" | "https"; port: string; base: string; label: string }[] = [];
       const seen = new Set<string>();
@@ -1095,8 +1099,8 @@ Deno.serve(async (req) => {
       for (const p of HTTP_PORTS) push("http", p, `http:${p}`);
       for (const p of HTTPS_PORTS) push("https", p, `https:${p}`);
 
-      // limita custo: máx 12 variantes
-      const limited = variants.slice(0, 12);
+      // limita custo: máx 7 variantes
+      const limited = variants.slice(0, 7);
 
       type VariantResult = {
         base: string;
@@ -1118,12 +1122,13 @@ Deno.serve(async (req) => {
           url += `?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
         }
         const t0 = Date.now();
+        const probeTimeout = Math.min(PER_PROBE_TIMEOUT, Math.max(800, remaining()));
         try {
           const res = await proxiedFetch(url, {
             method: "GET",
             headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
             redirect: "follow",
-            signal: AbortSignal.timeout(PER_PROBE_TIMEOUT),
+            signal: AbortSignal.timeout(probeTimeout),
           });
           // @ts-ignore tag
           const route = (res as Response & { _iptvRoute?: "direct" | "proxy" })._iptvRoute ?? "direct";
@@ -1169,12 +1174,20 @@ Deno.serve(async (req) => {
         }
       };
 
-      // Roda em paralelo (chunks de 6 para não estourar)
+      // Roda serial: paralelizar muitos probes em hosts inalcançáveis (TCP reset)
+      // satura sockets do worker e dispara SUPABASE_EDGE_RUNTIME_ERROR (503).
+      // Aborta o restante quando o orçamento global se esgota.
       const results: VariantResult[] = [];
-      for (let i = 0; i < limited.length; i += 6) {
-        const batch = limited.slice(i, i + 6);
-        const r = await Promise.all(batch.map(probeVariant));
-        results.push(...r);
+      let aborted = false;
+      for (const v of limited) {
+        if (remaining() < 1000) {
+          aborted = true;
+          break;
+        }
+        const r = await probeVariant(v);
+        results.push(r);
+        // Atalho: se já achou um Xtream auth=1, não precisa testar o resto
+        if (r.is_xtream && (r.xtream_auth === 1 || r.xtream_auth === "1")) break;
       }
 
       // Classifica candidatos
@@ -1235,7 +1248,10 @@ Deno.serve(async (req) => {
 
       return ok({
         original: { scheme: originalScheme, port: originalPort, base: `${originalScheme}://${host}${originalPort && originalPort !== (originalScheme === "https" ? "443" : "80") ? ":" + originalPort : ""}` },
-        variants_tested: limited.length,
+        variants_tested: results.length,
+        variants_planned: limited.length,
+        aborted_by_budget: aborted,
+        elapsed_ms: Date.now() - startedAt,
         results: results.map(({ ...r }) => r),
         candidates: candidates.map(({ _score, ...r }) => ({ ...r, score: Math.round(_score) })),
         best: best ? { base: best.base, scheme: best.scheme, port: best.port, score: Math.round(best._score) } : null,
