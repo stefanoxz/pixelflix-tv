@@ -158,10 +158,6 @@ const Highlights = () => {
                 <Info className="h-4 w-4" />
                 Mais informações
               </Button>
-              <Button size="lg" variant="ghost" onClick={() => navigate("/live")} className="gap-2">
-                <Tv className="h-4 w-4" />
-                Canais ao vivo
-              </Button>
             </div>
 
             {/* Indicadores */}
