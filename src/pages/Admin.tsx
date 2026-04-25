@@ -623,6 +623,7 @@ const Admin = () => {
           {[
             { id: "dashboard", label: "Dashboard", icon: TrendingUp },
             { id: "monitoring", label: "Monitoramento", icon: Monitor },
+            { id: "dns-errors", label: "Erros por DNS", icon: AlertOctagon },
             { id: "users", label: "Usuários", icon: Users },
             { id: "servers", label: "DNS / Servidores", icon: Server },
           ].map((item) => (
