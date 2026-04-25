@@ -777,6 +777,7 @@ const Admin = () => {
                 : tab === "users" ? "Quem está acessando a plataforma"
                 : tab === "endpoint-test" ? "Diagnóstico de uma DNS específica — exibe se a resposta veio direto ou via proxy"
                 : tab === "client-diagnostics" ? "Tentativas de login dos usuários com provedor, velocidade e localização — atualiza a cada 15s"
+                : tab === "pending-signups" ? "Cadastros aguardando sua aprovação para acessar o painel admin"
                 : "Cadastre as DNS autorizadas. Sem cadastro prévio, o cliente não consegue logar."}
             </p>
           </div>
