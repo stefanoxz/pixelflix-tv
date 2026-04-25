@@ -1,5 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Heart, Loader2, Play, Star } from "lucide-react";
+import {
+  AlertTriangle,
+  Calendar,
+  Clapperboard,
+  Clock,
+  Film,
+  Heart,
+  Loader2,
+  Play,
+  Star,
+  Users,
+  Video,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -65,7 +77,6 @@ export function MovieDetailsDialog({
   const year = releaseDate ? releaseDate.slice(0, 4) : null;
 
   // Fallback TMDB — chamado SEMPRE (antes de qualquer return) pra preservar a ordem dos hooks.
-  // Dispara quando faltar capa OU sinopse (no dialog é seguro — só 1 lookup por abertura).
   const { data: tmdb } = useTmdbFallback({
     type: "movie",
     hasCover: (!!sourceCover && !!sourcePlot) || !movie,
@@ -83,7 +94,13 @@ export function MovieDetailsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl p-0 overflow-hidden border-border/50 bg-card">
+      <DialogContent
+        className={cn(
+          "max-w-4xl p-0 overflow-hidden border-border/50 bg-card max-h-[92vh] overflow-y-auto",
+          // Override do botão close (X) do shadcn pra ficar maior e mais visível
+          "[&>button]:h-10 [&>button]:w-10 [&>button]:rounded-full [&>button]:bg-black/60 [&>button]:backdrop-blur [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:top-4 [&>button]:right-4 [&>button]:opacity-100 [&>button]:hover:bg-black/80 [&>button>svg]:h-5 [&>button>svg]:w-5",
+        )}
+      >
         <DialogTitle className="sr-only">{movie.name}</DialogTitle>
         <DialogDescription className="sr-only">Detalhes do filme</DialogDescription>
 
@@ -102,9 +119,9 @@ export function MovieDetailsDialog({
           <div className="absolute inset-0 bg-gradient-to-t from-card via-card/70 to-transparent" />
         </div>
 
-        <div className="px-6 pb-6 -mt-20 md:-mt-24 grid grid-cols-1 md:grid-cols-[180px,1fr] gap-5 relative">
+        <div className="px-6 pb-6 -mt-20 md:-mt-24 grid grid-cols-1 md:grid-cols-[180px,1fr] gap-5 md:gap-6 relative">
           {/* Capa */}
-          <div className="aspect-[2/3] w-32 md:w-full rounded-lg overflow-hidden bg-secondary shadow-card shrink-0">
+          <div className="aspect-[2/3] w-32 md:w-full rounded-xl overflow-hidden bg-secondary shadow-card shrink-0 ring-1 ring-border/40">
             {cover ? (
               <img
                 src={proxyImageUrl(cover, { w: 400, h: 600, q: 80 })}
@@ -121,49 +138,94 @@ export function MovieDetailsDialog({
             )}
           </div>
 
-          <div className="min-w-0 space-y-3 md:pt-20">
-            <h2 className="text-2xl md:text-3xl font-bold leading-tight">{movie.name}</h2>
+          <div className="min-w-0 space-y-4 md:pt-20">
+            {/* Título */}
+            <h2 className="text-3xl md:text-4xl font-extrabold uppercase tracking-tight leading-[1.05]">
+              {movie.name}
+              {year && (
+                <span className="text-foreground/70"> ({year})</span>
+              )}
+            </h2>
 
-            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-              {ratingNum > 0 && (
-                <span className="flex items-center gap-1">
-                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                  <span className="text-foreground font-medium">{ratingNum.toFixed(1)}</span>
+            {/* Barra de chips: metadados */}
+            <div className="inline-flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-border/60 bg-secondary/60 px-5 py-3">
+              {year && (
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Calendar className="h-[18px] w-[18px] text-primary" />
+                  <span>{year}</span>
                 </span>
               )}
-              {year && <span>{year}</span>}
-              {info?.duration && <span>{info.duration}</span>}
-              {info?.genre && <span className="truncate max-w-[260px]">{info.genre}</span>}
+              {info?.genre && (
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Film className="h-[18px] w-[18px] text-primary" />
+                  <span className="truncate max-w-[260px]">{info.genre}</span>
+                </span>
+              )}
+              {info?.duration && (
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Clock className="h-[18px] w-[18px] text-primary" />
+                  <span>{info.duration}</span>
+                </span>
+              )}
+              {ratingNum > 0 && (
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Star className="h-[18px] w-[18px] fill-yellow-400 text-yellow-400" />
+                  <span>{ratingNum.toFixed(1)}</span>
+                </span>
+              )}
             </div>
 
-            {isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Carregando detalhes…
-              </div>
-            ) : plot ? (
-              <p className="text-sm text-foreground/90 leading-relaxed line-clamp-6">{plot}</p>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">Sem sinopse disponível.</p>
-            )}
-
+            {/* Card de Direção / Elenco */}
             {(info?.cast || info?.director) && (
-              <div className="text-xs text-muted-foreground space-y-1">
+              <div className="rounded-2xl border border-border/50 bg-secondary/40 p-4 space-y-3">
                 {info?.director && (
-                  <p>
-                    <span className="font-semibold text-foreground/80">Direção:</span>{" "}
-                    {info.director}
-                  </p>
+                  <div className="grid grid-cols-[auto,1fr] gap-3 items-start">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground/90 min-w-[88px]">
+                      <Video className="h-5 w-5 text-muted-foreground" />
+                      <span>Direção:</span>
+                    </div>
+                    <p className="text-sm text-foreground/75 leading-relaxed">
+                      {info.director}
+                    </p>
+                  </div>
                 )}
                 {info?.cast && (
-                  <p className="line-clamp-2">
-                    <span className="font-semibold text-foreground/80">Elenco:</span> {info.cast}
-                  </p>
+                  <div className="grid grid-cols-[auto,1fr] gap-3 items-start">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground/90 min-w-[88px]">
+                      <Users className="h-5 w-5 text-muted-foreground" />
+                      <span>Elenco:</span>
+                    </div>
+                    <p className="text-sm text-foreground/75 leading-relaxed line-clamp-3">
+                      {info.cast}
+                    </p>
+                  </div>
                 )}
               </div>
             )}
 
+            {/* Sinopse */}
+            <div className="rounded-2xl border border-border/50 bg-secondary/30 p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <Clapperboard className="h-5 w-5 text-primary" />
+                <h3 className="text-base font-bold">Sinopse</h3>
+              </div>
+              {isLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Carregando detalhes…
+                </div>
+              ) : plot ? (
+                <p className="text-sm md:text-base text-foreground/85 leading-relaxed">
+                  {plot}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">
+                  Sem sinopse disponível.
+                </p>
+              )}
+            </div>
+
             {incompatible && (
-              <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2.5 text-xs text-destructive">
+              <div className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <div className="space-y-1">
                   <p className="font-semibold">Conteúdo marcado como incompatível</p>
@@ -185,13 +247,13 @@ export function MovieDetailsDialog({
               </div>
             )}
 
-            <div className="flex flex-wrap gap-2 pt-2">
+            <div className="flex flex-wrap items-center gap-3 pt-2">
               <Button
                 size="lg"
                 onClick={() => onPlay(movie)}
-                className="bg-gradient-primary hover:opacity-90 shadow-glow gap-2"
+                className="h-12 px-8 rounded-full text-base font-semibold bg-gradient-primary hover:opacity-90 shadow-glow gap-2"
               >
-                <Play className="h-4 w-4 fill-current" />
+                <Play className="h-5 w-5 fill-current" />
                 Assistir
               </Button>
               {onToggleFavorite && (
@@ -199,10 +261,13 @@ export function MovieDetailsDialog({
                   size="lg"
                   variant="outline"
                   onClick={onToggleFavorite}
-                  className={cn("gap-2", isFavorite && "border-primary/60 text-primary")}
+                  className={cn(
+                    "h-12 px-6 rounded-full text-base gap-2",
+                    isFavorite && "border-primary/60 text-primary",
+                  )}
                 >
                   <Heart
-                    className={cn("h-4 w-4", isFavorite && "fill-primary text-primary")}
+                    className={cn("h-5 w-5", isFavorite && "fill-primary text-primary")}
                   />
                   {isFavorite ? "Favorito" : "Favoritar"}
                 </Button>
