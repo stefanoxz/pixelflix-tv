@@ -413,6 +413,7 @@ export function EndpointTestPanel({ allowedServers }: Props) {
     }
     setLoading(true);
     setResult(null);
+    setResolveResult(null);
     try {
       const { data, error } = await supabase.functions.invoke<TestResult>("admin-api", {
         body: {
