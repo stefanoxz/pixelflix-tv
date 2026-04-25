@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Film, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Film } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Player } from "@/components/Player";
+import { PlayerOverlay } from "@/components/PlayerOverlay";
 import { MovieDetailsDialog } from "@/components/MovieDetailsDialog";
 import { LibraryTopBar } from "@/components/library/LibraryTopBar";
 import { CategoryRail, type RailCategory } from "@/components/library/CategoryRail";
@@ -265,49 +265,22 @@ const Movies = () => {
         onToggleFavorite={openMovie ? () => toggle(openMovie.stream_id) : undefined}
       />
 
-      {playing && (
-        <PlayerOverlay
-          playing={playing}
-          url={playingRawUrl}
-          onClose={() => setPlaying(null)}
-        />
-      )}
+      <PlayerOverlay open={!!playing} onClose={() => setPlaying(null)}>
+        {playing && (
+          <Player
+            src={playingRawUrl}
+            rawUrl={playingRawUrl ?? undefined}
+            containerExt={playing.container_extension || "mp4"}
+            title={playing.name}
+            poster={proxyImageUrl(playing.stream_icon)}
+            streamId={playing.stream_id}
+            contentKind="movie"
+            onClose={() => setPlaying(null)}
+          />
+        )}
+      </PlayerOverlay>
     </div>
   );
 };
-
-function PlayerOverlay({
-  playing,
-  url,
-  onClose,
-}: {
-  playing: VodStream;
-  url: string | null;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-      <div className="relative w-full max-w-5xl">
-        <Button
-          variant="secondary"
-          size="icon"
-          className="absolute -top-12 right-0 z-10"
-          onClick={onClose}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-        <Player
-          src={url}
-          rawUrl={url ?? undefined}
-          containerExt={playing.container_extension || "mp4"}
-          title={playing.name}
-          poster={proxyImageUrl(playing.stream_icon)}
-          streamId={playing.stream_id}
-          contentKind="movie"
-        />
-      </div>
-    </div>
-  );
-}
 
 export default Movies;
