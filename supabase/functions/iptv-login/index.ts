@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
+import { proxiedFetch, isProxyEnabled } from "../_shared/proxied-fetch.ts";
 
-console.log("[iptv-login] boot");
+console.log("[iptv-login] boot, proxy_enabled=", isProxyEnabled());
 
 const ALLOWED_SUFFIXES = [".lovable.app", ".lovableproject.com", ".lovable.dev"];
 function corsFor(req: Request): Record<string, string> {
@@ -210,7 +211,7 @@ async function fetchOnce(
   ua: string,
 ): Promise<{ res: Response; body: string } | { error: string }> {
   try {
-    const res = await fetch(url, {
+    const res = await proxiedFetch(url, {
       headers: { "User-Agent": ua, Accept: "application/json, */*" },
       redirect: "follow",
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
