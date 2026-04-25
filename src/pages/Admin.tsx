@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { DnsErrorTrendChart } from "@/components/admin/DnsErrorTrendChart";
 import { ServerProbeDialog } from "@/components/admin/ServerProbeDialog";
+import { EndpointTestPanel } from "@/components/admin/EndpointTestPanel";
 import {
   Users,
   UserCheck,
@@ -46,6 +47,7 @@ import {
   X,
   Pencil,
   AlertOctagon,
+  FlaskConical,
   Wifi,
 } from "lucide-react";
 
@@ -696,6 +698,7 @@ const Admin = () => {
             { id: "dns-errors", label: "Erros por DNS", icon: AlertOctagon },
             { id: "users", label: "Usuários", icon: Users },
             { id: "servers", label: "DNS / Servidores", icon: Server },
+            { id: "endpoint-test", label: "Testar endpoint", icon: FlaskConical },
           ].map((item) => (
             <button
               key={item.id}
@@ -746,6 +749,7 @@ const Admin = () => {
                 : tab === "monitoring" ? "Monitoramento"
                 : tab === "dns-errors" ? "Erros por DNS"
                 : tab === "users" ? "Usuários"
+                : tab === "endpoint-test" ? "Testar endpoint"
                 : "DNS / Servidores"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
@@ -753,6 +757,7 @@ const Admin = () => {
                 : tab === "monitoring" ? "Sessões ativas, consumo e bloqueios — atualiza a cada 10s"
                 : tab === "dns-errors" ? "Distribuição de falhas por servidor — atualiza a cada 10s"
                 : tab === "users" ? "Quem está acessando a plataforma"
+                : tab === "endpoint-test" ? "Diagnóstico de uma DNS específica — exibe se a resposta veio direto ou via proxy"
                 : "Cadastre as DNS autorizadas. Sem cadastro prévio, o cliente não consegue logar."}
             </p>
           </div>
@@ -777,6 +782,15 @@ const Admin = () => {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
+          <TabsContent value="endpoint-test" className="space-y-6 mt-0">
+            <EndpointTestPanel
+              allowedServers={allowed.map((s) => ({
+                server_url: s.server_url,
+                label: s.label,
+              }))}
+            />
+          </TabsContent>
+
           <TabsContent value="monitoring" className="space-y-6 mt-0">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <Card className="p-5 bg-gradient-card border-border/50">

@@ -1,5 +1,6 @@
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
+import { proxiedFetch, isProxyEnabled } from "../_shared/proxied-fetch.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -668,6 +669,96 @@ Deno.serve(async (req) => {
         best_status: working?.status ?? null,
         results,
       });
+    }
+
+    // ---------- TEST ENDPOINT (admin diagnostics) ----------
+    // Faz UMA requisição contra um endpoint IPTV usando o pipeline real
+    // (proxiedFetch com fallback automático direto → proxy) e devolve qual
+    // rota foi efetivamente usada + status HTTP + preview do corpo.
+    //
+    // payload: {
+    //   server_url: string;          // ex: "http://bkpac.cc:80"
+    //   path?: string;               // default: "/player_api.php"
+    //   username?: string;           // se vier, anexa ?username=..&password=..
+    //   password?: string;
+    //   method?: "GET" | "HEAD";     // default GET
+    //   timeout_ms?: number;         // default 5000
+    // }
+    if (action === "test_endpoint") {
+      const rawUrl = String(payload?.server_url ?? "").trim();
+      if (!rawUrl) return bad("server_url obrigatório");
+      const path = String(payload?.path ?? "/player_api.php").trim() || "/player_api.php";
+      const username = payload?.username ? String(payload.username) : "";
+      const password = payload?.password ? String(payload.password) : "";
+      const method = (String(payload?.method ?? "GET").toUpperCase() === "HEAD") ? "HEAD" : "GET";
+      const timeoutMs = Math.min(15_000, Math.max(1_000, Number(payload?.timeout_ms ?? 5000)));
+
+      const base = rawUrl.replace(/\/+$/, "");
+      const fullPath = path.startsWith("/") ? path : `/${path}`;
+      let target = `${base}${fullPath}`;
+      if (username || password) {
+        const sep = target.includes("?") ? "&" : "?";
+        target += `${sep}username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+      }
+
+      const TEST_UA = "VLC/3.0.20 LibVLC/3.0.20";
+      const startedAt = Date.now();
+      try {
+        const res = await proxiedFetch(target, {
+          method,
+          headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
+          redirect: "follow",
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+        const text = method === "HEAD" ? "" : await res.text();
+        const elapsed = Date.now() - startedAt;
+        // @ts-ignore - tag injetada por proxiedFetch
+        const route: "direct" | "proxy" = (res as any)._iptvRoute ?? "direct";
+
+        let isXtream = false;
+        let auth: number | string | null = null;
+        if (text) {
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed?.user_info) {
+              isXtream = true;
+              auth = parsed.user_info.auth ?? null;
+            }
+          } catch { /* não é JSON */ }
+        }
+
+        return ok({
+          target,
+          method,
+          route,
+          proxy_configured: isProxyEnabled(),
+          ok: res.ok,
+          status: res.status,
+          status_text: res.statusText,
+          latency_ms: elapsed,
+          is_xtream: isXtream,
+          auth,
+          body_preview: text.slice(0, 500),
+          error: null as string | null,
+        });
+      } catch (err) {
+        const elapsed = Date.now() - startedAt;
+        const msg = err instanceof Error ? err.message : String(err);
+        return ok({
+          target,
+          method,
+          route: null as "direct" | "proxy" | null,
+          proxy_configured: isProxyEnabled(),
+          ok: false,
+          status: null as number | null,
+          status_text: null as string | null,
+          latency_ms: elapsed,
+          is_xtream: false,
+          auth: null as number | string | null,
+          body_preview: "",
+          error: msg,
+        });
+      }
     }
 
     return bad("Ação inválida");
