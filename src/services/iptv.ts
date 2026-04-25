@@ -1465,6 +1465,38 @@ export function shouldUseProxy(url: string | null | undefined): boolean {
   return stats.success - stats.fail <= -2;
 }
 
+// =============================================================================
+// Per-host preferred playback engine (HLS vs MPEG-TS).
+//
+// Persisted across sessions so that once a host successfully plays on a given
+// engine, the next session starts directly with that engine — no visible
+// fallback. Stored in localStorage under `iptv.engine.host:<host>`.
+// =============================================================================
+export type EnginePreference = "hls" | "mpegts";
+const ENGINE_PREFIX = "iptv.engine.host:";
+// Legacy key used by an earlier in-Player implementation. Read-only fallback
+// so we don't lose learned preferences from older sessions.
+const LEGACY_ENGINE_PREFIX = "player.engine.host:";
+
+export function getPreferredEngine(url: string | null | undefined): EnginePreference | null {
+  const host = hostFromUrl(url);
+  if (!host) return null;
+  try {
+    const v = localStorage.getItem(`${ENGINE_PREFIX}${host}`);
+    if (v === "hls" || v === "mpegts") return v;
+    const legacy = localStorage.getItem(`${LEGACY_ENGINE_PREFIX}${host}`);
+    if (legacy === "hls" || legacy === "mpegts") return legacy;
+  } catch { /* noop */ }
+  return null;
+}
+
+export function setPreferredEngine(url: string | null | undefined, engine: EnginePreference): void {
+  const host = hostFromUrl(url);
+  if (!host) return;
+  try { localStorage.setItem(`${ENGINE_PREFIX}${host}`, engine); }
+  catch { /* noop */ }
+}
+
 
 /**
  * Asks the backend for a signed, short-lived stream URL.
