@@ -1556,6 +1556,9 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     upstreamHost,
     status: STATUS_LABEL[status],
   };
+
+  // Auto-scroll the logs list to the bottom when new logs arrive
+  useEffect(() => {
     if (!logsPanelOpen) return;
     const el = logsListRef.current;
     if (el) el.scrollTop = el.scrollHeight;
