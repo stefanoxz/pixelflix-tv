@@ -75,6 +75,37 @@ export function isProxyEnabled(): boolean {
   return _proxyConfigured;
 }
 
+/**
+ * Força fetch DIRETO (sem fallback). Útil para diagnóstico A/B.
+ * Lança o erro original se a rede falhar.
+ */
+export async function directFetch(
+  input: string | URL | Request,
+  init?: RequestInit,
+): Promise<Response> {
+  const host = hostOf(input);
+  const res = await fetch(input, init);
+  console.log(`[proxied-fetch] route=direct(forced) host=${host} status=${res.status}`);
+  return tagRoute(res, "direct");
+}
+
+/**
+ * Força fetch via PROXY (sem fallback). Retorna null se proxy não configurado.
+ * Útil para diagnóstico A/B contra a rota direta.
+ */
+export async function proxyOnlyFetch(
+  input: string | URL | Request,
+  init?: RequestInit,
+): Promise<Response | null> {
+  const client = getClient();
+  if (!client) return null;
+  const host = hostOf(input);
+  // @ts-ignore - `client` é uma extensão Deno do RequestInit
+  const res = await fetch(input, { ...(init ?? {}), client });
+  console.log(`[proxied-fetch] route=proxy(forced) host=${host} status=${res.status}`);
+  return tagRoute(res, "proxy");
+}
+
 /** Erros de TRANSPORTE que justificam retry via proxy. */
 function isNetworkError(err: unknown): boolean {
   const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();

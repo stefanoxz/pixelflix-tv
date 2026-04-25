@@ -1,6 +1,6 @@
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
-import { proxiedFetch, isProxyEnabled } from "../_shared/proxied-fetch.ts";
+import { proxiedFetch, isProxyEnabled, directFetch, proxyOnlyFetch } from "../_shared/proxied-fetch.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -691,7 +691,10 @@ Deno.serve(async (req) => {
       const username = payload?.username ? String(payload.username) : "";
       const password = payload?.password ? String(payload.password) : "";
       const method = (String(payload?.method ?? "GET").toUpperCase() === "HEAD") ? "HEAD" : "GET";
-      const timeoutMs = Math.min(15_000, Math.max(1_000, Number(payload?.timeout_ms ?? 5000)));
+      const mode = String(payload?.mode ?? "full").toLowerCase() === "quick" ? "quick" : "full";
+      const testStream = payload?.test_stream === undefined ? Boolean(username && password) : Boolean(payload.test_stream);
+      const compareRoutes = payload?.compare_routes === undefined ? true : Boolean(payload.compare_routes);
+      const timeoutMs = Math.min(15_000, Math.max(1_000, Number(payload?.timeout_ms ?? 8000)));
 
       const base = rawUrl.replace(/\/+$/, "");
       const fullPath = path.startsWith("/") ? path : `/${path}`;
@@ -702,63 +705,348 @@ Deno.serve(async (req) => {
       }
 
       const TEST_UA = "VLC/3.0.20 LibVLC/3.0.20";
-      const startedAt = Date.now();
-      try {
-        const res = await proxiedFetch(target, {
-          method,
-          headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
-          redirect: "follow",
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-        const text = method === "HEAD" ? "" : await res.text();
-        const elapsed = Date.now() - startedAt;
-        // @ts-ignore - tag injetada por proxiedFetch
-        const route: "direct" | "proxy" = (res as any)._iptvRoute ?? "direct";
+      const HEADERS_OF_INTEREST = ["server", "content-type", "content-length", "cf-ray", "via", "x-cache", "x-powered-by", "location", "date"];
 
-        let isXtream = false;
-        let auth: number | string | null = null;
-        if (text) {
-          try {
-            const parsed = JSON.parse(text);
-            if (parsed?.user_info) {
-              isXtream = true;
-              auth = parsed.user_info.auth ?? null;
-            }
-          } catch { /* não é JSON */ }
+      const pickHeaders = (h: Headers) => {
+        const out: Record<string, string> = {};
+        for (const k of HEADERS_OF_INTEREST) {
+          const v = h.get(k);
+          if (v) out[k] = v.length > 200 ? v.slice(0, 200) + "…" : v;
+        }
+        return out;
+      };
+
+      const maskCreds = (u: string) =>
+        u.replace(/([?&])(username|password)=[^&]*/gi, "$1$2=***");
+
+      type ProbeResult = {
+        name: string;
+        url: string;
+        method: "GET" | "HEAD";
+        route: "direct" | "proxy" | null;
+        status: number | null;
+        status_text: string | null;
+        latency_ms: number;
+        headers: Record<string, string>;
+        body_size: number;
+        body_preview: string;
+        error: string | null;
+        meta?: Record<string, unknown>;
+      };
+
+      const runProbe = async (
+        name: string,
+        url: string,
+        opts: { method?: "GET" | "HEAD"; timeout?: number; capturePreview?: boolean } = {},
+      ): Promise<ProbeResult> => {
+        const m: "GET" | "HEAD" = opts.method ?? "GET";
+        const startedAt = Date.now();
+        try {
+          const res = await proxiedFetch(url, {
+            method: m,
+            headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
+            redirect: "follow",
+            signal: AbortSignal.timeout(opts.timeout ?? timeoutMs),
+          });
+          // @ts-ignore - tag injetada por proxiedFetch
+          const route: "direct" | "proxy" = (res as Response & { _iptvRoute?: "direct" | "proxy" })._iptvRoute ?? "direct";
+          let body = "";
+          let size = 0;
+          if (m !== "HEAD") {
+            body = await res.text();
+            size = body.length;
+          } else {
+            const cl = Number(res.headers.get("content-length"));
+            size = Number.isFinite(cl) ? cl : 0;
+            // consome para evitar leak
+            try { await res.body?.cancel(); } catch { /* noop */ }
+          }
+          return {
+            name,
+            url: maskCreds(url),
+            method: m,
+            route,
+            status: res.status,
+            status_text: res.statusText,
+            latency_ms: Date.now() - startedAt,
+            headers: pickHeaders(res.headers),
+            body_size: size,
+            body_preview: opts.capturePreview ? body.slice(0, 500) : "",
+            error: null,
+          };
+        } catch (err) {
+          return {
+            name,
+            url: maskCreds(url),
+            method: m,
+            route: null,
+            status: null,
+            status_text: null,
+            latency_ms: Date.now() - startedAt,
+            headers: {},
+            body_size: 0,
+            body_preview: "",
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      };
+
+      const probes: ProbeResult[] = [];
+
+      // 1) Probe raiz (TTFB básico, headers do servidor)
+      const rootProbe = await runProbe("root", `${base}/`, { method: "HEAD", timeout: Math.min(timeoutMs, 5000) });
+      probes.push(rootProbe);
+
+      // 2) Probe principal (auth)
+      const authProbe = await runProbe("auth", target, { method, capturePreview: true });
+      probes.push(authProbe);
+
+      // Parse Xtream do auth probe
+      let xtream: {
+        auth: number | string | null;
+        status: string | null;
+        exp_date: string | null;
+        active_cons: number | null;
+        max_connections: number | null;
+        created_at: string | null;
+        is_trial: string | null;
+        username: string | null;
+      } | null = null;
+
+      if (authProbe.body_preview) {
+        try {
+          const parsed = JSON.parse(authProbe.body_preview.length >= 500
+            ? (await (async () => {
+                // re-fetch corpo completo se preview foi truncado
+                try {
+                  const r2 = await proxiedFetch(target, {
+                    method: "GET",
+                    headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
+                    redirect: "follow",
+                    signal: AbortSignal.timeout(timeoutMs),
+                  });
+                  return await r2.text();
+                } catch { return authProbe.body_preview; }
+              })())
+            : authProbe.body_preview);
+          if (parsed?.user_info) {
+            const ui = parsed.user_info;
+            xtream = {
+              auth: ui.auth ?? null,
+              status: ui.status ?? null,
+              exp_date: ui.exp_date ?? null,
+              active_cons: ui.active_cons != null ? Number(ui.active_cons) : null,
+              max_connections: ui.max_connections != null ? Number(ui.max_connections) : null,
+              created_at: ui.created_at ?? null,
+              is_trial: ui.is_trial ?? null,
+              username: ui.username ?? null,
+            };
+            authProbe.meta = { xtream };
+          }
+        } catch { /* não é JSON */ }
+      }
+
+      const xtreamAuthOk = xtream?.auth === 1 || xtream?.auth === "1";
+
+      // 3) Bateria full: categorias em paralelo
+      if (mode === "full" && username && password) {
+        const buildXtreamUrl = (action: string) =>
+          `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=${action}`;
+
+        const catActions: Array<["live_categories" | "vod_categories" | "series_categories", string]> = [
+          ["live_categories", "get_live_categories"],
+          ["vod_categories", "get_vod_categories"],
+          ["series_categories", "get_series_categories"],
+        ];
+
+        const catResults = await Promise.all(
+          catActions.map(([name, act]) => runProbe(name, buildXtreamUrl(act), { method: "GET", capturePreview: true })),
+        );
+
+        // anota count de itens
+        for (const r of catResults) {
+          if (r.body_preview) {
+            try {
+              const arr = JSON.parse(r.body_preview);
+              if (Array.isArray(arr)) r.meta = { count: arr.length };
+            } catch { /* não é JSON */ }
+          }
+          // limpa preview pesado
+          r.body_preview = r.body_preview.slice(0, 200);
+          probes.push(r);
         }
 
-        return ok({
-          target,
-          method,
-          route,
-          proxy_configured: isProxyEnabled(),
-          ok: res.ok,
-          status: res.status,
-          status_text: res.statusText,
-          latency_ms: elapsed,
-          is_xtream: isXtream,
-          auth,
-          body_preview: text.slice(0, 500),
-          error: null as string | null,
-        });
-      } catch (err) {
-        const elapsed = Date.now() - startedAt;
-        const msg = err instanceof Error ? err.message : String(err);
-        return ok({
-          target,
-          method,
-          route: null as "direct" | "proxy" | null,
-          proxy_configured: isProxyEnabled(),
-          ok: false,
-          status: null as number | null,
-          status_text: null as string | null,
-          latency_ms: elapsed,
-          is_xtream: false,
-          auth: null as number | string | null,
-          body_preview: "",
-          error: msg,
-        });
+        // 4) Probe de stream — só se auth ok e flag ligada
+        if (testStream && xtreamAuthOk) {
+          try {
+            // pega 1ª categoria live
+            const liveCatProbe = catResults.find((r) => r.name === "live_categories");
+            let categoryId: string | null = null;
+            if (liveCatProbe && liveCatProbe.status === 200) {
+              const r = await proxiedFetch(buildXtreamUrl("get_live_categories"), {
+                method: "GET",
+                headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
+                signal: AbortSignal.timeout(timeoutMs),
+              });
+              const arr = await r.json().catch(() => null);
+              if (Array.isArray(arr) && arr.length > 0) {
+                categoryId = String(arr[0].category_id ?? arr[0].categoryId ?? "");
+              }
+            }
+
+            if (categoryId) {
+              const streamsUrl = `${buildXtreamUrl("get_live_streams")}&category_id=${encodeURIComponent(categoryId)}`;
+              const sr = await proxiedFetch(streamsUrl, {
+                method: "GET",
+                headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
+                signal: AbortSignal.timeout(timeoutMs),
+              });
+              const streams = await sr.json().catch(() => null);
+              if (Array.isArray(streams) && streams.length > 0) {
+                const streamId = String(streams[0].stream_id ?? streams[0].streamId ?? "");
+                if (streamId) {
+                  const streamUrl = `${base}/live/${encodeURIComponent(username)}/${encodeURIComponent(password)}/${encodeURIComponent(streamId)}.ts`;
+                  const streamProbe = await runProbe("stream_head", streamUrl, { method: "HEAD", timeout: Math.min(timeoutMs, 6000) });
+                  streamProbe.meta = { ...(streamProbe.meta ?? {}), category_id: categoryId, stream_id: streamId };
+                  probes.push(streamProbe);
+                }
+              }
+            }
+          } catch (err) {
+            probes.push({
+              name: "stream_head",
+              url: "—",
+              method: "HEAD",
+              route: null,
+              status: null,
+              status_text: null,
+              latency_ms: 0,
+              headers: {},
+              body_size: 0,
+              body_preview: "",
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
       }
+
+      // 5) Comparativo direto vs proxy (paralelo) sobre player_api.php
+      let route_comparison: {
+        direct: { status: number | null; latency_ms: number; error: string | null };
+        proxy: { status: number | null; latency_ms: number; error: string | null } | null;
+      } | null = null;
+
+      if (compareRoutes && isProxyEnabled()) {
+        const compareUrl = target;
+        const tDirect = Date.now();
+        const tProxy = Date.now();
+        const [dRes, pRes] = await Promise.all([
+          directFetch(compareUrl, {
+            method: "HEAD",
+            headers: { "User-Agent": TEST_UA },
+            redirect: "follow",
+            signal: AbortSignal.timeout(Math.min(timeoutMs, 6000)),
+          }).then((r) => ({ status: r.status, error: null as string | null, ts: Date.now() - tDirect, body: r.body }))
+            .catch((e) => ({ status: null as number | null, error: e instanceof Error ? e.message : String(e), ts: Date.now() - tDirect, body: null })),
+          proxyOnlyFetch(compareUrl, {
+            method: "HEAD",
+            headers: { "User-Agent": TEST_UA },
+            redirect: "follow",
+            signal: AbortSignal.timeout(Math.min(timeoutMs, 6000)),
+          }).then((r) => r ? ({ status: r.status, error: null as string | null, ts: Date.now() - tProxy, body: r.body }) : null)
+            .catch((e) => ({ status: null as number | null, error: e instanceof Error ? e.message : String(e), ts: Date.now() - tProxy, body: null })),
+        ]);
+        // consome bodies para evitar leak
+        try { await dRes?.body?.cancel?.(); } catch { /* noop */ }
+        try { await pRes?.body?.cancel?.(); } catch { /* noop */ }
+        route_comparison = {
+          direct: { status: dRes?.status ?? null, latency_ms: dRes?.ts ?? 0, error: dRes?.error ?? null },
+          proxy: pRes ? { status: pRes.status, latency_ms: pRes.ts, error: pRes.error } : null,
+        };
+      }
+
+      // 6) Veredito
+      type Verdict = { level: "ok" | "warn" | "error"; code: string; message: string };
+      const verdict: Verdict = (() => {
+        const allFailed = probes.every((p) => p.status === null);
+        if (allFailed) {
+          const directDead = route_comparison?.direct?.status === null && route_comparison?.direct?.error;
+          const proxyAlive = route_comparison?.proxy?.status && route_comparison.proxy.status < 500;
+          if (directDead && proxyAlive) {
+            return { level: "warn", code: "geo_blocked", message: "Rota direta falhou mas o proxy responde — provável bloqueio geográfico no servidor." };
+          }
+          return { level: "error", code: "offline", message: "Servidor não respondeu em nenhuma sonda. Verifique se a DNS está no ar." };
+        }
+
+        // Geo-block detectado mesmo com sondas parciais
+        if (route_comparison?.direct?.error && route_comparison.proxy && route_comparison.proxy.status && route_comparison.proxy.status < 500) {
+          return { level: "warn", code: "geo_blocked", message: "Direto falhou e proxy passou — bloqueio geográfico provável." };
+        }
+
+        if (xtream) {
+          if (!xtreamAuthOk) {
+            return { level: "error", code: "bad_credentials", message: "Servidor respondeu mas as credenciais foram rejeitadas (auth=0)." };
+          }
+          // Status da conta
+          const st = (xtream.status ?? "").toLowerCase();
+          if (st && st !== "active") {
+            return { level: "error", code: "account_inactive", message: `Conta Xtream com status "${xtream.status}".` };
+          }
+          // Expiração
+          if (xtream.exp_date) {
+            const expMs = Number(xtream.exp_date) * 1000;
+            if (Number.isFinite(expMs) && expMs < Date.now()) {
+              return { level: "error", code: "account_expired", message: "Conta Xtream expirada." };
+            }
+          }
+          // Stream falhou mas auth ok
+          const sp = probes.find((p) => p.name === "stream_head");
+          if (sp && (sp.status === null || (sp.status !== null && sp.status >= 400))) {
+            return { level: "warn", code: "stream_failed", message: `Auth ok, mas a entrega de stream falhou (${sp.status ?? sp.error ?? "sem resposta"}). Servidor pode estar saturado.` };
+          }
+          return { level: "ok", code: "healthy", message: "Servidor saudável: API Xtream e stream respondendo." };
+        }
+
+        // Sem Xtream parsing — usa só HTTP
+        const ap = probes.find((p) => p.name === "auth");
+        if (ap?.status && ap.status >= 200 && ap.status < 300) {
+          return { level: "ok", code: "http_ok", message: `Endpoint respondeu HTTP ${ap.status} em ${ap.latency_ms}ms.` };
+        }
+        if (ap?.status === 401) {
+          return { level: "warn", code: "http_401", message: "Servidor vivo, mas exige autenticação (401). Informe usuário/senha para testar Xtream." };
+        }
+        if (ap?.status && ap.status >= 500) {
+          return { level: "error", code: "http_5xx", message: `Servidor com erro interno (HTTP ${ap.status}).` };
+        }
+        if (ap?.error) {
+          return { level: "error", code: "network", message: `Falha de rede: ${ap.error}` };
+        }
+        return { level: "warn", code: "unknown", message: "Não foi possível determinar saúde com certeza." };
+      })();
+
+      // Resposta retro-compatível: campos antigos + novos
+      const primary = probes.find((p) => p.name === "auth")!;
+      return ok({
+        // Campos legados (mantidos para retrocompatibilidade)
+        target,
+        method,
+        route: primary.route,
+        proxy_configured: isProxyEnabled(),
+        ok: primary.status !== null && primary.status >= 200 && primary.status < 300,
+        status: primary.status,
+        status_text: primary.status_text,
+        latency_ms: primary.latency_ms,
+        is_xtream: !!xtream,
+        auth: xtream?.auth ?? null,
+        body_preview: primary.body_preview,
+        error: primary.error,
+        // Campos novos
+        mode,
+        verdict,
+        xtream,
+        probes,
+        route_comparison,
+      });
     }
 
     return bad("Ação inválida");
