@@ -49,6 +49,7 @@ import {
   AlertOctagon,
   FlaskConical,
   Wifi,
+  Flag,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
