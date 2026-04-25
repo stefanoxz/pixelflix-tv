@@ -1,138 +1,60 @@
-# Redesign da página /live com EPG e navegação responsiva
+# Correções na home, detalhes, favoritos e conta
 
-## Diagnóstico do layout atual
+Cinco mudanças relacionadas para melhorar navegação, descoberta e personalização.
 
-A `/live` hoje empilha tudo verticalmente: título → busca → categorias em pílulas horizontais → player + sidebar de canais simples (só nome + número). **Não há EPG**. No mobile a sidebar de canais cai abaixo do player, então o usuário rola muito antes de trocar de canal. Em desktop, ~30% do viewport vertical é gasto em chrome (header, busca, categorias) antes do vídeo aparecer.
+## 1. Destaques da home: clique abre o item correto, com detalhes
 
-## Layout novo
+**Problema atual:** em `src/pages/Highlights.tsx`, todos os cards (Filmes populares e Séries em alta) chamam `navigate("/movies")` ou `navigate("/series")` — ignorando qual item foi clicado. Além disso, ao abrir filmes/séries, não aparece nenhuma tela de detalhes; o player abre direto.
 
-### Desktop (≥1024px) — três colunas
-```text
-┌──────────┬──────────────────────────┬──────────────┐
-│Categorias│   Player + EPG do canal  │   Lista de   │
-│ (rail    │                          │   canais     │
-│  vertical│   ┌────────────────────┐ │  com EPG     │
-│  com     │   │                    │ │  agora/       │
-│  contagem│   │      Player        │ │  próximo +   │
-│  por cat)│   │                    │ │  progresso   │
-│          │   └────────────────────┘ │              │
-│ ★ Favs   │   "Agora: Jornal Nac."  │  [busca]     │
-│ # Todos  │   "Próx: Globo Repórter" │  ◉ Globo     │
-│ ▸ Abertos│   ▓▓▓▓▓░░░░ 60%         │     Jornal..│
-│ ▸ Filmes │                          │  ○ SBT       │
-│ ▸ Esporte│   ─────EPG timeline──── │     Novela.. │
-│ ▸ Notícia│   06h ┃ 07h ┃ 08h ┃     │  ○ Record    │
-└──────────┴──────────────────────────┴──────────────┘
-```
+**Solução:**
+- Passar o item clicado para a rota destino via `navigate("/movies", { state: { openId: m.stream_id } })` (e análogo para séries).
+- Em `src/pages/Movies.tsx` e `src/pages/Series.tsx`, ler `useLocation().state?.openId` no mount e abrir automaticamente o modal correspondente.
+- Criar uma **tela de detalhes do filme** antes do player: novo componente `MovieDetailsDialog` que mostra capa, título, sinopse, gênero, ano, duração, nota e botão "Assistir". Para isso, adicionar `getVodInfo(creds, vodId)` em `src/services/iptv.ts` (action `get_vod_info` da API Xtream — já suportada pelo edge function genérico `iptv-categories`).
+- Em Filmes, o clique no card abre o `MovieDetailsDialog`; o botão "Assistir" do diálogo é que dispara o `Player` em tela cheia (mesmo padrão já usado em Séries).
 
-- **Coluna esquerda (rail de categorias)**: lista vertical scrollável, com ★ Favoritos no topo, contador de canais por categoria, ícone por tipo. Recolhível para versão "icon-only" via toggle.
-- **Coluna central (player + EPG)**: player no topo, abaixo dele o **EPG do canal ativo** mostrando programa atual com barra de progresso (calculada de `start`/`stop` do `get_short_epg`) e os próximos 4-5 programas em linha do tempo horizontal.
-- **Coluna direita (lista de canais)**: cada item agora mostra logo + nome + **"Agora: <programa>"** + barra de progresso fininha + duração restante. Busca persistente no topo.
+## 2. Remover toggle "Apenas conteúdos compatíveis com navegador"
 
-### Tablet (768-1023px) — duas colunas
-- Categorias viram dropdown no topo (mantém o componente `CategoryFilter` atual mas como `Select`).
-- Player + lista lado a lado.
+Remover o `Switch`+`Label` de `src/pages/Movies.tsx` (linhas 75-87) e de `src/pages/Series.tsx` (linhas 251-262). Remover o estado `onlyCompatible` e o filtro associado em ambas as páginas. Episódios continuam mostrando o badge de formato e o botão "Abrir externo" quando aplicável — só some o filtro global.
 
-### Mobile (<768px) — player full + drawer
-- Player ocupa 100% da largura no topo, com info compacta: "Agora: <programa> · 80% concluído".
-- Botão flutuante "Canais" abre **Sheet/Drawer lateral** (shadcn `Sheet`) com busca + categorias accordion + lista. Fecha após selecionar.
-- Botão de **favoritar** (★) na barra de info do player — toggle persistido em `localStorage`.
-- Tabs no drawer: "Todos", "Favoritos", "Categorias".
+## 3. Favoritos para Filmes e Séries
 
-## Funcionalidades EPG
+Hoje só existe favorito de canal ao vivo (`useFavorites` em `src/pages/Live.tsx`). Vamos generalizar:
 
-### Backend (sem mudanças)
-A edge function `iptv-categories` já aceita qualquer `action`. Adicionamos no client:
+- Estender `src/hooks/useFavorites.ts` aceitando um `kind`: `"live" | "vod" | "series"`, persistindo em chaves separadas (`pixelflix:favorites:{kind}:{user}`).
+- Em `MediaCard` adicionar prop opcional `isFavorite` + `onToggleFavorite`, exibindo um botão de coração no canto superior direito (visível em hover/sempre no mobile).
+- Em `Movies.tsx` e `Series.tsx`: usar o hook, passar handlers ao `MediaCard`, adicionar tab/filtro "Favoritos" junto do filtro de categorias (botão extra antes da lista de categorias).
+- Em `MovieDetailsDialog` e no modal de série, incluir botão "Favoritar" no cabeçalho.
 
-```ts
-// src/services/iptv.ts
-export interface EpgEntry {
-  id: string;
-  title: string;        // base64 — decodificamos no client
-  description: string;  // base64 — decodificamos no client
-  start: string;        // "2025-04-25 12:00:00"
-  end: string;
-  start_timestamp: string;
-  stop_timestamp: string;
-}
+## 4. Aba "Conta" mostra favoritos reais
 
-export const getShortEpg = (c: IptvCredentials, streamId: number, limit = 6) =>
-  iptvFetch<{ epg_listings: EpgEntry[] }>(c, "get_short_epg", { stream_id: streamId, limit });
-```
+Hoje a página `src/pages/Account.tsx` exibe contadores hardcoded em `0` e só lista canais e filmes. Vamos:
 
-Cache react-query agressivo:
-- `staleTime: 5 min` por canal
-- Pré-fetch do canal ativo no `useEffect` quando `activeChannel` muda
-- Pré-fetch dos primeiros 10 canais visíveis na sidebar (debounced 500ms ao terminar de scrollar)
-- `gcTime: 30 min` para reaproveitar quando o usuário volta a um canal
+- Ler favoritos persistidos do `localStorage` para os três tipos (`live`, `vod`, `series`) usando o hook `useFavorites`.
+- Substituir os 2 cards estáticos por uma seção com 3 cards (Canais, Filmes, Séries) mostrando contagem real.
+- Abaixo dos contadores, listar miniaturas (até 6 por tipo) com link para abrir o item — ao clicar, navegar para `/live`, `/movies` ou `/series` com `state.openId` (mesma mecânica do passo 1). Para resolver nome/capa, reaproveitar as queries `getLiveStreams` / `getVodStreams` / `getSeries` (já cacheadas pelo React Query).
+- Estado vazio amigável ("Você ainda não favoritou nenhum filme") em cada seção sem itens.
 
-### Componentes novos
+## 5. Hero de Destaques rotacionando automaticamente
 
-1. **`EpgNowNext`** — usado na lista de canais e no header do player. Mostra programa atual + barra de progresso baseada em `Date.now()` vs `start_timestamp`/`stop_timestamp`. Atualiza a cada 30s via `useEffect` + `setInterval`. Fallback gracioso se o canal não tiver `epg_channel_id` ou se vier vazio.
+Em `src/pages/Highlights.tsx` o hero mostra apenas `movies[0]`. Vamos:
 
-2. **`EpgTimeline`** — lista horizontal scrollável dos próximos 4-5 programas do canal ativo, cada bloco com largura proporcional à duração. Inclui horário de início, título, e badge "AO VIVO" no programa atual.
+- Misturar top 8 filmes + top 4 séries para formar uma fila de destaques.
+- Usar `useState` + `useEffect` com `setInterval` de **8s** para alternar o destaque ativo (com `clearInterval` no unmount).
+- Adicionar transição suave (fade) no título/imagem de fundo, indicadores (dots) clicáveis abaixo do CTA e pausa ao passar o mouse (`onMouseEnter`/`Leave`).
+- Botão "Assistir agora" passa a abrir o item atual via `navigate` com `state.openId` (consistente com o passo 1) em vez de levar para a listagem genérica.
 
-3. **`ChannelCategoryRail`** — substitui `CategoryFilter` em desktop. Lista vertical com:
-   - ★ Favoritos (separador)
-   - # Todos os canais (contador)
-   - Categorias retornadas pela API (contador por categoria, calculado em memória)
-   - Suporte a colapsar/expandir grupos
-   - Variant `icon-only` (w-14) quando sidebar do shadcn está colapsada
+## Detalhes técnicos
 
-4. **`ChannelListItem`** — item rico da lista direita: logo, nome, "Agora: X" + progresso. Memoizado (`React.memo`) por `stream_id` + `epg_now_id` para evitar re-render.
+**Arquivos a editar:**
+- `src/services/iptv.ts` — adicionar `getVodInfo(creds, vodId)` e tipos `VodInfo`.
+- `src/hooks/useFavorites.ts` — aceitar parâmetro `kind`.
+- `src/components/MediaCard.tsx` — botão de favorito opcional.
+- `src/pages/Highlights.tsx` — rotação do hero, navegação com `state.openId`.
+- `src/pages/Movies.tsx` — abrir via `state.openId`, detalhes antes do player, remover toggle, favoritos + filtro favoritos.
+- `src/pages/Series.tsx` — abrir via `state.openId`, remover toggle, favoritos + filtro favoritos.
+- `src/pages/Account.tsx` — substituir cards estáticos por contagem + miniaturas reais.
 
-### Favoritos (localStorage)
-- Chave: `pixelflix:favorites:${username}` (escopado por usuário IPTV)
-- Toggle no item da lista (★ ao passar mouse) e no header do player
-- Categoria virtual "★ Favoritos" no topo da rail
+**Novos arquivos:**
+- `src/components/MovieDetailsDialog.tsx` — modal de detalhes (capa, sinopse, metadados, botão Assistir + Favoritar).
 
-### Navegação por teclado
-- `↑` / `↓` na lista de canais: muda canal ativo (com scroll-into-view)
-- `/`: foca o input de busca
-- `Esc`: limpa busca / fecha drawer mobile
-- `f`: favoritar canal atual
-- Implementado via `useEffect` global na página `/live` com `keydown` e ignora quando o foco está num `input/textarea`.
-
-## Performance
-
-- **Virtualização da lista de canais**: já que há provedores com 1000+ canais, usar `@tanstack/react-virtual` (ou solução manual com `IntersectionObserver`) para renderizar só os ~20 itens visíveis. Sem isso, render inicial trava com 2000 botões + imagens.
-- **`proxyImageUrl` com lazy loading**: `loading="lazy"` + `decoding="async"` + `width/height` definidos.
-- **`useDeferredValue`** no input de busca para não bloquear digitação.
-- **Memoização do filtro** (`useMemo`) já existe — manter, mas mover o sort de favoritos pra fora.
-
-## Arquivos a alterar
-
-```text
-src/services/iptv.ts                          # + EpgEntry, getShortEpg, decodeBase64Epg
-src/hooks/useEpgNow.ts                        # NOVO — hook react-query + tick 30s
-src/hooks/useFavorites.ts                     # NOVO — localStorage scoped por user
-src/hooks/useLiveKeyboardNav.ts               # NOVO — atalhos de teclado
-src/components/live/EpgNowNext.tsx            # NOVO
-src/components/live/EpgTimeline.tsx           # NOVO
-src/components/live/ChannelCategoryRail.tsx   # NOVO (substitui CategoryFilter no desktop)
-src/components/live/ChannelListItem.tsx       # NOVO (memoizado)
-src/components/live/VirtualChannelList.tsx    # NOVO (wrapper com virtualização)
-src/components/live/MobileChannelDrawer.tsx   # NOVO (Sheet do shadcn)
-src/components/live/PlayerInfoBar.tsx         # NOVO (info do canal + favoritar + Agora)
-src/pages/Live.tsx                            # reescrito com novo grid responsivo
-src/components/ChannelSidebar.tsx             # mantido como fallback / removido após migração
-src/components/CategoryFilter.tsx             # mantido para uso em /vod /series
-```
-
-## Não muda
-
-- **Player.tsx**: nenhuma alteração — só recebe novos props existentes.
-- **Edge functions**: `iptv-categories` já aceita `get_short_epg`, sem deploy necessário.
-- **Banco**: nenhuma migração.
-- **Restantes das rotas (`/vod`, `/series`)**: intocadas.
-
-## Resultado esperado
-
-| Antes | Depois |
-|---|---|
-| Sem EPG | EPG agora/próximo na lista + timeline no player |
-| Sidebar única empilhando 1000 canais | Lista virtualizada (60fps mesmo com 2000 canais) |
-| Categorias em pílulas horizontais | Rail vertical desktop + dropdown tablet + tabs mobile |
-| Mobile: scroll abaixo do player | Sheet/Drawer com botão flutuante |
-| Sem favoritos nem teclado | ★ favs + ↑↓ / Esc f atalhos |
-| ~30% viewport gasto em chrome | Player domina o viewport, info contextual |
+**Sem mudanças necessárias** em edge functions, banco de dados, autenticação ou na página `/live` (a não ser ajustar a chamada de `useFavorites` para o novo kind `"live"`).
