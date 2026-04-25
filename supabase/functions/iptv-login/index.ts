@@ -187,7 +187,12 @@ function buildVariants(serverBase: string): string[] {
     `https://${hostPort}`,
   ];
   if (!hasPort) {
-    candidates.push(`http://${host}:80`, `http://${host}:8080`, `http://${host}:8000`, `https://${host}:443`);
+    // Portas comuns em painéis Xtream / BLACK / Cloudflare-relayed.
+    // Ordem: HTTP padrão → HTTP alternativas → HTTPS Cloudflare → HTTPS padrão.
+    const httpPorts = [80, 8080, 8000, 2052, 2082, 2086, 8880];
+    const httpsPorts = [2095, 443];
+    for (const p of httpPorts) candidates.push(`http://${host}:${p}`);
+    for (const p of httpsPorts) candidates.push(`https://${host}:${p}`);
   }
 
   for (const c of candidates) {
