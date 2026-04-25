@@ -58,7 +58,7 @@ interface Props {
   snapshot: ReportSnapshot;
 }
 
-export function ReportProblemDialog({ open, onOpenChange, snapshot }: Props) {
+export const ReportProblemDialog = forwardRef<HTMLDivElement, Props>(function ReportProblemDialog({ open, onOpenChange, snapshot }, _ref) {
   const [category, setCategory] = useState<ReportCategory>("buffering");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
