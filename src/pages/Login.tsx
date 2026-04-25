@@ -59,7 +59,7 @@ const Login = () => {
         serverInfo: data.server_info,
       });
       toast.success(`Bem-vindo, ${data.user_info.username}!`);
-      navigate("/");
+      navigate("/sync");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
       toast.error(msg);
@@ -121,7 +121,7 @@ const Login = () => {
       } else {
         toast.success(`Bem-vindo, ${data.user_info.username}!`);
       }
-      navigate("/");
+      navigate("/sync");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
       toast.error(msg);
