@@ -59,7 +59,10 @@ import {
   normalizeExt,
   requestStreamToken,
   reportStreamEvent,
+  getHostProxyMode,
+  markHostProxyRequired,
   type PlaybackStrategy,
+  type StreamMode,
 } from "@/services/iptv";
 import { useIptv } from "@/context/IptvContext";
 import { cn } from "@/lib/utils";
@@ -227,6 +230,11 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const heartbeatRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
   const fragLoadErrorCountRef = useRef(0);
+  // Tracks the current segment delivery mode for this play session.
+  // Starts as "redirect"; flips to "stream" once the host is marked.
+  const segmentModeRef = useRef<StreamMode>("redirect");
+  // Guard so we only auto-restart once per session when activating proxy.
+  const proxyAutoRestartedRef = useRef(false);
 
   // Watchdog timers
   const bootstrapTimeoutRef = useRef<number | null>(null);
