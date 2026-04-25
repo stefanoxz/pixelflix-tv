@@ -116,6 +116,11 @@ async function tryFetch(url: string): Promise<{ res: Response; ua: string } | { 
         };
       } catch (e) {
         lastErr = e instanceof Error ? e.message : String(e);
+        // Erros de TLS/conexão não são resolvidos trocando User-Agent.
+        // Aborta cedo para que o caller tente a próxima variante (HTTP).
+        if (isTlsOrConnectError(lastErr)) {
+          return { error: lastErr, body: "" };
+        }
         await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
       }
     }
@@ -126,11 +131,9 @@ async function tryFetch(url: string): Promise<{ res: Response; ua: string } | { 
 function buildVariants(serverBase: string): string[] {
   const variants = new Set<string>();
   const stripped = serverBase.trim().replace(/\/+$/, "");
-  let proto = "http";
   let hostPort = stripped;
   const m = stripped.match(/^(https?):\/\/(.+)$/i);
   if (m) {
-    proto = m[1].toLowerCase();
     hostPort = m[2];
   }
   hostPort = hostPort.replace(/\s+/g, "");
@@ -139,12 +142,15 @@ function buildVariants(serverBase: string): string[] {
   const hasPort = /:\d+$/.test(hostPort);
   const host = hasPort ? hostPort.replace(/:\d+$/, "") : hostPort;
 
+  // Priorizar HTTP sempre primeiro — servidores IPTV Xtream costumam falhar
+  // o handshake TLS (SNI / UnrecognisedName / certificado inválido) e
+  // funcionar normalmente em HTTP plano.
   const candidates = [
-    `${proto}://${hostPort}`,
-    `${proto === "http" ? "https" : "http"}://${hostPort}`,
+    `http://${hostPort}`,
+    `https://${hostPort}`,
   ];
   if (!hasPort) {
-    candidates.push(`http://${host}:80`, `http://${host}:8080`, `https://${host}:443`);
+    candidates.push(`http://${host}:80`, `http://${host}:8080`, `http://${host}:8000`, `https://${host}:443`);
   }
 
   for (const c of candidates) {
@@ -156,6 +162,12 @@ function buildVariants(serverBase: string): string[] {
     }
   }
   return [...variants];
+}
+
+/** Erros de TLS/conexão recuperáveis trocando https→http. */
+function isTlsOrConnectError(msg: string): boolean {
+  return /UnrecognisedName|fatal alert|tls|certificate|ssl|handshake|Connect|ConnectionRefused|ConnectionReset/i
+    .test(msg);
 }
 
 async function attemptLogin(serverBase: string, username: string, password: string) {
