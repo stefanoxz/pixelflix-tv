@@ -2057,6 +2057,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           </div>
         </div>
       )}
+
+      <ReportProblemDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        snapshot={reportSnapshot}
+      />
     </div>
   );
 });
