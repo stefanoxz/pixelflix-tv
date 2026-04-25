@@ -1,10 +1,16 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Play, Tv, Film, Clapperboard } from "lucide-react";
+import { Loader2, Play, Tv, Film, Clapperboard, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MediaCard } from "@/components/MediaCard";
 import { useIptv } from "@/context/IptvContext";
 import { getLiveStreams, getVodStreams, getSeries, proxyImageUrl } from "@/services/iptv";
+import { cn } from "@/lib/utils";
+
+type FeaturedItem =
+  | { kind: "movie"; id: number; title: string; cover: string; rating: number }
+  | { kind: "series"; id: number; title: string; cover: string; rating: number };
 
 const Highlights = () => {
   const { session } = useIptv();
@@ -24,9 +30,68 @@ const Highlights = () => {
     queryFn: () => getSeries(creds),
   });
 
-  const featured = movies[0];
-  const topMovies = [...movies].sort((a, b) => b.rating_5based - a.rating_5based).slice(0, 12);
-  const topSeries = [...series].sort((a, b) => b.rating_5based - a.rating_5based).slice(0, 12);
+  const topMovies = useMemo(
+    () => [...movies].sort((a, b) => b.rating_5based - a.rating_5based).slice(0, 12),
+    [movies],
+  );
+  const topSeries = useMemo(
+    () => [...series].sort((a, b) => b.rating_5based - a.rating_5based).slice(0, 12),
+    [series],
+  );
+
+  // Fila de destaques (top 8 filmes + top 4 séries) embaralhada de forma estável
+  const featuredQueue = useMemo<FeaturedItem[]>(() => {
+    const m: FeaturedItem[] = topMovies.slice(0, 8).map((x) => ({
+      kind: "movie",
+      id: x.stream_id,
+      title: x.name,
+      cover: x.stream_icon,
+      rating: x.rating_5based,
+    }));
+    const s: FeaturedItem[] = topSeries.slice(0, 4).map((x) => ({
+      kind: "series",
+      id: x.series_id,
+      title: x.name,
+      cover: x.cover,
+      rating: x.rating_5based,
+    }));
+    // intercala filmes e séries
+    const out: FeaturedItem[] = [];
+    const max = Math.max(m.length, s.length);
+    for (let i = 0; i < max; i++) {
+      if (m[i]) out.push(m[i]);
+      if (i < s.length && s[i]) out.push(s[i]);
+    }
+    return out;
+  }, [topMovies, topSeries]);
+
+  const [activeIdx, setActiveIdx] = useState(0);
+  const pausedRef = useRef(false);
+
+  // Reseta o índice se o tamanho da fila muda
+  useEffect(() => {
+    if (activeIdx >= featuredQueue.length) setActiveIdx(0);
+  }, [featuredQueue.length, activeIdx]);
+
+  // Rotação automática a cada 8s
+  useEffect(() => {
+    if (featuredQueue.length <= 1) return;
+    const id = setInterval(() => {
+      if (pausedRef.current) return;
+      setActiveIdx((i) => (i + 1) % featuredQueue.length);
+    }, 8000);
+    return () => clearInterval(id);
+  }, [featuredQueue.length]);
+
+  const featured = featuredQueue[activeIdx];
+
+  const openFeatured = (item: FeaturedItem) => {
+    if (item.kind === "movie") {
+      navigate("/movies", { state: { openId: item.id } });
+    } else {
+      navigate("/series", { state: { openId: item.id } });
+    }
+  };
 
   if (loadingMovies && movies.length === 0) {
     return (
@@ -38,25 +103,36 @@ const Highlights = () => {
 
   return (
     <div className="space-y-12 pb-12">
-      {/* HERO */}
-      <section className="relative h-[60vh] min-h-[420px] w-full overflow-hidden">
-        {featured?.stream_icon && (
+      {/* HERO ROTATIVO */}
+      <section
+        className="relative h-[60vh] min-h-[420px] w-full overflow-hidden"
+        onMouseEnter={() => (pausedRef.current = true)}
+        onMouseLeave={() => (pausedRef.current = false)}
+      >
+        {/* camadas de fundo cross-fade */}
+        {featuredQueue.map((item, i) => (
           <img
-            src={proxyImageUrl(featured.stream_icon)}
-            alt={featured.name}
-            className="absolute inset-0 h-full w-full object-cover opacity-40"
+            key={`${item.kind}-${item.id}`}
+            src={proxyImageUrl(item.cover)}
+            alt=""
+            aria-hidden
+            className={cn(
+              "absolute inset-0 h-full w-full object-cover transition-opacity duration-700",
+              i === activeIdx ? "opacity-40" : "opacity-0",
+            )}
+            onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
           />
-        )}
+        ))}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-r from-background via-background/50 to-transparent" />
 
         <div className="relative h-full flex items-end pb-12 mx-auto max-w-[1600px] px-4 md:px-8">
-          <div className="max-w-2xl space-y-4 animate-fade-in">
+          <div key={featured?.id ?? "empty"} className="max-w-2xl space-y-4 animate-fade-in">
             <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-xs font-medium text-primary">
-              ✨ Em destaque
+              ✨ Em destaque {featured?.kind === "series" ? "· Série" : featured?.kind === "movie" ? "· Filme" : ""}
             </span>
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-tight">
-              {featured?.name || "Bem-vindo ao SuperTech"}
+              {featured?.title || "Bem-vindo ao SuperTech"}
             </h1>
             <p className="text-base md:text-lg text-muted-foreground max-w-xl">
               Descubra milhares de filmes, séries e canais ao vivo em alta qualidade.
@@ -65,17 +141,45 @@ const Highlights = () => {
             <div className="flex flex-wrap gap-3 pt-2">
               <Button
                 size="lg"
-                onClick={() => navigate("/movies")}
+                onClick={() => featured && openFeatured(featured)}
                 className="bg-gradient-primary hover:opacity-90 shadow-glow gap-2"
+                disabled={!featured}
               >
                 <Play className="h-4 w-4 fill-current" />
                 Assistir agora
               </Button>
-              <Button size="lg" variant="secondary" onClick={() => navigate("/live")} className="gap-2">
+              <Button
+                size="lg"
+                variant="secondary"
+                onClick={() => featured && openFeatured(featured)}
+                className="gap-2"
+                disabled={!featured}
+              >
+                <Info className="h-4 w-4" />
+                Mais informações
+              </Button>
+              <Button size="lg" variant="ghost" onClick={() => navigate("/live")} className="gap-2">
                 <Tv className="h-4 w-4" />
                 Canais ao vivo
               </Button>
             </div>
+
+            {/* Indicadores */}
+            {featuredQueue.length > 1 && (
+              <div className="flex gap-1.5 pt-3">
+                {featuredQueue.map((_, i) => (
+                  <button
+                    key={i}
+                    aria-label={`Ir para destaque ${i + 1}`}
+                    onClick={() => setActiveIdx(i)}
+                    className={cn(
+                      "h-1.5 rounded-full transition-all",
+                      i === activeIdx ? "w-8 bg-primary" : "w-3 bg-foreground/30 hover:bg-foreground/50",
+                    )}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -116,7 +220,7 @@ const Highlights = () => {
                   title={m.name}
                   cover={m.stream_icon}
                   rating={m.rating_5based}
-                  onClick={() => navigate("/movies")}
+                  onClick={() => navigate("/movies", { state: { openId: m.stream_id } })}
                 />
               ))}
             </div>
@@ -139,7 +243,7 @@ const Highlights = () => {
                   title={s.name}
                   cover={s.cover}
                   rating={s.rating_5based}
-                  onClick={() => navigate("/series")}
+                  onClick={() => navigate("/series", { state: { openId: s.series_id } })}
                 />
               ))}
             </div>
