@@ -396,6 +396,7 @@ interface ResolveResult {
 }
 
 export function EndpointTestPanel({ allowedServers }: Props) {
+  const [pasteUrl, setPasteUrl] = useState("");
   const [serverUrl, setServerUrl] = useState("");
   const [path, setPath] = useState("/player_api.php");
   const [username, setUsername] = useState("");
