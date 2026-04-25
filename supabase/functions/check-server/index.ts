@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
       .slice(0, 50);
 
     const results = await Promise.all(urls.map(pingOne));
-    return json({ results });
+    return json({ results, proxy_enabled: isProxyEnabled() });
   } catch (e) {
     console.error("[check-server] unhandled", e);
     return json({ error: "Erro interno" }, 500);
