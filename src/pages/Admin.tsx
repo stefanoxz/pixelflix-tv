@@ -46,6 +46,7 @@ import {
   X,
   Pencil,
   AlertOctagon,
+  Wifi,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
