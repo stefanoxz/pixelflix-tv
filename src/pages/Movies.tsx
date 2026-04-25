@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Film, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -13,10 +13,12 @@ import { PosterGrid } from "@/components/library/PosterGrid";
 import type { PosterItem } from "@/components/library/PosterCard";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useIptv } from "@/context/IptvContext";
 import {
   buildVodStreamUrl,
   getVodCategories,
+  getVodInfo,
   getVodStreams,
   proxyImageUrl,
   type VodStream,
@@ -32,9 +34,11 @@ const Movies = () => {
   const location = useLocation();
   const creds = session!.creds;
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
 
   const [activeCategory, setActiveCategory] = useState<string>(SPECIAL_ALL);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 250);
   const [activeId, setActiveId] = useState<number | undefined>();
   const [openMovie, setOpenMovie] = useState<VodStream | null>(null);
   const [playing, setPlaying] = useState<VodStream | null>(null);
@@ -64,6 +68,7 @@ const Movies = () => {
   }, [location.state, location.pathname, movies, navigate]);
 
   const filteredMovies = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
     return movies.filter((m) => {
       if (activeCategory === SPECIAL_FAVS) {
         if (!favorites.has(m.stream_id)) return false;
@@ -72,10 +77,10 @@ const Movies = () => {
       } else if (activeCategory !== SPECIAL_ALL && m.category_id !== activeCategory) {
         return false;
       }
-      if (search && !m.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (q && !m.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [movies, activeCategory, search, favorites]);
+  }, [movies, activeCategory, debouncedSearch, favorites]);
 
   const sortedMovies = useMemo(() => {
     if (activeCategory === SPECIAL_RECENT) {
@@ -180,6 +185,18 @@ const Movies = () => {
     },
   });
 
+  // Prefetch da sinopse ao passar o mouse / focar — fica instantâneo no clique.
+  const prefetchInfo = useCallback(
+    (it: PosterItem) => {
+      queryClient.prefetchQuery({
+        queryKey: ["vod-info", it.id],
+        queryFn: () => getVodInfo(creds, it.id),
+        staleTime: 1000 * 60 * 5,
+      });
+    },
+    [queryClient, creds],
+  );
+
   return (
     <div className="mx-auto max-w-[1800px] px-3 md:px-6 py-2 md:py-3">
       <LibraryTopBar
@@ -214,6 +231,7 @@ const Movies = () => {
               if (m) setOpenMovie(m);
             }}
             onToggleFavorite={toggle}
+            onHoverItem={prefetchInfo}
             search={search}
             onSearchChange={setSearch}
             searchInputRef={searchRef}

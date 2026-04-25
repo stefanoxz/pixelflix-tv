@@ -75,8 +75,10 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
                   <div className="h-12 w-20 shrink-0 rounded bg-secondary overflow-hidden flex items-center justify-center">
                     {ep.info?.movie_image ? (
                       <img
-                        src={proxyImageUrl(ep.info.movie_image)}
+                        src={proxyImageUrl(ep.info.movie_image, { w: 160, h: 96, q: 70 })}
                         alt=""
+                        loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-cover"
                         onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                       />
@@ -89,19 +91,15 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
                       <p className="text-xs font-medium text-foreground truncate">
                         {ep.episode_num}. {ep.title}
                       </p>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span
-                            className={cn(
-                              "text-[9px] font-semibold px-1 py-0.5 rounded border tracking-wide",
-                              toneClasses[badge.tone],
-                            )}
-                          >
-                            {badge.label}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>{badge.tooltip}</TooltipContent>
-                      </Tooltip>
+                      <span
+                        title={badge.tooltip}
+                        className={cn(
+                          "text-[9px] font-semibold px-1 py-0.5 rounded border tracking-wide",
+                          toneClasses[badge.tone],
+                        )}
+                      >
+                        {badge.label}
+                      </span>
                     </div>
                     {ep.info?.plot && (
                       <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">

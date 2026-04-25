@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Tv2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,11 +14,13 @@ import type { PosterItem } from "@/components/library/PosterCard";
 import { SeriesDetailsDialog } from "@/components/SeriesDetailsDialog";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useIptv } from "@/context/IptvContext";
 import {
   buildSeriesEpisodeUrl,
   getSeries,
   getSeriesCategories,
+  getSeriesInfo,
   proxyImageUrl,
   type Episode,
   type Series,
@@ -34,9 +36,11 @@ const SeriesPage = () => {
   const location = useLocation();
   const creds = session!.creds;
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
 
   const [activeCategory, setActiveCategory] = useState<string>(SPECIAL_ALL);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 250);
   const [activeId, setActiveId] = useState<number | undefined>();
   const [openSeries, setOpenSeries] = useState<Series | null>(null);
   const [playingEp, setPlayingEp] = useState<{ ep: Episode; coverFallback?: string } | null>(null);
@@ -66,6 +70,7 @@ const SeriesPage = () => {
   }, [location.state, location.pathname, series, navigate]);
 
   const filtered = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
     return series.filter((s) => {
       if (activeCategory === SPECIAL_FAVS) {
         if (!favorites.has(s.series_id)) return false;
@@ -74,10 +79,10 @@ const SeriesPage = () => {
       } else if (activeCategory !== SPECIAL_ALL && s.category_id !== activeCategory) {
         return false;
       }
-      if (search && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (q && !s.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [series, activeCategory, search, favorites]);
+  }, [series, activeCategory, debouncedSearch, favorites]);
 
   const sorted = useMemo(() => {
     if (activeCategory === SPECIAL_RECENT) {
@@ -171,6 +176,17 @@ const SeriesPage = () => {
     },
   });
 
+  const prefetchSeriesInfo = useCallback(
+    (it: PosterItem) => {
+      queryClient.prefetchQuery({
+        queryKey: ["series-info", it.id],
+        queryFn: () => getSeriesInfo(creds, it.id),
+        staleTime: 1000 * 60 * 5,
+      });
+    },
+    [queryClient, creds],
+  );
+
   const epUrl = playingEp
     ? buildSeriesEpisodeUrl(
         creds,
@@ -214,6 +230,7 @@ const SeriesPage = () => {
               if (s) setOpenSeries(s);
             }}
             onToggleFavorite={toggle}
+            onHoverItem={prefetchSeriesInfo}
             search={search}
             onSearchChange={setSearch}
             searchInputRef={searchRef}

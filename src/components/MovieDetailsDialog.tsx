@@ -42,6 +42,7 @@ export function MovieDetailsDialog({
     queryFn: () => getVodInfo(creds, movie!.stream_id),
     enabled: !!movie && open,
     staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
   });
 
   const upstreamHost = (() => {
@@ -74,8 +75,10 @@ export function MovieDetailsDialog({
         <div className="relative h-48 md:h-64 w-full overflow-hidden">
           {backdrop && (
             <img
-              src={proxyImageUrl(backdrop)}
+              src={proxyImageUrl(backdrop, { w: 900, q: 75 })}
               alt=""
+              loading="eager"
+              decoding="async"
               className="absolute inset-0 h-full w-full object-cover"
               onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
             />
@@ -95,8 +98,10 @@ export function MovieDetailsDialog({
           <div className="aspect-[2/3] w-32 md:w-full rounded-lg overflow-hidden bg-secondary shadow-card shrink-0">
             {cover ? (
               <img
-                src={proxyImageUrl(cover)}
+                src={proxyImageUrl(cover, { w: 400, h: 600, q: 80 })}
                 alt={movie.name}
+                loading="eager"
+                decoding="async"
                 className="h-full w-full object-cover"
                 onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")}
               />

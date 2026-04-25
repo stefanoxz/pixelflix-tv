@@ -11,6 +11,7 @@ import { MobileChannelDrawer } from "@/components/live/MobileChannelDrawer";
 import { PlayerInfoBar } from "@/components/live/PlayerInfoBar";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useLiveKeyboardNav } from "@/hooks/useLiveKeyboardNav";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useIptv } from "@/context/IptvContext";
 import {
   getLiveCategories,
@@ -44,6 +45,7 @@ const Live = () => {
 
   const [activeCategory, setActiveCategory] = useState("all");
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 250);
   const [activeChannel, setActiveChannel] = useState<LiveStream | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -74,7 +76,7 @@ const Live = () => {
 
   // Filtragem: categoria + favoritos + busca.
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
     return channels.filter((c) => {
       let matchCat = true;
       if (activeCategory === "favorites") matchCat = favorites.has(c.stream_id);
@@ -82,7 +84,7 @@ const Live = () => {
       const matchSearch = !q || c.name.toLowerCase().includes(q);
       return matchCat && matchSearch;
     });
-  }, [channels, activeCategory, search, favorites]);
+  }, [channels, activeCategory, debouncedSearch, favorites]);
 
   // Abre canal específico vindo de outra página (ex: Conta) com state.openId
   useEffect(() => {
