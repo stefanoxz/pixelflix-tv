@@ -325,6 +325,7 @@ Deno.serve(async (req) => {
         "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
         Referer: `${decoded.protocol}//${decoded.host}/`,
         Accept: "*/*",
+        Connection: "keep-alive",
       };
       const range = req.headers.get("range");
       if (range) upstreamHeaders["Range"] = range;
