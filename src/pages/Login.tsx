@@ -99,6 +99,10 @@ const Login = () => {
           <img
             src={logoSuperTech}
             alt="SuperTech"
+            width={96}
+            height={96}
+            fetchPriority="high"
+            decoding="async"
             className="mx-auto h-24 w-24 object-contain mb-4 drop-shadow-[0_0_24px_hsl(var(--primary)/0.45)]"
           />
           <h1 className="text-3xl font-bold tracking-tight">
