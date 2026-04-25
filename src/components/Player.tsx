@@ -85,6 +85,14 @@ interface PlayerProps {
   title?: string;
   autoPlay?: boolean;
   onClose?: () => void;
+  /**
+   * Identificador do conteúdo (stream_id do filme/episódio). Usado para
+   * marcar localmente como "incompatível" quando o navegador rejeita o
+   * codec, evitando novas tentativas que sabemos que vão falhar.
+   */
+  streamId?: number | string | null;
+  /** Tipo lógico do conteúdo (movie/episode/live), só pra reporte ao admin. */
+  contentKind?: "movie" | "episode" | "live";
 }
 
 type PlayerError = {
