@@ -211,7 +211,7 @@ async function fetchOnce(
   ua: string,
 ): Promise<{ res: Response; body: string } | { error: string }> {
   try {
-    const res = await fetch(url, {
+    const res = await proxiedFetch(url, {
       headers: { "User-Agent": ua, Accept: "application/json, */*" },
       redirect: "follow",
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
