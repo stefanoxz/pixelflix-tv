@@ -214,6 +214,24 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_admin_signups: {
+        Row: {
+          created_at: string
+          email: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       stream_events: {
         Row: {
           anon_user_id: string | null
