@@ -257,4 +257,8 @@ Deno.serve(async (req) => {
 
   const proxied = `${PROXY_BASE}?t=${encodeURIComponent(token)}`;
   return json({ url: proxied, expires_at: exp }, 200, cors);
+  } catch (e) {
+    console.error("[stream-token] unhandled", e);
+    return json({ error: "internal_error" }, 500, cors);
+  }
 });
