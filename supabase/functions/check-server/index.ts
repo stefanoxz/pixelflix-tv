@@ -61,12 +61,12 @@ async function singlePing(url: string): Promise<Attempt> {
   const target = url.replace(/\/+$/, "") + "/player_api.php";
   const start = Date.now();
   try {
-    let res = await fetch(target, {
+    let res = await proxiedFetch(target, {
       method: "HEAD",
       signal: AbortSignal.timeout(5000),
     });
     if (res.status === 405 || res.status === 501) {
-      res = await fetch(target, {
+      res = await proxiedFetch(target, {
         method: "GET",
         signal: AbortSignal.timeout(5000),
       });
