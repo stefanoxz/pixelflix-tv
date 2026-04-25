@@ -575,7 +575,18 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       firstFrameAtRef.current = null;
       manifestParsedAtRef.current = null;
       setupStartRef.current = performance.now();
-      pushLog({ source: "diag", level: "info", label: "setup_start", details: src ?? undefined });
+      pushLog({
+        source: "diag",
+        level: "info",
+        label: "setup_start",
+        details: src ?? undefined,
+        meta: {
+          ...captureNetMeta(),
+          host: extractUpstreamHost(rawUrl ?? src) ?? undefined,
+          engine,
+          ext: containerExt,
+        },
+      });
       if (logsPanelOpenRef.current) setLogsVersion((v) => v + 1);
 
       if (!src) {
