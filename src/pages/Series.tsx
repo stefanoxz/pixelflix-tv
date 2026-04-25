@@ -124,14 +124,25 @@ const SeriesPage = () => {
           <p className="text-sm text-muted-foreground mt-1">{series.length} séries disponíveis</p>
         </div>
 
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar série..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 bg-secondary/50 border-border/50"
-          />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative max-w-md flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar série..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 bg-secondary/50 border-border/50"
+            />
+          </div>
+          <Button
+            variant={showOnlyFavs ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowOnlyFavs((v) => !v)}
+            className={cn("gap-2", showOnlyFavs && "bg-primary text-primary-foreground")}
+          >
+            <Heart className={cn("h-4 w-4", showOnlyFavs && "fill-current")} />
+            Favoritos {favorites.size > 0 && `(${favorites.size})`}
+          </Button>
         </div>
 
         <CategoryFilter
@@ -143,6 +154,12 @@ const SeriesPage = () => {
         {isLoading ? (
           <div className="flex justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground">
+            {showOnlyFavs
+              ? "Você ainda não favoritou nenhuma série."
+              : "Nenhuma série encontrada."}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -156,6 +173,8 @@ const SeriesPage = () => {
                   setOpenSeries(s);
                   setActiveSeason(null);
                 }}
+                isFavorite={isFavorite(s.series_id)}
+                onToggleFavorite={() => toggle(s.series_id)}
               />
             ))}
           </div>
