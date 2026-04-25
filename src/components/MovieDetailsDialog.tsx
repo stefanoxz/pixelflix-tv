@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Heart, Loader2, Play, Star, X } from "lucide-react";
+import { AlertTriangle, Heart, Loader2, Play, Star, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,6 +15,8 @@ import {
   type IptvCredentials,
   type VodStream,
 } from "@/services/iptv";
+import { useIsIncompatible } from "@/hooks/useIsIncompatible";
+import { clearIncompatible } from "@/lib/incompatibleContent";
 
 interface MovieDetailsDialogProps {
   open: boolean;
