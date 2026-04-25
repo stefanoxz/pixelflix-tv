@@ -117,7 +117,7 @@ export function SeriesDetailsDialog({
                 <Loader2 className="h-4 w-4 animate-spin" /> Carregando detalhes…
               </div>
             ) : plot ? (
-              <p className="text-base text-foreground/90 leading-relaxed line-clamp-5">
+              <p className="text-base md:text-lg text-foreground/90 leading-relaxed">
                 {plot}
               </p>
             ) : (
@@ -125,7 +125,7 @@ export function SeriesDetailsDialog({
             )}
 
             {(cast || director) && (
-              <div className="text-sm text-muted-foreground space-y-1">
+              <div className="text-base text-muted-foreground space-y-1">
                 {director && (
                   <p>
                     <span className="font-semibold text-foreground/80">Direção:</span>{" "}
@@ -143,13 +143,13 @@ export function SeriesDetailsDialog({
             <div className="flex flex-wrap gap-2 pt-1">
               {onToggleFavorite && (
                 <Button
-                  size="default"
+                  size="lg"
                   variant="outline"
                   onClick={onToggleFavorite}
-                  className={cn("gap-2", isFavorite && "border-primary/60 text-primary")}
+                  className={cn("gap-2 text-base", isFavorite && "border-primary/60 text-primary")}
                 >
                   <Heart
-                    className={cn("h-4 w-4", isFavorite && "fill-primary text-primary")}
+                    className={cn("h-5 w-5", isFavorite && "fill-primary text-primary")}
                   />
                   {isFavorite ? "Favorito" : "Favoritar"}
                 </Button>
@@ -159,7 +159,7 @@ export function SeriesDetailsDialog({
         </div>
 
         <div className="px-4 md:px-6 pb-6">
-          <h3 className="text-lg font-semibold mb-3">Episódios</h3>
+          <h3 className="text-xl md:text-2xl font-bold mb-3">Episódios</h3>
           {data?.episodes ? (
             <SeriesEpisodesPanel
               episodesBySeason={data.episodes}
