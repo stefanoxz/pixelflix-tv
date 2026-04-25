@@ -59,6 +59,8 @@ const MUTATING_ACTIONS = new Set([
   "remove_server",
   "unblock_user",
   "evict_session",
+  "approve_signup",
+  "reject_signup",
 ]);
 
 Deno.serve(async (req) => {
