@@ -1,60 +1,85 @@
-# Correções na home, detalhes, favoritos e conta
+## Novo layout para Filmes e Séries (estilo IBO Pro)
 
-Cinco mudanças relacionadas para melhorar navegação, descoberta e personalização.
+Hoje Filmes e Séries usam um grid de pôsteres com filtros no topo. O IBO Pro usa um modelo de **3 colunas focado em TV/teclado**, com prévia rica e navegação fluida. Vou replicar esse padrão mantendo total responsividade (desktop, tablet, TV e mobile).
 
-## 1. Destaques da home: clique abre o item correto, com detalhes
+### Layout alvo (desktop / TV)
 
-**Problema atual:** em `src/pages/Highlights.tsx`, todos os cards (Filmes populares e Séries em alta) chamam `navigate("/movies")` ou `navigate("/series")` — ignorando qual item foi clicado. Além disso, ao abrir filmes/séries, não aparece nenhuma tela de detalhes; o player abre direto.
+```text
+┌──────────────┬────────────────────────────┬─────────────────────────────┐
+│ CATEGORIAS   │ LISTA DE TÍTULOS           │ PAINEL DE DETALHES          │
+│              │                            │                             │
+│ ▸ Todos      │ ▸ Duna: Parte 2     2024   │ [ backdrop grande ]         │
+│   Lançamentos│   Oppenheimer       2023   │                             │
+│   Ação       │   Interestelar      2014   │ Título · Ano · Duração      │
+│   Comédia    │   ...                      │ ★ 8.7   Ação, Drama         │
+│   Drama      │                            │                             │
+│   Infantil   │                            │ Sinopse curta...            │
+│   Favoritos♥ │                            │                             │
+│              │  [busca embutida no topo]  │ Direção · Elenco            │
+│              │                            │                             │
+│              │                            │ [ ▶ Assistir ] [ ♥ ] [ + ]  │
+└──────────────┴────────────────────────────┴─────────────────────────────┘
+```
 
-**Solução:**
-- Passar o item clicado para a rota destino via `navigate("/movies", { state: { openId: m.stream_id } })` (e análogo para séries).
-- Em `src/pages/Movies.tsx` e `src/pages/Series.tsx`, ler `useLocation().state?.openId` no mount e abrir automaticamente o modal correspondente.
-- Criar uma **tela de detalhes do filme** antes do player: novo componente `MovieDetailsDialog` que mostra capa, título, sinopse, gênero, ano, duração, nota e botão "Assistir". Para isso, adicionar `getVodInfo(creds, vodId)` em `src/services/iptv.ts` (action `get_vod_info` da API Xtream — já suportada pelo edge function genérico `iptv-categories`).
-- Em Filmes, o clique no card abre o `MovieDetailsDialog`; o botão "Assistir" do diálogo é que dispara o `Player` em tela cheia (mesmo padrão já usado em Séries).
+- **Esquerda (rail de categorias)**: lista vertical fixa, ícone + nome, com "Favoritos" e contador. Item ativo destacado em azul (cor primária do projeto).
+- **Centro (lista de títulos)**: linhas compactas (não cards) com mini-pôster 40×60, nome, ano, rating e badge de qualidade quando houver. Busca no topo. Virtualizada para suportar bibliotecas grandes.
+- **Direita (painel de prévia)**: atualiza ao passar o foco/hover, mostrando backdrop, sinopse, metadados e ações. Sem precisar abrir modal pra ver informações — é o grande diferencial do IBO.
+- **Player**: ao clicar em "Assistir", entra em modo cinema fullscreen com overlay escuro (já existente).
 
-## 2. Remover toggle "Apenas conteúdos compatíveis com navegador"
+### Layout em mobile / tablet pequeno
 
-Remover o `Switch`+`Label` de `src/pages/Movies.tsx` (linhas 75-87) e de `src/pages/Series.tsx` (linhas 251-262). Remover o estado `onlyCompatible` e o filtro associado em ambas as páginas. Episódios continuam mostrando o badge de formato e o botão "Abrir externo" quando aplicável — só some o filtro global.
+- Vira **pilha**: categorias viram chips horizontais no topo (mantém o `CategoryFilter` atual).
+- Lista ocupa a largura toda, item compacto (igual desktop, sem painel direito).
+- Tocar no item abre o `MovieDetailsDialog` / modal de série já existentes (preview ocupa a tela inteira), com botão "Assistir".
+- Breakpoint do split: `lg` (≥1024px) mostra 3 colunas; abaixo, layout pilha.
 
-## 3. Favoritos para Filmes e Séries
+### Séries — diferenças
 
-Hoje só existe favorito de canal ao vivo (`useFavorites` em `src/pages/Live.tsx`). Vamos generalizar:
+Mesma estrutura de 3 colunas, mas o painel direito tem 2 modos:
+1. **Visão da série**: backdrop, sinopse, elenco, botão "Ver episódios".
+2. **Episódios**: tabs de temporadas no topo do painel, lista de episódios abaixo (linha com thumb + título + sinopse curta + botão play / link externo). Mantém o tratamento atual de `isExternalOnly` e badges de formato.
 
-- Estender `src/hooks/useFavorites.ts` aceitando um `kind`: `"live" | "vod" | "series"`, persistindo em chaves separadas (`pixelflix:favorites:{kind}:{user}`).
-- Em `MediaCard` adicionar prop opcional `isFavorite` + `onToggleFavorite`, exibindo um botão de coração no canto superior direito (visível em hover/sempre no mobile).
-- Em `Movies.tsx` e `Series.tsx`: usar o hook, passar handlers ao `MediaCard`, adicionar tab/filtro "Favoritos" junto do filtro de categorias (botão extra antes da lista de categorias).
-- Em `MovieDetailsDialog` e no modal de série, incluir botão "Favoritar" no cabeçalho.
+### Navegação por teclado / TV
 
-## 4. Aba "Conta" mostra favoritos reais
+- `↑ ↓` move entre categorias quando o foco está no rail; entre títulos quando está na lista.
+- `← →` alterna entre as 3 colunas.
+- `Enter` abre/atualiza painel direito; segundo `Enter` no painel inicia playback.
+- `/` foca a busca; `f` alterna favorito do título focado; `Esc` sai do player.
+- Hook reutilizável `useGridKeyboardNav` (similar ao `useLiveKeyboardNav` já existente).
 
-Hoje a página `src/pages/Account.tsx` exibe contadores hardcoded em `0` e só lista canais e filmes. Vamos:
+### Novidades funcionais
 
-- Ler favoritos persistidos do `localStorage` para os três tipos (`live`, `vod`, `series`) usando o hook `useFavorites`.
-- Substituir os 2 cards estáticos por uma seção com 3 cards (Canais, Filmes, Séries) mostrando contagem real.
-- Abaixo dos contadores, listar miniaturas (até 6 por tipo) com link para abrir o item — ao clicar, navegar para `/live`, `/movies` ou `/series` com `state.openId` (mesma mecânica do passo 1). Para resolver nome/capa, reaproveitar as queries `getLiveStreams` / `getVodStreams` / `getSeries` (já cacheadas pelo React Query).
-- Estado vazio amigável ("Você ainda não favoritou nenhum filme") em cada seção sem itens.
+- **Painel sempre atualizado**: ao mover o foco/hover na lista do meio, o painel direito faz fetch de `getVodInfo` / `getSeriesInfo` (com cache do React Query, debounce 250 ms) — usuário vê detalhes sem clicar.
+- **Categoria "Favoritos"** fixa no topo do rail, mostrando contagem (substitui o botão atual de filtro de favoritos).
+- **Categoria "Recentes"** opcional (lista os últimos 30 itens por `added`/`last_modified`).
+- **Busca local** no topo da coluna central (mantém o que já existe, só muda de lugar).
+- Busca e categoria persistem na URL (`?cat=...&q=...`) pra deep-link.
 
-## 5. Hero de Destaques rotacionando automaticamente
+### Arquivos afetados
 
-Em `src/pages/Highlights.tsx` o hero mostra apenas `movies[0]`. Vamos:
+Novos:
+- `src/components/library/LibraryShell.tsx` — wrapper 3 colunas responsivo.
+- `src/components/library/CategoryRail.tsx` — rail vertical de categorias com favoritos/recentes.
+- `src/components/library/TitleList.tsx` — lista virtualizada (`@tanstack/react-virtual`, já instalado) com item linha.
+- `src/components/library/TitleListItem.tsx` — linha com thumb 40×60, nome, ano, rating, badge.
+- `src/components/library/PreviewPanel.tsx` — painel direito (backdrop + metadados + ações), com variante `vod` e `series`.
+- `src/components/library/SeriesEpisodesPanel.tsx` — temporadas + episódios dentro do painel direito.
+- `src/hooks/useGridKeyboardNav.ts` — navegação por setas/atalhos.
+- `src/hooks/useDebouncedValue.ts` — debounce do título focado pra evitar refetch agressivo.
 
-- Misturar top 8 filmes + top 4 séries para formar uma fila de destaques.
-- Usar `useState` + `useEffect` com `setInterval` de **8s** para alternar o destaque ativo (com `clearInterval` no unmount).
-- Adicionar transição suave (fade) no título/imagem de fundo, indicadores (dots) clicáveis abaixo do CTA e pausa ao passar o mouse (`onMouseEnter`/`Leave`).
-- Botão "Assistir agora" passa a abrir o item atual via `navigate` com `state.openId` (consistente com o passo 1) em vez de levar para a listagem genérica.
+Reescritos:
+- `src/pages/Movies.tsx` — passa a montar `LibraryShell` + `CategoryRail` + `TitleList` + `PreviewPanel`. Remove o grid de cards e o botão "Favoritos" do topo (agora é categoria).
+- `src/pages/Series.tsx` — mesma estrutura; `SeriesEpisodesPanel` substitui o modal grande.
 
-## Detalhes técnicos
+Atualizados (pequeno):
+- `src/components/MovieDetailsDialog.tsx` — vira fallback para mobile (já está pronto, sem mudança grande).
+- `src/services/iptv.ts` — adiciona helper `sortByRecent` e tipo `EnrichedVodInfo` se necessário.
 
-**Arquivos a editar:**
-- `src/services/iptv.ts` — adicionar `getVodInfo(creds, vodId)` e tipos `VodInfo`.
-- `src/hooks/useFavorites.ts` — aceitar parâmetro `kind`.
-- `src/components/MediaCard.tsx` — botão de favorito opcional.
-- `src/pages/Highlights.tsx` — rotação do hero, navegação com `state.openId`.
-- `src/pages/Movies.tsx` — abrir via `state.openId`, detalhes antes do player, remover toggle, favoritos + filtro favoritos.
-- `src/pages/Series.tsx` — abrir via `state.openId`, remover toggle, favoritos + filtro favoritos.
-- `src/pages/Account.tsx` — substituir cards estáticos por contagem + miniaturas reais.
+### Nota técnica
 
-**Novos arquivos:**
-- `src/components/MovieDetailsDialog.tsx` — modal de detalhes (capa, sinopse, metadados, botão Assistir + Favoritar).
-
-**Sem mudanças necessárias** em edge functions, banco de dados, autenticação ou na página `/live` (a não ser ajustar a chamada de `useFavorites` para o novo kind `"live"`).
+- Mantém React Query com `staleTime: 5min` pra `getVodInfo` / `getSeriesInfo`.
+- Painel direito faz prefetch em hover (250 ms) e no foco do teclado (imediato).
+- Virtualização: lista de títulos vira `useVirtualizer` com `estimateSize: 72`.
+- Acessibilidade: cada coluna tem `role="region"` + `aria-label`; itens da lista são `<button>` com `aria-selected`.
+- Performance: no breakpoint mobile o `PreviewPanel` não é montado (evita fetch desnecessário).
+- Sem mudanças de banco/edge functions.
