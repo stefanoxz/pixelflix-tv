@@ -505,6 +505,105 @@ async function invokeFn<T>(
   throw lastErr instanceof Error ? lastErr : new Error("Falha desconhecida");
 }
 
+/**
+ * Versão "à prova de crash" do invoke. Sempre retorna um envelope
+ * `{ data?, error? }` — nunca lança em respostas de erro estruturadas
+ * (HTTP 4xx/5xx que vêm com JSON). Apenas lança em falha de rede/timeout
+ * absolutos onde não conseguimos extrair JSON.
+ *
+ * Útil para o login: a edge agora SEMPRE devolve `{ success, code, error }`
+ * mesmo em erro lógico, então não queremos que o supabase-js transforme
+ * isso em throw.
+ */
+export type SafeResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; code: string; error: string; status?: number };
+
+export async function invokeSafe<T = unknown>(
+  name: string,
+  body: Record<string, unknown>,
+  kind: InvokeKind = "data",
+): Promise<SafeResult<T>> {
+  ensureMonitor();
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return { ok: false, code: "OFFLINE", error: "Sem conexão com a internet" };
+  }
+  const timeout = timeoutFor(kind);
+
+  try {
+    const exec = async () => {
+      const res = await supabase.functions.invoke(name, { body });
+      // supabase-js v2: em HTTP não-2xx, ele preenche `error` mas TAMBÉM
+      // costuma deixar `data` quando o body é JSON. Quando não conseguir
+      // ler o body, tentamos extrair manualmente do contexto.
+      const dataAny = res.data as any;
+      const errAny = res.error as any;
+
+      // Sucesso real
+      if (!errAny && dataAny && (dataAny.success !== false) && !dataAny.error) {
+        return { ok: true as const, data: dataAny as T };
+      }
+
+      // Erro estruturado vindo no body (preferido)
+      if (dataAny && typeof dataAny === "object" && (dataAny.code || dataAny.error)) {
+        return {
+          ok: false as const,
+          code: String(dataAny.code ?? "UNKNOWN_ERROR"),
+          error: String(dataAny.error ?? "Erro desconhecido"),
+        };
+      }
+
+      // FunctionsHttpError / FunctionsFetchError: tentar extrair JSON do response
+      if (errAny) {
+        const ctx = errAny.context;
+        if (ctx && typeof ctx.json === "function") {
+          try {
+            const parsed = await ctx.json();
+            if (parsed && typeof parsed === "object") {
+              return {
+                ok: false as const,
+                code: String(parsed.code ?? "UNKNOWN_ERROR"),
+                error: String(parsed.error ?? errAny.message ?? "Erro desconhecido"),
+                status: ctx.status,
+              };
+            }
+          } catch {
+            /* fallthrough */
+          }
+        }
+        return {
+          ok: false as const,
+          code: "UNKNOWN_ERROR",
+          error: String(errAny.message ?? "Falha ao contatar o servidor"),
+          status: ctx?.status,
+        };
+      }
+
+      return {
+        ok: false as const,
+        code: "UNKNOWN_ERROR",
+        error: "Resposta inválida do servidor",
+      };
+    };
+
+    const out = await withTimeout(enqueue(exec), timeout);
+    if (out.ok) noteRequestSuccess();
+    else noteRequestFailure("other");
+    return out;
+  } catch (e) {
+    const cls = classifyError(e);
+    noteRequestFailure(cls);
+    if (cls === "timeout") {
+      return { ok: false, code: "TIMEOUT", error: "Tempo esgotado ao contatar o servidor" };
+    }
+    if (cls === "network") {
+      return { ok: false, code: "NETWORK_ERROR", error: "Falha de rede ao contatar o servidor" };
+    }
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, code: "UNKNOWN_ERROR", error: msg };
+  }
+}
+
 // =============================================================================
 
 // =============================================================================
