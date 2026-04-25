@@ -75,8 +75,10 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }
                   <div className="h-12 w-20 shrink-0 rounded bg-secondary overflow-hidden flex items-center justify-center">
                     {ep.info?.movie_image ? (
                       <img
-                        src={proxyImageUrl(ep.info.movie_image)}
+                        src={proxyImageUrl(ep.info.movie_image, { w: 160, h: 96, q: 70 })}
                         alt=""
+                        loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-cover"
                         onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                       />
