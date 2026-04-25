@@ -160,6 +160,13 @@ const HLS_CONFIG: Partial<Hls["config"]> = {
 const HEARTBEAT_INTERVAL_MS = 45_000;
 const BOOTSTRAP_TIMEOUT_MS = 12_000;
 const STALL_TIMEOUT_MS = 8_000;
+/**
+ * Janela curta para detectar bloqueios de IP/hotlink em provedores como
+ * `bkpac.cc`: se o manifest carregou mas nenhum byte de vídeo chegou em
+ * 6s, ativamos o proxy de bytes pra esse host (cache 30min em
+ * `markHostProxyRequired`) sem esperar o bootstrap watchdog de 12s.
+ */
+const LOADEDDATA_WATCHDOG_MS = 6_000;
 
 const STATUS_LABEL: Record<DiagnosticStatus, string> = {
   connecting: "Conectando",
@@ -229,7 +236,9 @@ function extractUpstreamHost(rawUrl?: string | null): string | null {
   try { return new URL(rawUrl).host; } catch { return null; }
 }
 
-const FRAG_LOAD_ERROR_THRESHOLD = 3;
+// Reduzido de 3 → 2: 2 fragLoadError seguidos antes do primeiro frame já
+// indicam bloqueio de segmento (o auto-fallback ativa o proxy do host).
+const FRAG_LOAD_ERROR_THRESHOLD = 2;
 
 export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player({
   src,
@@ -260,6 +269,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   // Watchdog timers
   const bootstrapTimeoutRef = useRef<number | null>(null);
   const stallTimeoutRef = useRef<number | null>(null);
+  const loadeddataWatchdogRef = useRef<number | null>(null);
 
   // Diagnostic flags
   const playbackStartedRef = useRef(false);
@@ -378,6 +388,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       stallTimeoutRef.current = null;
     }
   };
+  const clearLoadeddataWatchdog = () => {
+    if (loadeddataWatchdogRef.current !== null) {
+      window.clearTimeout(loadeddataWatchdogRef.current);
+      loadeddataWatchdogRef.current = null;
+    }
+  };
 
   const teardown = () => {
     const v = videoRef.current;
@@ -408,6 +424,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     }
     clearBootstrapTimeout();
     clearStallTimeout();
+    clearLoadeddataWatchdog();
     playbackStartedRef.current = false;
     manifestReadyRef.current = false;
   };
@@ -542,7 +559,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         });
         clearBootstrapTimeout();
         clearStallTimeout();
-        // Show a discreet loading state during automatic restart.
+        clearLoadeddataWatchdog();
         setError(null);
         setLoading(true);
         updateStatus("connecting", `proxy auto: ${reason}`);
@@ -577,13 +594,30 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         });
         clearBootstrapTimeout();
         clearStallTimeout();
-        let upstreamHost: string | null = null;
-        try { if (src) upstreamHost = new URL(src).host; } catch { /* noop */ }
+        clearLoadeddataWatchdog();
+        let evHost: string | null = null;
+        try { if (src) evHost = new URL(src).host; } catch { /* noop */ }
         reportStreamEvent("stream_error", {
           url: src,
-          meta: { type: "stream_no_data", reason, host: upstreamHost, mode: segmentModeRef.current },
+          meta: { type: "stream_no_data", reason, host: evHost, mode: segmentModeRef.current },
         });
       };
+
+      // Loadeddata watchdog (6s): se o manifest carregou mas nenhum frame
+      // chegou, é assinatura típica de bloqueio de IP/hotlink no upstream.
+      // Ativa o proxy de bytes pra esse host antes do bootstrap de 12s — só
+      // quando ainda estamos em modo redirect e nunca tentamos restart.
+      loadeddataWatchdogRef.current = window.setTimeout(() => {
+        if (cancelled) return;
+        if (playbackStartedRef.current) return;
+        if (segmentModeRef.current === "stream") return;
+        if (proxyAutoRestartedRef.current) return;
+        // Só age se o manifest realmente chegou — evita falso positivo em
+        // conexão lenta onde nem o manifest entrou ainda (esse caso é do
+        // bootstrap watchdog).
+        if (!manifestReadyRef.current) return;
+        tryActivateProxyAndRestart("no_loadeddata_6s");
+      }, LOADEDDATA_WATCHDOG_MS);
 
       // Bootstrap watchdog: must reach `playing`/`loadeddata` within 12s.
       bootstrapTimeoutRef.current = window.setTimeout(() => {
@@ -1044,6 +1078,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setLoading(false);
       clearBootstrapTimeout();
       clearStallTimeout();
+      clearLoadeddataWatchdog();
       if (wasFirst) {
         firstFrameAtRef.current = performance.now();
         const ttff = setupStartRef.current ? Math.round(firstFrameAtRef.current - setupStartRef.current) : 0;
@@ -1063,6 +1098,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setLoading(false);
       clearBootstrapTimeout();
       clearStallTimeout();
+      clearLoadeddataWatchdog();
       const ttff = setupStartRef.current
         ? Math.round(performance.now() - setupStartRef.current)
         : 0;
