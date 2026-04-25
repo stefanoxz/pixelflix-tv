@@ -451,6 +451,14 @@ class TimeoutError extends Error {
   constructor() { super("timeout"); this.name = "TimeoutError"; }
 }
 
+export class MaxConnectionsError extends Error {
+  code = "MAX_CONNECTIONS" as const;
+  constructor(message = "Limite de telas atingido") {
+    super(message);
+    this.name = "MaxConnectionsError";
+  }
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(() => reject(new TimeoutError()), ms);
