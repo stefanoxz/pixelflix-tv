@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Search } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Input } from "@/components/ui/input";
 import { PosterCard, type PosterItem } from "./PosterCard";
@@ -20,6 +20,10 @@ interface Props {
   searchPlaceholder?: string;
   emptyMessage?: string;
   totalLabel?: string;
+  /** Quantos itens revelar inicialmente. */
+  pageSize?: number;
+  /** Quantos itens adicionar a cada vez que o sentinela entrar em view. */
+  pageIncrement?: number;
 }
 
 // Mapeia largura do container → colunas (mesmo do tailwind grid antigo).
@@ -32,8 +36,11 @@ function colsFor(width: number): number {
 }
 
 /**
- * Grade virtualizada de pôsteres. Renderiza só as linhas visíveis
- * (overscan de 4 linhas) — funciona com listas de milhares de itens
+ * Grade virtualizada de pôsteres com paginação incremental no client.
+ *
+ * Renderiza só as linhas visíveis (overscan de 4 linhas) e além disso só
+ * "expõe" `visibleCount` itens à virtualização — revelando mais conforme o
+ * usuário rola até o sentinela. Funciona com listas de milhares de itens
  * sem perda de fluidez. Marca de incompatibilidade vem de um único
  * subscriber global (sem listener por card).
  */
@@ -51,10 +58,25 @@ export function PosterGrid({
   searchPlaceholder = "Buscar...",
   emptyMessage = "Nenhum item encontrado.",
   totalLabel,
+  pageSize = 120,
+  pageIncrement = 60,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const incompatibleKeys = useIncompatibleKeys();
+
+  // Janela incremental — reseta quando a lista muda de identidade
+  // (nova busca / categoria / favoritos). `Movies`/`Series` memoizam
+  // `items`, então mudar o filtro gera nova referência.
+  const [visibleCount, setVisibleCount] = useState(() =>
+    Math.min(pageSize, items.length),
+  );
+  useEffect(() => {
+    setVisibleCount(Math.min(pageSize, items.length));
+    // role para o topo ao trocar a lista
+    if (containerRef.current) containerRef.current.scrollTop = 0;
+  }, [items, pageSize]);
 
   // Mede largura para decidir colunas + altura da linha (aspect 2:3 + gap).
   useLayoutEffect(() => {
@@ -75,7 +97,13 @@ export function PosterGrid({
   // aspect 2:3 = altura = largura * 1.5
   const rowHeight = colWidth ? Math.floor(colWidth * 1.5) + gap : 240;
 
-  const rowCount = Math.ceil(items.length / cols);
+  // Slice exposto à virtualização.
+  const visibleItems = useMemo(
+    () => items.slice(0, visibleCount),
+    [items, visibleCount],
+  );
+  const hasMore = visibleCount < items.length;
+  const rowCount = Math.ceil(visibleItems.length / cols);
 
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
@@ -89,18 +117,46 @@ export function PosterGrid({
     rowVirtualizer.measure();
   }, [rowHeight, rowVirtualizer]);
 
+  // IntersectionObserver no sentinela — revela mais ao se aproximar do fim.
+  useEffect(() => {
+    const root = containerRef.current;
+    const target = sentinelRef.current;
+    if (!root || !target || !hasMore) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            setVisibleCount((c) => Math.min(c + pageIncrement, items.length));
+          }
+        }
+      },
+      { root, rootMargin: "600px 0px" },
+    );
+    io.observe(target);
+    return () => io.disconnect();
+  }, [hasMore, items.length, pageIncrement]);
+
   // Scroll automático para manter o card ativo visível (navegação por teclado).
-  // Só roda quando activeId muda — não quando a lista muda — pra não bagunçar
-  // a posição do scroll quando o usuário só digita na busca.
+  // Se o ativo está além da janela revelada, expande a janela primeiro.
   const lastActiveRef = useRef<number | undefined>(activeId);
   useEffect(() => {
     if (activeId == null || activeId === lastActiveRef.current) return;
     lastActiveRef.current = activeId;
     const idx = items.findIndex((i) => i.id === activeId);
     if (idx < 0) return;
+    if (idx >= visibleCount) {
+      // expande até cobrir o índice (arredondando pra próximo múltiplo do incremento)
+      const needed = Math.min(
+        items.length,
+        Math.max(visibleCount + pageIncrement, idx + pageIncrement),
+      );
+      setVisibleCount(needed);
+      // o scroll efetivo acontece no próximo effect (após re-render)
+      return;
+    }
     const row = Math.floor(idx / cols);
     rowVirtualizer.scrollToIndex(row, { align: "auto" });
-  }, [activeId, items, cols, rowVirtualizer]);
+  }, [activeId, items, cols, rowVirtualizer, visibleCount, pageIncrement]);
 
   // Handlers estáveis pra preservar memoização do PosterCard.
   const handleOpen = useCallback(
@@ -116,6 +172,11 @@ export function PosterGrid({
     for (const it of items) if (it.host) return it.host;
     return null;
   }, [items]);
+
+  const totalSize = rowVirtualizer.getTotalSize();
+  // Sentinela posicionado logo acima do fim do conteúdo virtual,
+  // pra que `rootMargin: 600px` dispare antes de bater no fundo.
+  const sentinelTop = Math.max(0, totalSize - 1);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -151,14 +212,14 @@ export function PosterGrid({
           {containerWidth > 0 && (
             <div
               style={{
-                height: rowVirtualizer.getTotalSize(),
+                height: totalSize,
                 width: "100%",
                 position: "relative",
               }}
             >
               {rowVirtualizer.getVirtualItems().map((vRow) => {
                 const start = vRow.index * cols;
-                const rowItems = items.slice(start, start + cols);
+                const rowItems = visibleItems.slice(start, start + cols);
                 return (
                   <div
                     key={vRow.key}
@@ -198,8 +259,38 @@ export function PosterGrid({
                   </div>
                 );
               })}
+
+              {/* Sentinela — quando entra em view, revela o próximo chunk. */}
+              {hasMore && (
+                <div
+                  ref={sentinelRef}
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    top: sentinelTop,
+                    left: 0,
+                    width: "100%",
+                    height: 1,
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
             </div>
           )}
+
+          {/* Rodapé discreto: progresso da revelação. */}
+          <div className="py-3 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+            {hasMore ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>
+                  Mostrando {visibleItems.length} de {items.length}
+                </span>
+              </>
+            ) : items.length > pageSize ? (
+              <span>{items.length} itens carregados</span>
+            ) : null}
+          </div>
         </div>
       )}
     </div>
