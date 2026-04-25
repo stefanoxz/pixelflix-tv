@@ -191,4 +191,4 @@ export const ReportProblemDialog = forwardRef<HTMLDivElement, Props>(function Re
       </DialogContent>
     </Dialog>
   );
-}
+});
