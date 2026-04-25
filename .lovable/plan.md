@@ -1,48 +1,71 @@
-# Paginação incremental na grade virtualizada
+## Objetivo
 
-## Contexto importante
+Quando o usuário cola uma URL M3U na tela de login e o servidor extraído **autentica com sucesso** no Xtream, a DNS é cadastrada automaticamente na allowlist (`allowed_servers`) do painel admin, sem intervenção manual. Se a DNS já estiver cadastrada, nada muda. Se a autenticação falhar, nada é gravado.
 
-A API Xtream (`get_vod_streams`, `get_series`, `get_live_streams`) **não suporta paginação server-side** — ela retorna o catálogo inteiro num único JSON. Isso já é cacheado pelo React Query e usado para alimentar busca, filtros por categoria, favoritos e "Lançamentos" (que precisa do dataset completo pra ordenar por `added`).
+## Como vai funcionar (visão do usuário)
 
-Portanto, "carregar sob demanda" aqui significa **paginação incremental no client**: o array filtrado completo fica disponível para lógica (busca/filtro), mas a `PosterGrid` só **expõe** N itens por vez à virtualização, revelando os próximos chunks conforme o usuário rola.
-
-Benefício real: menos linhas calculadas pelo `useVirtualizer`, menos ranges medidos, menos imagens enfileiradas para download de uma vez (o `<img loading="lazy">` já evita fetch fora-de-tela, mas o browser ainda processa milhares de elementos virtuais — agora processa só o "revelado").
-
-## O que muda
-
-### 1. `PosterGrid.tsx` — janela incremental
-
-- Nova prop opcional `pageSize` (default `120`) e `pageIncrement` (default `60`).
-- Estado interno `visibleCount` reseta para `pageSize` sempre que `items` mudar de identidade (nova busca, nova categoria).
-- A virtualização passa a operar sobre `items.slice(0, visibleCount)` em vez de `items` direto.
-- Ao final da grade renderizamos uma **linha sentinela** (`<div ref={sentinelRef}>`) observada por `IntersectionObserver` com `rootMargin: "600px"` (pré-carrega antes de chegar no fim). Quando entra em view e ainda há itens, faz `setVisibleCount(c => Math.min(c + pageIncrement, items.length))`.
-- Fallback: se o usuário usar `Ctrl+End` / navegação por teclado para um `activeId` que está além do `visibleCount`, expandimos a janela até cobrir aquele índice antes do `scrollToIndex`.
-- Indicador visual discreto abaixo da grade: "Mostrando X de Y" + spinner enquanto há mais para revelar (substitui/complementa o `totalLabel` do topo).
-
-### 2. `Movies.tsx`, `Series.tsx`
-
-- Nenhuma mudança de lógica de dados — continuam passando o array filtrado inteiro para `PosterGrid`. A paginação fica encapsulada no componente da grade, então as duas páginas ganham o comportamento de graça.
-- Para "Lançamentos" (que já faz `.slice(0, 60)`), a paginação simplesmente não dispara (cabe na primeira página).
-
-### 3. `Live.tsx` / `VirtualChannelList.tsx`
-
-- **Fora do escopo deste plano.** Lista de canais é unidimensional, mais leve por item, e a UX de TV ao vivo espera a lista inteira disponível para zapping rápido por categoria. Posso fazer num passo separado se quiser.
+1. Usuário cola URL M3U → clica "Entrar com M3U"
+2. Sistema extrai `server`, `username`, `password`
+3. Tenta o login direto contra o servidor Xtream
+4. **Se autenticar:**
+   - Se DNS já está na allowlist → segue fluxo normal (login OK)
+   - Se DNS é nova → grava em `allowed_servers` com label inteligente, depois loga o usuário
+5. **Se falhar autenticação** → mensagem de erro normal, nada é gravado
 
 ## Detalhes técnicos
 
-- O reset de `visibleCount` usa `useEffect` com dependência `items` (referência). Como `Movies`/`Series` já memoizam `items` via `useMemo`, mudar busca/categoria gera nova referência → reset automático para o topo, comportamento esperado.
-- O `IntersectionObserver` é criado uma vez (`useEffect` com `[]`) e re-observa quando o `sentinelRef` muda. Como o sentinela vive **dentro** do container scrollável, passamos `root: containerRef.current` ao observer.
-- Cuidado com a interação do sentinela com o `position: absolute` dos rows virtualizados: o sentinela fica posicionado em `top: totalSize` dentro do mesmo wrapper relative — fora do fluxo dos rows mas dentro do espaço total, garantindo que só aparece quando o scroll chega perto do fim.
-- A altura total mostrada pela scrollbar continua refletindo só `visibleCount * rowHeight` (não a lista inteira) — o usuário vê a barra "crescer" conforme rola, mesma sensação de feed infinito do Instagram/Netflix.
-- Sem mudanças em React Query: o catálogo permanece em cache (`staleTime` atual) — só a renderização é incremental.
+### 1. Edge function `iptv-login` — novo modo `m3u_register`
+
+Adicionar um novo branch no `Deno.serve` (antes da validação de allowlist do modo default):
+
+- Recebe `{ mode: "m3u_register", server, username, password }`
+- **Pula** a checagem de allowlist (essa é a diferença crítica vs. modo default)
+- Roda `attemptLogin(server, username, password, null, admin)` direto
+- Se `r.ok === true`:
+  - Extrai label: `data.server_info?.url` (campo retornado pelo Xtream) → fallback para `new URL(usedVariant).hostname`
+  - `admin.from("allowed_servers").upsert({ server_url: normalizeServer(usedVariant), label, notes: "Auto-cadastrado via login M3U" }, { onConflict: "server_url" })` — upsert evita duplicar quando a DNS já existe
+  - Loga `login_events` com `reason: "m3u_auto_register"` em sucesso
+  - Retorna o mesmo payload do login normal (`success, user_info, server_info, server_url, allowed_servers, route`) para o cliente entrar direto
+- Se `r.ok === false`:
+  - Loga falha em `login_events`
+  - Retorna `errorResponse` com a mesma classificação do fluxo padrão (INVALID_CREDENTIALS, SERVER_UNREACHABLE, etc.)
+  - **Não grava** nada em `allowed_servers`
+
+Nada muda no modo default — usuários que digitam usuário/senha continuam sujeitos à allowlist como hoje.
+
+### 2. Cliente — `src/services/iptv.ts`
+
+Adicionar função `iptvLoginM3u({ server, username, password })` que invoca a edge function com `mode: "m3u_register"`. Reaproveita o mesmo tratamento de erro de `iptvLogin`.
+
+### 3. Cliente — `src/pages/Login.tsx`
+
+No `handleSubmitM3u`, substituir a chamada `performLogin(parsed.server, ...)` por um caminho dedicado que use `iptvLoginM3u`. Em sucesso:
+- `resolveStreamBase` igual ao fluxo atual
+- `setSession(...)` igual
+- `toast.success` mostra mensagem extra quando o backend indica que foi recém-cadastrada (campo opcional `auto_registered: true` no payload)
+- `navigate("/")`
+
+A aba "Usuário e senha" continua usando `iptvLogin` original (allowlist obrigatória).
+
+### 4. Painel admin
+
+Nenhuma mudança necessária — a DNS aparece automaticamente na lista `allowed_servers` da próxima vez que o admin abrir `/admin`, com o label e a nota indicando origem automática.
+
+## Segurança
+
+- O auto-cadastro só ocorre **após** o servidor Xtream retornar `user_info` válido com `auth: 1`. Isso garante que apenas DNS que realmente são servidores IPTV funcionais entrem na allowlist (não é possível injetar URLs aleatórias).
+- O `attemptLogin` mantém todos os limites de timeout, fallback de UA e validação atuais.
+- Nenhuma mudança em RLS — o `admin client` (service role) já é quem grava em `allowed_servers` na edge function.
+- O modo `m3u_register` exige `server`, `username` e `password` no body — sem trio completo retorna `BAD_REQUEST`.
 
 ## Arquivos afetados
 
-- `src/components/library/PosterGrid.tsx` — adiciona estado de janela, sentinela e observer.
-- (Nenhum outro arquivo precisa mudar; o contrato externo do componente ganha duas props opcionais com defaults sensatos.)
+- `supabase/functions/iptv-login/index.ts` — novo branch `mode: "m3u_register"` + upsert em `allowed_servers` em sucesso
+- `src/services/iptv.ts` — nova função `iptvLoginM3u`
+- `src/pages/Login.tsx` — `handleSubmitM3u` passa a usar a nova função
 
-## Fora de escopo
+## O que NÃO muda
 
-- Paginação real server-side (impossível com Xtream).
-- Lazy-load do catálogo inicial em si (já é uma única request cacheada — quebrar isso pioraria a busca).
-- Aplicar a mesma técnica em `VirtualChannelList` (pode vir num próximo passo se útil).
+- Login com usuário/senha continua bloqueado pela allowlist
+- Painel admin de DNS, RLS, tabelas, hooks, fluxo de favoritos, player — tudo intocado
+- Nenhuma migração de banco necessária (`allowed_servers` já tem todas as colunas)

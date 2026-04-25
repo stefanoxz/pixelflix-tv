@@ -873,6 +873,35 @@ export async function iptvLogin(
   return iptvLoginViaEdge(creds, startedAt, reason);
 }
 
+/**
+ * Login via URL M3U que AUTO-CADASTRA a DNS extraída na allowlist se o
+ * servidor Xtream autenticar com sucesso. Usado APENAS pela aba "URL M3U"
+ * da tela de login — o fluxo padrão (usuário/senha) continua exigindo que
+ * a DNS já esteja cadastrada pelo admin.
+ */
+export async function iptvLoginM3u(
+  creds: IptvCredentials,
+): Promise<LoginResponse & { server_url?: string; auto_registered?: boolean }> {
+  const startedAt = Date.now();
+  const result: SafeResult<LoginResponse & { server_url?: string; auto_registered?: boolean }> =
+    await invokeSafe<LoginResponse & { server_url?: string; auto_registered?: boolean }>(
+      "iptv-login",
+      { mode: "m3u_register", ...creds } as unknown as Record<string, unknown>,
+      "login",
+    );
+  if (result.ok === true) {
+    const durationMs = Date.now() - startedAt;
+    console.log("[iptv] method: m3u_register", {
+      durationMs,
+      auto_registered: (result.data as any)?.auto_registered,
+      server: (result.data as any)?.server_url,
+    });
+    return result.data;
+  }
+  console.log("[iptv] method: m3u_register fail", { code: result.code, error: result.error });
+  throw new Error(messageForLoginCode(result.code, result.error));
+}
+
 /** Mensagem amigável para cada `code` retornado pela edge `iptv-login`. */
 function messageForLoginCode(code: string, fallback: string): string {
   switch (code) {
