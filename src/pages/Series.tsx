@@ -246,7 +246,7 @@ const SeriesPage = () => {
                           ))}
                         </div>
 
-                        <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                        <div className="px-1">
                           <p className="text-xs text-muted-foreground">
                             {allEpisodes.length} episódios
                             {externalCount > 0 && (
@@ -258,19 +258,6 @@ const SeriesPage = () => {
                               </>
                             )}
                           </p>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              id="only-compatible"
-                              checked={onlyCompatible}
-                              onCheckedChange={setOnlyCompatible}
-                            />
-                            <Label
-                              htmlFor="only-compatible"
-                              className="text-xs text-muted-foreground cursor-pointer"
-                            >
-                              Apenas compatíveis com navegador
-                            </Label>
-                          </div>
                         </div>
 
                         <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
