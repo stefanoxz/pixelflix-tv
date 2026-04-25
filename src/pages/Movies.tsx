@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Film, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -13,10 +13,12 @@ import { PosterGrid } from "@/components/library/PosterGrid";
 import type { PosterItem } from "@/components/library/PosterCard";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useIptv } from "@/context/IptvContext";
 import {
   buildVodStreamUrl,
   getVodCategories,
+  getVodInfo,
   getVodStreams,
   proxyImageUrl,
   type VodStream,
