@@ -60,13 +60,15 @@ export function MovieDetailsDialog({
   const sourceBackdrop = Array.isArray(info?.backdrop_path)
     ? info!.backdrop_path[0]
     : (info?.backdrop_path as string | undefined) || sourceCover;
+  const sourcePlot = info?.plot;
   const releaseDate = info?.releasedate || info?.release_date;
   const year = releaseDate ? releaseDate.slice(0, 4) : null;
 
   // Fallback TMDB — chamado SEMPRE (antes de qualquer return) pra preservar a ordem dos hooks.
+  // Dispara quando faltar capa OU sinopse (no dialog é seguro — só 1 lookup por abertura).
   const { data: tmdb } = useTmdbFallback({
     type: "movie",
-    hasCover: !!sourceCover || !movie,
+    hasCover: (!!sourceCover && !!sourcePlot) || !movie,
     tmdb_id: info?.tmdb_id ?? undefined,
     name: movie?.name,
     year: year ?? undefined,
@@ -77,6 +79,7 @@ export function MovieDetailsDialog({
   const ratingNum = movie.rating_5based || (info?.rating_5based ?? 0);
   const cover = sourceCover || tmdb?.poster || null;
   const backdrop = sourceBackdrop || tmdb?.backdrop || cover;
+  const plot = sourcePlot || tmdb?.overview || null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -137,8 +140,8 @@ export function MovieDetailsDialog({
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> Carregando detalhes…
               </div>
-            ) : info?.plot ? (
-              <p className="text-sm text-foreground/90 leading-relaxed line-clamp-6">{info.plot}</p>
+            ) : plot ? (
+              <p className="text-sm text-foreground/90 leading-relaxed line-clamp-6">{plot}</p>
             ) : (
               <p className="text-sm text-muted-foreground italic">Sem sinopse disponível.</p>
             )}
