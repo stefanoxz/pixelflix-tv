@@ -78,13 +78,6 @@ export function SeriesDetailsDialog({
             />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-card via-card/70 to-transparent" />
-          <button
-            onClick={() => onOpenChange(false)}
-            className="absolute top-3 right-3 h-9 w-9 rounded-full bg-black/60 backdrop-blur flex items-center justify-center hover:bg-black/80 transition-smooth"
-            aria-label="Fechar"
-          >
-            <X className="h-4 w-4 text-white" />
-          </button>
         </div>
 
         <div className="px-4 md:px-6 pb-6 -mt-16 md:-mt-20 grid grid-cols-1 md:grid-cols-[160px,1fr] gap-4 md:gap-5 relative">
