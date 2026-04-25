@@ -78,6 +78,11 @@ interface PlayerProps {
   streamId?: number | string | null;
   /** Tipo lógico do conteúdo (movie/episode/live), só pra reporte ao admin. */
   contentKind?: "movie" | "episode" | "live";
+  /**
+   * Disparado quando o vídeo chega ao fim (evento nativo `ended`).
+   * Usado em séries para acionar o autoplay do próximo episódio.
+   */
+  onEnded?: () => void;
 }
 
 type PlayerError = {
@@ -310,7 +315,11 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   onClose,
   streamId,
   contentKind,
+  onEnded,
 }, forwardedRef) {
+  const onEndedRef = useRef<typeof onEnded>(onEnded);
+  useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
+
   const { session } = useIptv();
   const videoRef = useRef<HTMLVideoElement>(null);
   useImperativeHandle(forwardedRef, () => videoRef.current as HTMLVideoElement);
