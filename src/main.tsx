@@ -37,7 +37,8 @@ if (typeof window !== "undefined") {
   // que causavam "Failed to execute 'removeChild' on 'Node'" durante o
   // primeiro commit da rota /login.
   persistQueryClient({
-    queryClient,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    queryClient: queryClient as any,
     persister,
     maxAge: 12 * 60 * 60 * 1000,
     buster: "v1",
