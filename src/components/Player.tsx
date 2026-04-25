@@ -235,10 +235,10 @@ const STALL_TIMEOUT_MS = 20_000;
 /**
  * Janela curta para detectar bloqueios de IP/hotlink em provedores como
  * `bkpac.cc`: se o manifest carregou mas nenhum byte de vídeo chegou em
- * 6s, ativamos o proxy de bytes pra esse host (cache 30min em
+ * 4s, ativamos o proxy de bytes pra esse host (cache 30min em
  * `markHostProxyRequired`) sem esperar o bootstrap watchdog de 12s.
  */
-const LOADEDDATA_WATCHDOG_MS = 6_000;
+const LOADEDDATA_WATCHDOG_MS = 4_000;
 const HLS_FATAL_NETWORK_RETRY_LIMIT = 10;
 const HLS_FATAL_MEDIA_RETRY_LIMIT = 4;
 const HLS_FATAL_RETRY_BASE_DELAY_MS = 1_200;
@@ -312,9 +312,9 @@ function extractUpstreamHost(rawUrl?: string | null): string | null {
   try { return new URL(rawUrl).host; } catch { return null; }
 }
 
-// Reduzido de 3 → 2: 2 fragLoadError seguidos antes do primeiro frame já
-// indicam bloqueio de segmento (o auto-fallback ativa o proxy do host).
-const FRAG_LOAD_ERROR_THRESHOLD = 2;
+// Reduzido para 1: o primeiro fragLoadError antes do primeiro frame já
+// indica bloqueio de segmento — ativa o proxy do host imediatamente.
+const FRAG_LOAD_ERROR_THRESHOLD = 1;
 
 export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player({
   src,
