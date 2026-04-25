@@ -68,6 +68,7 @@ const Movies = () => {
   }, [location.state, location.pathname, movies, navigate]);
 
   const filteredMovies = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
     return movies.filter((m) => {
       if (activeCategory === SPECIAL_FAVS) {
         if (!favorites.has(m.stream_id)) return false;
@@ -76,10 +77,10 @@ const Movies = () => {
       } else if (activeCategory !== SPECIAL_ALL && m.category_id !== activeCategory) {
         return false;
       }
-      if (search && !m.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (q && !m.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [movies, activeCategory, search, favorites]);
+  }, [movies, activeCategory, debouncedSearch, favorites]);
 
   const sortedMovies = useMemo(() => {
     if (activeCategory === SPECIAL_RECENT) {
