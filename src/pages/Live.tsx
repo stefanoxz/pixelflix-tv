@@ -11,6 +11,7 @@ import { MobileChannelDrawer } from "@/components/live/MobileChannelDrawer";
 import { PlayerInfoBar } from "@/components/live/PlayerInfoBar";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useLiveKeyboardNav } from "@/hooks/useLiveKeyboardNav";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useIptv } from "@/context/IptvContext";
 import {
   getLiveCategories,
