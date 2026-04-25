@@ -183,11 +183,29 @@ const SeriesPage = () => {
         {openSeries && (
           <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm overflow-y-auto animate-fade-in">
             <div className="mx-auto max-w-6xl p-4 md:p-8">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-foreground truncate">{openSeries.name}</h2>
-                <Button variant="secondary" size="icon" onClick={closeModal}>
-                  <X className="h-4 w-4" />
-                </Button>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h2 className="text-2xl font-bold text-foreground truncate flex-1 min-w-0">{openSeries.name}</h2>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => toggle(openSeries.series_id)}
+                    className={cn("gap-2", isFavorite(openSeries.series_id) && "border-primary/60 text-primary")}
+                  >
+                    <Heart
+                      className={cn(
+                        "h-4 w-4",
+                        isFavorite(openSeries.series_id) && "fill-primary text-primary",
+                      )}
+                    />
+                    <span className="hidden sm:inline">
+                      {isFavorite(openSeries.series_id) ? "Favorito" : "Favoritar"}
+                    </span>
+                  </Button>
+                  <Button variant="secondary" size="icon" onClick={closeModal}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
               {playingEp ? (
