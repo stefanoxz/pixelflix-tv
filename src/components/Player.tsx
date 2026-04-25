@@ -559,7 +559,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         });
         clearBootstrapTimeout();
         clearStallTimeout();
-        // Show a discreet loading state during automatic restart.
+        clearLoadeddataWatchdog();
         setError(null);
         setLoading(true);
         updateStatus("connecting", `proxy auto: ${reason}`);
@@ -594,7 +594,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         });
         clearBootstrapTimeout();
         clearStallTimeout();
-        let upstreamHost: string | null = null;
+        clearLoadeddataWatchdog();
         try { if (src) upstreamHost = new URL(src).host; } catch { /* noop */ }
         reportStreamEvent("stream_error", {
           url: src,
@@ -1077,8 +1077,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setLoading(false);
       clearBootstrapTimeout();
       clearStallTimeout();
-      if (wasFirst) {
-        firstFrameAtRef.current = performance.now();
+      clearLoadeddataWatchdog();
         const ttff = setupStartRef.current ? Math.round(firstFrameAtRef.current - setupStartRef.current) : 0;
         pushLog({ source: "video", level: "info", label: "first_playing", details: `TTFF=${ttff}ms` });
         updateStatus("playback_started", null);
@@ -1096,8 +1095,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setLoading(false);
       clearBootstrapTimeout();
       clearStallTimeout();
-      const ttff = setupStartRef.current
-        ? Math.round(performance.now() - setupStartRef.current)
+      clearLoadeddataWatchdog();
         : 0;
       pushLog({ source: "video", level: "info", label: "loadeddata", details: `TTFF=${ttff}ms` });
       if (wasFirst) {
