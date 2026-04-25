@@ -1,6 +1,13 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import Hls, { type ErrorData } from "hls.js";
-import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink, Activity, Terminal, Trash2, VideoOff, ListVideo, Zap } from "lucide-react";
+import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink, Activity, Terminal, Trash2, VideoOff, ListVideo, Zap, Rewind, FastForward, Gauge, Flag } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ReportProblemDialog, type ReportSnapshot } from "@/components/ReportProblemDialog";
 
 /**
  * Motor de reprodução para canais ao vivo.
