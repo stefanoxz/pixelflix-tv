@@ -1364,6 +1364,108 @@ export function clearHostProxyMode(url: string | null | undefined): void {
   try { localStorage.removeItem(`${PROXY_HOST_PREFIX}${host}`); } catch { /* noop */ }
 }
 
+// =============================================================================
+// Per-host playback stats — auto-learning which servers misbehave.
+//
+// Independent of the short-lived PROXY_HOST cache above: stats accumulate
+// across many sessions, decay over 24h windows, and bias the initial
+// proxy-mode decision so problematic servers go straight to proxy without
+// a visible fallback.
+// =============================================================================
+const HOST_STATS_PREFIX = "iptv.host.stats:";
+const HOST_STATS_MAX_SCORE = 10;
+const HOST_STATS_DECAY_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h
+
+export interface HostStats {
+  success: number;
+  fail: number;
+  lastFailAt?: number;
+  lastSuccessAt?: number;
+}
+
+function applyHostStatsDecay(stats: HostStats): HostStats {
+  const now = Date.now();
+  if (stats.lastFailAt && now - stats.lastFailAt > HOST_STATS_DECAY_WINDOW_MS) {
+    stats.fail = Math.max(0, stats.fail - 1);
+    stats.lastFailAt = now;
+  }
+  if (stats.lastSuccessAt && now - stats.lastSuccessAt > HOST_STATS_DECAY_WINDOW_MS) {
+    stats.success = Math.max(0, stats.success - 1);
+    stats.lastSuccessAt = now;
+  }
+  return stats;
+}
+
+function saveHostStats(host: string, stats: HostStats): void {
+  try {
+    stats.success = Math.min(stats.success, HOST_STATS_MAX_SCORE);
+    stats.fail = Math.min(stats.fail, HOST_STATS_MAX_SCORE);
+    localStorage.setItem(`${HOST_STATS_PREFIX}${host}`, JSON.stringify(stats));
+  } catch { /* noop */ }
+}
+
+export function getHostStats(url: string | null | undefined): HostStats {
+  const host = hostFromUrl(url);
+  if (!host) return { success: 0, fail: 0 };
+  try {
+    const raw = localStorage.getItem(`${HOST_STATS_PREFIX}${host}`);
+    if (!raw) return { success: 0, fail: 0 };
+    const parsed = JSON.parse(raw) as Partial<HostStats>;
+    const stats: HostStats = {
+      success: typeof parsed.success === "number" ? parsed.success : 0,
+      fail: typeof parsed.fail === "number" ? parsed.fail : 0,
+      lastFailAt: parsed.lastFailAt,
+      lastSuccessAt: parsed.lastSuccessAt,
+    };
+    return applyHostStatsDecay(stats);
+  } catch {
+    return { success: 0, fail: 0 };
+  }
+}
+
+export function markHostSuccess(url: string | null | undefined): void {
+  const host = hostFromUrl(url);
+  if (!host) return;
+  const stats = getHostStats(url);
+  stats.success += 1;
+  stats.lastSuccessAt = Date.now();
+  saveHostStats(host, stats);
+}
+
+/**
+ * Increments the host failure counter — but only when `reason` looks like a
+ * real upstream failure (frag/no_data/network/rst). Codec issues, manual
+ * stops and other "user-side" failures are ignored to avoid penalizing
+ * otherwise-healthy servers.
+ */
+export function markHostFailure(url: string | null | undefined, reason?: string): void {
+  const host = hostFromUrl(url);
+  if (!host) return;
+  const r = (reason ?? "").toLowerCase();
+  const isRealFailure =
+    r.includes("frag") ||
+    r.includes("no_data") ||
+    r.includes("no_loadeddata") ||
+    r.includes("network") ||
+    r.includes("rst");
+  if (!isRealFailure) return;
+  const stats = getHostStats(url);
+  stats.fail += 1;
+  stats.lastFailAt = Date.now();
+  saveHostStats(host, stats);
+}
+
+/**
+ * Decide if a host should default to proxy based on accumulated stats.
+ * Threshold: at least 2 net failures before forcing proxy. Each future
+ * success rebalances the score and can flip the host back to direct.
+ */
+export function shouldUseProxy(url: string | null | undefined): boolean {
+  const stats = getHostStats(url);
+  return stats.success - stats.fail <= -2;
+}
+
+
 /**
  * Asks the backend for a signed, short-lived stream URL.
  * Requires an active Supabase session (anonymous or otherwise).
