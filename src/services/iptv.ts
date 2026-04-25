@@ -494,7 +494,25 @@ async function invokeFn<T>(
   const attempt = async (): Promise<T> => {
     const exec = async () => {
       const { data, error } = await supabase.functions.invoke(name, { body });
-      if (error) throw new Error(error.message || `Falha em ${name}`);
+      // Quando o edge devolve 4xx/5xx com JSON, supabase-js coloca a resposta
+      // em `error.context.response`. Tentamos extrair o JSON pra detectar
+      // códigos conhecidos (ex.: MAX_CONNECTIONS) antes de jogar erro genérico.
+      if (error) {
+        let parsed: { error?: string; code?: string } | null = null;
+        try {
+          const resp = (error as { context?: { response?: Response } })?.context?.response;
+          if (resp) parsed = await resp.clone().json().catch(() => null);
+        } catch { /* ignore */ }
+        if (parsed?.code === "MAX_CONNECTIONS") {
+          throw new MaxConnectionsError(parsed.error || "Limite de telas atingido");
+        }
+        throw new Error(parsed?.error || error.message || `Falha em ${name}`);
+      }
+      if ((data as { code?: string })?.code === "MAX_CONNECTIONS") {
+        throw new MaxConnectionsError(
+          (data as { error?: string })?.error || "Limite de telas atingido",
+        );
+      }
       if ((data as { error?: string })?.error) {
         throw new Error((data as { error: string }).error);
       }
