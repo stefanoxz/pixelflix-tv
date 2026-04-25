@@ -1623,6 +1623,13 @@ const Admin = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ServerProbeDialog
+        open={!!probeServer}
+        onOpenChange={(o) => !o && setProbeServer(null)}
+        serverUrl={probeServer?.server_url ?? null}
+        serverLabel={probeServer?.label ?? null}
+      />
     </div>
   );
 };
