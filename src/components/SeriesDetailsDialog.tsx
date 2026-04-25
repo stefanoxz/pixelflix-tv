@@ -1,5 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
-import { Heart, Loader2, Star } from "lucide-react";
+import {
+  Calendar,
+  Clapperboard,
+  Film,
+  Heart,
+  Layers,
+  ListVideo,
+  Loader2,
+  Star,
+  Tv,
+  Users,
+  Video,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -55,7 +67,6 @@ export function SeriesDetailsDialog({
   const year = releaseDate ? releaseDate.slice(0, 4) : null;
 
   // Fallback TMDB — chamado SEMPRE (antes de qualquer return) pra preservar a ordem dos hooks.
-  // Dispara quando faltar capa OU sinopse (no dialog é seguro — só 1 lookup por abertura).
   const { data: tmdb } = useTmdbFallback({
     type: "series",
     hasCover: (!!sourceCover && !!sourcePlot) || !series,
@@ -73,9 +84,20 @@ export function SeriesDetailsDialog({
   const cover = sourceCover || tmdb?.poster || null;
   const backdrop = tmdb?.backdrop || cover;
 
+  // Contagens de temporadas/episódios
+  const seasonsCount = data?.episodes ? Object.keys(data.episodes).length : 0;
+  const episodesCount = data?.episodes
+    ? Object.values(data.episodes).reduce((acc, eps) => acc + (eps?.length ?? 0), 0)
+    : 0;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl p-0 overflow-hidden border-border/50 bg-card max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className={cn(
+          "max-w-4xl p-0 overflow-hidden border-border/50 bg-card max-h-[92vh] overflow-y-auto",
+          "[&>button]:h-10 [&>button]:w-10 [&>button]:rounded-full [&>button]:bg-black/60 [&>button]:backdrop-blur [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:top-4 [&>button]:right-4 [&>button]:opacity-100 [&>button]:hover:bg-black/80 [&>button>svg]:h-5 [&>button>svg]:w-5",
+        )}
+      >
         <DialogTitle className="sr-only">{series.name}</DialogTitle>
         <DialogDescription className="sr-only">Detalhes da série</DialogDescription>
 
@@ -93,8 +115,8 @@ export function SeriesDetailsDialog({
           <div className="absolute inset-0 bg-gradient-to-t from-card via-card/70 to-transparent" />
         </div>
 
-        <div className="px-4 md:px-6 pb-6 -mt-16 md:-mt-20 grid grid-cols-1 md:grid-cols-[160px,1fr] gap-4 md:gap-5 relative">
-          <div className="aspect-[2/3] w-28 md:w-full rounded-lg overflow-hidden bg-secondary shadow-card shrink-0">
+        <div className="px-4 md:px-6 pb-6 -mt-16 md:-mt-20 grid grid-cols-1 md:grid-cols-[180px,1fr] gap-4 md:gap-6 relative">
+          <div className="aspect-[2/3] w-28 md:w-full rounded-xl overflow-hidden bg-secondary shadow-card shrink-0 ring-1 ring-border/40">
             {cover ? (
               <img
                 src={proxyImageUrl(cover, { w: 400, h: 600, q: 80 })}
@@ -111,55 +133,110 @@ export function SeriesDetailsDialog({
             )}
           </div>
 
-          <div className="min-w-0 space-y-3 md:space-y-4 md:pt-16">
-            <h2 className="text-2xl md:text-3xl font-bold leading-tight">{series.name}</h2>
+          <div className="min-w-0 space-y-4 md:pt-16">
+            {/* Título */}
+            <h2 className="text-3xl md:text-4xl font-extrabold uppercase tracking-tight leading-[1.05]">
+              {series.name}
+              {year && <span className="text-foreground/70"> ({year})</span>}
+            </h2>
 
-            <div className="flex flex-wrap items-center gap-3 text-base text-muted-foreground">
-              {ratingNum > 0 && (
-                <span className="flex items-center gap-1">
-                  <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                  <span className="text-foreground font-medium">{ratingNum.toFixed(1)}</span>
+            {/* Barra de chips: metadados */}
+            <div className="inline-flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-border/60 bg-secondary/60 px-5 py-3">
+              {seasonsCount > 0 && (
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Tv className="h-[18px] w-[18px] text-primary" />
+                  <span>
+                    {seasonsCount} Temporada{seasonsCount > 1 ? "s" : ""}
+                  </span>
                 </span>
               )}
-              {year && <span>{year}</span>}
-              {genre && <span className="truncate max-w-[260px]">{genre}</span>}
+              {episodesCount > 0 && (
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Layers className="h-[18px] w-[18px] text-primary" />
+                  <span>
+                    {episodesCount} Episódio{episodesCount > 1 ? "s" : ""}
+                  </span>
+                </span>
+              )}
+              {releaseDate && (
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Calendar className="h-[18px] w-[18px] text-primary" />
+                  <span>{releaseDate}</span>
+                </span>
+              )}
+              {genre && (
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Film className="h-[18px] w-[18px] text-primary" />
+                  <span className="truncate max-w-[260px]">{genre}</span>
+                </span>
+              )}
+              {ratingNum > 0 && (
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Star className="h-[18px] w-[18px] fill-yellow-400 text-yellow-400" />
+                  <span>{ratingNum.toFixed(1)}</span>
+                </span>
+              )}
             </div>
 
-            {isLoading ? (
-              <div className="flex items-center gap-2 text-base text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Carregando detalhes…
-              </div>
-            ) : plot ? (
-              <p className="text-base md:text-lg text-foreground/90 leading-relaxed">
-                {plot}
-              </p>
-            ) : (
-              <p className="text-base text-muted-foreground italic">Sem sinopse disponível.</p>
-            )}
-
+            {/* Card de Direção / Elenco */}
             {(cast || director) && (
-              <div className="text-base text-muted-foreground space-y-1">
+              <div className="rounded-2xl border border-border/50 bg-secondary/40 p-4 space-y-3">
                 {director && (
-                  <p>
-                    <span className="font-semibold text-foreground/80">Direção:</span>{" "}
-                    {director}
-                  </p>
+                  <div className="grid grid-cols-[auto,1fr] gap-3 items-start">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground/90 min-w-[88px]">
+                      <Video className="h-5 w-5 text-muted-foreground" />
+                      <span>Direção:</span>
+                    </div>
+                    <p className="text-sm text-foreground/75 leading-relaxed">
+                      {director}
+                    </p>
+                  </div>
                 )}
                 {cast && (
-                  <p className="line-clamp-2">
-                    <span className="font-semibold text-foreground/80">Elenco:</span> {cast}
-                  </p>
+                  <div className="grid grid-cols-[auto,1fr] gap-3 items-start">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground/90 min-w-[88px]">
+                      <Users className="h-5 w-5 text-muted-foreground" />
+                      <span>Elenco:</span>
+                    </div>
+                    <p className="text-sm text-foreground/75 leading-relaxed line-clamp-3">
+                      {cast}
+                    </p>
+                  </div>
                 )}
               </div>
             )}
 
-            <div className="flex flex-wrap gap-2 pt-1">
+            {/* Sinopse */}
+            <div className="rounded-2xl border border-border/50 bg-secondary/30 p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <Clapperboard className="h-5 w-5 text-primary" />
+                <h3 className="text-base font-bold">Sinopse</h3>
+              </div>
+              {isLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Carregando detalhes…
+                </div>
+              ) : plot ? (
+                <p className="text-sm md:text-base text-foreground/85 leading-relaxed">
+                  {plot}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">
+                  Sem sinopse disponível.
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 pt-1">
               {onToggleFavorite && (
                 <Button
                   size="lg"
                   variant="outline"
                   onClick={onToggleFavorite}
-                  className={cn("gap-2 text-base", isFavorite && "border-primary/60 text-primary")}
+                  className={cn(
+                    "h-12 px-6 rounded-full text-base gap-2",
+                    isFavorite && "border-primary/60 text-primary",
+                  )}
                 >
                   <Heart
                     className={cn("h-5 w-5", isFavorite && "fill-primary text-primary")}
@@ -172,7 +249,10 @@ export function SeriesDetailsDialog({
         </div>
 
         <div className="px-4 md:px-6 pb-6">
-          <h3 className="text-2xl md:text-3xl font-bold mb-4">Episódios</h3>
+          <div className="flex items-center gap-2 mb-4">
+            <ListVideo className="h-[22px] w-[22px] text-primary" />
+            <h3 className="text-2xl md:text-3xl font-bold">Episódios</h3>
+          </div>
           {data?.episodes ? (
             <SeriesEpisodesPanel
               episodesBySeason={data.episodes}
