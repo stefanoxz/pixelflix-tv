@@ -450,16 +450,17 @@ Deno.serve(async (req) => {
       const since24h = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
 
       const [sessions, blocks, recentErrors, topRej] = await Promise.all([
-        admin.from("active_sessions").select("anon_user_id, iptv_username, ip, started_at, last_seen_at, content_kind, content_title, content_id, content_started_at").gt("last_seen_at", cutoff).order("started_at", { ascending: false }).limit(200),
+        admin.from("active_sessions").select("anon_user_id, iptv_username, ip, server_url, started_at, last_seen_at, content_kind, content_title, content_id, content_started_at").gt("last_seen_at", cutoff).order("started_at", { ascending: false }).limit(200),
         admin.from("user_blocks").select("anon_user_id, blocked_until, reason, created_at").gt("blocked_until", new Date().toISOString()).order("blocked_until", { ascending: false }),
         admin.from("stream_events").select("id, anon_user_id, event_type, ip, meta, created_at").gte("created_at", since24h).in("event_type", ["stream_error", "token_rejected", "rate_limited", "user_blocked", "suspicious_pattern"]).order("created_at", { ascending: false }).limit(50),
         admin.from("stream_events").select("ip").eq("event_type", "token_rejected").gte("created_at", since24h),
       ]);
 
-      const sessionsList = (sessions.data ?? []).map((s: { anon_user_id: string; iptv_username: string | null; ip: string | null; started_at: string; last_seen_at: string; content_kind: string | null; content_title: string | null; content_id: string | null; content_started_at: string | null }) => ({
+      const sessionsList = (sessions.data ?? []).map((s: { anon_user_id: string; iptv_username: string | null; ip: string | null; server_url: string | null; started_at: string; last_seen_at: string; content_kind: string | null; content_title: string | null; content_id: string | null; content_started_at: string | null }) => ({
         anon_user_id: s.anon_user_id,
         iptv_username: s.iptv_username,
         ip_masked: maskIp(s.ip),
+        server_url: s.server_url,
         started_at: s.started_at,
         last_seen_at: s.last_seen_at,
         duration_s: Math.floor((Date.now() - new Date(s.started_at).getTime()) / 1000),
