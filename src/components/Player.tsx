@@ -1656,7 +1656,75 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
       {title && !error && (
         <div className="pointer-events-none absolute left-0 top-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-4">
-          <h3 className="text-sm font-semibold text-white drop-shadow">{title}</h3>
+          <h3 className="text-sm font-semibold text-white drop-shadow pr-32">{title}</h3>
+        </div>
+      )}
+
+      {/* Custom controls bar — top-right (skip ±10s, speed, report) */}
+      {showVideo && !error && (
+        <div className="pointer-events-auto absolute top-3 right-3 z-20 flex items-center gap-1.5">
+          {!isLive && (
+            <>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="h-9 w-9 bg-black/60 hover:bg-black/80 backdrop-blur border-0 text-white"
+                onClick={() => skipBy(-10)}
+                title="Voltar 10 segundos (←)"
+                aria-label="Voltar 10 segundos"
+              >
+                <Rewind className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="h-9 w-9 bg-black/60 hover:bg-black/80 backdrop-blur border-0 text-white"
+                onClick={() => skipBy(10)}
+                title="Avançar 10 segundos (→)"
+                aria-label="Avançar 10 segundos"
+              >
+                <FastForward className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-9 px-2.5 bg-black/60 hover:bg-black/80 backdrop-blur border-0 text-white gap-1.5 tabular-nums"
+                title="Velocidade de reprodução"
+              >
+                <Gauge className="h-3.5 w-3.5" />
+                {playbackRate}x
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[120px]">
+              {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((r) => (
+                <DropdownMenuItem
+                  key={r}
+                  onClick={() => setPlaybackRate(r)}
+                  className={cn(
+                    "justify-between tabular-nums",
+                    r === playbackRate && "bg-primary/10 text-primary font-medium",
+                  )}
+                >
+                  {r}x
+                  {r === 1 && <span className="text-[10px] text-muted-foreground">normal</span>}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            variant="secondary"
+            size="icon"
+            className="h-9 w-9 bg-black/60 hover:bg-destructive/80 backdrop-blur border-0 text-white"
+            onClick={() => setReportOpen(true)}
+            title="Reportar problema"
+            aria-label="Reportar problema"
+          >
+            <Flag className="h-4 w-4" />
+          </Button>
         </div>
       )}
 
