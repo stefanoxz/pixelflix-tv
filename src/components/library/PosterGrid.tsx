@@ -63,6 +63,7 @@ export function PosterGrid({
   totalLabel,
   pageSize = 120,
   pageIncrement = 60,
+  isLoading = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
