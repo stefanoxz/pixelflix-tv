@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Play, Tv, Film, Clapperboard, Info } from "lucide-react";
+import { Play, Tv, Film, Clapperboard, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MediaCard } from "@/components/MediaCard";
 import { useIptv } from "@/context/IptvContext";
