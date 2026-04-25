@@ -1205,20 +1205,46 @@ export async function requestStreamToken(params: {
   );
 }
 
-/** Lightweight event reporting (errors / heartbeats). Best-effort. */
-export async function reportStreamEvent(
+/**
+ * Lightweight event reporting (errors / heartbeats). Best-effort.
+ *
+ * Usa fetch direto com `keepalive: true` em vez de `invokeFn` para que:
+ *  - O response NÃO seja aguardado pelo caller (fire-and-forget total).
+ *  - O browser priorize a fila do manifest/playlist em cima da telemetria.
+ *  - Heartbeats sigam disparando mesmo se o usuário fechar a aba.
+ *
+ * Retorna void imediatamente; o request roda em background.
+ */
+export function reportStreamEvent(
   event_type: "stream_started" | "stream_error" | "session_heartbeat",
   payload?: { url?: string; meta?: Record<string, unknown> },
-): Promise<void> {
-  try {
-    await invokeFn<unknown>(
-      "stream-event",
-      { event_type, ...payload },
-      "event",
-    );
-  } catch {
-    // best-effort
-  }
+): void {
+  // Async wrapper só para pegar o token e disparar — não retorna a promise
+  // ao caller.
+  void (async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stream-event`;
+      // fetch com keepalive: o request continua mesmo se a aba for fechada
+      // ou se o player descartar o effect. Não awaitamos o response.
+      // priority é Fetch Priority API (Chromium); usamos cast pra silenciar TS.
+      await fetch(url, {
+        method: "POST",
+        keepalive: true,
+        priority: "low",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ event_type, ...payload }),
+      } as RequestInit & { priority: "low" | "high" | "auto" });
+    } catch {
+      // best-effort — telemetria nunca derruba o caller.
+    }
+  })();
 }
 
 export function normalizeExt(ext?: string): string {

@@ -14,9 +14,28 @@ import {
   type LiveStream,
 } from "@/services/iptv";
 
+// Pré-aquece as edge functions de stream — elimina o cold-start de
+// ~500-1000ms no primeiro canal aberto. Dispara só uma vez por sessão.
+let _preheated = false;
+function preheatStreamFunctions() {
+  if (_preheated) return;
+  _preheated = true;
+  const base = import.meta.env.VITE_SUPABASE_URL;
+  if (!base) return;
+  // OPTIONS rápido: acorda o worker, popula DNS/TLS e cacheia o preflight
+  // CORS por 24h (Access-Control-Max-Age). Não precisa de auth.
+  const opts: RequestInit = { method: "OPTIONS", keepalive: true, mode: "cors" };
+  try { void fetch(`${base}/functions/v1/stream-token`, opts); } catch { /* noop */ }
+  try { void fetch(`${base}/functions/v1/stream-proxy`, opts); } catch { /* noop */ }
+  try { void fetch(`${base}/functions/v1/stream-event`, opts); } catch { /* noop */ }
+}
+
 const Live = () => {
   const { session } = useIptv();
   const creds = session!.creds;
+
+  // Aquece edge functions ao entrar em /live, antes do usuário clicar num canal.
+  useEffect(() => { preheatStreamFunctions(); }, []);
 
   const [activeCategory, setActiveCategory] = useState("all");
   const [search, setSearch] = useState("");
