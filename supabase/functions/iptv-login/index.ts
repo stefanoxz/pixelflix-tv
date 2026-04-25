@@ -455,7 +455,7 @@ async function markServerHealthy(
   }
 }
 
-/** Incrementa contador e ativa cooldown progressivo se passar do limite. */
+/** Incrementa contador de falhas (estatística). Cooldown automático foi removido. */
 async function markServerFailure(
   admin: any,
   serverRow: { id?: string; consecutive_failures?: number } | null,
@@ -463,9 +463,6 @@ async function markServerFailure(
   if (!serverRow?.id) return;
   const next = (serverRow.consecutive_failures ?? 0) + 1;
   const patch: Record<string, unknown> = { consecutive_failures: next };
-  if (next >= COOLDOWN_THRESHOLD) {
-    patch.unreachable_until = new Date(Date.now() + cooldownMs(next)).toISOString();
-  }
   try {
     await admin.from("allowed_servers").update(patch).eq("id", serverRow.id);
   } catch (err) {
