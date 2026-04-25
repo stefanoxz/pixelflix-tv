@@ -1058,7 +1058,10 @@ Deno.serve(async (req) => {
       const password = payload?.password ? String(payload.password) : "";
       const failureCode = String(payload?.failure_code ?? "").trim();
       const TEST_UA = "VLC/3.0.20 LibVLC/3.0.20";
-      const PER_PROBE_TIMEOUT = 4000;
+      const PER_PROBE_TIMEOUT = 2500;
+      const GLOBAL_BUDGET_MS = 18000;
+      const startedAt = Date.now();
+      const remaining = () => Math.max(0, GLOBAL_BUDGET_MS - (Date.now() - startedAt));
 
       // 1) Parse base
       let parsed: URL | null = null;
