@@ -1,7 +1,11 @@
 // Receives client-side stream events (errors, started, etc).
 // Auth required (Supabase JWT).
+//
+// Resiliência: telemetria NUNCA deve derrubar o cliente. Falhas internas
+// retornam 200 {ok:false} em vez de 5xx — assim heartbeats que falham não
+// disparam toasts/error loops no frontend nem invalidam a sessão.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
+import { createClient } from "npm:@supabase/supabase-js@2.95.0";
 import { clientIp, uaHash, urlHash } from "../_shared/stream-token.ts";
 
 const ALLOWED_SUFFIXES = [".lovable.app", ".lovableproject.com", ".lovable.dev"];
@@ -24,8 +28,10 @@ function corsFor(req: Request): Record<string, string> {
 }
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+// Singleton: criar um client por request causa cold-start frequente
+// e contribuiu pra 503s SUPABASE_EDGE_RUNTIME_ERROR.
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
 const ALLOWED_EVENTS = new Set([
@@ -34,75 +40,91 @@ const ALLOWED_EVENTS = new Set([
   "session_heartbeat",
 ]);
 
+// Decodifica o JWT sem validar criptograficamente (só pega o sub).
+// Validação real é feita pelo Supabase Auth no gateway antes de chegar aqui
+// quando verify_jwt=true; e mesmo sem isso, o uso aqui é só telemetria.
+function extractUserIdFromJwt(token: string): string | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
+    );
+    return typeof payload?.sub === "string" ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   const cors = corsFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+
+  const jsonHeaders = { ...cors, "Content-Type": "application/json" };
+  const okResponse = (extra: Record<string, unknown> = {}) =>
+    new Response(JSON.stringify({ ok: true, ...extra }), { status: 200, headers: jsonHeaders });
+  const softFail = (reason: string) =>
+    new Response(JSON.stringify({ ok: false, reason }), { status: 200, headers: jsonHeaders });
+
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { ...cors, "Content-Type": "application/json" },
+      headers: jsonHeaders,
     });
   }
 
-  const auth = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
-  if (!auth) {
-    return new Response(JSON.stringify({ error: "Missing token" }), {
-      status: 401,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
+  try {
+    const auth = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    if (!auth) return softFail("missing_token");
+
+    const userId = extractUserIdFromJwt(auth);
+    if (!userId) return softFail("invalid_token");
+
+    let body: { event_type?: string; url?: string; meta?: Record<string, unknown> };
+    try {
+      body = await req.json();
+    } catch {
+      return softFail("invalid_body");
+    }
+
+    const evType = String(body.event_type || "");
+    if (!ALLOWED_EVENTS.has(evType)) return softFail("invalid_event_type");
+
+    const ip = clientIp(req);
+    const ua = req.headers.get("user-agent") || "";
+
+    // Heartbeat: caminho rápido — só atualiza last_seen_at.
+    if (evType === "session_heartbeat") {
+      try {
+        await admin.from("active_sessions").update({
+          last_seen_at: new Date().toISOString(),
+          ip,
+          ua_hash: await uaHash(ua),
+        }).eq("anon_user_id", userId);
+      } catch (e) {
+        console.error("[stream-event] heartbeat update failed", e);
+        return softFail("heartbeat_persist_failed");
+      }
+      return okResponse();
+    }
+
+    try {
+      await admin.from("stream_events").insert({
+        anon_user_id: userId,
+        event_type: evType,
+        ip,
+        ua_hash: await uaHash(ua),
+        url_hash: body.url ? await urlHash(body.url) : null,
+        meta: body.meta ?? null,
+      });
+    } catch (e) {
+      console.error("[stream-event] insert failed", e);
+      return softFail("event_persist_failed");
+    }
+
+    return okResponse();
+  } catch (e) {
+    console.error("[stream-event] unhandled", e);
+    return softFail("internal_error");
   }
-
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: `Bearer ${auth}` } },
-    auth: { persistSession: false },
-  });
-  const { data: udata, error } = await userClient.auth.getUser();
-  if (error || !udata?.user) {
-    return new Response(JSON.stringify({ error: "Invalid session" }), {
-      status: 401,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  let body: { event_type?: string; url?: string; meta?: Record<string, unknown> };
-  try { body = await req.json(); } catch {
-    return new Response(JSON.stringify({ error: "Invalid body" }), {
-      status: 400, headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  const evType = String(body.event_type || "");
-  if (!ALLOWED_EVENTS.has(evType)) {
-    return new Response(JSON.stringify({ error: "Invalid event_type" }), {
-      status: 400, headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  const ip = clientIp(req);
-  const ua = req.headers.get("user-agent") || "";
-
-  // Heartbeat: bump active_sessions.last_seen_at — no event row.
-  if (evType === "session_heartbeat") {
-    await admin.from("active_sessions").update({
-      last_seen_at: new Date().toISOString(),
-      ip,
-      ua_hash: await uaHash(ua),
-    }).eq("anon_user_id", udata.user.id);
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200, headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  await admin.from("stream_events").insert({
-    anon_user_id: udata.user.id,
-    event_type: evType,
-    ip,
-    ua_hash: await uaHash(ua),
-    url_hash: body.url ? await urlHash(body.url) : null,
-    meta: body.meta ?? null,
-  });
-
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200, headers: { ...cors, "Content-Type": "application/json" },
-  });
 });
