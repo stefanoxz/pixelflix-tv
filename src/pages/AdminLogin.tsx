@@ -133,8 +133,15 @@ const AdminLogin = () => {
         pushDebug("signup", false, `${error.status ?? "?"} ${error.message}`);
         throw error;
       }
-      pushDebug("signup", true, "conta criada (verifique e-mail se exigido)");
-      toast.success("Conta criada. Peça ao admin atual para liberar permissão.");
+      pushDebug("signup", true, "conta criada (aguardando aprovação)");
+      // Faz logout: cadastro recente fica pendente até admin aprovar.
+      // Sem isso o Supabase já criaria sessão e o usuário cairia na tela
+      // de "aguardando aprovação" sem perceber que precisa esperar.
+      await supabase.auth.signOut().catch(() => {});
+      toast.success(
+        "Cadastro recebido! Aguarde a aprovação do administrador para acessar o painel.",
+        { duration: 8000 },
+      );
       setMode("signin");
     } catch (err) {
       const raw = err instanceof Error ? err.message : "Falha no cadastro";
