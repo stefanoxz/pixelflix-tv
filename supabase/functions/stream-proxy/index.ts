@@ -400,26 +400,67 @@ Deno.serve(async (req) => {
     }
 
     // ----- playlist: fetch upstream, rewrite, return inline -----
-    const upstream = await fetch(payload.u, {
-      method: "GET",
-      redirect: "follow",
-      headers: {
-        "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
-        Referer: `${decoded.protocol}//${decoded.host}/`,
-        Accept: "*/*",
-        Connection: "keep-alive",
-      },
-    });
-    const finalUrl = new URL(upstream.url || payload.u);
-    if (isPrivateHost(finalUrl.host)) {
-      return new Response("Forbidden", { status: 403, headers: cors });
-    }
-    const text = await upstream.text();
-    if (!text.includes("#EXTM3U") && !text.includes("#EXT-X")) {
-      return new Response("Bad upstream playlist", {
-        status: 502,
-        headers: { ...cors, "Content-Type": "text/plain" },
-      });
+    // Helper para buscar uma playlist do upstream com headers padrão.
+    const upstreamHeaders = {
+      "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
+      Referer: `${decoded.protocol}//${decoded.host}/`,
+      Accept: "*/*",
+      Connection: "keep-alive",
+    } as const;
+
+    const fetchPlaylist = async (rawUrl: string): Promise<{ text: string; finalUrl: URL } | { error: Response }> => {
+      const r = await fetch(rawUrl, { method: "GET", redirect: "follow", headers: upstreamHeaders });
+      const fUrl = new URL(r.url || rawUrl);
+      if (isPrivateHost(fUrl.host)) {
+        return { error: new Response("Forbidden", { status: 403, headers: cors }) };
+      }
+      const t = await r.text();
+      if (!t.includes("#EXTM3U") && !t.includes("#EXT-X")) {
+        return {
+          error: new Response("Bad upstream playlist", {
+            status: 502,
+            headers: { ...cors, "Content-Type": "text/plain" },
+          }),
+        };
+      }
+      return { text: t, finalUrl: fUrl };
+    };
+
+    // ===== Pull master =====
+    const firstResult = await fetchPlaylist(payload.u);
+    if ("error" in firstResult) return firstResult.error;
+
+    let { text, finalUrl } = firstResult;
+
+    // ===== Inline-fold de master de 1 variante (ganho ~1.3s por canal) =====
+    // Quando o upstream devolve um master playlist com exatamente um
+    // #EXT-X-STREAM-INF, hls.js fará outro round-trip ao stream-proxy só pra
+    // pegar a nested. Como não há ABR (1 variante), podemos pegar a nested
+    // já agora e devolver direto — o player nunca vê o master.
+    const isMaster = /^#EXT-X-STREAM-INF/m.test(text);
+    if (isMaster) {
+      const baseHrefMaster = finalUrl.toString().substring(0, finalUrl.toString().lastIndexOf("/") + 1);
+      const variantLines: string[] = [];
+      const masterLines = text.split("\n");
+      for (let i = 0; i < masterLines.length; i++) {
+        const ln = masterLines[i].trim();
+        if (!ln || ln.startsWith("#")) continue;
+        // Linha imediatamente após STREAM-INF é a URL da variante.
+        const prev = (masterLines[i - 1] || "").trim();
+        if (prev.startsWith("#EXT-X-STREAM-INF")) variantLines.push(ln);
+      }
+      if (variantLines.length === 1) {
+        try {
+          const variantAbs = new URL(variantLines[0], baseHrefMaster).toString();
+          const nested = await fetchPlaylist(variantAbs);
+          if (!("error" in nested)) {
+            text = nested.text;
+            finalUrl = nested.finalUrl;
+          }
+          // Se nested falhar, segue com master original — não regride
+          // comportamento.
+        } catch { /* keep master fallback */ }
+      }
     }
 
     const baseHref = finalUrl.toString().substring(0, finalUrl.toString().lastIndexOf("/") + 1);
