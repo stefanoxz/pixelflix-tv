@@ -461,14 +461,33 @@ const Admin = () => {
     }
   };
 
+  const refreshDnsErrors = async (hours: number = dnsErrorsHours) => {
+    try {
+      const data = await callAdmin<DnsErrorOverview>("dns_errors", { hours });
+      setDnsErrors(data);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha ao carregar erros de DNS";
+      toast.error(msg);
+    }
+  };
+
   useEffect(() => {
     refresh();
-    // Faster refresh while on Monitoring tab
-    const interval = tab === "monitoring" ? 10_000 : 30_000;
+    // Faster refresh while on Monitoring/DNS Errors tab
+    const interval = tab === "monitoring" || tab === "dns-errors" ? 10_000 : 30_000;
     const t = setInterval(refresh, interval);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
+
+  // Refresh DNS errors when tab is active (real-time)
+  useEffect(() => {
+    if (tab !== "dns-errors") return;
+    refreshDnsErrors(dnsErrorsHours);
+    const t = setInterval(() => refreshDnsErrors(dnsErrorsHours), 10_000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, dnsErrorsHours]);
 
   // Health check polling — apenas no tab "servers"
   useEffect(() => {
