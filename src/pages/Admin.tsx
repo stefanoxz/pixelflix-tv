@@ -698,6 +698,7 @@ const Admin = () => {
             { id: "dns-errors", label: "Erros por DNS", icon: AlertOctagon },
             { id: "users", label: "Usuários", icon: Users },
             { id: "servers", label: "DNS / Servidores", icon: Server },
+            { id: "endpoint-test", label: "Testar endpoint", icon: FlaskConical },
           ].map((item) => (
             <button
               key={item.id}
