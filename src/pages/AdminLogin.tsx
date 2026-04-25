@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Loader2, Bug, ChevronDown, ChevronUp } from "lucide-react";
+import { Shield, Loader2, Bug, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -201,6 +201,14 @@ const AdminLogin = () => {
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-glow opacity-50" />
       <Card className="relative w-full max-w-sm p-8 bg-gradient-card border-border/50 shadow-card animate-scale-in">
+        <button
+          type="button"
+          onClick={() => navigate("/login")}
+          className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Voltar ao login do webplayer
+        </button>
         <div className="text-center mb-6">
           <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
             <Shield className="h-6 w-6 text-primary" />
