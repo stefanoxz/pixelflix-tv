@@ -889,7 +889,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
           // Heartbeat (renew session lifecycle on backend every 45s)
           heartbeatRef.current = window.setInterval(() => {
-            reportStreamEvent("session_heartbeat");
+            reportStreamEvent("session_heartbeat", { url: src ?? undefined, meta: buildContentMeta() });
           }, HEARTBEAT_INTERVAL_MS);
 
           // Motor MPEG-TS para canais ao vivo Xtream.
