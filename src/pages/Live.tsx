@@ -195,6 +195,8 @@ const Live = () => {
             containerExt="m3u8"
             title={activeChannel?.name}
             poster={proxyImageUrl(activeChannel?.stream_icon)}
+            streamId={activeChannel?.stream_id}
+            contentKind="live"
           />
           <PlayerInfoBar
             channel={activeChannel}
