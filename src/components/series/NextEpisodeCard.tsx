@@ -13,10 +13,14 @@ interface Props {
   coverFallback?: string;
   /** Em segundos. Quando autoplay está OFF, ignorado (sem countdown). */
   autoplaySeconds?: number;
+  /** Quanto tempo antes do disparo automático chamar `onPrefetch` (segundos). */
+  prefetchLeadSeconds?: number;
   autoplayEnabled: boolean;
   onAutoplayToggle: () => void;
   onPlayNow: () => void;
   onCancel: () => void;
+  /** Disparado uma vez por countdown, ~prefetchLeadSeconds antes do autoplay. */
+  onPrefetch?: () => void;
 }
 
 /**
