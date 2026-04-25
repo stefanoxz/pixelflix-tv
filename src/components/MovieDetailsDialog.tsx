@@ -148,6 +148,29 @@ export function MovieDetailsDialog({
               </div>
             )}
 
+            {incompatible && (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2.5 text-xs text-destructive">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="font-semibold">Conteúdo marcado como incompatível</p>
+                  <p className="opacity-90">
+                    Você já tentou abrir este filme antes e o navegador não conseguiu
+                    decodificar (provavelmente HEVC/4K). Recomendamos abrir em um
+                    player externo (VLC, MX Player). Você ainda pode tentar de novo.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      clearIncompatible(upstreamHost, movie.stream_id)
+                    }
+                    className="underline underline-offset-2 hover:text-destructive/80"
+                  >
+                    Esquecer marcação
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2 pt-2">
               <Button
                 size="lg"
