@@ -45,7 +45,7 @@ const Live = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const { favorites, toggle, isFavorite } = useFavorites(creds.username);
+  const { favorites, toggle, isFavorite } = useFavorites(creds.username, "live");
 
   const { data: categories = [] } = useQuery({
     queryKey: ["live-cats", creds.username],
