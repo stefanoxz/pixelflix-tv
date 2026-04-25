@@ -28,6 +28,7 @@ import { ServerProbeDialog } from "@/components/admin/ServerProbeDialog";
 import { EndpointTestPanel } from "@/components/admin/EndpointTestPanel";
 import { UserReportsPanel } from "@/components/admin/UserReportsPanel";
 import ClientDiagnosticsPanel from "@/components/admin/ClientDiagnosticsPanel";
+import PendingSignupsPanel from "@/components/admin/PendingSignupsPanel";
 import {
   Users,
   UserCheck,
