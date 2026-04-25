@@ -1514,7 +1514,15 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [copyTarget, src]);
 
-  useEffect(() => () => teardown(), []);
+  // Quando o player desmonta (usuário fechou e voltou ao menu), marca a
+  // sessão como ociosa para o painel de monitoramento e habilita o
+  // auto-kick por inatividade após 60min.
+  useEffect(() => () => {
+    teardown();
+    reportStreamEvent("session_heartbeat", {
+      meta: { content_kind: "idle", content_title: null, content_id: null },
+    });
+  }, []);
 
   const handleCopy = async () => {
     const target = error?.copyUrl || copyTarget;
