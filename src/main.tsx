@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
-import { QueryClient } from "@tanstack/react-query";
-import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { persistQueryClient } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import App from "./App.tsx";
 import "./index.css";
@@ -26,27 +26,33 @@ const PERSISTED_KEYS = new Set([
   "live-streams",
 ]);
 
-const persister = createSyncStoragePersister({
-  storage: typeof window !== "undefined" ? window.localStorage : undefined,
-  key: "pixelflix-rq-cache",
-  throttleTime: 1000,
-});
+if (typeof window !== "undefined") {
+  const persister = createSyncStoragePersister({
+    storage: window.localStorage,
+    key: "pixelflix-rq-cache",
+    throttleTime: 1000,
+  });
+
+  // Hidratação imperativa — não envolve Suspense, evitando races de mount
+  // que causavam "Failed to execute 'removeChild' on 'Node'" durante o
+  // primeiro commit da rota /login.
+  persistQueryClient({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    queryClient: queryClient as any,
+    persister,
+    maxAge: 12 * 60 * 60 * 1000,
+    buster: "v1",
+    dehydrateOptions: {
+      shouldDehydrateQuery: (q) => {
+        const k = q.queryKey?.[0];
+        return typeof k === "string" && PERSISTED_KEYS.has(k);
+      },
+    },
+  });
+}
 
 createRoot(document.getElementById("root")!).render(
-  <PersistQueryClientProvider
-    client={queryClient}
-    persistOptions={{
-      persister,
-      maxAge: 12 * 60 * 60 * 1000,
-      buster: "v1",
-      dehydrateOptions: {
-        shouldDehydrateQuery: (q) => {
-          const k = q.queryKey?.[0];
-          return typeof k === "string" && PERSISTED_KEYS.has(k);
-        },
-      },
-    }}
-  >
+  <QueryClientProvider client={queryClient}>
     <App />
-  </PersistQueryClientProvider>,
+  </QueryClientProvider>,
 );
