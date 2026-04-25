@@ -1579,13 +1579,40 @@ export function setPreferredEngine(url: string | null | undefined, engine: Engin
  * Asks the backend for a signed, short-lived stream URL.
  * Requires an active Supabase session (anonymous or otherwise).
  */
+// Cache leve de tokens recém-emitidos. Permite "primear" o token do próximo
+// episódio antes do autoplay disparar — quando o Player montar e chamar
+// requestStreamToken para a mesma URL, o cache responde imediatamente.
+// Margem de 5s antes do `expires_at` para evitar entregar token a expirar.
+type CachedToken = { url: string; expires_at: number };
+const TOKEN_CACHE_MARGIN_MS = 5_000;
+const tokenCache = new Map<string, Promise<CachedToken>>();
+
+function tokenCacheKey(p: { url: string; kind: StreamKind; mode?: StreamMode }): string {
+  return `${p.kind}|${p.mode ?? "redirect"}|${p.url}`;
+}
+
+function isCachedTokenFresh(t: CachedToken): boolean {
+  return t.expires_at * 1000 - Date.now() > TOKEN_CACHE_MARGIN_MS;
+}
+
 export async function requestStreamToken(params: {
   url: string;
   kind: StreamKind;
   iptvUsername?: string;
   mode?: StreamMode;
 }): Promise<{ url: string; expires_at: number }> {
-  return invokeFn<{ url: string; expires_at: number }>(
+  const key = tokenCacheKey(params);
+  const cached = tokenCache.get(key);
+  if (cached) {
+    try {
+      const value = await cached;
+      if (isCachedTokenFresh(value)) return value;
+    } catch {
+      /* fall through to fresh request */
+    }
+    tokenCache.delete(key);
+  }
+  const promise = invokeFn<CachedToken>(
     "stream-token",
     {
       url: params.url,
@@ -1594,7 +1621,56 @@ export async function requestStreamToken(params: {
       mode: params.mode ?? "redirect",
     },
     "token",
-  );
+  ).catch((err) => {
+    tokenCache.delete(key);
+    throw err;
+  });
+  tokenCache.set(key, promise);
+  return promise;
+}
+
+/**
+ * Prefetch de token + warm-up de conexão para o próximo stream.
+ * Use ~1-2s antes de iniciar a reprodução para reduzir o TTFF.
+ *
+ * - Reaproveita o cache de `requestStreamToken` (idempotente).
+ * - Faz um GET com Range muito pequeno na URL tokenizada para forçar
+ *   handshake DNS/TLS, popular o HTTP cache e (em HLS) baixar o manifest.
+ * - Tudo é fire-and-forget; aceita um `AbortSignal` para cancelar.
+ */
+export async function primeStreamToken(params: {
+  url: string;
+  kind: StreamKind;
+  iptvUsername?: string;
+  mode?: StreamMode;
+  signal?: AbortSignal;
+}): Promise<void> {
+  try {
+    const tok = await requestStreamToken({
+      url: params.url,
+      kind: params.kind,
+      iptvUsername: params.iptvUsername,
+      mode: params.mode,
+    });
+    if (params.signal?.aborted) return;
+    // Warm-up: HEAD não é suportado por todos os hosts Xtream; usar GET com
+    // Range mínimo é mais confiável e ainda traz só ~1KB.
+    await fetch(tok.url, {
+      method: "GET",
+      headers: { Range: "bytes=0-1023" },
+      mode: "cors",
+      credentials: "omit",
+      signal: params.signal,
+      // Hint pro browser priorizar — Fetch Priority API (Chromium).
+    } as RequestInit & { priority?: "low" | "high" | "auto" }).then((r) => {
+      // Drena o body pra liberar a conexão, mas ignora o conteúdo.
+      r.body?.cancel().catch(() => {});
+    }).catch(() => {
+      /* warm-up é best-effort; falhas não são erro */
+    });
+  } catch {
+    /* prefetch é silencioso */
+  }
 }
 
 /**
