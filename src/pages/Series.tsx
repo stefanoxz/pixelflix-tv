@@ -1,53 +1,47 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Loader2, X, Play, Star, ExternalLink, Heart } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { X } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { MediaCard } from "@/components/MediaCard";
-import { CategoryFilter } from "@/components/CategoryFilter";
 import { Player } from "@/components/Player";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { LibraryShell } from "@/components/library/LibraryShell";
+import { CategoryRail, type RailCategory } from "@/components/library/CategoryRail";
+import { TitleList } from "@/components/library/TitleList";
+import type { TitleListItemData } from "@/components/library/TitleListItem";
+import { PreviewPanel } from "@/components/library/PreviewPanel";
+import { SeriesEpisodesPanel } from "@/components/library/SeriesEpisodesPanel";
+import { useFavorites } from "@/hooks/useFavorites";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
 import { useIptv } from "@/context/IptvContext";
 import {
-  getSeriesCategories,
-  getSeries,
-  getSeriesInfo,
   buildSeriesEpisodeUrl,
-  isExternalOnly,
-  getFormatBadge,
+  getSeries,
+  getSeriesCategories,
+  getSeriesInfo,
   proxyImageUrl,
-  type Series,
   type Episode,
+  type Series,
 } from "@/services/iptv";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import { useFavorites } from "@/hooks/useFavorites";
 
-const toneClasses: Record<"green" | "blue" | "yellow" | "gray", string> = {
-  green: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  blue: "bg-sky-500/15 text-sky-400 border-sky-500/30",
-  yellow: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-  gray: "bg-muted text-muted-foreground border-border",
-};
+const SPECIAL_ALL = "all";
+const SPECIAL_FAVS = "__favorites__";
+const SPECIAL_RECENT = "__recent__";
 
 const SeriesPage = () => {
   const { session } = useIptv();
   const navigate = useNavigate();
   const location = useLocation();
   const creds = session!.creds;
+  const isMobile = useIsMobile();
 
-  const [activeCategory, setActiveCategory] = useState("all");
+  const [activeCategory, setActiveCategory] = useState<string>(SPECIAL_ALL);
   const [search, setSearch] = useState("");
-  const [openSeries, setOpenSeries] = useState<Series | null>(null);
-  const [activeSeason, setActiveSeason] = useState<string | null>(null);
-  const [playingEp, setPlayingEp] = useState<Episode | null>(null);
-  const [showOnlyFavs, setShowOnlyFavs] = useState(false);
+  const [activeId, setActiveId] = useState<number | undefined>();
+  const [playingEp, setPlayingEp] = useState<{ ep: Episode; coverFallback?: string } | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const { isFavorite, toggle, favorites } = useFavorites(creds.username, "series");
 
@@ -55,56 +49,93 @@ const SeriesPage = () => {
     queryKey: ["series-cats", creds.username],
     queryFn: () => getSeriesCategories(creds),
   });
-  const { data: series = [], isLoading } = useQuery({
+  const { data: series = [] } = useQuery({
     queryKey: ["series", creds.username],
     queryFn: () => getSeries(creds),
   });
 
-  const { data: seriesInfo, isLoading: loadingInfo } = useQuery({
-    queryKey: ["series-info", openSeries?.series_id],
-    queryFn: () => getSeriesInfo(creds, openSeries!.series_id),
-    enabled: !!openSeries,
-  });
-
-  // Abrir série vinda de outra página (ex: Destaques) com state.openId
+  // Deep-link
   useEffect(() => {
     const openId = (location.state as { openId?: number } | null)?.openId;
     if (openId && series.length) {
-      const s = series.find((x) => x.series_id === openId);
-      if (s) {
-        setOpenSeries(s);
-        setActiveSeason(null);
-      }
+      setActiveId(openId);
       navigate(location.pathname, { replace: true, state: null });
     }
   }, [location.state, location.pathname, series, navigate]);
 
   const filtered = useMemo(() => {
     return series.filter((s) => {
-      const matchCat = activeCategory === "all" || s.category_id === activeCategory;
-      const matchSearch = !search || s.name.toLowerCase().includes(search.toLowerCase());
-      const matchFav = !showOnlyFavs || favorites.has(s.series_id);
-      return matchCat && matchSearch && matchFav;
+      if (activeCategory === SPECIAL_FAVS) {
+        if (!favorites.has(s.series_id)) return false;
+      } else if (activeCategory === SPECIAL_RECENT) {
+        // sem filtro adicional
+      } else if (activeCategory !== SPECIAL_ALL && s.category_id !== activeCategory) {
+        return false;
+      }
+      if (search && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
     });
-  }, [series, activeCategory, search, showOnlyFavs, favorites]);
+  }, [series, activeCategory, search, favorites]);
 
-  const seasonKeys = seriesInfo ? Object.keys(seriesInfo.episodes || {}) : [];
-  const currentSeason = activeSeason || seasonKeys[0];
-  const allEpisodes = seriesInfo?.episodes?.[currentSeason] || [];
+  const sorted = useMemo(() => {
+    if (activeCategory === SPECIAL_RECENT) {
+      return [...filtered]
+        .sort((a, b) => Number(b.last_modified || 0) - Number(a.last_modified || 0))
+        .slice(0, 60);
+    }
+    return filtered;
+  }, [filtered, activeCategory]);
 
-  const externalCount = useMemo(
+  const items: TitleListItemData[] = useMemo(
     () =>
-      allEpisodes.filter((ep) => isExternalOnly(ep.container_extension, ep.direct_source)).length,
-    [allEpisodes],
+      sorted.map((s) => ({
+        id: s.series_id,
+        title: s.name,
+        cover: s.cover,
+        rating: s.rating_5based,
+        subtitle: s.genre,
+      })),
+    [sorted],
   );
 
-  const episodes = allEpisodes;
+  useEffect(() => {
+    if (items.length === 0) {
+      setActiveId(undefined);
+      return;
+    }
+    if (activeId == null || !items.find((i) => i.id === activeId)) {
+      setActiveId(items[0].id);
+    }
+  }, [items, activeId]);
 
-  const closeModal = () => {
-    setOpenSeries(null);
-    setActiveSeason(null);
-    setPlayingEp(null);
-  };
+  const activeSeries: Series | null = useMemo(
+    () => sorted.find((s) => s.series_id === activeId) || null,
+    [sorted, activeId],
+  );
+
+  const debouncedActiveId = useDebouncedValue(activeId, 300);
+  const { data: seriesInfo, isLoading: loadingInfo } = useQuery({
+    queryKey: ["series-info", debouncedActiveId],
+    queryFn: () => getSeriesInfo(creds, debouncedActiveId!),
+    enabled: !!debouncedActiveId && !isMobile,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const railCategories: RailCategory[] = useMemo(() => {
+    const base: RailCategory[] = [
+      { id: SPECIAL_ALL, name: "Todas", variant: "all", count: series.length },
+      { id: SPECIAL_FAVS, name: "Favoritas", variant: "favorites", count: favorites.size },
+      { id: SPECIAL_RECENT, name: "Recentes", variant: "recent" },
+    ];
+    return [
+      ...base,
+      ...categories.map((c) => ({
+        id: c.category_id,
+        name: c.category_name,
+        variant: "default" as const,
+      })),
+    ];
+  }, [categories, series.length, favorites.size]);
 
   const handleCopyExternal = async (ep: Episode) => {
     const url = buildSeriesEpisodeUrl(creds, ep.id, ep.container_extension, ep.direct_source);
@@ -116,288 +147,141 @@ const SeriesPage = () => {
     }
   };
 
+  // Mobile fallback: usa modal antigo grande
+  // Para não quebrar a experiência mobile (poucas mudanças), apresenta também 3-col simplificado.
+
+  useGridKeyboardNav({
+    enabled: !isMobile && !playingEp,
+    onPrev: () => {
+      const idx = items.findIndex((i) => i.id === activeId);
+      if (idx > 0) setActiveId(items[idx - 1].id);
+    },
+    onNext: () => {
+      const idx = items.findIndex((i) => i.id === activeId);
+      if (idx >= 0 && idx < items.length - 1) setActiveId(items[idx + 1].id);
+    },
+    onPrevCategory: () => {
+      const idx = railCategories.findIndex((c) => c.id === activeCategory);
+      if (idx > 0) setActiveCategory(railCategories[idx - 1].id);
+    },
+    onNextCategory: () => {
+      const idx = railCategories.findIndex((c) => c.id === activeCategory);
+      if (idx >= 0 && idx < railCategories.length - 1)
+        setActiveCategory(railCategories[idx + 1].id);
+    },
+    onSearchFocus: () => searchRef.current?.focus(),
+    onEscape: () => playingEp && setPlayingEp(null),
+    onFavorite: () => activeId != null && toggle(activeId),
+  });
+
+  const epUrl = playingEp
+    ? buildSeriesEpisodeUrl(
+        creds,
+        playingEp.ep.id,
+        playingEp.ep.container_extension,
+        playingEp.ep.direct_source,
+      )
+    : null;
+
   return (
-    <TooltipProvider delayDuration={200}>
-      <div className="mx-auto max-w-[1600px] px-4 md:px-8 py-6 space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Séries</h1>
-          <p className="text-sm text-muted-foreground mt-1">{series.length} séries disponíveis</p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative max-w-md flex-1 min-w-[240px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar série..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 bg-secondary/50 border-border/50"
-            />
-          </div>
-          <Button
-            variant={showOnlyFavs ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowOnlyFavs((v) => !v)}
-            className={cn("gap-2", showOnlyFavs && "bg-primary text-primary-foreground")}
-          >
-            <Heart className={cn("h-4 w-4", showOnlyFavs && "fill-current")} />
-            Favoritos {favorites.size > 0 && `(${favorites.size})`}
-          </Button>
-        </div>
-
-        <CategoryFilter
-          categories={categories.map((c) => ({ id: c.category_id, name: c.category_name }))}
-          active={activeCategory}
-          onChange={setActiveCategory}
-        />
-
-        {isLoading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-16 text-muted-foreground">
-            {showOnlyFavs
-              ? "Você ainda não favoritou nenhuma série."
-              : "Nenhuma série encontrada."}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {filtered.slice(0, 120).map((s) => (
-              <MediaCard
-                key={s.series_id}
-                title={s.name}
-                cover={s.cover}
-                rating={s.rating_5based}
-                onClick={() => {
-                  setOpenSeries(s);
-                  setActiveSeason(null);
-                }}
-                isFavorite={isFavorite(s.series_id)}
-                onToggleFavorite={() => toggle(s.series_id)}
-              />
-            ))}
-          </div>
-        )}
-
-        {openSeries && (
-          <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm overflow-y-auto animate-fade-in">
-            <div className="mx-auto max-w-6xl p-4 md:p-8">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <h2 className="text-2xl font-bold text-foreground truncate flex-1 min-w-0">{openSeries.name}</h2>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => toggle(openSeries.series_id)}
-                    className={cn("gap-2", isFavorite(openSeries.series_id) && "border-primary/60 text-primary")}
-                  >
-                    <Heart
-                      className={cn(
-                        "h-4 w-4",
-                        isFavorite(openSeries.series_id) && "fill-primary text-primary",
-                      )}
-                    />
-                    <span className="hidden sm:inline">
-                      {isFavorite(openSeries.series_id) ? "Favorito" : "Favoritar"}
-                    </span>
-                  </Button>
-                  <Button variant="secondary" size="icon" onClick={closeModal}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {playingEp ? (
-                <div className="space-y-4">
-                  {(() => {
-                    const epUrl = buildSeriesEpisodeUrl(
-                      creds,
-                      playingEp.id,
-                      playingEp.container_extension,
-                      playingEp.direct_source,
-                    );
-                    return (
-                      <Player
-                        src={epUrl}
-                        rawUrl={epUrl}
-                        containerExt={playingEp.container_extension}
-                        title={playingEp.title}
-                        poster={proxyImageUrl(playingEp.info?.movie_image || openSeries.cover)}
-                        onClose={() => setPlayingEp(null)}
-                      />
-                    );
-                  })()}
-                  <Button variant="outline" onClick={() => setPlayingEp(null)}>
-                    ← Voltar aos episódios
-                  </Button>
-                </div>
-              ) : loadingInfo ? (
-                <div className="flex justify-center py-20">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : (
-                <div className="grid md:grid-cols-[260px,1fr] gap-6">
-                  <div className="space-y-3">
-                    <img
-                      src={openSeries.cover}
-                      alt={openSeries.name}
-                      className="w-full aspect-[2/3] object-cover rounded-lg shadow-card"
-                      onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")}
-                    />
-                    {openSeries.rating && (
-                      <div className="flex items-center gap-1 text-sm">
-                        <Star className="h-4 w-4 fill-primary text-primary" />
-                        <span>{openSeries.rating}</span>
-                      </div>
-                    )}
-                    {openSeries.genre && (
-                      <p className="text-xs text-muted-foreground">{openSeries.genre}</p>
-                    )}
-                    {openSeries.plot && (
-                      <p className="text-sm text-muted-foreground line-clamp-6">
-                        {openSeries.plot}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-4 min-w-0">
-                    {seasonKeys.length === 0 ? (
-                      <p className="text-muted-foreground">Nenhum episódio disponível.</p>
-                    ) : (
-                      <>
-                        <div className="flex flex-wrap gap-2">
-                          {seasonKeys.map((sk) => (
-                            <button
-                              key={sk}
-                              onClick={() => setActiveSeason(sk)}
-                              className={cn(
-                                "px-3 py-1.5 rounded-md text-sm font-medium transition-smooth",
-                                currentSeason === sk
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-secondary text-foreground hover:bg-secondary/70",
-                              )}
-                            >
-                              Temporada {sk}
-                            </button>
-                          ))}
-                        </div>
-
-                        <div className="px-1">
-                          <p className="text-xs text-muted-foreground">
-                            {allEpisodes.length} episódios
-                            {externalCount > 0 && (
-                              <>
-                                {" · "}
-                                <span className="text-amber-400">
-                                  {externalCount} só em player externo
-                                </span>
-                              </>
-                            )}
-                          </p>
-                        </div>
-
-                        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
-                          {episodes.length === 0 ? (
-                            <p className="text-sm text-muted-foreground py-6 text-center">
-                              Nenhum episódio nesta temporada.
-                            </p>
-                          ) : (
-                            episodes.map((ep) => {
-                              const ext = ep.container_extension;
-                              const external = isExternalOnly(ext, ep.direct_source);
-                              const badge = getFormatBadge(ext, ep.direct_source);
-                              return (
-                                <div
-                                  key={ep.id}
-                                  className="w-full flex gap-3 items-center p-3 rounded-lg bg-card hover:bg-secondary/50 border border-border/50 transition-smooth"
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (external) {
-                                        handleCopyExternal(ep);
-                                      } else {
-                                        setPlayingEp(ep);
-                                      }
-                                    }}
-                                    className="flex gap-3 items-center flex-1 min-w-0 text-left"
-                                  >
-                                    <div className="h-16 w-28 shrink-0 rounded bg-secondary overflow-hidden flex items-center justify-center">
-                                      {ep.info?.movie_image ? (
-                                        <img
-                                          src={proxyImageUrl(ep.info.movie_image)}
-                                          alt={ep.title}
-                                          className="h-full w-full object-cover"
-                                          onError={(e) =>
-                                            ((e.target as HTMLImageElement).style.display = "none")
-                                          }
-                                        />
-                                      ) : (
-                                        <Play className="h-5 w-5 text-muted-foreground" />
-                                      )}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <p className="text-sm font-medium text-foreground truncate">
-                                          {ep.episode_num}. {ep.title}
-                                        </p>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <span
-                                              className={cn(
-                                                "text-[10px] font-semibold px-1.5 py-0.5 rounded border tracking-wide",
-                                                toneClasses[badge.tone],
-                                              )}
-                                            >
-                                              {badge.label}
-                                            </span>
-                                          </TooltipTrigger>
-                                          <TooltipContent>{badge.tooltip}</TooltipContent>
-                                        </Tooltip>
-                                      </div>
-                                      {ep.info?.plot && (
-                                        <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                                          {ep.info.plot}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </button>
-                                  {external ? (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="gap-1.5 shrink-0"
-                                          onClick={() => handleCopyExternal(ep)}
-                                        >
-                                          <ExternalLink className="h-3.5 w-3.5" />
-                                          Abrir externo
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        Copiar link para VLC / MX Player
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : (
-                                    <Play className="h-4 w-4 text-primary shrink-0" />
-                                  )}
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
+    <>
+      <LibraryShell
+        showPreview={!isMobile}
+        header={
+          <div className="flex items-baseline justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Séries</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {series.length} séries · use ↑↓ ←→ para navegar
+              </p>
             </div>
           </div>
-        )}
-      </div>
-    </TooltipProvider>
+        }
+        rail={
+          <CategoryRail
+            categories={railCategories}
+            active={activeCategory}
+            onChange={setActiveCategory}
+          />
+        }
+        list={
+          <TitleList
+            items={items}
+            activeId={activeId}
+            isFavorite={isFavorite}
+            onSelect={(it) => setActiveId(it.id)}
+            onActivate={(it) => setActiveId(it.id)}
+            onToggleFavorite={toggle}
+            search={search}
+            onSearchChange={setSearch}
+            searchInputRef={searchRef}
+            searchPlaceholder="Buscar série..."
+            totalLabel={`${items.length} de ${series.length}`}
+            emptyMessage={
+              activeCategory === SPECIAL_FAVS
+                ? "Você ainda não favoritou nenhuma série."
+                : "Nenhuma série encontrada."
+            }
+          />
+        }
+        preview={
+          <PreviewPanel
+            loading={loadingInfo}
+            cover={activeSeries?.cover}
+            backdrop={activeSeries?.cover}
+            title={activeSeries?.name}
+            rating={activeSeries?.rating_5based}
+            year={activeSeries?.releaseDate?.slice(0, 4)}
+            genre={activeSeries?.genre}
+            director={activeSeries?.director}
+            cast={activeSeries?.cast}
+            plot={activeSeries?.plot}
+            isFavorite={activeId != null && isFavorite(activeId)}
+            onToggleFavorite={activeId != null ? () => toggle(activeId) : undefined}
+            playLabel="Episódios"
+            emptyMessage="Selecione uma série à esquerda para ver os episódios."
+          >
+            {seriesInfo?.episodes && (
+              <SeriesEpisodesPanel
+                episodesBySeason={seriesInfo.episodes}
+                onPlay={(ep) =>
+                  setPlayingEp({
+                    ep,
+                    coverFallback: activeSeries?.cover,
+                  })
+                }
+                onCopyExternal={handleCopyExternal}
+              />
+            )}
+          </PreviewPanel>
+        }
+      />
+
+      {playingEp && epUrl && (
+        <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="relative w-full max-w-5xl">
+            <Button
+              variant="secondary"
+              size="icon"
+              className="absolute -top-12 right-0 z-10"
+              onClick={() => setPlayingEp(null)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            <Player
+              src={epUrl}
+              rawUrl={epUrl}
+              containerExt={playingEp.ep.container_extension}
+              title={playingEp.ep.title}
+              poster={proxyImageUrl(
+                playingEp.ep.info?.movie_image || playingEp.coverFallback || "",
+              )}
+              onClose={() => setPlayingEp(null)}
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
