@@ -47,6 +47,7 @@ import {
   X,
   Pencil,
   AlertOctagon,
+  FlaskConical,
   Wifi,
 } from "lucide-react";
 
