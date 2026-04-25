@@ -98,13 +98,13 @@ export function SeriesDetailsDialog({
             )}
           </div>
 
-          <div className="min-w-0 space-y-3 md:pt-16">
-            <h2 className="text-xl md:text-2xl font-bold leading-tight">{series.name}</h2>
+          <div className="min-w-0 space-y-3 md:space-y-4 md:pt-16">
+            <h2 className="text-2xl md:text-3xl font-bold leading-tight">{series.name}</h2>
 
-            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3 text-base text-muted-foreground">
               {ratingNum > 0 && (
                 <span className="flex items-center gap-1">
-                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                  <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
                   <span className="text-foreground font-medium">{ratingNum.toFixed(1)}</span>
                 </span>
               )}
@@ -113,19 +113,19 @@ export function SeriesDetailsDialog({
             </div>
 
             {isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-base text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> Carregando detalhes…
               </div>
             ) : plot ? (
-              <p className="text-sm text-foreground/90 leading-relaxed line-clamp-5">
+              <p className="text-base text-foreground/90 leading-relaxed line-clamp-5">
                 {plot}
               </p>
             ) : (
-              <p className="text-sm text-muted-foreground italic">Sem sinopse disponível.</p>
+              <p className="text-base text-muted-foreground italic">Sem sinopse disponível.</p>
             )}
 
             {(cast || director) && (
-              <div className="text-xs text-muted-foreground space-y-1">
+              <div className="text-sm text-muted-foreground space-y-1">
                 {director && (
                   <p>
                     <span className="font-semibold text-foreground/80">Direção:</span>{" "}
@@ -143,7 +143,7 @@ export function SeriesDetailsDialog({
             <div className="flex flex-wrap gap-2 pt-1">
               {onToggleFavorite && (
                 <Button
-                  size="sm"
+                  size="default"
                   variant="outline"
                   onClick={onToggleFavorite}
                   className={cn("gap-2", isFavorite && "border-primary/60 text-primary")}
@@ -159,7 +159,7 @@ export function SeriesDetailsDialog({
         </div>
 
         <div className="px-4 md:px-6 pb-6">
-          <h3 className="text-sm font-semibold mb-2">Episódios</h3>
+          <h3 className="text-lg font-semibold mb-3">Episódios</h3>
           {data?.episodes ? (
             <SeriesEpisodesPanel
               episodesBySeason={data.episodes}
@@ -167,11 +167,11 @@ export function SeriesDetailsDialog({
               onCopyExternal={onCopyExternal}
             />
           ) : isLoading ? (
-            <div className="text-xs text-muted-foreground flex items-center gap-2">
-              <Loader2 className="h-3 w-3 animate-spin" /> Carregando episódios…
+            <div className="text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> Carregando episódios…
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground italic">
+            <p className="text-sm text-muted-foreground italic">
               Nenhum episódio disponível.
             </p>
           )}
