@@ -17,6 +17,7 @@ import {
 } from "@/services/iptv";
 import { useIsIncompatible } from "@/hooks/useIsIncompatible";
 import { clearIncompatible } from "@/lib/incompatibleContent";
+import { useTmdbFallback } from "@/hooks/useTmdbFallback";
 
 interface MovieDetailsDialogProps {
   open: boolean;
@@ -57,13 +58,24 @@ export function MovieDetailsDialog({
   if (!movie) return null;
 
   const info = data?.info;
-  const cover = info?.movie_image || info?.cover_big || movie.stream_icon;
-  const backdrop = Array.isArray(info?.backdrop_path)
+  const sourceCover = info?.movie_image || info?.cover_big || movie.stream_icon;
+  const sourceBackdrop = Array.isArray(info?.backdrop_path)
     ? info!.backdrop_path[0]
-    : (info?.backdrop_path as string | undefined) || cover;
+    : (info?.backdrop_path as string | undefined) || sourceCover;
   const releaseDate = info?.releasedate || info?.release_date;
   const year = releaseDate ? releaseDate.slice(0, 4) : null;
   const ratingNum = movie.rating_5based || (info?.rating_5based ?? 0);
+
+  // Fallback TMDB quando a fonte IPTV não retorna capa/backdrop.
+  const { data: tmdb } = useTmdbFallback({
+    type: "movie",
+    hasCover: !!sourceCover,
+    tmdb_id: info?.tmdb_id ?? undefined,
+    name: movie.name,
+    year: year ?? undefined,
+  });
+  const cover = sourceCover || tmdb?.poster || null;
+  const backdrop = sourceBackdrop || tmdb?.backdrop || cover;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

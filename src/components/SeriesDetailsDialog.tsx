@@ -10,6 +10,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { SeriesEpisodesPanel } from "@/components/library/SeriesEpisodesPanel";
+import { useTmdbFallback } from "@/hooks/useTmdbFallback";
 import {
   getSeriesInfo,
   proxyImageUrl,
@@ -50,8 +51,7 @@ export function SeriesDetailsDialog({
   if (!series) return null;
 
   const info = data?.info;
-  const cover = info?.cover || series.cover;
-  const backdrop = cover;
+  const sourceCover = info?.cover || series.cover;
   const releaseDate = series.releaseDate || info?.releaseDate;
   const year = releaseDate ? releaseDate.slice(0, 4) : null;
   const ratingNum = series.rating_5based || 0;
@@ -59,6 +59,16 @@ export function SeriesDetailsDialog({
   const cast = series.cast || info?.cast;
   const director = series.director || info?.director;
   const genre = series.genre || info?.genre;
+
+  // Fallback TMDB quando a fonte IPTV não retorna capa.
+  const { data: tmdb } = useTmdbFallback({
+    type: "series",
+    hasCover: !!sourceCover,
+    name: series.name,
+    year: year ?? undefined,
+  });
+  const cover = sourceCover || tmdb?.poster || null;
+  const backdrop = tmdb?.backdrop || cover;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
