@@ -99,6 +99,52 @@ type DiagnosticStatus =
 
 type LogSource = "hls" | "video" | "diag" | "net";
 type LogLevel = "info" | "warn" | "error";
+/**
+ * Snapshot rico do estado do player capturado em todo log. Permite
+ * diagnosticar pós-mortem stalls, falhas de buffer e travas de rede sem
+ * precisar reproduzir o problema. Todos os campos são opcionais — só
+ * preenchidos quando aplicáveis.
+ */
+type LogMeta = {
+  /** video.currentTime em segundos */
+  ct?: number;
+  /** maior fim de buffered, ou null se vazio */
+  be?: number;
+  /** segundos de buffer à frente de currentTime */
+  bAhead?: number;
+  /** video.readyState (0-4) */
+  rs?: number;
+  /** video.networkState (0-3) */
+  ns?: number;
+  /** video.paused */
+  p?: boolean;
+  /** HTTP status code (eventos de rede) */
+  http?: number;
+  /** Bytes carregados (frag/level) */
+  bytes?: number;
+  /** Tempo total de carregamento em ms (request total time) */
+  loadMs?: number;
+  /** Time-to-first-byte em ms */
+  ttfb?: number;
+  /** Duração do segmento em segundos (sn duration) */
+  sd?: number;
+  /** SN do fragmento */
+  sn?: number | string;
+  /** Nível/qualidade ativo */
+  level?: number;
+  /** Bitrate atual (bps) */
+  br?: number;
+  /** URL ofensiva (truncada) */
+  url?: string;
+  /** effectiveType da Network Information API */
+  net?: string;
+  /** rtt da Network Information API */
+  rtt?: number;
+  /** downlink Mbps */
+  dl?: number;
+  /** Contadores arbitrários */
+  [k: string]: unknown;
+};
 type LogEntry = {
   t: number;
   tRel: number;
@@ -106,6 +152,7 @@ type LogEntry = {
   level: LogLevel;
   label: string;
   details?: string;
+  meta?: LogMeta;
 };
 
 /** Por onde o manifest do canal foi carregado. */
@@ -341,10 +388,56 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     catch { /* noop */ }
   }, [logsPanelOpen]);
 
+  /**
+   * Captura um snapshot leve do `<video>` para anexar a logs. Tudo é
+   * opcional e protegido contra elementos não montados.
+   */
+  const captureVideoMeta = (): LogMeta => {
+    const v = videoRef.current;
+    if (!v) return {};
+    let be: number | undefined;
+    let bAhead: number | undefined;
+    try {
+      const buf = v.buffered;
+      if (buf.length > 0) {
+        be = buf.end(buf.length - 1);
+        bAhead = Math.max(0, be - v.currentTime);
+      }
+    } catch { /* noop */ }
+    return {
+      ct: Number.isFinite(v.currentTime) ? +v.currentTime.toFixed(2) : undefined,
+      be: be !== undefined ? +be.toFixed(2) : undefined,
+      bAhead: bAhead !== undefined ? +bAhead.toFixed(2) : undefined,
+      rs: v.readyState,
+      ns: v.networkState,
+      p: v.paused,
+    };
+  };
+
+  /**
+   * Snapshot da Network Information API (Chrome/Edge). Útil pra correlacionar
+   * stalls com queda de qualidade da conexão (ex: 4g → 3g).
+   */
+  const captureNetMeta = (): LogMeta => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = (navigator as any).connection;
+    if (!c) return {};
+    return {
+      net: typeof c.effectiveType === "string" ? c.effectiveType : undefined,
+      rtt: typeof c.rtt === "number" ? c.rtt : undefined,
+      dl: typeof c.downlink === "number" ? c.downlink : undefined,
+    };
+  };
+
   const pushLog = (entry: Omit<LogEntry, "t" | "tRel">) => {
     const t = performance.now();
     const tRel = setupStartRef.current ? t - setupStartRef.current : 0;
-    logsRef.current.push({ ...entry, t, tRel });
+    // Mescla auto-snapshot de vídeo + meta explícito do chamador (este último vence).
+    const autoMeta = captureVideoMeta();
+    const meta = { ...autoMeta, ...(entry.meta ?? {}) };
+    // Só anexa se houver algo útil
+    const finalMeta = Object.keys(meta).length > 0 ? meta : undefined;
+    logsRef.current.push({ ...entry, t, tRel, meta: finalMeta });
     if (logsRef.current.length > 200) logsRef.current.shift();
     if (logsPanelOpenRef.current) setLogsVersion((v) => v + 1);
   };
@@ -482,7 +575,18 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       firstFrameAtRef.current = null;
       manifestParsedAtRef.current = null;
       setupStartRef.current = performance.now();
-      pushLog({ source: "diag", level: "info", label: "setup_start", details: src ?? undefined });
+      pushLog({
+        source: "diag",
+        level: "info",
+        label: "setup_start",
+        details: src ?? undefined,
+        meta: {
+          ...captureNetMeta(),
+          host: extractUpstreamHost(rawUrl ?? src) ?? undefined,
+          engine,
+          ext: containerExt,
+        },
+      });
       if (logsPanelOpenRef.current) setLogsVersion((v) => v + 1);
 
       if (!src) {
@@ -859,39 +963,130 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                 }
               });
 
-              hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              hls.on(Hls.Events.MANIFEST_PARSED, (_evt, data) => {
                 if (cancelled) return;
                 manifestReadyRef.current = true;
                 manifestParsedAtRef.current = performance.now();
                 lastReasonRef.current = "manifest carregado";
                 setLastReason("manifest carregado");
-                pushLog({ source: "hls", level: "info", label: "manifest_parsed" });
-                // play() já foi disparado em MEDIA_ATTACHED.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const levels = (data as any)?.levels?.length ?? 0;
+                pushLog({
+                  source: "hls",
+                  level: "info",
+                  label: "manifest_parsed",
+                  details: `levels=${levels}`,
+                  meta: { ...captureNetMeta(), levels },
+                });
               });
 
-              hls.on(Hls.Events.LEVEL_LOADED, () => {
+              hls.on(Hls.Events.LEVEL_LOADED, (_evt, data) => {
                 if (cancelled) return;
                 if (retryCountRef.current > 0) retryCountRef.current = 0;
                 // Sucesso de rede: cancela o watchdog de stall (HLS está vivo).
                 clearStallTimeout();
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const d = data as any;
+                const lvl = typeof d?.level === "number" ? d.level : undefined;
+                const stats = d?.stats ?? {};
+                const ttfb = stats.tfirst && stats.trequest ? Math.round(stats.tfirst - stats.trequest) : undefined;
+                const loadMs = stats.tload && stats.trequest ? Math.round(stats.tload - stats.trequest) : undefined;
+                const fragCount = d?.details?.fragments?.length;
+                pushLog({
+                  source: "hls",
+                  level: "info",
+                  label: "level_loaded",
+                  details: `lvl=${lvl} frags=${fragCount ?? "?"} ttfb=${ttfb ?? "?"}ms`,
+                  meta: { level: lvl, ttfb, loadMs, frags: fragCount },
+                });
               });
 
-              hls.on(Hls.Events.FRAG_LOADED, () => {
+              hls.on(Hls.Events.FRAG_LOADED, (_evt, data) => {
                 if (cancelled) return;
                 if (fragLoadErrorCountRef.current > 0) fragLoadErrorCountRef.current = 0;
                 // Fragmento chegou: cancela o watchdog de stall.
                 clearStallTimeout();
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const d = data as any;
+                const frag = d?.frag ?? {};
+                const stats = d?.payload ? { total: d.payload.byteLength } : (frag.stats ?? {});
+                const ttfb = stats.tfirst && stats.trequest ? Math.round(stats.tfirst - stats.trequest) : undefined;
+                const loadMs = stats.tload && stats.trequest ? Math.round(stats.tload - stats.trequest) : undefined;
+                const bytes = stats.total ?? stats.loaded;
+                pushLog({
+                  source: "hls",
+                  level: "info",
+                  label: "frag_loaded",
+                  details: `sn=${frag.sn} ${bytes ? `${Math.round(bytes / 1024)}KB` : ""} ${loadMs ?? "?"}ms`,
+                  meta: {
+                    sn: frag.sn,
+                    sd: frag.duration,
+                    bytes,
+                    ttfb,
+                    loadMs,
+                    level: frag.level,
+                  },
+                });
+              });
+
+              hls.on(Hls.Events.LEVEL_SWITCHED, (_evt, data) => {
+                if (cancelled) return;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const d = data as any;
+                const lvl = d?.level;
+                const br = hls.levels?.[lvl]?.bitrate;
+                pushLog({
+                  source: "hls",
+                  level: "info",
+                  label: "level_switched",
+                  details: `lvl=${lvl} ${br ? `${Math.round(br / 1000)}kbps` : ""}`,
+                  meta: { level: lvl, br },
+                });
+              });
+
+              hls.on(Hls.Events.FRAG_LOAD_EMERGENCY_ABORTED, (_evt, data) => {
+                if (cancelled) return;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const frag = (data as any)?.frag ?? {};
+                pushLog({
+                  source: "hls",
+                  level: "warn",
+                  label: "frag_emergency_aborted",
+                  details: `sn=${frag.sn} — bitrate baixou`,
+                  meta: { sn: frag.sn, level: frag.level },
+                });
               });
 
               hls.on(Hls.Events.ERROR, (_evt, data: ErrorData) => {
                 const detail = `${data.type}/${data.details}`;
                 lastReasonRef.current = detail;
                 setLastReason(detail);
+                // Extrai info HTTP/URL pra diagnóstico
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const d = data as any;
+                const ctx = d?.context ?? d?.networkDetails ?? {};
+                const httpStatus =
+                  typeof d?.response?.code === "number" ? d.response.code :
+                  typeof ctx?.status === "number" ? ctx.status :
+                  undefined;
+                const offendingUrl: string | undefined =
+                  d?.frag?.url ?? d?.url ?? ctx?.responseURL ?? d?.context?.url;
+                const truncatedUrl = offendingUrl
+                  ? offendingUrl.length > 120 ? `${offendingUrl.slice(0, 60)}…${offendingUrl.slice(-50)}` : offendingUrl
+                  : undefined;
                 pushLog({
                   source: "hls",
                   level: data.fatal ? "error" : "warn",
                   label: "error",
-                  details: `${detail} fatal=${data.fatal}`,
+                  details: `${detail} fatal=${data.fatal}${httpStatus ? ` http=${httpStatus}` : ""}`,
+                  meta: {
+                    http: httpStatus,
+                    url: truncatedUrl,
+                    sn: d?.frag?.sn,
+                    level: d?.frag?.level ?? d?.level,
+                    bytes: d?.frag?.stats?.loaded,
+                    ...captureNetMeta(),
+                  },
                 });
 
                 // Codec / decode → mark immediately
@@ -1095,7 +1290,17 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       if (stallTimeoutRef.current === null) {
         stallTimeoutRef.current = window.setTimeout(() => {
           updateStatus("stall_timeout", lastReasonRef.current || "BUFFER_STALLED_ERROR");
-          pushLog({ source: "diag", level: "error", label: "stall_timeout_8s", details: lastReasonRef.current ?? undefined });
+          pushLog({
+            source: "diag",
+            level: "error",
+            label: "stall_timeout",
+            details: `${Math.round(STALL_TIMEOUT_MS / 1000)}s — ${lastReasonRef.current ?? "no reason"}`,
+            meta: {
+              ...captureNetMeta(),
+              fragErrors: fragLoadErrorCountRef.current,
+              fatalRetries: retryCountRef.current,
+            },
+          });
         }, STALL_TIMEOUT_MS);
       }
     };
@@ -1110,7 +1315,17 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       if (stallTimeoutRef.current === null) {
         stallTimeoutRef.current = window.setTimeout(() => {
           updateStatus("stall_timeout", "BUFFER_STALLED_ERROR");
-          pushLog({ source: "diag", level: "error", label: "stall_timeout_8s", details: "BUFFER_STALLED_ERROR" });
+          pushLog({
+            source: "diag",
+            level: "error",
+            label: "stall_timeout",
+            details: `${Math.round(STALL_TIMEOUT_MS / 1000)}s — BUFFER_STALLED_ERROR`,
+            meta: {
+              ...captureNetMeta(),
+              fragErrors: fragLoadErrorCountRef.current,
+              fatalRetries: retryCountRef.current,
+            },
+          });
         }, STALL_TIMEOUT_MS);
       }
     };
@@ -1611,29 +1826,56 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
             {logsRef.current.length === 0 ? (
               <div className="text-muted-foreground text-center py-4">Sem eventos ainda</div>
             ) : (
-              logsRef.current.map((entry, i) => (
-                <div key={i} className="flex items-start gap-1.5 leading-tight">
-                  <span className="shrink-0 text-muted-foreground tabular-nums">
-                    [+{Math.round(entry.tRel)}ms]
-                  </span>
-                  <span
-                    className={cn(
-                      "shrink-0 rounded border px-1 py-0 text-[10px] uppercase tracking-wide",
-                      sourceBadge[entry.source],
-                    )}
-                  >
-                    {entry.source}
-                  </span>
-                  <div className={cn("min-w-0 flex-1", levelTone[entry.level])}>
-                    <span className="font-semibold">{entry.label}</span>
-                    {entry.details && (
-                      <span className="ml-1 text-muted-foreground truncate inline-block max-w-full align-bottom" title={entry.details}>
-                        {entry.details}
-                      </span>
-                    )}
+              logsRef.current.map((entry, i) => {
+                // Formata meta numa linha curta humanamente legível.
+                // Ex: "ct=12.3 bAhead=2.1 rs=4 http=503"
+                const metaParts: string[] = [];
+                if (entry.meta) {
+                  const m = entry.meta;
+                  if (m.ct !== undefined) metaParts.push(`ct=${m.ct}`);
+                  if (m.bAhead !== undefined) metaParts.push(`buf=${m.bAhead}s`);
+                  if (m.rs !== undefined) metaParts.push(`rs=${m.rs}`);
+                  if (m.http !== undefined) metaParts.push(`http=${m.http}`);
+                  if (m.bytes !== undefined) metaParts.push(`${Math.round((m.bytes as number) / 1024)}KB`);
+                  if (m.ttfb !== undefined) metaParts.push(`ttfb=${m.ttfb}ms`);
+                  if (m.loadMs !== undefined) metaParts.push(`load=${m.loadMs}ms`);
+                  if (m.net) metaParts.push(`net=${m.net}`);
+                  if (m.rtt !== undefined) metaParts.push(`rtt=${m.rtt}`);
+                }
+                const metaStr = metaParts.join(" ");
+                const fullMetaJson = entry.meta ? JSON.stringify(entry.meta, null, 2) : "";
+                return (
+                  <div key={i} className="flex items-start gap-1.5 leading-tight">
+                    <span className="shrink-0 text-muted-foreground tabular-nums">
+                      [+{Math.round(entry.tRel)}ms]
+                    </span>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded border px-1 py-0 text-[10px] uppercase tracking-wide",
+                        sourceBadge[entry.source],
+                      )}
+                    >
+                      {entry.source}
+                    </span>
+                    <div className={cn("min-w-0 flex-1", levelTone[entry.level])}>
+                      <span className="font-semibold">{entry.label}</span>
+                      {entry.details && (
+                        <span className="ml-1 text-muted-foreground" title={entry.details}>
+                          {entry.details}
+                        </span>
+                      )}
+                      {metaStr && (
+                        <span
+                          className="ml-1 text-[10px] text-muted-foreground/80 break-all"
+                          title={fullMetaJson}
+                        >
+                          {metaStr}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
