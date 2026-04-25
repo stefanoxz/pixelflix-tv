@@ -186,78 +186,101 @@ interface DnsErrorOverview {
   per_server_series?: { server_url: string; points: DnsErrorSeriesPoint[] }[];
 }
 
-const ERROR_BUCKET_META: Record<ErrorBucket, { label: string; cls: string; tip: string }> = {
+const ERROR_BUCKET_META: Record<ErrorBucket, { label: string; cls: string; tip: string; color: string }> = {
   refused: {
     label: "Connection refused",
     cls: "text-destructive bg-destructive/10",
     tip: "Servidor recusou a conexão TCP (porta fechada / serviço parado).",
+    color: "hsl(0 84% 60%)",
   },
   reset: {
     label: "Reset by peer",
     cls: "text-destructive bg-destructive/10",
     tip: "Servidor derrubou a conexão durante o handshake (firewall / anti-bot).",
+    color: "hsl(14 90% 55%)",
   },
   http_404: {
     label: "HTTP 404",
     cls: "text-warning bg-warning/10",
     tip: "Endpoint /player_api.php não encontrado nessa DNS.",
+    color: "hsl(38 92% 50%)",
   },
   http_444: {
     label: "HTTP 444",
     cls: "text-warning bg-warning/10",
     tip: "Servidor encerrou sem resposta (anti-scraping nginx).",
+    color: "hsl(28 90% 55%)",
   },
   http_5xx: {
     label: "HTTP 5xx",
     cls: "text-warning bg-warning/10",
     tip: "Erro interno do servidor (sobrecarga, 502/503/504).",
+    color: "hsl(48 95% 55%)",
   },
   tls: {
     label: "TLS / SSL",
     cls: "text-warning bg-warning/10",
     tip: "Falha de TLS/SSL (handshake, UnrecognisedName, alert).",
+    color: "hsl(280 70% 60%)",
   },
   cert_invalid: {
     label: "Certificado inválido",
     cls: "text-destructive bg-destructive/10",
     tip: "Certificate verify failed: expirado, autoassinado ou hostname inválido.",
+    color: "hsl(320 75% 55%)",
   },
   timeout: {
     label: "Timeout",
     cls: "text-warning bg-warning/10",
     tip: "Servidor não respondeu no tempo limite.",
+    color: "hsl(60 80% 50%)",
   },
   io_timeout: {
     label: "I/O timeout",
     cls: "text-warning bg-warning/10",
     tip: "Tempo limite em leitura/escrita do socket (read/write timeout).",
+    color: "hsl(80 70% 50%)",
   },
   dns: {
     label: "DNS off",
     cls: "text-destructive bg-destructive/10",
     tip: "Domínio não resolveu (DNS inválido ou removido).",
+    color: "hsl(340 80% 55%)",
   },
   no_route: {
     label: "No route to host",
     cls: "text-destructive bg-destructive/10",
     tip: "Sem rota até o host (EHOSTUNREACH). IP inválido ou bloqueado.",
+    color: "hsl(200 80% 55%)",
   },
   net_unreach: {
     label: "Rede inacessível",
     cls: "text-destructive bg-destructive/10",
     tip: "Network is unreachable (ENETUNREACH). Problema de roteamento.",
+    color: "hsl(220 75% 60%)",
   },
   protocol: {
     label: "Protocolo inválido",
     cls: "text-warning bg-warning/10",
     tip: "Resposta HTTP malformada (parse error, EOF inesperado).",
+    color: "hsl(160 65% 50%)",
   },
   other: {
     label: "Outros",
     cls: "text-muted-foreground bg-muted/40",
     tip: "Outras falhas (incluindo credenciais inválidas).",
+    color: "hsl(220 10% 55%)",
   },
 };
+
+const SERVER_PALETTE = [
+  "hsl(214 100% 56%)",
+  "hsl(0 84% 60%)",
+  "hsl(38 92% 50%)",
+  "hsl(142 71% 45%)",
+  "hsl(280 70% 60%)",
+  "hsl(180 70% 50%)",
+];
 
 async function callAdmin<T>(action: string, payload?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("admin-api", {
