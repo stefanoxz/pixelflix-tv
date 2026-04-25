@@ -115,6 +115,10 @@ interface MonitoringSession {
   started_at: string;
   last_seen_at: string;
   duration_s: number;
+  content_kind: "live" | "movie" | "episode" | "idle" | null;
+  content_title: string | null;
+  content_id: string | null;
+  content_started_at: string | null;
 }
 interface MonitoringBlock {
   anon_user_id: string;
