@@ -24,28 +24,7 @@ const ENGINE_LABEL: Record<PlaybackEngine, string> = {
   external: "Externo",
 };
 
-const ENGINE_STORAGE_PREFIX = "player.engine.host:";
 const MPEGTS_BOOTSTRAP_TIMEOUT_MS = 8_000;
-
-function safeHostFromUrl(u: string | null | undefined): string | null {
-  if (!u) return null;
-  try { return new URL(u).host.toLowerCase(); } catch { return null; }
-}
-
-function getPreferredEngine(host: string | null): PlaybackEngine | null {
-  if (!host) return null;
-  try {
-    const v = localStorage.getItem(`${ENGINE_STORAGE_PREFIX}${host}`);
-    if (v === "hls" || v === "mpegts" || v === "external") return v;
-  } catch { /* noop */ }
-  return null;
-}
-
-function setPreferredEngine(host: string | null, engine: PlaybackEngine) {
-  if (!host) return;
-  try { localStorage.setItem(`${ENGINE_STORAGE_PREFIX}${host}`, engine); }
-  catch { /* noop */ }
-}
 
 /** Detecta canal ao vivo Xtream: /live/<u>/<p>/<id>.m3u8 */
 function isLiveXtreamUrl(url: string | null | undefined): boolean {
@@ -72,6 +51,8 @@ import {
   markHostSuccess,
   markHostFailure,
   shouldUseProxy,
+  getPreferredEngine,
+  setPreferredEngine,
   type PlaybackStrategy,
   type StreamMode,
 } from "@/services/iptv";
@@ -388,7 +369,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const isLive = useMemo(() => isLiveXtreamUrl(rawUrl ?? src ?? null), [rawUrl, src]);
   const [engine, setEngine] = useState<PlaybackEngine>(() => {
     if (!isLive) return "hls";
-    return getPreferredEngine(safeHostFromUrl(rawUrl ?? src)) ?? "hls";
+    return getPreferredEngine(rawUrl ?? src) ?? "hls";
   });
   // Re-sincroniza engine quando o canal muda de host.
   useEffect(() => {
@@ -396,7 +377,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setEngine("hls");
       return;
     }
-    const pref = getPreferredEngine(safeHostFromUrl(rawUrl ?? src)) ?? "hls";
+    const pref = getPreferredEngine(rawUrl ?? src) ?? "hls";
     setEngine(pref);
     // Channel changed → reset the per-session proxy auto-restart guard so the
     // new channel gets its own opportunity to fall back to proxy.
@@ -748,7 +729,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         ) {
           engineAutoSwitchedRef.current = true;
           markHostFailure(url, reason);
-          setPreferredEngine(safeHostFromUrl(url), "mpegts");
+          setPreferredEngine(url, "mpegts");
           pushLog({
             source: "diag",
             level: "warn",
@@ -1455,7 +1436,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         updateStatus("playback_started", null);
         setRootCauseOnce("ok", `TTFF=${ttff}ms`);
         markHostSuccess(rawUrl ?? src);
-        setPreferredEngine(safeHostFromUrl(rawUrl ?? src), engine);
+        if (engine === "hls" || engine === "mpegts") setPreferredEngine(rawUrl ?? src, engine);
         reportStreamEvent("stream_started", { url: src ?? undefined, meta: { trigger: "playing_event", ttff_ms: ttff } });
       } else if (status === "stall_timeout") {
         updateStatus("playback_started", "recuperado após stall");
@@ -1480,7 +1461,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         }
         updateStatus("playback_started", null);
         markHostSuccess(rawUrl ?? src);
-        setPreferredEngine(safeHostFromUrl(rawUrl ?? src), engine);
+        if (engine === "hls" || engine === "mpegts") setPreferredEngine(rawUrl ?? src, engine);
       }
     };
     const onError = () => {
@@ -1556,7 +1537,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
   const handleEngineChange = (next: PlaybackEngine) => {
     if (next === engine) return;
-    setPreferredEngine(safeHostFromUrl(rawUrl ?? src), next);
+    if (next === "hls" || next === "mpegts") setPreferredEngine(rawUrl ?? src, next);
     pushLog({ source: "diag", level: "info", label: "engine_change", details: `${engine} → ${next}` });
     console.log("[player] engine_change:", engine, "→", next);
     setError(null);
