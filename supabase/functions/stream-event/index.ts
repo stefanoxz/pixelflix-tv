@@ -50,6 +50,7 @@ const ALLOWED_EVENTS = new Set([
   "stream_started",
   "stream_error",
   "session_heartbeat",
+  "user_report",
 ]);
 
 // Decodifica o JWT sem validar criptograficamente (só pega o sub).

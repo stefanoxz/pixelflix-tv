@@ -1332,7 +1332,11 @@ export async function requestStreamToken(params: {
  * Retorna void imediatamente; o request roda em background.
  */
 export function reportStreamEvent(
-  event_type: "stream_started" | "stream_error" | "session_heartbeat",
+  event_type:
+    | "stream_started"
+    | "stream_error"
+    | "session_heartbeat"
+    | "user_report",
   payload?: { url?: string; meta?: Record<string, unknown> },
 ): void {
   // Async wrapper só para pegar o token e disparar — não retorna a promise

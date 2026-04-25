@@ -1,6 +1,13 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import Hls, { type ErrorData } from "hls.js";
-import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink, Activity, Terminal, Trash2, VideoOff, ListVideo, Zap } from "lucide-react";
+import { Tv, AlertTriangle, Copy, Check, RefreshCw, X, Loader2, ExternalLink, Activity, Terminal, Trash2, VideoOff, ListVideo, Zap, Rewind, FastForward, Gauge, Flag } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ReportProblemDialog, type ReportSnapshot } from "@/components/ReportProblemDialog";
 
 /**
  * Motor de reprodução para canais ao vivo.
@@ -341,6 +348,15 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const [copied, setCopied] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [playbackRate, setPlaybackRateState] = useState<number>(() => {
+    try {
+      const v = parseFloat(localStorage.getItem("player.rate") || "1");
+      return Number.isFinite(v) && v > 0 ? v : 1;
+    } catch {
+      return 1;
+    }
+  });
 
   const [status, setStatus] = useState<DiagnosticStatus>("connecting");
   const [lastReason, setLastReason] = useState<string | null>(null);
@@ -1460,6 +1476,87 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     setEngine(next);
   };
 
+  // ===== Playback rate + skip controls =====
+  const setPlaybackRate = (rate: number) => {
+    setPlaybackRateState(rate);
+    try {
+      localStorage.setItem("player.rate", String(rate));
+    } catch {
+      /* noop */
+    }
+    if (videoRef.current) videoRef.current.playbackRate = rate;
+  };
+
+  // Aplica rate sempre que o vídeo (re)cria.
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.playbackRate = playbackRate;
+  }, [playbackRate, src, retryNonce]);
+
+  const skipBy = (delta: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (isLive) return; // não tem efeito em live
+    const dur = Number.isFinite(v.duration) ? v.duration : 0;
+    const target = Math.max(0, Math.min(dur > 0 ? dur - 1 : v.currentTime + delta, v.currentTime + delta));
+    v.currentTime = target;
+  };
+
+  // Atalhos de teclado: ← → ±10s, Espaço play/pause, > < velocidade
+  useEffect(() => {
+    if (!src || error) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+      switch (e.key) {
+        case "ArrowLeft":
+          if (!isLive) {
+            e.preventDefault();
+            skipBy(-10);
+          }
+          break;
+        case "ArrowRight":
+          if (!isLive) {
+            e.preventDefault();
+            skipBy(10);
+          }
+          break;
+        case " ": {
+          const v = videoRef.current;
+          if (v) {
+            e.preventDefault();
+            if (v.paused) v.play().catch(() => {});
+            else v.pause();
+          }
+          break;
+        }
+        case ">":
+        case ".":
+          setPlaybackRate(Math.min(2, +(playbackRate + 0.25).toFixed(2)));
+          break;
+        case "<":
+        case ",":
+          setPlaybackRate(Math.max(0.5, +(playbackRate - 0.25).toFixed(2)));
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src, error, isLive, playbackRate]);
+
+  const reportSnapshot: ReportSnapshot = {
+    title,
+    url: copyTarget,
+    containerExt,
+    engine: ENGINE_LABEL[engine],
+    loadMethod: LOAD_METHOD_LABEL[loadMethod],
+    rootCause: ROOT_CAUSE_LABEL[rootCause],
+    lastReason,
+    upstreamHost,
+    status: STATUS_LABEL[status],
+  };
+
   // Auto-scroll the logs list to the bottom when new logs arrive
   useEffect(() => {
     if (!logsPanelOpen) return;
@@ -1559,7 +1656,75 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
       {title && !error && (
         <div className="pointer-events-none absolute left-0 top-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-4">
-          <h3 className="text-sm font-semibold text-white drop-shadow">{title}</h3>
+          <h3 className="text-sm font-semibold text-white drop-shadow pr-32">{title}</h3>
+        </div>
+      )}
+
+      {/* Custom controls bar — top-right (skip ±10s, speed, report) */}
+      {showVideo && !error && (
+        <div className="pointer-events-auto absolute top-3 right-3 z-20 flex items-center gap-1.5">
+          {!isLive && (
+            <>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="h-9 w-9 bg-black/60 hover:bg-black/80 backdrop-blur border-0 text-white"
+                onClick={() => skipBy(-10)}
+                title="Voltar 10 segundos (←)"
+                aria-label="Voltar 10 segundos"
+              >
+                <Rewind className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="h-9 w-9 bg-black/60 hover:bg-black/80 backdrop-blur border-0 text-white"
+                onClick={() => skipBy(10)}
+                title="Avançar 10 segundos (→)"
+                aria-label="Avançar 10 segundos"
+              >
+                <FastForward className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-9 px-2.5 bg-black/60 hover:bg-black/80 backdrop-blur border-0 text-white gap-1.5 tabular-nums"
+                title="Velocidade de reprodução"
+              >
+                <Gauge className="h-3.5 w-3.5" />
+                {playbackRate}x
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[120px]">
+              {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((r) => (
+                <DropdownMenuItem
+                  key={r}
+                  onClick={() => setPlaybackRate(r)}
+                  className={cn(
+                    "justify-between tabular-nums",
+                    r === playbackRate && "bg-primary/10 text-primary font-medium",
+                  )}
+                >
+                  {r}x
+                  {r === 1 && <span className="text-[10px] text-muted-foreground">normal</span>}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            variant="secondary"
+            size="icon"
+            className="h-9 w-9 bg-black/60 hover:bg-destructive/80 backdrop-blur border-0 text-white"
+            onClick={() => setReportOpen(true)}
+            title="Reportar problema"
+            aria-label="Reportar problema"
+          >
+            <Flag className="h-4 w-4" />
+          </Button>
         </div>
       )}
 
@@ -1892,6 +2057,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           </div>
         </div>
       )}
+
+      <ReportProblemDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        snapshot={reportSnapshot}
+      />
     </div>
   );
 });

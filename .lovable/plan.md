@@ -1,85 +1,127 @@
-## Novo layout para Filmes e Séries (estilo IBO Pro)
+## Objetivo
 
-Hoje Filmes e Séries usam um grid de pôsteres com filtros no topo. O IBO Pro usa um modelo de **3 colunas focado em TV/teclado**, com prévia rica e navegação fluida. Vou replicar esse padrão mantendo total responsividade (desktop, tablet, TV e mobile).
+Replicar o layout do print (estilo IBO Pro) em Filmes/Séries — rail vertical de categorias + **grid de pôsteres** (não mais lista compacta + preview lateral) — com topbar (voltar, título, relógio/data). Adicionar controles **±10s** e **velocidade de reprodução** no Player, otimizados para **mobile/web**. Adicionar **botão "Reportar problema"** no Player que envia o relato para o painel admin.
 
-### Layout alvo (desktop / TV)
+---
+
+## 1) Filmes / Séries — layout estilo IBO
+
+### Topbar (novo componente `LibraryTopBar`)
+- Esquerda: botão **voltar** (ícone seta) + ícone do app + título da seção (Filmes / Séries).
+- Direita: relógio em tempo real (HH:MM) + data abreviada (Sáb., 25/04).
+- Mobile: relógio compacto; voltar leva ao Início (`/`).
+
+### Layout principal (substitui o atual 3-col com PreviewPanel)
+```text
+┌────────────────────────────────────────────────────────────┐
+│  ←  [Filmes]                            03:04  Sáb., 25/04 │
+├──────────────┬─────────────────────────────────────────────┤
+│ ▶ EM ALTA    │ [poster][poster][poster][poster][poster][p] │
+│ □ Lançament. │ [poster][poster][poster][poster][poster][p] │
+│ □ Netflix  ›│ [poster][poster][poster][poster][poster][p] │
+│ □ HBO Max  ›│                                              │
+│ □ Prime    ›│                                              │
+└──────────────┴─────────────────────────────────────────────┘
+```
+- **Rail esquerda**: continua usando `CategoryRail` (já existente). Itens com ícone de pasta + chevron à direita; o ativo recebe ícone de "play" / destaque azul. Mostrar contagem só em Favoritos. Largura: 240px desktop; **drawer (Sheet) no mobile**, aberto por botão de filtro na topbar.
+- **Conteúdo central**: novo componente `PosterGrid` que troca o `TitleList`+`PreviewPanel` por uma grade responsiva de pôsteres com hover/foco overlay (título + ano embaixo), igual ao print:
+  - Mobile: `grid-cols-3` (gap 2)
+  - sm: `grid-cols-4`, md: `grid-cols-5`, lg: `grid-cols-6`, xl: `grid-cols-7`
+  - Cada card: `aspect-[2/3]`, capa (proxied), gradiente bottom com nome + ano, badge de favorito no canto, foco visível para teclado/TV.
+  - Virtualização: usar `useWindowVirtualizer` do `@tanstack/react-virtual` por linhas para listas grandes (>200).
+- **Detalhes**: ao clicar em um pôster, abre o `MovieDetailsDialog` existente (já mostra sinopse, elenco, botão "Assistir"). Mantém comportamento de duplo-clique = play direto.
+- Busca: input continua no topo do grid, com placeholder "Buscar filme...".
+
+### Componentes a criar
+- `src/components/library/LibraryTopBar.tsx`
+- `src/components/library/PosterGrid.tsx`
+- `src/components/library/PosterCard.tsx`
+- `src/components/library/MobileCategoryDrawer.tsx`
+
+### Componentes alterados / removidos do uso em Filmes/Séries
+- `LibraryShell` continua existindo, mas Movies/Series passam a usar layout próprio mais simples (rail + grid). `PreviewPanel` e `TitleList` deixam de ser usados nessas duas páginas (mantidos no repo por compat, mas sem importar).
+- `Movies.tsx` e `Series.tsx` reescritos para o novo layout (rail + PosterGrid + dialog).
+- Para Séries, ao abrir o pôster, exibe um `SeriesDetailsDialog` novo (espelho do `MovieDetailsDialog`, com seleção de temporada/episódio reaproveitando a lógica do `SeriesEpisodesPanel`).
+
+### Navegação por teclado/TV
+Continuar usando `useGridKeyboardNav` adaptado para grid 2D:
+- ↑/↓ → linha acima/abaixo (n colunas)
+- ←/→ → coluna anterior/próxima
+- Enter → abre dialog
+- `/` → foca busca
+- `f` → favorita o card focado
+
+---
+
+## 2) Player — controles ±10s, velocidade e reportar problema
+
+Adicionar **overlay customizado** sobre o `<video>` (mantém `controls` nativo como fallback em fullscreen). Barra inferior translúcida visível em hover/touch:
 
 ```text
-┌──────────────┬────────────────────────────┬─────────────────────────────┐
-│ CATEGORIAS   │ LISTA DE TÍTULOS           │ PAINEL DE DETALHES          │
-│              │                            │                             │
-│ ▸ Todos      │ ▸ Duna: Parte 2     2024   │ [ backdrop grande ]         │
-│   Lançamentos│   Oppenheimer       2023   │                             │
-│   Ação       │   Interestelar      2014   │ Título · Ano · Duração      │
-│   Comédia    │   ...                      │ ★ 8.7   Ação, Drama         │
-│   Drama      │                            │                             │
-│   Infantil   │                            │ Sinopse curta...            │
-│   Favoritos♥ │                            │                             │
-│              │  [busca embutida no topo]  │ Direção · Elenco            │
-│              │                            │                             │
-│              │                            │ [ ▶ Assistir ] [ ♥ ] [ + ]  │
-└──────────────┴────────────────────────────┴─────────────────────────────┘
+[⏮ -10s] [▶/⏸] [+10s ⏭]   ───────●───────   1x ▾   🚩 Reportar
 ```
 
-- **Esquerda (rail de categorias)**: lista vertical fixa, ícone + nome, com "Favoritos" e contador. Item ativo destacado em azul (cor primária do projeto).
-- **Centro (lista de títulos)**: linhas compactas (não cards) com mini-pôster 40×60, nome, ano, rating e badge de qualidade quando houver. Busca no topo. Virtualizada para suportar bibliotecas grandes.
-- **Direita (painel de prévia)**: atualiza ao passar o foco/hover, mostrando backdrop, sinopse, metadados e ações. Sem precisar abrir modal pra ver informações — é o grande diferencial do IBO.
-- **Player**: ao clicar em "Assistir", entra em modo cinema fullscreen com overlay escuro (já existente).
+### Implementação no `Player.tsx`
+- Novo estado `playbackRate` (1, persistido em `localStorage` `player.rate`). Aplica via `videoRef.current.playbackRate`. DropdownMenu shadcn com 0.5x, 0.75x, **1x**, 1.25x, 1.5x, 1.75x, 2x.
+- Botões `seek(-10)` / `seek(+10)` que ajustam `currentTime`. Desabilitados quando `isLive` (canais ao vivo).
+- Atalhos de teclado: `←`/`→` ±10s, `Espaço` play/pause, `>`/`<` velocidade.
+- Botão **🚩 Reportar problema** abre `ReportProblemDialog` (novo).
+- Mobile: barra com botões maiores (touch ≥44px), gap maior; toggle de visibilidade ao tocar no vídeo (hide após 3s).
+- Manter o painel `Logs` e o card de diagnóstico atuais.
 
-### Layout em mobile / tablet pequeno
+### `ReportProblemDialog` (novo componente)
+- Campos: título do conteúdo (auto-preenchido), categoria (Select: "Não carrega", "Trava/buffering", "Áudio fora de sincronia", "Sem áudio", "Sem legenda", "Outro"), descrição (Textarea opcional).
+- Snapshot técnico anexado automaticamente: `url` (raw), `engine`, `rootCause`, `lastReason`, `loadMethod`, `containerExt`, `userAgent`, último heartbeat, host upstream.
+- Envia via `reportStreamEvent` (já existe em `services/iptv.ts`) com `event_type = "user_report"` e `meta = { category, description, snapshot }`. Não exige nova tabela — reaproveita `stream_events` existente.
 
-- Vira **pilha**: categorias viram chips horizontais no topo (mantém o `CategoryFilter` atual).
-- Lista ocupa a largura toda, item compacto (igual desktop, sem painel direito).
-- Tocar no item abre o `MovieDetailsDialog` / modal de série já existentes (preview ocupa a tela inteira), com botão "Assistir".
-- Breakpoint do split: `lg` (≥1024px) mostra 3 colunas; abaixo, layout pilha.
+---
 
-### Séries — diferenças
+## 3) Painel Admin — aba "Reportes de usuários"
 
-Mesma estrutura de 3 colunas, mas o painel direito tem 2 modos:
-1. **Visão da série**: backdrop, sinopse, elenco, botão "Ver episódios".
-2. **Episódios**: tabs de temporadas no topo do painel, lista de episódios abaixo (linha com thumb + título + sinopse curta + botão play / link externo). Mantém o tratamento atual de `isExternalOnly` e badges de formato.
+- Nova aba no `Admin.tsx`: **"Reportes"**.
+- Lista paginada dos últimos `stream_events` com `event_type = 'user_report'` (consulta via edge `admin-api` — adicionar handler `list_user_reports`).
+- Colunas: data, usuário, host upstream, categoria, descrição, ações (ver detalhes em Dialog com snapshot técnico completo + link para abrir o `ServerProbeDialog` daquele host).
+- Filtros: período (24h / 7d / 30d), categoria, busca por usuário/host.
+- Badge de "novos" no menu lateral: contagem de reports nas últimas 24h.
 
-### Navegação por teclado / TV
+### Backend (edge `admin-api`)
+- Adicionar ação `list_user_reports` (SELECT em `stream_events` filtrando `event_type = 'user_report'`, ordenado por `created_at DESC`, com paginação).
+- Adicionar ação `count_user_reports_24h` para o badge.
+- Sem migração de schema (usa `stream_events.meta` JSONB existente).
 
-- `↑ ↓` move entre categorias quando o foco está no rail; entre títulos quando está na lista.
-- `← →` alterna entre as 3 colunas.
-- `Enter` abre/atualiza painel direito; segundo `Enter` no painel inicia playback.
-- `/` foca a busca; `f` alterna favorito do título focado; `Esc` sai do player.
-- Hook reutilizável `useGridKeyboardNav` (similar ao `useLiveKeyboardNav` já existente).
+---
 
-### Novidades funcionais
+## Arquivos
 
-- **Painel sempre atualizado**: ao mover o foco/hover na lista do meio, o painel direito faz fetch de `getVodInfo` / `getSeriesInfo` (com cache do React Query, debounce 250 ms) — usuário vê detalhes sem clicar.
-- **Categoria "Favoritos"** fixa no topo do rail, mostrando contagem (substitui o botão atual de filtro de favoritos).
-- **Categoria "Recentes"** opcional (lista os últimos 30 itens por `added`/`last_modified`).
-- **Busca local** no topo da coluna central (mantém o que já existe, só muda de lugar).
-- Busca e categoria persistem na URL (`?cat=...&q=...`) pra deep-link.
+**Criar**
+- `src/components/library/LibraryTopBar.tsx`
+- `src/components/library/PosterGrid.tsx`
+- `src/components/library/PosterCard.tsx`
+- `src/components/library/MobileCategoryDrawer.tsx`
+- `src/components/SeriesDetailsDialog.tsx`
+- `src/components/ReportProblemDialog.tsx`
+- `src/components/admin/UserReportsPanel.tsx`
+- `src/hooks/useClock.ts` (HH:MM + data ptBR, atualiza a cada 30s)
 
-### Arquivos afetados
+**Editar**
+- `src/pages/Movies.tsx` — novo layout (rail + topbar + PosterGrid + MovieDetailsDialog)
+- `src/pages/Series.tsx` — idem com SeriesDetailsDialog
+- `src/components/Player.tsx` — overlay com ±10s, velocidade, atalhos, botão reportar
+- `src/pages/Admin.tsx` — nova aba "Reportes" + badge
+- `supabase/functions/admin-api/index.ts` — handlers `list_user_reports` / `count_user_reports_24h`
 
-Novos:
-- `src/components/library/LibraryShell.tsx` — wrapper 3 colunas responsivo.
-- `src/components/library/CategoryRail.tsx` — rail vertical de categorias com favoritos/recentes.
-- `src/components/library/TitleList.tsx` — lista virtualizada (`@tanstack/react-virtual`, já instalado) com item linha.
-- `src/components/library/TitleListItem.tsx` — linha com thumb 40×60, nome, ano, rating, badge.
-- `src/components/library/PreviewPanel.tsx` — painel direito (backdrop + metadados + ações), com variante `vod` e `series`.
-- `src/components/library/SeriesEpisodesPanel.tsx` — temporadas + episódios dentro do painel direito.
-- `src/hooks/useGridKeyboardNav.ts` — navegação por setas/atalhos.
-- `src/hooks/useDebouncedValue.ts` — debounce do título focado pra evitar refetch agressivo.
+**Mantidos sem alteração** (não mais usados em Filmes/Séries, mas seguem disponíveis)
+- `src/components/library/PreviewPanel.tsx`
+- `src/components/library/TitleList.tsx`, `TitleListItem.tsx`
+- `src/components/library/SeriesEpisodesPanel.tsx` (será reusado dentro de `SeriesDetailsDialog`)
 
-Reescritos:
-- `src/pages/Movies.tsx` — passa a montar `LibraryShell` + `CategoryRail` + `TitleList` + `PreviewPanel`. Remove o grid de cards e o botão "Favoritos" do topo (agora é categoria).
-- `src/pages/Series.tsx` — mesma estrutura; `SeriesEpisodesPanel` substitui o modal grande.
+---
 
-Atualizados (pequeno):
-- `src/components/MovieDetailsDialog.tsx` — vira fallback para mobile (já está pronto, sem mudança grande).
-- `src/services/iptv.ts` — adiciona helper `sortByRecent` e tipo `EnrichedVodInfo` se necessário.
+## Notas de UX mobile-web (prioridade)
+- Topbar fixa (sticky top-0, z-30), backdrop blur.
+- Rail vira drawer lateral via `Sheet` no mobile, acessível por botão "filtro" na topbar.
+- Pôsteres com `aspect-[2/3]` e `loading="lazy"` para economizar dados.
+- Player: barra de controles sempre tocável (touch targets ≥44px), gestos: tap-duplo nas laterais = ±10s (estilo YouTube/Netflix).
+- Diálogo de reportar problema com botões grandes e categorias rapidamente selecionáveis.
 
-### Nota técnica
-
-- Mantém React Query com `staleTime: 5min` pra `getVodInfo` / `getSeriesInfo`.
-- Painel direito faz prefetch em hover (250 ms) e no foco do teclado (imediato).
-- Virtualização: lista de títulos vira `useVirtualizer` com `estimateSize: 72`.
-- Acessibilidade: cada coluna tem `role="region"` + `aria-label`; itens da lista são `<button>` com `aria-selected`.
-- Performance: no breakpoint mobile o `PreviewPanel` não é montado (evita fetch desnecessário).
-- Sem mudanças de banco/edge functions.
+Aguardando sua aprovação para implementar.

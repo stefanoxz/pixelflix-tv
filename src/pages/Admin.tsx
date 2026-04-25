@@ -25,6 +25,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { DnsErrorTrendChart } from "@/components/admin/DnsErrorTrendChart";
 import { ServerProbeDialog } from "@/components/admin/ServerProbeDialog";
 import { EndpointTestPanel } from "@/components/admin/EndpointTestPanel";
+import { UserReportsPanel } from "@/components/admin/UserReportsPanel";
 import {
   Users,
   UserCheck,
@@ -49,6 +50,7 @@ import {
   AlertOctagon,
   FlaskConical,
   Wifi,
+  Flag,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
@@ -695,6 +697,7 @@ const Admin = () => {
           {[
             { id: "dashboard", label: "Dashboard", icon: TrendingUp },
             { id: "monitoring", label: "Monitoramento", icon: Monitor },
+            { id: "reports", label: "Reportes", icon: Flag },
             { id: "dns-errors", label: "Erros por DNS", icon: AlertOctagon },
             { id: "users", label: "Usuários", icon: Users },
             { id: "servers", label: "DNS / Servidores", icon: Server },
@@ -747,6 +750,7 @@ const Admin = () => {
             <h1 className="text-3xl font-bold">
               {tab === "dashboard" ? "Dashboard"
                 : tab === "monitoring" ? "Monitoramento"
+                : tab === "reports" ? "Reportes de usuários"
                 : tab === "dns-errors" ? "Erros por DNS"
                 : tab === "users" ? "Usuários"
                 : tab === "endpoint-test" ? "Testar endpoint"
@@ -755,6 +759,7 @@ const Admin = () => {
             <p className="text-sm text-muted-foreground mt-1">
               {tab === "dashboard" ? "Visão geral em tempo real"
                 : tab === "monitoring" ? "Sessões ativas, consumo e bloqueios — atualiza a cada 10s"
+                : tab === "reports" ? "Problemas relatados pelos usuários direto do player"
                 : tab === "dns-errors" ? "Distribuição de falhas por servidor — atualiza a cada 10s"
                 : tab === "users" ? "Quem está acessando a plataforma"
                 : tab === "endpoint-test" ? "Diagnóstico de uma DNS específica — exibe se a resposta veio direto ou via proxy"
@@ -782,6 +787,10 @@ const Admin = () => {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
+          <TabsContent value="reports" className="space-y-6 mt-0">
+            <UserReportsPanel />
+          </TabsContent>
+
           <TabsContent value="endpoint-test" className="space-y-6 mt-0">
             <EndpointTestPanel
               allowedServers={allowed.map((s) => ({
