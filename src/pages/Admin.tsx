@@ -289,13 +289,27 @@ const SERVER_PALETTE = [
   "hsl(180 70% 50%)",
 ];
 
-async function callAdmin<T>(action: string, payload?: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke("admin-api", {
-    body: { action, payload },
-  });
-  if (error) throw new Error(error.message);
-  if ((data as any)?.error) throw new Error((data as any).error);
-  return data as T;
+const TRANSIENT_EDGE_ERROR = /503|temporarily unavailable|SUPABASE_EDGE_RUNTIME_ERROR|failed to fetch|network/i;
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function callAdmin<T>(action: string, payload?: Record<string, unknown>, retries = 2): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-api", {
+        body: { action, payload },
+      });
+      if (error) throw new Error(error.message);
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as T;
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (attempt >= retries || !TRANSIENT_EDGE_ERROR.test(message)) break;
+      await wait(450 * (attempt + 1));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Falha ao carregar dados");
 }
 
 function formatRelative(iso: string): string {
@@ -505,11 +519,14 @@ const Admin = () => {
   const refresh = async () => {
     setLoading(true);
     try {
-      const [s, u, sv, e, mo, tc] = await Promise.all([
-        callAdmin<Stats>("stats"),
+      // Evita disparar 6 cold starts simultâneos no admin-api, que pode causar 503 transitório.
+      const s = await callAdmin<Stats>("stats");
+      const sv = await callAdmin<{ allowed: AllowedServer[]; pending: PendingServer[] }>("list_servers");
+      const [u, e] = await Promise.all([
         callAdmin<{ users: AdminUser[] }>("list_users"),
-        callAdmin<{ allowed: AllowedServer[]; pending: PendingServer[] }>("list_servers"),
         callAdmin<{ events: AdminEvent[] }>("recent_events", { limit: 50 }),
+      ]);
+      const [mo, tc] = await Promise.all([
         callAdmin<MonitoringOverview>("monitoring_overview"),
         callAdmin<{ consumers: TopConsumer[] }>("top_consumers"),
       ]);
