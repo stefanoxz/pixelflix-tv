@@ -96,31 +96,63 @@ function classifyReason(reason: string): { code: string; message: string } {
   if (/credenc|invalid|auth=0|unauthor|401/.test(r)) {
     return { code: "INVALID_CREDENTIALS", message: "Usuário ou senha inválidos" };
   }
-  if (/timeout|timed out|deadline/.test(r)) {
-    return { code: "TIMEOUT", message: "Tempo esgotado ao contatar o servidor IPTV" };
+  if (/timeout|timed out|deadline|i\/o timeout/.test(r)) {
+    return {
+      code: "TIMEOUT",
+      message: "Tempo esgotado ao contatar o servidor IPTV. Servidor pode estar lento ou bloqueado.",
+    };
   }
-  // TLS/conexão recusada vem ANTES de DNS — o texto sanitizado contém
-  // "verifique a dns" mesmo quando o problema real é TLS/SNI.
-  if (/tls|ssl|certificate|handshake|unrecognisedname|fatal alert|connection refused|connection reset|connect: |unreach|http 5\d\d|http 444/.test(r)) {
+  // Connection refused = porta fechada / serviço offline. Mensagem específica
+  // para que o admin saiba que provavelmente é problema de protocolo/porta.
+  if (/connection refused|os error 111|econnrefused/.test(r)) {
     return {
       code: "SERVER_UNREACHABLE",
       message:
-        "Servidor IPTV recusou conexão (TLS/porta inválida). Confirme com sua revenda se a URL e a porta estão corretas.",
+        "Servidor recusou a conexão. A porta pode estar fechada — verifique se a DNS deve usar HTTP/HTTPS ou uma porta específica (ex: :8080).",
     };
   }
-  if (/getaddrinfo|name resolution|enotfound|nxdomain|^dns /.test(r)) {
+  // Reset by peer = geralmente UA bloqueado ou firewall ativo.
+  if (/connection reset|reset by peer|os error 104|econnreset/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message: "Servidor encerrou a conexão (possível bloqueio por User-Agent ou firewall).",
+    };
+  }
+  // TLS/cert: cair pra HTTP costuma resolver, mas isso é cadastro do admin.
+  if (/tls|ssl|certificate|handshake|unrecognisedname|fatal alert|cert.*invalid/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message: "Erro de certificado/TLS. Tente cadastrar a DNS como HTTP (sem 's') se o servidor não tiver SSL válido.",
+    };
+  }
+  if (/no route to host|ehostunreach/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message: "Sem rota até o servidor. DNS pode estar offline ou com firewall bloqueando.",
+    };
+  }
+  if (/getaddrinfo|name resolution|enotfound|nxdomain|^dns |name or service not known/.test(r)) {
     return {
       code: "DNS_ERROR",
-      message: "DNS do servidor IPTV não resolveu. Verifique o endereço.",
+      message: "Hostname não resolveu. Verifique se o endereço está correto.",
     };
   }
-  // "verifique a dns" sozinho é o texto sanitizado para qualquer falha de
-  // transporte — tratamos como servidor inacessível, não como erro de DNS.
-  if (/verifique a dns|servidor iptv não respondeu/.test(r)) {
+  if (/http\s*5\d\d|bad gateway|service unavailable/.test(r)) {
     return {
       code: "SERVER_UNREACHABLE",
-      message:
-        "Servidor IPTV não respondeu. Confirme com sua revenda se essa DNS/URL ainda está ativa.",
+      message: "Servidor IPTV retornou erro interno. Tente novamente em alguns minutos.",
+    };
+  }
+  if (/http\s*44[34]/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message: "Servidor recusou a requisição (provável bloqueio anti-scraping).",
+    };
+  }
+  if (/verifique a dns|servidor iptv não respondeu|unreach/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message: "Servidor IPTV não respondeu. Confirme com sua revenda se essa DNS ainda está ativa.",
     };
   }
   return { code: "UNKNOWN_ERROR", message: reason || "Erro desconhecido ao contatar o servidor" };
