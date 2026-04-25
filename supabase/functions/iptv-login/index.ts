@@ -1,7 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
 import { proxiedFetch, isProxyEnabled } from "../_shared/proxied-fetch.ts";
 
-console.log("[iptv-login] boot, proxy_enabled=", isProxyEnabled());
+// Keep module initialization lightweight. Calling proxy/env helpers at boot can
+// make cold starts more fragile; request handlers log proxy state when needed.
+console.log("[iptv-login] boot");
 
 const ALLOWED_SUFFIXES = [".lovable.app", ".lovableproject.com", ".lovable.dev"];
 function corsFor(req: Request): Record<string, string> {
@@ -498,7 +500,7 @@ Deno.serve(async (req) => {
       return new Response("ok", { headers: corsHeaders });
     }
 
-    console.log("[iptv-login] start request");
+    console.log("[iptv-login] start request", { proxy_enabled: isProxyEnabled() });
 
     const ua = req.headers.get("user-agent") ?? undefined;
     const ip =
@@ -514,6 +516,11 @@ Deno.serve(async (req) => {
     }
 
     const { mode, server, username, password } = body || {};
+
+    if (mode === "ping") {
+      return jsonResponse(200, { ok: true }, corsHeaders);
+    }
+
     let admin: any;
     try {
       admin = getAdminClient();
