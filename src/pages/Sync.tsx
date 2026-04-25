@@ -22,8 +22,7 @@ type StepStatus = "pending" | "loading" | "done" | "error";
 interface SyncStep {
   key: string;
   label: string;
-  queryKey: readonly unknown[];
-  run: () => Promise<unknown>;
+  run: () => Promise<void>;
 }
 
 const Sync = () => {
@@ -42,40 +41,40 @@ const Sync = () => {
   const steps: SyncStep[] = creds
     ? [
         {
-          key: "live-cats",
-          label: "Categorias de TV ao vivo",
-          queryKey: ["live-cats", creds.username],
-          run: () => getLiveCategories(creds),
+          key: "live",
+          label: "TV ao vivo",
+          run: async () => {
+            const [cats, streams] = await Promise.all([
+              getLiveCategories(creds),
+              getLiveStreams(creds),
+            ]);
+            queryClient.setQueryData(["live-cats", creds.username], cats);
+            queryClient.setQueryData(["live-streams", creds.username], streams);
+          },
         },
         {
-          key: "live-streams",
-          label: "Canais de TV",
-          queryKey: ["live-streams", creds.username],
-          run: () => getLiveStreams(creds),
-        },
-        {
-          key: "vod-cats",
-          label: "Categorias de filmes",
-          queryKey: ["vod-cats", creds.username],
-          run: () => getVodCategories(creds),
-        },
-        {
-          key: "vod-streams",
-          label: "Catálogo de filmes",
-          queryKey: ["vod-streams", creds.username],
-          run: () => getVodStreams(creds),
-        },
-        {
-          key: "series-cats",
-          label: "Categorias de séries",
-          queryKey: ["series-cats", creds.username],
-          run: () => getSeriesCategories(creds),
+          key: "movies",
+          label: "Filmes",
+          run: async () => {
+            const [cats, streams] = await Promise.all([
+              getVodCategories(creds),
+              getVodStreams(creds),
+            ]);
+            queryClient.setQueryData(["vod-cats", creds.username], cats);
+            queryClient.setQueryData(["vod-streams", creds.username], streams);
+          },
         },
         {
           key: "series",
-          label: "Catálogo de séries",
-          queryKey: ["series", creds.username],
-          run: () => getSeries(creds),
+          label: "Séries",
+          run: async () => {
+            const [cats, list] = await Promise.all([
+              getSeriesCategories(creds),
+              getSeries(creds),
+            ]);
+            queryClient.setQueryData(["series-cats", creds.username], cats);
+            queryClient.setQueryData(["series", creds.username], list);
+          },
         },
       ]
     : [];
@@ -94,8 +93,7 @@ const Sync = () => {
       steps.map(async (step) => {
         setStatuses((prev) => ({ ...prev, [step.key]: "loading" }));
         try {
-          const data = await step.run();
-          queryClient.setQueryData(step.queryKey, data);
+          await step.run();
           setStatuses((prev) => ({ ...prev, [step.key]: "done" }));
         } catch (e) {
           anyError = true;
