@@ -428,6 +428,7 @@ const Admin = () => {
   const [newLabel, setNewLabel] = useState("");
   const [newNotes, setNewNotes] = useState("");
   const [editingServer, setEditingServer] = useState<AllowedServer | null>(null);
+  const [probeServer, setProbeServer] = useState<AllowedServer | null>(null);
 
   const [health, setHealth] = useState<Record<string, HealthStatus>>({});
   const [healthLoading, setHealthLoading] = useState(false);
