@@ -52,10 +52,14 @@ const SeriesPage = () => {
   const { data: categories = [] } = useQuery({
     queryKey: ["series-cats", creds.username],
     queryFn: () => getSeriesCategories(creds),
+    staleTime: 30 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   });
-  const { data: series = [] } = useQuery({
+  const { data: series = [], isLoading: seriesLoading } = useQuery({
     queryKey: ["series", creds.username],
     queryFn: () => getSeries(creds),
+    staleTime: 30 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   });
 
   // Deep-link
