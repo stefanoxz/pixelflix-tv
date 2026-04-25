@@ -42,6 +42,7 @@ export function MovieDetailsDialog({
     queryFn: () => getVodInfo(creds, movie!.stream_id),
     enabled: !!movie && open,
     staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
   });
 
   const upstreamHost = (() => {
