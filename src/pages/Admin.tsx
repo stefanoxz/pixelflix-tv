@@ -886,7 +886,7 @@ const Admin = () => {
 
           <TabsContent value="dns-errors" className="space-y-6 mt-0">
             {(() => {
-              const buckets: ErrorBucket[] = ["refused", "reset", "http_404", "http_444", "http_5xx", "tls", "timeout", "dns", "other"];
+              const buckets: ErrorBucket[] = ["refused", "reset", "http_404", "http_444", "http_5xx", "tls", "cert_invalid", "timeout", "io_timeout", "dns", "no_route", "net_unreach", "protocol", "other"];
               const totals = dnsErrors?.totals;
               const failRate = totals && totals.total > 0
                 ? Math.round((totals.fail / totals.total) * 100)
