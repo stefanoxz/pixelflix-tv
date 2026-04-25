@@ -724,6 +724,7 @@ const Admin = () => {
             { id: "users", label: "Usuários", icon: Users },
             { id: "servers", label: "DNS / Servidores", icon: Server },
             { id: "endpoint-test", label: "Testar endpoint", icon: FlaskConical },
+            { id: "client-diagnostics", label: "Diagnóstico de clientes", icon: Stethoscope },
           ].map((item) => (
             <button
               key={item.id}
