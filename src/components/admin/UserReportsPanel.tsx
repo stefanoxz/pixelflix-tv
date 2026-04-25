@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { invokeAdminApi } from "@/lib/adminApi";
 
 interface UserReport {
   id: string;
@@ -72,12 +73,7 @@ function formatRelative(iso: string): string {
 }
 
 async function callAdmin<T>(action: string, payload?: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke("admin-api", {
-    body: { action, payload },
-  });
-  if (error) throw new Error(error.message);
-  if ((data as { error?: string })?.error) throw new Error((data as { error?: string }).error!);
-  return data as T;
+  return invokeAdminApi<T>(action, payload);
 }
 
 export function UserReportsPanel() {
