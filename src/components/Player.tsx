@@ -1505,12 +1505,18 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       clearStallTimeout();
     };
 
+    const onEndedNative = () => {
+      pushLog({ source: "video", level: "info", label: "ended" });
+      onEndedRef.current?.();
+    };
+
     video.addEventListener("waiting", onWaiting);
     video.addEventListener("playing", onPlaying);
     video.addEventListener("canplay", onCanPlay);
     video.addEventListener("loadeddata", onLoadedData);
     video.addEventListener("stalled", onStalled);
     video.addEventListener("error", onError);
+    video.addEventListener("ended", onEndedNative);
 
     return () => {
       video.removeEventListener("waiting", onWaiting);
@@ -1519,6 +1525,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       video.removeEventListener("loadeddata", onLoadedData);
       video.removeEventListener("stalled", onStalled);
       video.removeEventListener("error", onError);
+      video.removeEventListener("ended", onEndedNative);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [copyTarget, src]);
