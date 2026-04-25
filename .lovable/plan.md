@@ -1,96 +1,48 @@
-## Diagnóstico — onde está lento e por quê
+# Paginação incremental na grade virtualizada
 
-Rodei uma análise completa em `Movies.tsx`, `Series.tsx`, `PosterGrid`, `PosterCard`, dialogs de detalhes, `services/iptv.ts` e setup do React Query. Lighthouse desktop dá 99/100, então **rede inicial está ok**. A lentidão percebida no uso real (mobile/scroll/abrir filme) vem de outro lado:
+## Contexto importante
 
-### 1. Grid sem virtualização e re-renders pesados
-`PosterGrid` renderiza **todos os filmes/séries de uma vez** (podem ser 2.000+ pôsteres). Mesmo com `loading="lazy"`, cada `PosterCard`:
-- chama `useState` + `useIsIncompatible` (`useEffect` + 2 `addEventListener` por card) → centenas de listeners no `window`,
-- não é memoizado (`React.memo`), então qualquer mudança de busca/seta re-renderiza tudo,
-- `useEffect` no grid faz `scrollIntoView` a cada mudança de `activeId` (acionado também ao filtrar).
+A API Xtream (`get_vod_streams`, `get_series`, `get_live_streams`) **não suporta paginação server-side** — ela retorna o catálogo inteiro num único JSON. Isso já é cacheado pelo React Query e usado para alimentar busca, filtros por categoria, favoritos e "Lançamentos" (que precisa do dataset completo pra ordenar por `added`).
 
-Resultado em celular: scroll travado, busca digitando com lag, listeners empilhando.
+Portanto, "carregar sob demanda" aqui significa **paginação incremental no client**: o array filtrado completo fica disponível para lógica (busca/filtro), mas a `PosterGrid` só **expõe** N itens por vez à virtualização, revelando os próximos chunks conforme o usuário rola.
 
-### 2. Busca sem debounce
-`onSearchChange` atualiza estado a cada tecla → `filteredMovies`/`items` recalculam → grid inteiro re-renderiza a cada caractere. Em listas grandes isso engasga, principalmente no mobile.
+Benefício real: menos linhas calculadas pelo `useVirtualizer`, menos ranges medidos, menos imagens enfileiradas para download de uma vez (o `<img loading="lazy">` já evita fetch fora-de-tela, mas o browser ainda processa milhares de elementos virtuais — agora processa só o "revelado").
 
-### 3. Capas sem dimensões / sem CDN otimizada
-`<img>` dos pôsteres não tem `width`/`height` → causa shifts e layout extra. `proxyImageUrl` (weserv.nl) é chamada **sem parâmetros de redimensionamento**: estamos baixando a capa em tamanho original (geralmente 600×900 ou maior) só pra exibir num quadrado de ~140px. Em uma grade com 100 capas isso é **muitos MB desnecessários**.
+## O que muda
 
-### 4. Sinopses lentas porque dependem da edge a cada abertura
-`getVodInfo` / `getSeriesInfo` vão sempre pela edge function `iptv-categories`. Tem `staleTime: 5min` no React Query, mas:
-- não tem `gcTime` longo → ao trocar de filme e voltar, refetch,
-- não tem prefetch ao **focar** o card (no desktop dá pra começar a buscar antes do clique),
-- não tem cache cross-sessão (recarregou a página, perde tudo).
+### 1. `PosterGrid.tsx` — janela incremental
 
-### 5. `host` recalculado por item
-Em `Movies.tsx` `upstreamHost` é `useMemo`, mas é passado a cada `PosterItem`, fazendo `items` ser uma nova array sempre que `upstreamHost` muda (raro) — ok. Mas `useIsIncompatible` em todo card adiciona 2 event listeners no `window` por card. Para 1.500 cards = 3.000 listeners.
+- Nova prop opcional `pageSize` (default `120`) e `pageIncrement` (default `60`).
+- Estado interno `visibleCount` reseta para `pageSize` sempre que `items` mudar de identidade (nova busca, nova categoria).
+- A virtualização passa a operar sobre `items.slice(0, visibleCount)` em vez de `items` direto.
+- Ao final da grade renderizamos uma **linha sentinela** (`<div ref={sentinelRef}>`) observada por `IntersectionObserver` com `rootMargin: "600px"` (pré-carrega antes de chegar no fim). Quando entra em view e ainda há itens, faz `setVisibleCount(c => Math.min(c + pageIncrement, items.length))`.
+- Fallback: se o usuário usar `Ctrl+End` / navegação por teclado para um `activeId` que está além do `visibleCount`, expandimos a janela até cobrir aquele índice antes do `scrollToIndex`.
+- Indicador visual discreto abaixo da grade: "Mostrando X de Y" + spinner enquanto há mais para revelar (substitui/complementa o `totalLabel` do topo).
 
-### 6. Warning React no `SeriesEpisodesPanel`
-Console mostra: *"Function components cannot be given refs ... Check render method of SeriesEpisodesPanel"*. O `<TooltipTrigger asChild>` está envolvendo um `<span>`/`<Button>`, mas a árvore real reclama que algum filho não aceita ref. Precisa identificar o trigger problemático e garantir que o filho direto seja um elemento DOM (ou wrappar em `forwardRef`).
+### 2. `Movies.tsx`, `Series.tsx`
 
-### 7. Cache HTTP do bundle
-Lighthouse aponta `index.js` e `index.css` com `Cache TTL = 0`. É controlado pela infraestrutura do Lovable; não dá pra mexer pelo código, mas vale registrar (não é ação nossa).
+- Nenhuma mudança de lógica de dados — continuam passando o array filtrado inteiro para `PosterGrid`. A paginação fica encapsulada no componente da grade, então as duas páginas ganham o comportamento de graça.
+- Para "Lançamentos" (que já faz `.slice(0, 60)`), a paginação simplesmente não dispara (cabe na primeira página).
 
----
+### 3. `Live.tsx` / `VirtualChannelList.tsx`
 
-## O que vou fazer
+- **Fora do escopo deste plano.** Lista de canais é unidimensional, mais leve por item, e a UX de TV ao vivo espera a lista inteira disponível para zapping rápido por categoria. Posso fazer num passo separado se quiser.
 
-### A. Virtualizar a grade de pôsteres
-Adicionar **`@tanstack/react-virtual`** no `PosterGrid`. Renderizar só as linhas visíveis + buffer. Mantém grid responsivo (3→7 colunas) calculando `colCount` a partir da largura do container. Ganho esperado: **scroll fluido com 5.000+ itens**, sem lag de filtragem.
+## Detalhes técnicos
 
-### B. Memoizar `PosterCard` e remover listeners por card
-- Envolver `PosterCard` em `React.memo` com comparação rasa.
-- Substituir `useIsIncompatible` por **uma única inscrição global** no `PosterGrid` que carrega o `Set` de chaves marcadas e propaga via prop. Os cards apenas leem `props.incompatible` (sem `useEffect`).
-- Resultado: zero listeners por card, re-renders só quando o item realmente muda.
+- O reset de `visibleCount` usa `useEffect` com dependência `items` (referência). Como `Movies`/`Series` já memoizam `items` via `useMemo`, mudar busca/categoria gera nova referência → reset automático para o topo, comportamento esperado.
+- O `IntersectionObserver` é criado uma vez (`useEffect` com `[]`) e re-observa quando o `sentinelRef` muda. Como o sentinela vive **dentro** do container scrollável, passamos `root: containerRef.current` ao observer.
+- Cuidado com a interação do sentinela com o `position: absolute` dos rows virtualizados: o sentinela fica posicionado em `top: totalSize` dentro do mesmo wrapper relative — fora do fluxo dos rows mas dentro do espaço total, garantindo que só aparece quando o scroll chega perto do fim.
+- A altura total mostrada pela scrollbar continua refletindo só `visibleCount * rowHeight` (não a lista inteira) — o usuário vê a barra "crescer" conforme rola, mesma sensação de feed infinito do Instagram/Netflix.
+- Sem mudanças em React Query: o catálogo permanece em cache (`staleTime` atual) — só a renderização é incremental.
 
-### C. Debounce na busca (250 ms)
-Já existe `useDebouncedValue` no projeto. Aplicar em `Movies.tsx`, `Series.tsx` e `Live.tsx`. O `<Input>` continua respondendo na hora; o filtro pesado roda com 250ms de atraso.
+## Arquivos afetados
 
-### D. Capas otimizadas pela CDN
-Mudar `proxyImageUrl` (ou criar `posterThumbUrl`) para passar `?w=300&h=450&fit=cover&output=webp&q=75` no weserv. Para o `MovieDetailsDialog` usar `?w=600`. Reduz tráfego de imagens em 5-10x e acelera primeiro paint do grid.
+- `src/components/library/PosterGrid.tsx` — adiciona estado de janela, sentinela e observer.
+- (Nenhum outro arquivo precisa mudar; o contrato externo do componente ganha duas props opcionais com defaults sensatos.)
 
-Adicionar `width`/`height` no `<img>` do pôster para reservar espaço (sem shift).
+## Fora de escopo
 
-### E. Cache persistente e prefetch dos detalhes
-- Subir `gcTime` para 30 min nas queries de `vod-info` e `series-info`.
-- **Prefetch on hover/focus**: ao passar o mouse no `PosterCard` (desktop) ou ao mudar `activeId` por teclado, disparar `queryClient.prefetchQuery(["vod-info", id])`. Quando o usuário clicar, sinopse já está pronta.
-- Persistir cache de detalhes em `sessionStorage` via `persistQueryClient` (só pras chaves de info, não pras listas grandes).
-
-### F. Corrigir warning ref do `SeriesEpisodesPanel`
-Investigar qual `TooltipTrigger asChild` está reclamando (provavelmente o `<span>` do badge ou o `<Button>` com `onClick`). Garantir que o filho aceite ref. Sem warning = sem renderização extra de validação em dev.
-
-### G. Pequenas limpezas
-- Remover `scrollIntoView` em todo mudança de `activeId` quando ele veio do clique do mouse (só fazer em navegação por teclado).
-- `useGridKeyboardNav`: garantir handlers estáveis com `useCallback`.
-
----
-
-## Detalhes técnicos (resumido)
-
-```text
-PosterGrid
-├── useVirtualizer({ count: rows, estimateSize, overscan: 4 })
-├── ResizeObserver → colCount (3..7)
-├── useIncompatibleSet(host) → Set<key> (1 listener)
-└── memo(PosterCard) recebe { item, active, isFavorite, incompatible }
-
-services/iptv.ts
-└── proxyImageUrl(url, { w, h, q })  // weserv params
-
-Movies.tsx / Series.tsx
-├── searchDebounced = useDebouncedValue(search, 250)
-├── filtered = useMemo(... searchDebounced ...)
-└── onCardHover(id) → queryClient.prefetchQuery(["vod-info", id])
-```
-
-Pacotes novos: `@tanstack/react-virtual` (já compatível com o React Query 5 do projeto). Sem outras deps.
-
----
-
-## O que NÃO vou mexer
-
-- Player / lógica de stream / edge functions (já está estável; foco do pedido é navegação/capas/sinopse).
-- Bundle splitting adicional (App.tsx já lazy-load todas as rotas; ganho marginal).
-- Cache HTTP do bundle (controlado pela infra do Lovable).
-
-Pronto para implementar?
+- Paginação real server-side (impossível com Xtream).
+- Lazy-load do catálogo inicial em si (já é uma única request cacheada — quebrar isso pioraria a busca).
+- Aplicar a mesma técnica em `VirtualChannelList` (pode vir num próximo passo se útil).
