@@ -5,6 +5,7 @@ import { Tv2 } from "lucide-react";
 import { toast } from "sonner";
 import { Player } from "@/components/Player";
 import { PlayerOverlay } from "@/components/PlayerOverlay";
+import { NextEpisodeCard } from "@/components/series/NextEpisodeCard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { LibraryTopBar } from "@/components/library/LibraryTopBar";
 import { CategoryRail, type RailCategory } from "@/components/library/CategoryRail";
@@ -15,6 +16,7 @@ import { SeriesDetailsDialog } from "@/components/SeriesDetailsDialog";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useAutoplayPreference } from "@/hooks/useAutoplayPreference";
 import { useIptv } from "@/context/IptvContext";
 import {
   buildSeriesEpisodeUrl,
@@ -24,6 +26,7 @@ import {
   proxyImageUrl,
   type Episode,
   type Series,
+  type SeriesInfo,
 } from "@/services/iptv";
 
 const SPECIAL_ALL = "all";
@@ -43,7 +46,13 @@ const SeriesPage = () => {
   const debouncedSearch = useDebouncedValue(search, 250);
   const [activeId, setActiveId] = useState<number | undefined>();
   const [openSeries, setOpenSeries] = useState<Series | null>(null);
-  const [playingEp, setPlayingEp] = useState<{ ep: Episode; coverFallback?: string } | null>(null);
+  const [playingEp, setPlayingEp] = useState<{
+    ep: Episode;
+    seriesId: number;
+    coverFallback?: string;
+  } | null>(null);
+  const [showNextCard, setShowNextCard] = useState(false);
+  const autoplayPref = useAutoplayPreference();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -192,6 +201,64 @@ const SeriesPage = () => {
     [queryClient, creds],
   );
 
+  // Calcula próximo episódio cruzando o ep atual com o SeriesInfo cacheado.
+  const nextEpisodeInfo = useMemo<{
+    ep: Episode;
+    season: number;
+    episodeNumber: number;
+  } | null>(() => {
+    if (!playingEp) return null;
+    const info = queryClient.getQueryData<SeriesInfo>([
+      "series-info",
+      playingEp.seriesId,
+    ]);
+    if (!info?.episodes) return null;
+    // Ordena temporadas numericamente
+    const seasonNums = Object.keys(info.episodes)
+      .map((k) => Number(k))
+      .filter((n) => Number.isFinite(n))
+      .sort((a, b) => a - b);
+    for (let i = 0; i < seasonNums.length; i++) {
+      const sNum = seasonNums[i];
+      const list = info.episodes[String(sNum)] ?? [];
+      const idx = list.findIndex((e) => String(e.id) === String(playingEp.ep.id));
+      if (idx === -1) continue;
+      // Próximo da mesma temporada
+      if (idx + 1 < list.length) {
+        const nextEp = list[idx + 1];
+        return { ep: nextEp, season: sNum, episodeNumber: nextEp.episode_num ?? idx + 2 };
+      }
+      // Primeiro da próxima temporada
+      const nextS = seasonNums[i + 1];
+      if (nextS != null) {
+        const nextList = info.episodes[String(nextS)] ?? [];
+        if (nextList.length > 0) {
+          const nextEp = nextList[0];
+          return { ep: nextEp, season: nextS, episodeNumber: nextEp.episode_num ?? 1 };
+        }
+      }
+      return null;
+    }
+    return null;
+  }, [playingEp, queryClient]);
+
+  const handleEpisodeEnded = useCallback(() => {
+    setShowNextCard(true);
+  }, []);
+
+  const handlePlayNext = useCallback(() => {
+    if (!nextEpisodeInfo || !playingEp) {
+      setShowNextCard(false);
+      return;
+    }
+    setShowNextCard(false);
+    setPlayingEp({
+      ep: nextEpisodeInfo.ep,
+      seriesId: playingEp.seriesId,
+      coverFallback: playingEp.coverFallback,
+    });
+  }, [nextEpisodeInfo, playingEp]);
+
   const epUrl = playingEp
     ? buildSeriesEpisodeUrl(
         creds,
@@ -268,27 +335,59 @@ const SeriesPage = () => {
         onPlayEpisode={(ep) => {
           // Mantém `openSeries` definido — quando o player fechar,
           // o diálogo da série reaparece automaticamente (condição `&& !playingEp`).
-          setPlayingEp({ ep, coverFallback: openSeries?.cover });
+          if (!openSeries) return;
+          setShowNextCard(false);
+          setPlayingEp({
+            ep,
+            seriesId: openSeries.series_id,
+            coverFallback: openSeries.cover,
+          });
         }}
         onCopyExternal={handleCopyExternal}
         isFavorite={openSeries ? isFavorite(openSeries.series_id) : false}
         onToggleFavorite={openSeries ? () => toggle(openSeries.series_id) : undefined}
       />
 
-      <PlayerOverlay open={!!(playingEp && epUrl)} onClose={() => setPlayingEp(null)}>
+      <PlayerOverlay
+        open={!!(playingEp && epUrl)}
+        onClose={() => {
+          setShowNextCard(false);
+          setPlayingEp(null);
+        }}
+      >
         {playingEp && epUrl && (
-          <Player
-            src={epUrl}
-            rawUrl={epUrl}
-            containerExt={playingEp.ep.container_extension}
-            title={playingEp.ep.title}
-            poster={proxyImageUrl(
-              playingEp.ep.info?.movie_image || playingEp.coverFallback || "",
-            )}
-            onClose={() => setPlayingEp(null)}
-            streamId={playingEp.ep.id}
-            contentKind="episode"
-          />
+          <>
+            <Player
+              // Forçar remontagem ao trocar de episódio garante reset limpo de hls/mpegts.
+              key={String(playingEp.ep.id)}
+              src={epUrl}
+              rawUrl={epUrl}
+              containerExt={playingEp.ep.container_extension}
+              title={playingEp.ep.title}
+              poster={proxyImageUrl(
+                playingEp.ep.info?.movie_image || playingEp.coverFallback || "",
+              )}
+              onClose={() => {
+                setShowNextCard(false);
+                setPlayingEp(null);
+              }}
+              streamId={playingEp.ep.id}
+              contentKind="episode"
+              onEnded={handleEpisodeEnded}
+            />
+            <NextEpisodeCard
+              open={showNextCard && !!nextEpisodeInfo}
+              episode={nextEpisodeInfo?.ep ?? null}
+              season={nextEpisodeInfo?.season ?? 0}
+              episodeNumber={nextEpisodeInfo?.episodeNumber ?? 0}
+              coverFallback={playingEp.coverFallback}
+              autoplaySeconds={10}
+              autoplayEnabled={autoplayPref.enabled}
+              onAutoplayToggle={autoplayPref.toggle}
+              onPlayNow={handlePlayNext}
+              onCancel={() => setShowNextCard(false)}
+            />
+          </>
         )}
       </PlayerOverlay>
     </div>

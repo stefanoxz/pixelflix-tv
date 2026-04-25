@@ -1,146 +1,76 @@
-## Objetivo
+## Resposta curta
 
-Implementar o efeito **"Spotlight de capa"** nos modais de Filmes e Séries: quando o usuário abre um conteúdo, o fundo da página fica bem escurecido e a **capa do título aparece em destaque integrada ao backdrop**, como se fosse um "ato cinematográfico". Mantendo 100% a fidelidade do nosso design system (azul primário, gradientes, cards arredondados refinados).
-
-Inspirado nas referências, mas refinado — não copiado.
+Hoje **não**. Quando um episódio termina em Séries, o player apenas para no último frame e o usuário precisa fechar o player e escolher o próximo episódio manualmente na lista. Vou adicionar **autoplay do próximo episódio**, no estilo Netflix/Prime, mantendo a identidade visual do PixelFlix.
 
 ---
 
-## Como vai funcionar visualmente
+## O que será implementado
 
-### Modal de Filme (referência: imagem 18)
+### 1. Detecção de "próximo episódio"
+Em `src/pages/Series.tsx`, ao tocar um episódio, hoje guardamos só `{ ep, coverFallback }`. Vou expandir para guardar também:
+- `seriesId` da série atual
+- `season` e `episodeIndex` do episódio em reprodução
+- A lista ordenada de episódios da temporada (vinda de `getSeriesInfo`)
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  [PÁGINA ESCURECIDA AO FUNDO ~95% black]                    │
-│                                                              │
-│   ┌──────────────────────────────────────────────────────┐  │
-│   │ ▓▓▓▓▓▓▓▓▓│ TÍTULO DO FILME (2025)              [X] │  │
-│   │ ▓ CAPA  ▓│ ╭──────────────────────────╮              │  │
-│   │ ▓ HERO  ▓│ │ 📅2025  🎬Terror  ⭐8.0 │              │  │
-│   │ ▓ FULL  ▓│ ╰──────────────────────────╯              │  │
-│   │ ▓ HEIGHT▓│ ╭──────────────────────────╮              │  │
-│   │ ▓▓▓▓▓▓▓▓▓│ │ 🎥 Direção: ...          │              │  │
-│   │  fade →  │ │ 👥 Elenco:  ...          │              │  │
-│   │          │ ╰──────────────────────────╯              │  │
-│   │          │ 🎬 Sinopse                                 │  │
-│   │          │ Texto....                                  │  │
-│   │          │ [▶ Assistir]  [♥ Favoritar]               │  │
-│   └──────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-```
+Com isso é possível calcular o "próximo episódio":
+1. Próximo episódio da **mesma temporada**, se existir.
+2. Caso seja o último, primeiro episódio da **próxima temporada** (se houver).
+3. Se não houver próximo, mostra apenas "Fim da série" (sem countdown).
 
-- **Overlay** mais escuro (`bg-black/90` + `backdrop-blur-sm`) em vez do `bg-black/80` atual
-- **Capa em coluna esquerda full-height** dentro do modal — ocupa toda altura, com fade radial pra direita
-- **Backdrop horizontal removido** (substituído pela capa lateral)
-- Conteúdo (título, chips, sinopse, botões) na coluna direita, mantendo todo o refino visual já feito
-- Em mobile (sem espaço lateral): volta o layout atual (backdrop em cima + capa pequena), garantindo legibilidade
+### 2. Card "Próximo episódio" sobreposto ao Player
+Um overlay leve no canto inferior direito do `PlayerOverlay` (estilo Netflix), com:
+- Miniatura do próximo episódio (ou capa da série como fallback)
+- Título da temporada/episódio (ex: `T2 • E5 — Nome do episódio`)
+- Contagem regressiva (10s) com barra de progresso usando `bg-gradient-primary`
+- Botão **"Próximo episódio"** (toca imediatamente)
+- Botão **"Cancelar"** (mantém o vídeo no fim, sem pular)
 
-### Modal de Série (referência: imagem 19)
+Aparece automaticamente quando:
+- O vídeo dispara o evento `ended`, **ou**
+- Faltam menos de ~20s para o fim (mostra antecipadamente, igual Netflix). Esse threshold fica configurável; começo só com `ended` para evitar interferir em créditos curtos, e adiciono o "antecipado" como segunda fase se você preferir.
 
-Mesma estrutura, mas com a seção de **episódios abaixo** da área principal — exatamente como já está hoje, só que agora também com a capa lateral em destaque na parte superior.
+Se o usuário não interagir, ao zerar a contagem o próximo episódio começa a tocar **dentro do mesmo `PlayerOverlay`** (sem fechar/reabrir, sem flicker).
 
----
+### 3. Continuidade sem fechar o player
+A troca de episódio acontece atualizando o estado `playingEp` em `Series.tsx` para o próximo episódio. O `Player` re-monta com a nova `src` (ele já lida com troca de URL), e o `SeriesDetailsDialog` permanece aberto por baixo, igual hoje.
 
-## Mudanças visuais
-
-### 1. Overlay escurecido + blur sutil
-
-Atualizar `DialogOverlay` apenas no `MovieDetailsDialog` e `SeriesDetailsDialog` via override de classe:
-- Adicionar `bg-black/90 backdrop-blur-sm` (override) no overlay específico desses modais
-
-Como o `Dialog` do shadcn não expõe diretamente o overlay via `DialogContent`, vamos usar estes modais com `DialogPortal` + `DialogOverlay` customizados (já temos exportados no `dialog.tsx`). **Sem editar o `dialog.tsx` global** — apenas compor manualmente.
-
-### 2. Capa lateral (desktop ≥ md)
-
-Substituir o backdrop horizontal por uma **coluna esquerda full-height** com a capa do filme:
-
-```tsx
-<div className="hidden md:block relative w-[42%] max-w-[420px] shrink-0">
-  <img src={proxyImageUrl(cover, { w: 600, h: 900, q: 85 })} 
-       className="absolute inset-0 h-full w-full object-cover" />
-  {/* Fade gradient pra direita pra integrar com o conteúdo */}
-  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-card/40 to-card" />
-</div>
-```
-
-- Capa ocupa altura total do modal
-- `bg-gradient-to-r from-transparent ... to-card` faz a fusão suave com a área de conteúdo
-- Sem moldura — a capa "sangra" pra dentro do modal
-
-### 3. Layout do modal — flex horizontal
-
-Refazer o layout principal de:
-```tsx
-// hoje: grid vertical com backdrop em cima
-<div className="grid grid-cols-1 md:grid-cols-[180px,1fr]">
-```
-
-Para:
-```tsx
-// novo: flex horizontal com capa sangrando à esquerda
-<div className="flex flex-col md:flex-row min-h-[560px]">
-  <CapaSpotlight />        {/* desktop only */}
-  <ConteúdoDireita />      {/* sempre */}
-</div>
-```
-
-### 4. Mobile: fallback elegante
-
-Em telas `< md`:
-- Mantém o backdrop horizontal no topo (como hoje)
-- Capa pequena flutuando + conteúdo abaixo
-- Garante boa leitura sem espremer nada
-
-### 5. Tamanho do modal
-
-Aumentar largura máxima para `max-w-5xl` (de `max-w-4xl`), sem altura fixa — `max-h-[92vh]` continua. A capa ocupar a esquerda exige um pouco mais de respiro horizontal.
-
-### 6. Refino do conteúdo direito
-
-Tudo que já refinamos antes (chips, cards de credits/sinopse, botão pill) **fica intacto** — só ganha mais respiro porque a coluna direita tem `padding` próprio (`px-6 md:px-8 py-8`).
-
-### 7. Séries — capa lateral termina antes dos episódios
-
-Para o `SeriesDetailsDialog`, a coluna lateral da capa cobre apenas o **bloco superior** (título + meta + sinopse + botão). A seção de "Episódios" continua **full-width abaixo** com cabeçalho `ListVideo` icon — exatamente como referência da imagem 19.
-
-```tsx
-<div className="flex flex-col md:flex-row">
-  <CapaSpotlight />
-  <BlocoSuperior />
-</div>
-<div className="px-4 md:px-8 pb-6">
-  <h3>Episódios</h3>
-  <SeriesEpisodesPanel ... />
-</div>
-```
-
----
-
-## O que NÃO muda
-
-- Lógica de queries, fallback TMDB, favoritos, marcação incompatível, `onPlay`, `onPlayEpisode`, `onCopyExternal`
-- `SeriesEpisodesPanel.tsx` (intacto)
-- `dialog.tsx` global do shadcn (não tocaremos)
-- Cores do design system (azul primário, gradientes, sombras)
-- Outros modais e componentes
-
----
-
-## Arquivos editados
-
-1. `src/components/MovieDetailsDialog.tsx` — novo layout flex com capa lateral, overlay customizado
-2. `src/components/SeriesDetailsDialog.tsx` — mesma estrutura + bloco de episódios full-width abaixo
-
-Nenhum arquivo novo. Nenhuma dependência nova.
+### 4. Toggle "Reprodução automática"
+Pequeno switch dentro do card de "Próximo episódio" ("Autoplay: ligado/desligado"), persistido em `localStorage` (`pixelflix:series:autoplay`, default `true`). Se desligado, o card de próximo episódio ainda aparece ao final, mas **sem** countdown — só com o botão "Próximo episódio".
 
 ---
 
 ## Detalhes técnicos
 
-- Imports adicionais nos dois modais: `DialogPortal`, `DialogOverlay` do `@/components/ui/dialog`
-- Compor manualmente o `<DialogPortal><DialogOverlay className="bg-black/90 backdrop-blur-sm" /><DialogPrimitive.Content>...` — isso permite escurecer só esses modais
-- Usar `proxyImageUrl(cover, { w: 600, h: 900, q: 85 })` pra capa lateral em alta qualidade
-- Fade radial via gradiente Tailwind (`bg-gradient-to-r from-transparent via-card/40 to-card`)
-- Aspect ratio da capa preservado com `object-cover` + altura `h-full`
-- Acessibilidade: `DialogTitle`/`Description` `sr-only` mantidos
+**Arquivos a alterar:**
+
+- `src/components/Player.tsx`
+  - Adicionar prop opcional `onEnded?: () => void` e prop `onTimeRemaining?: (secondsLeft: number) => void` (usada para a fase futura de antecipação).
+  - Conectar `video.addEventListener('ended', ...)` chamando `onEnded`.
+
+- `src/pages/Series.tsx`
+  - Trocar o estado `playingEp` para incluir contexto: `{ ep, season, indexInSeason, seriesId, coverFallback }`.
+  - Carregar `getSeriesInfo` (já cacheado via React Query) para obter a lista de temporadas/episódios e calcular `nextEpisode` com `useMemo`.
+  - Passar `onEnded` ao `Player` que aciona o card de próximo episódio.
+
+- `src/components/PlayerOverlay.tsx` (ou um novo `src/components/series/NextEpisodeCard.tsx`)
+  - Novo componente `NextEpisodeCard` com:
+    - Layout em card (`rounded-2xl`, `bg-card/85`, `backdrop-blur-md`, `border-border/60`)
+    - Thumb 16:9 do próximo episódio (`info.movie_image` com fallback para `series.cover` via `proxyImageUrl`)
+    - Botões: "Próximo episódio" (primário com `bg-gradient-primary`) e "Cancelar" (ghost)
+    - Barra de progresso animada via `requestAnimationFrame` (10s)
+  - Renderizado condicionalmente sobre o `Player` quando `showNextCard === true`.
+
+- `src/hooks/useAutoplayPreference.ts` (novo, pequeno)
+  - Lê/escreve `pixelflix:series:autoplay` em `localStorage`.
+
+**Não muda:** `MovieDetailsDialog` (filmes não têm "próximo"), lógica de favoritos, proxy de imagens, navegação por teclado.
+
+**Acessibilidade:** o card é focável; `Enter` toca o próximo, `Esc` cancela. Em mobile, ocupa rodapé inteiro com botões maiores.
+
+---
+
+## Fora do escopo (posso fazer depois se quiser)
+
+- Pular abertura/encerramento (intro/outro skip) — exige marcação manual ou heurística.
+- Mostrar o card **antes** do fim (aos 20s restantes) — fácil de adicionar depois, fica como fase 2.
+- Sincronizar autoplay com "continue assistindo" no histórico.
