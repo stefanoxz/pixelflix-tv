@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { DnsErrorTrendChart } from "@/components/admin/DnsErrorTrendChart";
 import { ServerProbeDialog } from "@/components/admin/ServerProbeDialog";
+import { EndpointTestPanel } from "@/components/admin/EndpointTestPanel";
 import {
   Users,
   UserCheck,
