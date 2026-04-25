@@ -786,6 +786,10 @@ const Admin = () => {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
+          <TabsContent value="reports" className="space-y-6 mt-0">
+            <UserReportsPanel />
+          </TabsContent>
+
           <TabsContent value="endpoint-test" className="space-y-6 mt-0">
             <EndpointTestPanel
               allowedServers={allowed.map((s) => ({
