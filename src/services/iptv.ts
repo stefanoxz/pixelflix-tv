@@ -524,6 +524,13 @@ export type SafeResult<T> =
   | { ok: true; data: T }
   | { ok: false; code: string; error: string; status?: number };
 
+/** Detecta o erro transitório do runtime do Supabase Edge (cold start / 503). */
+function isEdgeRuntimeTransient(status: number | undefined, code: string, error: string): boolean {
+  if (status !== 503) return false;
+  const blob = `${code} ${error}`.toUpperCase();
+  return /SUPABASE_EDGE_RUNTIME_ERROR|TEMPORARILY UNAVAILABLE|BOOT_ERROR/.test(blob);
+}
+
 export async function invokeSafe<T = unknown>(
   name: string,
   body: Record<string, unknown>,
@@ -535,78 +542,89 @@ export async function invokeSafe<T = unknown>(
   }
   const timeout = timeoutFor(kind);
 
-  try {
-    const exec = async () => {
-      const res = await supabase.functions.invoke(name, { body });
-      // supabase-js v2: em HTTP não-2xx, ele preenche `error` mas TAMBÉM
-      // costuma deixar `data` quando o body é JSON. Quando não conseguir
-      // ler o body, tentamos extrair manualmente do contexto.
-      const dataAny = res.data as any;
-      const errAny = res.error as any;
+  // Retry transparente APENAS para 503 do runtime do Supabase (cold start).
+  // Outros erros (4xx, timeouts reais, falha de rede) NÃO retentam.
+  const MAX_RUNTIME_RETRIES = 2;
+  const RUNTIME_BACKOFFS_MS = [500, 1500];
 
-      // Sucesso real
-      if (!errAny && dataAny && (dataAny.success !== false) && !dataAny.error) {
-        return { ok: true as const, data: dataAny as T };
-      }
+  const attempt = async (): Promise<SafeResult<T>> => {
+    try {
+      const exec = async () => {
+        const res = await supabase.functions.invoke(name, { body });
+        const dataAny = res.data as any;
+        const errAny = res.error as any;
 
-      // Erro estruturado vindo no body (preferido)
-      if (dataAny && typeof dataAny === "object" && (dataAny.code || dataAny.error)) {
-        return {
-          ok: false as const,
-          code: String(dataAny.code ?? "UNKNOWN_ERROR"),
-          error: String(dataAny.error ?? "Erro desconhecido"),
-        };
-      }
-
-      // FunctionsHttpError / FunctionsFetchError: tentar extrair JSON do response
-      if (errAny) {
-        const ctx = errAny.context;
-        if (ctx && typeof ctx.json === "function") {
-          try {
-            const parsed = await ctx.json();
-            if (parsed && typeof parsed === "object") {
-              return {
-                ok: false as const,
-                code: String(parsed.code ?? "UNKNOWN_ERROR"),
-                error: String(parsed.error ?? errAny.message ?? "Erro desconhecido"),
-                status: ctx.status,
-              };
-            }
-          } catch {
-            /* fallthrough */
-          }
+        if (!errAny && dataAny && (dataAny.success !== false) && !dataAny.error) {
+          return { ok: true as const, data: dataAny as T };
         }
+
+        if (dataAny && typeof dataAny === "object" && (dataAny.code || dataAny.error)) {
+          return {
+            ok: false as const,
+            code: String(dataAny.code ?? "UNKNOWN_ERROR"),
+            error: String(dataAny.error ?? "Erro desconhecido"),
+          };
+        }
+
+        if (errAny) {
+          const ctx = errAny.context;
+          if (ctx && typeof ctx.json === "function") {
+            try {
+              const parsed = await ctx.json();
+              if (parsed && typeof parsed === "object") {
+                return {
+                  ok: false as const,
+                  code: String(parsed.code ?? "UNKNOWN_ERROR"),
+                  error: String(parsed.error ?? errAny.message ?? "Erro desconhecido"),
+                  status: ctx.status,
+                };
+              }
+            } catch {
+              /* fallthrough */
+            }
+          }
+          return {
+            ok: false as const,
+            code: "UNKNOWN_ERROR",
+            error: String(errAny.message ?? "Falha ao contatar o servidor"),
+            status: ctx?.status,
+          };
+        }
+
         return {
           ok: false as const,
           code: "UNKNOWN_ERROR",
-          error: String(errAny.message ?? "Falha ao contatar o servidor"),
-          status: ctx?.status,
+          error: "Resposta inválida do servidor",
         };
-      }
-
-      return {
-        ok: false as const,
-        code: "UNKNOWN_ERROR",
-        error: "Resposta inválida do servidor",
       };
-    };
 
-    const out = await withTimeout(enqueue(exec), timeout);
-    if (out.ok) noteRequestSuccess();
-    else noteRequestFailure("other");
-    return out;
-  } catch (e) {
-    const cls = classifyError(e);
-    noteRequestFailure(cls);
-    if (cls === "timeout") {
-      return { ok: false, code: "TIMEOUT", error: "Tempo esgotado ao contatar o servidor" };
+      return await withTimeout(enqueue(exec), timeout);
+    } catch (e) {
+      const cls = classifyError(e);
+      noteRequestFailure(cls);
+      if (cls === "timeout") {
+        return { ok: false, code: "TIMEOUT", error: "Tempo esgotado ao contatar o servidor" };
+      }
+      if (cls === "network") {
+        return { ok: false, code: "NETWORK_ERROR", error: "Falha de rede ao contatar o servidor" };
+      }
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, code: "UNKNOWN_ERROR", error: msg };
     }
-    if (cls === "network") {
-      return { ok: false, code: "NETWORK_ERROR", error: "Falha de rede ao contatar o servidor" };
-    }
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, code: "UNKNOWN_ERROR", error: msg };
+  };
+
+  let out = await attempt();
+  for (let i = 0; i < MAX_RUNTIME_RETRIES; i++) {
+    if (out.ok === true) break;
+    if (!isEdgeRuntimeTransient(out.status, out.code, out.error)) break;
+    console.warn(`[invokeSafe] ${name}: edge runtime 503, retry ${i + 1}/${MAX_RUNTIME_RETRIES}`);
+    await new Promise((r) => setTimeout(r, RUNTIME_BACKOFFS_MS[i] ?? 1500));
+    out = await attempt();
   }
+
+  if (out.ok) noteRequestSuccess();
+  else noteRequestFailure("other");
+  return out;
 }
 
 // =============================================================================
