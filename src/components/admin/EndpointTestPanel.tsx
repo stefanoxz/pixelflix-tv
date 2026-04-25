@@ -403,6 +403,8 @@ export function EndpointTestPanel({ allowedServers }: Props) {
   const [compareRoutes, setCompareRoutes] = useState(true);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<TestResult | null>(null);
+  const [resolving, setResolving] = useState(false);
+  const [resolveResult, setResolveResult] = useState<ResolveResult | null>(null);
 
   const run = async () => {
     if (!serverUrl.trim()) {
