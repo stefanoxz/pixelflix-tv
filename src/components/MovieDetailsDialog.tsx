@@ -44,6 +44,15 @@ export function MovieDetailsDialog({
     staleTime: 1000 * 60 * 5,
   });
 
+  const upstreamHost = (() => {
+    try {
+      return new URL(creds.streamBase || creds.server).host;
+    } catch {
+      return null;
+    }
+  })();
+  const incompatible = useIsIncompatible(upstreamHost, movie?.stream_id ?? null);
+
   if (!movie) return null;
 
   const info = data?.info;
