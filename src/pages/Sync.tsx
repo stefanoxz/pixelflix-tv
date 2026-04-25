@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { CheckCircle2, Loader2, AlertCircle, RefreshCw, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -222,23 +222,24 @@ const Sync = () => {
         {hasError && (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground text-center">
-              Algumas etapas falharam. Você pode tentar de novo ou continuar — o
-              app carregará os itens faltantes ao abrir cada seção.
+              Algumas etapas falharam ao carregar o conteúdo. Tente novamente
+              ou volte para a tela anterior.
             </p>
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 className="flex-1"
+                onClick={() => navigate(-1)}
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Voltar
+              </Button>
+              <Button
+                className="flex-1 bg-gradient-primary hover:opacity-90"
                 onClick={() => runSync()}
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Tentar novamente
-              </Button>
-              <Button
-                className="flex-1 bg-gradient-primary hover:opacity-90"
-                onClick={() => navigate("/", { replace: true })}
-              >
-                Continuar
               </Button>
             </div>
           </div>
