@@ -10,17 +10,32 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import Login from "./pages/Login";
 
-// Lazy-load non-landing routes to reduce initial bundle size
-const Index = lazy(() => import("./pages/Index.tsx"));
-const Live = lazy(() => import("./pages/Live"));
-const Movies = lazy(() => import("./pages/Movies"));
-const SeriesPage = lazy(() => import("./pages/Series"));
-const Account = lazy(() => import("./pages/Account"));
+// Lazy-load non-landing routes to reduce initial bundle size.
+// Each route exposes a `preload*` helper so the Sync screen can prefetch
+// the JS chunks in parallel with the data fetches — eliminating the
+// Suspense fallback flash on the first navigation after sync.
+const indexLoader = () => import("./pages/Index.tsx");
+const liveLoader = () => import("./pages/Live");
+const moviesLoader = () => import("./pages/Movies");
+const seriesLoader = () => import("./pages/Series");
+const accountLoader = () => import("./pages/Account");
+
+const Index = lazy(indexLoader);
+const Live = lazy(liveLoader);
+const Movies = lazy(moviesLoader);
+const SeriesPage = lazy(seriesLoader);
+const Account = lazy(accountLoader);
 const Sync = lazy(() => import("./pages/Sync"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 const AdminResetPassword = lazy(() => import("./pages/AdminResetPassword"));
 const Admin = lazy(() => import("./pages/Admin"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+
+export const preloadIndex = indexLoader;
+export const preloadLive = liveLoader;
+export const preloadMovies = moviesLoader;
+export const preloadSeries = seriesLoader;
+export const preloadAccount = accountLoader;
 
 const RouteFallback = () => (
   <div className="flex justify-center items-center min-h-[60vh]">

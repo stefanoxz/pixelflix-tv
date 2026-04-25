@@ -93,13 +93,8 @@ const Highlights = () => {
     }
   };
 
-  if (loadingMovies && movies.length === 0) {
-    return (
-      <div className="flex justify-center py-32">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  // Sem gate de loading: o cache é populado pelo Sync e as seções abaixo
+  // já se escondem sozinhas enquanto não houver dados (renderização progressiva).
 
   return (
     <div className="space-y-12 pb-12">

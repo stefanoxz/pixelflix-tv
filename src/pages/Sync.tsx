@@ -14,6 +14,13 @@ import {
   getSeriesCategories,
   getSeries,
 } from "@/services/iptv";
+import {
+  preloadIndex,
+  preloadLive,
+  preloadMovies,
+  preloadSeries,
+  preloadAccount,
+} from "@/App";
 
 const logoSuperTech = "/logo-supertech.webp";
 
@@ -85,6 +92,18 @@ const Sync = () => {
     setAllDone(false);
     setErrors({});
     setStatuses(Object.fromEntries(steps.map((s) => [s.key, "pending"])));
+
+    // Pré-carrega os bundles JS das rotas em paralelo com os dados.
+    // Quando o sync terminar, o Suspense resolve sincronamente — sem flash de spinner.
+    [preloadIndex, preloadLive, preloadMovies, preloadSeries, preloadAccount].forEach(
+      (fn) => {
+        try {
+          fn();
+        } catch {
+          /* ignore preload errors — a navegação fará o fetch normalmente */
+        }
+      },
+    );
 
     let anyError = false;
 
