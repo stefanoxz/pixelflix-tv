@@ -76,7 +76,7 @@ const Live = () => {
 
   // Filtragem: categoria + favoritos + busca.
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
     return channels.filter((c) => {
       let matchCat = true;
       if (activeCategory === "favorites") matchCat = favorites.has(c.stream_id);
@@ -84,7 +84,7 @@ const Live = () => {
       const matchSearch = !q || c.name.toLowerCase().includes(q);
       return matchCat && matchSearch;
     });
-  }, [channels, activeCategory, search, favorites]);
+  }, [channels, activeCategory, debouncedSearch, favorites]);
 
   // Abre canal específico vindo de outra página (ex: Conta) com state.openId
   useEffect(() => {
