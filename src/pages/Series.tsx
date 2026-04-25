@@ -1,10 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Loader2, X, Play, Star, ExternalLink } from "lucide-react";
+import { Search, Loader2, X, Play, Star, ExternalLink, Heart } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import {
   Tooltip,
   TooltipContent,
@@ -20,7 +19,6 @@ import {
   getSeries,
   getSeriesInfo,
   buildSeriesEpisodeUrl,
-  isBrowserPlayable,
   isExternalOnly,
   getFormatBadge,
   proxyImageUrl,
@@ -29,6 +27,7 @@ import {
 } from "@/services/iptv";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useFavorites } from "@/hooks/useFavorites";
 
 const toneClasses: Record<"green" | "blue" | "yellow" | "gray", string> = {
   green: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
@@ -39,6 +38,8 @@ const toneClasses: Record<"green" | "blue" | "yellow" | "gray", string> = {
 
 const SeriesPage = () => {
   const { session } = useIptv();
+  const navigate = useNavigate();
+  const location = useLocation();
   const creds = session!.creds;
 
   const [activeCategory, setActiveCategory] = useState("all");
@@ -46,7 +47,9 @@ const SeriesPage = () => {
   const [openSeries, setOpenSeries] = useState<Series | null>(null);
   const [activeSeason, setActiveSeason] = useState<string | null>(null);
   const [playingEp, setPlayingEp] = useState<Episode | null>(null);
-  const [onlyCompatible, setOnlyCompatible] = useState(false);
+  const [showOnlyFavs, setShowOnlyFavs] = useState(false);
+
+  const { isFavorite, toggle, favorites } = useFavorites(creds.username, "series");
 
   const { data: categories = [] } = useQuery({
     queryKey: ["series-cats", creds.username],
@@ -63,13 +66,27 @@ const SeriesPage = () => {
     enabled: !!openSeries,
   });
 
+  // Abrir série vinda de outra página (ex: Destaques) com state.openId
+  useEffect(() => {
+    const openId = (location.state as { openId?: number } | null)?.openId;
+    if (openId && series.length) {
+      const s = series.find((x) => x.series_id === openId);
+      if (s) {
+        setOpenSeries(s);
+        setActiveSeason(null);
+      }
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.state, location.pathname, series, navigate]);
+
   const filtered = useMemo(() => {
     return series.filter((s) => {
       const matchCat = activeCategory === "all" || s.category_id === activeCategory;
       const matchSearch = !search || s.name.toLowerCase().includes(search.toLowerCase());
-      return matchCat && matchSearch;
+      const matchFav = !showOnlyFavs || favorites.has(s.series_id);
+      return matchCat && matchSearch && matchFav;
     });
-  }, [series, activeCategory, search]);
+  }, [series, activeCategory, search, showOnlyFavs, favorites]);
 
   const seasonKeys = seriesInfo ? Object.keys(seriesInfo.episodes || {}) : [];
   const currentSeason = activeSeason || seasonKeys[0];
@@ -81,13 +98,7 @@ const SeriesPage = () => {
     [allEpisodes],
   );
 
-  const episodes = useMemo(
-    () =>
-      onlyCompatible
-        ? allEpisodes.filter((ep) => isBrowserPlayable(ep.container_extension, ep.direct_source))
-        : allEpisodes,
-    [allEpisodes, onlyCompatible],
-  );
+  const episodes = allEpisodes;
 
   const closeModal = () => {
     setOpenSeries(null);
