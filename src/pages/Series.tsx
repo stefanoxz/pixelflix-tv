@@ -1,10 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Loader2, X, Play, Star, ExternalLink } from "lucide-react";
+import { Search, Loader2, X, Play, Star, ExternalLink, Heart } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import {
   Tooltip,
   TooltipContent,
@@ -20,7 +19,6 @@ import {
   getSeries,
   getSeriesInfo,
   buildSeriesEpisodeUrl,
-  isBrowserPlayable,
   isExternalOnly,
   getFormatBadge,
   proxyImageUrl,
@@ -29,6 +27,7 @@ import {
 } from "@/services/iptv";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useFavorites } from "@/hooks/useFavorites";
 
 const toneClasses: Record<"green" | "blue" | "yellow" | "gray", string> = {
   green: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
@@ -39,6 +38,8 @@ const toneClasses: Record<"green" | "blue" | "yellow" | "gray", string> = {
 
 const SeriesPage = () => {
   const { session } = useIptv();
+  const navigate = useNavigate();
+  const location = useLocation();
   const creds = session!.creds;
 
   const [activeCategory, setActiveCategory] = useState("all");
@@ -46,7 +47,9 @@ const SeriesPage = () => {
   const [openSeries, setOpenSeries] = useState<Series | null>(null);
   const [activeSeason, setActiveSeason] = useState<string | null>(null);
   const [playingEp, setPlayingEp] = useState<Episode | null>(null);
-  const [onlyCompatible, setOnlyCompatible] = useState(false);
+  const [showOnlyFavs, setShowOnlyFavs] = useState(false);
+
+  const { isFavorite, toggle, favorites } = useFavorites(creds.username, "series");
 
   const { data: categories = [] } = useQuery({
     queryKey: ["series-cats", creds.username],
@@ -63,13 +66,27 @@ const SeriesPage = () => {
     enabled: !!openSeries,
   });
 
+  // Abrir série vinda de outra página (ex: Destaques) com state.openId
+  useEffect(() => {
+    const openId = (location.state as { openId?: number } | null)?.openId;
+    if (openId && series.length) {
+      const s = series.find((x) => x.series_id === openId);
+      if (s) {
+        setOpenSeries(s);
+        setActiveSeason(null);
+      }
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.state, location.pathname, series, navigate]);
+
   const filtered = useMemo(() => {
     return series.filter((s) => {
       const matchCat = activeCategory === "all" || s.category_id === activeCategory;
       const matchSearch = !search || s.name.toLowerCase().includes(search.toLowerCase());
-      return matchCat && matchSearch;
+      const matchFav = !showOnlyFavs || favorites.has(s.series_id);
+      return matchCat && matchSearch && matchFav;
     });
-  }, [series, activeCategory, search]);
+  }, [series, activeCategory, search, showOnlyFavs, favorites]);
 
   const seasonKeys = seriesInfo ? Object.keys(seriesInfo.episodes || {}) : [];
   const currentSeason = activeSeason || seasonKeys[0];
@@ -81,13 +98,7 @@ const SeriesPage = () => {
     [allEpisodes],
   );
 
-  const episodes = useMemo(
-    () =>
-      onlyCompatible
-        ? allEpisodes.filter((ep) => isBrowserPlayable(ep.container_extension, ep.direct_source))
-        : allEpisodes,
-    [allEpisodes, onlyCompatible],
-  );
+  const episodes = allEpisodes;
 
   const closeModal = () => {
     setOpenSeries(null);
@@ -113,14 +124,25 @@ const SeriesPage = () => {
           <p className="text-sm text-muted-foreground mt-1">{series.length} séries disponíveis</p>
         </div>
 
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar série..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 bg-secondary/50 border-border/50"
-          />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative max-w-md flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar série..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 bg-secondary/50 border-border/50"
+            />
+          </div>
+          <Button
+            variant={showOnlyFavs ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowOnlyFavs((v) => !v)}
+            className={cn("gap-2", showOnlyFavs && "bg-primary text-primary-foreground")}
+          >
+            <Heart className={cn("h-4 w-4", showOnlyFavs && "fill-current")} />
+            Favoritos {favorites.size > 0 && `(${favorites.size})`}
+          </Button>
         </div>
 
         <CategoryFilter
@@ -132,6 +154,12 @@ const SeriesPage = () => {
         {isLoading ? (
           <div className="flex justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground">
+            {showOnlyFavs
+              ? "Você ainda não favoritou nenhuma série."
+              : "Nenhuma série encontrada."}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -145,6 +173,8 @@ const SeriesPage = () => {
                   setOpenSeries(s);
                   setActiveSeason(null);
                 }}
+                isFavorite={isFavorite(s.series_id)}
+                onToggleFavorite={() => toggle(s.series_id)}
               />
             ))}
           </div>
@@ -153,11 +183,29 @@ const SeriesPage = () => {
         {openSeries && (
           <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm overflow-y-auto animate-fade-in">
             <div className="mx-auto max-w-6xl p-4 md:p-8">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-foreground truncate">{openSeries.name}</h2>
-                <Button variant="secondary" size="icon" onClick={closeModal}>
-                  <X className="h-4 w-4" />
-                </Button>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h2 className="text-2xl font-bold text-foreground truncate flex-1 min-w-0">{openSeries.name}</h2>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => toggle(openSeries.series_id)}
+                    className={cn("gap-2", isFavorite(openSeries.series_id) && "border-primary/60 text-primary")}
+                  >
+                    <Heart
+                      className={cn(
+                        "h-4 w-4",
+                        isFavorite(openSeries.series_id) && "fill-primary text-primary",
+                      )}
+                    />
+                    <span className="hidden sm:inline">
+                      {isFavorite(openSeries.series_id) ? "Favorito" : "Favoritar"}
+                    </span>
+                  </Button>
+                  <Button variant="secondary" size="icon" onClick={closeModal}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
               {playingEp ? (
@@ -235,7 +283,7 @@ const SeriesPage = () => {
                           ))}
                         </div>
 
-                        <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                        <div className="px-1">
                           <p className="text-xs text-muted-foreground">
                             {allEpisodes.length} episódios
                             {externalCount > 0 && (
@@ -247,25 +295,12 @@ const SeriesPage = () => {
                               </>
                             )}
                           </p>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              id="only-compatible"
-                              checked={onlyCompatible}
-                              onCheckedChange={setOnlyCompatible}
-                            />
-                            <Label
-                              htmlFor="only-compatible"
-                              className="text-xs text-muted-foreground cursor-pointer"
-                            >
-                              Apenas compatíveis com navegador
-                            </Label>
-                          </div>
                         </div>
 
                         <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
                           {episodes.length === 0 ? (
                             <p className="text-sm text-muted-foreground py-6 text-center">
-                              Nenhum episódio compatível nesta temporada.
+                              Nenhum episódio nesta temporada.
                             </p>
                           ) : (
                             episodes.map((ep) => {

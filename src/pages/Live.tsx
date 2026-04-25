@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Loader2, Tv, Menu } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,8 @@ function preheatStreamFunctions() {
 const Live = () => {
   const { session } = useIptv();
   const creds = session!.creds;
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => { preheatStreamFunctions(); }, []);
 
@@ -45,7 +48,7 @@ const Live = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const { favorites, toggle, isFavorite } = useFavorites(creds.username);
+  const { favorites, toggle, isFavorite } = useFavorites(creds.username, "live");
 
   const { data: categories = [] } = useQuery({
     queryKey: ["live-cats", creds.username],
@@ -80,6 +83,16 @@ const Live = () => {
       return matchCat && matchSearch;
     });
   }, [channels, activeCategory, search, favorites]);
+
+  // Abre canal específico vindo de outra página (ex: Conta) com state.openId
+  useEffect(() => {
+    const openId = (location.state as { openId?: number } | null)?.openId;
+    if (openId && channels.length) {
+      const ch = channels.find((x) => x.stream_id === openId);
+      if (ch) setActiveChannel(ch);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.state, location.pathname, channels, navigate]);
 
   // Auto-seleciona o primeiro canal quando a lista carrega/muda e nada está ativo
   // (ou o ativo saiu do filtro).

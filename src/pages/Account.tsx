@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useIptv } from "@/context/IptvContext";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import {
   Heart,
   Radio,
   Film,
+  Clapperboard,
   AlertTriangle,
   Monitor,
   X,
@@ -19,6 +21,13 @@ import {
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { readFavoriteIds } from "@/hooks/useFavorites";
+import {
+  getLiveStreams,
+  getVodStreams,
+  getSeries,
+  proxyImageUrl,
+} from "@/services/iptv";
 
 interface ActiveSessionRow {
   anon_user_id: string;
@@ -35,10 +44,46 @@ const Account = () => {
   const { session, logout } = useIptv();
   const navigate = useNavigate();
   const u = session!.userInfo;
+  const creds = session!.creds;
 
   const [mySession, setMySession] = useState<ActiveSessionRow | null>(null);
   const [block, setBlock] = useState<UserBlockRow | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
+
+  // Lê IDs favoritos do localStorage (sem reagir a outras abas — recarrega no mount)
+  const favLive = useMemo(() => readFavoriteIds(creds.username, "live"), [creds.username]);
+  const favVod = useMemo(() => readFavoriteIds(creds.username, "vod"), [creds.username]);
+  const favSeries = useMemo(() => readFavoriteIds(creds.username, "series"), [creds.username]);
+
+  // Reaproveita os caches já carregados em outras telas (mesmo queryKey)
+  const { data: liveAll = [] } = useQuery({
+    queryKey: ["live-streams", creds.username],
+    queryFn: () => getLiveStreams(creds),
+    enabled: favLive.length > 0,
+  });
+  const { data: moviesAll = [] } = useQuery({
+    queryKey: ["vod-streams", creds.username],
+    queryFn: () => getVodStreams(creds),
+    enabled: favVod.length > 0,
+  });
+  const { data: seriesAll = [] } = useQuery({
+    queryKey: ["series", creds.username],
+    queryFn: () => getSeries(creds),
+    enabled: favSeries.length > 0,
+  });
+
+  const liveItems = useMemo(
+    () => favLive.map((id) => liveAll.find((x) => x.stream_id === id)).filter(Boolean),
+    [favLive, liveAll],
+  );
+  const vodItems = useMemo(
+    () => favVod.map((id) => moviesAll.find((x) => x.stream_id === id)).filter(Boolean),
+    [favVod, moviesAll],
+  );
+  const seriesItems = useMemo(
+    () => favSeries.map((id) => seriesAll.find((x) => x.series_id === id)).filter(Boolean),
+    [favSeries, seriesAll],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +141,51 @@ const Account = () => {
     { icon: Clock, label: "Expira em", value: fmt(expDate) },
     { icon: Wifi, label: "Conexões", value: `${u.active_cons ?? 0} / ${u.max_connections ?? 0}` },
     { icon: Shield, label: "Tipo", value: isTrial ? "Trial" : "Padrão" },
+  ];
+
+  const favSections = [
+    {
+      key: "live",
+      icon: Radio,
+      label: "Canais favoritos",
+      count: favLive.length,
+      items: liveItems.slice(0, 6).map((x) => ({
+        id: x!.stream_id,
+        title: x!.name,
+        cover: x!.stream_icon,
+        to: "/live" as const,
+      })),
+      route: "/live" as const,
+      empty: "Você ainda não favoritou nenhum canal.",
+    },
+    {
+      key: "vod",
+      icon: Film,
+      label: "Filmes favoritos",
+      count: favVod.length,
+      items: vodItems.slice(0, 6).map((x) => ({
+        id: x!.stream_id,
+        title: x!.name,
+        cover: x!.stream_icon,
+        to: "/movies" as const,
+      })),
+      route: "/movies" as const,
+      empty: "Você ainda não favoritou nenhum filme.",
+    },
+    {
+      key: "series",
+      icon: Clapperboard,
+      label: "Séries favoritas",
+      count: favSeries.length,
+      items: seriesItems.slice(0, 6).map((x) => ({
+        id: x!.series_id,
+        title: x!.name,
+        cover: x!.cover,
+        to: "/series" as const,
+      })),
+      route: "/series" as const,
+      empty: "Você ainda não favoritou nenhuma série.",
+    },
   ];
 
   return (
@@ -196,25 +286,76 @@ const Account = () => {
           <Heart className="h-5 w-5 text-primary fill-primary/30" />
           <h2 className="text-lg md:text-xl font-bold">Favoritos</h2>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="rounded-xl border border-border/50 bg-card/40 p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <Radio className="h-5 w-5" />
+
+        {/* Contadores */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {favSections.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => navigate(s.route)}
+              className="text-left rounded-xl border border-border/50 bg-card/40 p-4 flex items-center gap-3 transition-smooth hover:border-primary/50"
+            >
+              <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <s.icon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {s.label}
+                </p>
+                <p className="text-base font-semibold mt-0.5">{s.count}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Listas com miniaturas */}
+        <div className="mt-6 space-y-6">
+          {favSections.map((s) => (
+            <div key={`list-${s.key}`}>
+              <div className="flex items-center gap-2 mb-3">
+                <s.icon className="h-4 w-4 text-primary/80" />
+                <h3 className="text-sm font-semibold">{s.label}</h3>
+                {s.count > 6 && (
+                  <span className="text-xs text-muted-foreground">
+                    (mostrando 6 de {s.count})
+                  </span>
+                )}
+              </div>
+              {s.items.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">{s.empty}</p>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                  {s.items.map((item) => (
+                    <button
+                      key={`${s.key}-${item.id}`}
+                      onClick={() => navigate(s.route, { state: { openId: item.id } })}
+                      className="group relative aspect-[2/3] overflow-hidden rounded-md bg-secondary border border-border/50 transition-smooth hover:border-primary/50 hover:shadow-glow"
+                      title={item.title}
+                    >
+                      {item.cover ? (
+                        <img
+                          src={proxyImageUrl(item.cover)}
+                          alt={item.title}
+                          loading="lazy"
+                          className="absolute inset-0 h-full w-full object-cover transition-smooth group-hover:scale-105"
+                          onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground p-2 text-center">
+                          {item.title}
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2">
+                        <p className="text-[11px] text-white font-medium line-clamp-2">
+                          {item.title}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Canais favoritos</p>
-              <p className="text-base font-semibold mt-0.5">0</p>
-            </div>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-card/40 p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <Film className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Filmes favoritos</p>
-              <p className="text-base font-semibold mt-0.5">0</p>
-            </div>
-          </div>
+          ))}
         </div>
       </Card>
 
