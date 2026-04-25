@@ -409,6 +409,17 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setLastReason(null);
       setStatus("connecting");
 
+      // Resolve segment mode from per-host cache. If host was previously marked
+      // as proxy_required, we already start in "stream" mode without waiting
+      // for failure.
+      segmentModeRef.current = getHostProxyMode(rawUrl ?? src);
+      pushLog({
+        source: "diag",
+        level: "info",
+        label: "segment_proxy_mode",
+        details: segmentModeRef.current,
+      });
+
       // Reset diagnóstico para novo ciclo
       rootCauseLockedRef.current = false;
       setRootCause("unknown");
