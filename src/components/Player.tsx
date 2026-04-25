@@ -1826,29 +1826,56 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
             {logsRef.current.length === 0 ? (
               <div className="text-muted-foreground text-center py-4">Sem eventos ainda</div>
             ) : (
-              logsRef.current.map((entry, i) => (
-                <div key={i} className="flex items-start gap-1.5 leading-tight">
-                  <span className="shrink-0 text-muted-foreground tabular-nums">
-                    [+{Math.round(entry.tRel)}ms]
-                  </span>
-                  <span
-                    className={cn(
-                      "shrink-0 rounded border px-1 py-0 text-[10px] uppercase tracking-wide",
-                      sourceBadge[entry.source],
-                    )}
-                  >
-                    {entry.source}
-                  </span>
-                  <div className={cn("min-w-0 flex-1", levelTone[entry.level])}>
-                    <span className="font-semibold">{entry.label}</span>
-                    {entry.details && (
-                      <span className="ml-1 text-muted-foreground truncate inline-block max-w-full align-bottom" title={entry.details}>
-                        {entry.details}
-                      </span>
-                    )}
+              logsRef.current.map((entry, i) => {
+                // Formata meta numa linha curta humanamente legível.
+                // Ex: "ct=12.3 bAhead=2.1 rs=4 http=503"
+                const metaParts: string[] = [];
+                if (entry.meta) {
+                  const m = entry.meta;
+                  if (m.ct !== undefined) metaParts.push(`ct=${m.ct}`);
+                  if (m.bAhead !== undefined) metaParts.push(`buf=${m.bAhead}s`);
+                  if (m.rs !== undefined) metaParts.push(`rs=${m.rs}`);
+                  if (m.http !== undefined) metaParts.push(`http=${m.http}`);
+                  if (m.bytes !== undefined) metaParts.push(`${Math.round((m.bytes as number) / 1024)}KB`);
+                  if (m.ttfb !== undefined) metaParts.push(`ttfb=${m.ttfb}ms`);
+                  if (m.loadMs !== undefined) metaParts.push(`load=${m.loadMs}ms`);
+                  if (m.net) metaParts.push(`net=${m.net}`);
+                  if (m.rtt !== undefined) metaParts.push(`rtt=${m.rtt}`);
+                }
+                const metaStr = metaParts.join(" ");
+                const fullMetaJson = entry.meta ? JSON.stringify(entry.meta, null, 2) : "";
+                return (
+                  <div key={i} className="flex items-start gap-1.5 leading-tight">
+                    <span className="shrink-0 text-muted-foreground tabular-nums">
+                      [+{Math.round(entry.tRel)}ms]
+                    </span>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded border px-1 py-0 text-[10px] uppercase tracking-wide",
+                        sourceBadge[entry.source],
+                      )}
+                    >
+                      {entry.source}
+                    </span>
+                    <div className={cn("min-w-0 flex-1", levelTone[entry.level])}>
+                      <span className="font-semibold">{entry.label}</span>
+                      {entry.details && (
+                        <span className="ml-1 text-muted-foreground" title={entry.details}>
+                          {entry.details}
+                        </span>
+                      )}
+                      {metaStr && (
+                        <span
+                          className="ml-1 text-[10px] text-muted-foreground/80 break-all"
+                          title={fullMetaJson}
+                        >
+                          {metaStr}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
