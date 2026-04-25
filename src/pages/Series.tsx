@@ -230,6 +230,7 @@ const SeriesPage = () => {
               if (s) setOpenSeries(s);
             }}
             onToggleFavorite={toggle}
+            onHoverItem={prefetchSeriesInfo}
             search={search}
             onSearchChange={setSearch}
             searchInputRef={searchRef}
