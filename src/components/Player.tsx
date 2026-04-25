@@ -269,6 +269,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   // Watchdog timers
   const bootstrapTimeoutRef = useRef<number | null>(null);
   const stallTimeoutRef = useRef<number | null>(null);
+  const loadeddataWatchdogRef = useRef<number | null>(null);
 
   // Diagnostic flags
   const playbackStartedRef = useRef(false);
