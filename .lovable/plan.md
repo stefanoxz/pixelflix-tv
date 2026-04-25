@@ -1,160 +1,138 @@
-# Acelerar abertura de canais ao vivo
+# Redesign da página /live com EPG e navegação responsiva
 
-## Diagnóstico (números reais dos logs)
+## Diagnóstico do layout atual
 
-Para abrir um canal, o pipeline atual gasta:
+A `/live` hoje empilha tudo verticalmente: título → busca → categorias em pílulas horizontais → player + sidebar de canais simples (só nome + número). **Não há EPG**. No mobile a sidebar de canais cai abaixo do player, então o usuário rola muito antes de trocar de canal. Em desktop, ~30% do viewport vertical é gasto em chrome (header, busca, categorias) antes do vídeo aparecer.
 
+## Layout novo
+
+### Desktop (≥1024px) — três colunas
 ```text
-setup_start (t=0)
-├── OPTIONS  /stream-token       743 ms   ← preflight CORS
-├── POST     /stream-token      1800 ms   ← 3 queries Postgres + upsert + sign
-├── GET      /stream-proxy m3u8 1412 ms   ← fetch upstream + assina N URLs
-├── GET      /stream-proxy m3u8 1270 ms   ← nested playlist (2º hop)
-├── (em paralelo) OPTIONS+POST /stream-event  ~1100 ms
-└── GET      /stream-proxy 1ºseg ~700 ms
-                                ─────
-                          Total ~6-9 s  ✓ bate com 8772 ms observado
+┌──────────┬──────────────────────────┬──────────────┐
+│Categorias│   Player + EPG do canal  │   Lista de   │
+│ (rail    │                          │   canais     │
+│  vertical│   ┌────────────────────┐ │  com EPG     │
+│  com     │   │                    │ │  agora/       │
+│  contagem│   │      Player        │ │  próximo +   │
+│  por cat)│   │                    │ │  progresso   │
+│          │   └────────────────────┘ │              │
+│ ★ Favs   │   "Agora: Jornal Nac."  │  [busca]     │
+│ # Todos  │   "Próx: Globo Repórter" │  ◉ Globo     │
+│ ▸ Abertos│   ▓▓▓▓▓░░░░ 60%         │     Jornal..│
+│ ▸ Filmes │                          │  ○ SBT       │
+│ ▸ Esporte│   ─────EPG timeline──── │     Novela.. │
+│ ▸ Notícia│   06h ┃ 07h ┃ 08h ┃     │  ○ Record    │
+└──────────┴──────────────────────────┴──────────────┘
 ```
 
-Tudo isso roda **antes** do hls.js dizer `MANIFEST_PARSED`. Os ganhos abaixo
-atacam cada barra dessa lista, sem mexer em segurança nem em features.
+- **Coluna esquerda (rail de categorias)**: lista vertical scrollável, com ★ Favoritos no topo, contador de canais por categoria, ícone por tipo. Recolhível para versão "icon-only" via toggle.
+- **Coluna central (player + EPG)**: player no topo, abaixo dele o **EPG do canal ativo** mostrando programa atual com barra de progresso (calculada de `start`/`stop` do `get_short_epg`) e os próximos 4-5 programas em linha do tempo horizontal.
+- **Coluna direita (lista de canais)**: cada item agora mostra logo + nome + **"Agora: <programa>"** + barra de progresso fininha + duração restante. Busca persistente no topo.
 
-## O que vai mudar
+### Tablet (768-1023px) — duas colunas
+- Categorias viram dropdown no topo (mantém o componente `CategoryFilter` atual mas como `Select`).
+- Player + lista lado a lado.
 
-### 1. Eliminar preflights CORS recorrentes (ganho ~1.5 s)
+### Mobile (<768px) — player full + drawer
+- Player ocupa 100% da largura no topo, com info compacta: "Agora: <programa> · 80% concluído".
+- Botão flutuante "Canais" abre **Sheet/Drawer lateral** (shadcn `Sheet`) com busca + categorias accordion + lista. Fecha após selecionar.
+- Botão de **favoritar** (★) na barra de info do player — toggle persistido em `localStorage`.
+- Tabs no drawer: "Todos", "Favoritos", "Categorias".
 
-As respostas `OPTIONS` das três funções (`stream-token`, `stream-event`,
-`stream-proxy`) hoje não enviam `Access-Control-Max-Age`. O browser refaz o
-preflight em cada chamada nova. Vamos adicionar:
+## Funcionalidades EPG
 
-```text
-Access-Control-Max-Age: 86400
-```
-
-Resultado: o preflight só acontece **uma vez por dia** por origem/método, em
-vez de a cada novo canal aberto.
-
-### 2. Paralelizar e enxugar `stream-token` (1800 ms → ~400 ms)
-
-A função hoje executa **3 SELECTs sequenciais** + 2 UPSERTs antes de assinar:
-
-```text
-SELECT user_blocks  →  SELECT usage_counters  →  SELECT active_sessions
-                                                        ↓
-                                  UPSERT usage_counters + UPSERT active_sessions
-                                                        ↓
-                                                   sign + return
-```
-
-Mudanças:
-
-- **Paralelizar leituras**: `Promise.all([blockCheck, usageCounter, activeSessions])`.
-- **Mover upserts para fire-and-forget após o return**: `EdgeRuntime.waitUntil(...)`
-  (suportado nativamente pelo Deno Deploy / Supabase). O cliente não precisa
-  esperar a escrita para receber o token.
-- **Cache em memória da função (TTL 30 s) do `user_blocks`**: blocos mudam
-  raramente; revalidar a cada 30 s evita 1 SELECT por request.
-- **Pular o SELECT de `usage_counters` quando o counter já está em memória**
-  na própria função (singleton mapa user→{minute, count}, reseta no minuto novo).
-  O UPSERT continua acontecendo (fire-and-forget) para persistir entre
-  cold-starts.
-
-Segurança preservada: o token continua amarrado a `userId + IP/24 + UA hash`
-e expira em 30 min. As escritas atrasadas só afetam o **próximo** request,
-não dão privilégio extra ao atual.
-
-### 3. `stream-event(stream_started)` fora do caminho crítico
-
-Hoje o player chama `reportStreamEvent("stream_started")` e isso aparece nos
-logs como ~1.1 s entre OPTIONS+POST. O evento é puramente analítico — não
-precisa bloquear nada. Mudanças no client:
-
-- Disparar com `fetch(..., { keepalive: true })` **sem `await`** logo após
-  o `play()`.
-- Marcar a chamada como `priority: "low"` (Fetch Priority API) para que o
-  browser não a empilhe na mesma fila do manifest.
-
-### 4. Resolver a nested playlist no mesmo hop (1270 ms → 0)
-
-Quando o upstream devolve uma **master playlist** com uma única variante
-(caso comum em IPTV BR), o `stream-proxy` hoje devolve o master reescrito,
-o hls.js então faz **outro** request para a nested. Mudança no
-`stream-proxy`:
-
-- Após fazer parse do upstream, se o documento for master e tiver
-  exatamente 1 `#EXT-X-STREAM-INF`, já buscar a nested upstream **na mesma
-  invocação** (em paralelo com a assinatura), e devolver a nested já
-  reescrita marcando `Content-Type` HLS normalmente.
-- Quando o master tiver várias variantes (4K + HD + SD), manter o comportamento
-  atual — o ABR do hls.js precisa enxergar todas.
-
-Em master de 1 variante (a maioria dos canais Xtream), elimina-se 1 hop
-inteiro de ~1.3 s.
-
-### 5. Pré-aquecer as edge functions na entrada da grade (`/live`)
-
-Quando o usuário entra em `/live` (ou abre a lista de canais), disparar
-em background:
+### Backend (sem mudanças)
+A edge function `iptv-categories` já aceita qualquer `action`. Adicionamos no client:
 
 ```ts
-// preheat: dispara um OPTIONS fake só para acordar a função.
-fetch(`${SUPABASE_URL}/functions/v1/stream-token`, { method: "OPTIONS", keepalive: true });
-fetch(`${SUPABASE_URL}/functions/v1/stream-proxy`,  { method: "OPTIONS", keepalive: true });
+// src/services/iptv.ts
+export interface EpgEntry {
+  id: string;
+  title: string;        // base64 — decodificamos no client
+  description: string;  // base64 — decodificamos no client
+  start: string;        // "2025-04-25 12:00:00"
+  end: string;
+  start_timestamp: string;
+  stop_timestamp: string;
+}
+
+export const getShortEpg = (c: IptvCredentials, streamId: number, limit = 6) =>
+  iptvFetch<{ epg_listings: EpgEntry[] }>(c, "get_short_epg", { stream_id: streamId, limit });
 ```
 
-Isso elimina o cold-start de ~500-1000 ms que aparece na primeira
-abertura de canal por sessão.
+Cache react-query agressivo:
+- `staleTime: 5 min` por canal
+- Pré-fetch do canal ativo no `useEffect` quando `activeChannel` muda
+- Pré-fetch dos primeiros 10 canais visíveis na sidebar (debounced 500ms ao terminar de scrollar)
+- `gcTime: 30 min` para reaproveitar quando o usuário volta a um canal
 
-### 6. HLS.js: começar a tocar com 1 segmento, não 3
+### Componentes novos
 
-`HLS_CONFIG` hoje:
+1. **`EpgNowNext`** — usado na lista de canais e no header do player. Mostra programa atual + barra de progresso baseada em `Date.now()` vs `start_timestamp`/`stop_timestamp`. Atualiza a cada 30s via `useEffect` + `setInterval`. Fallback gracioso se o canal não tiver `epg_channel_id` ou se vier vazio.
 
-```ts
-liveSyncDurationCount: 3,   // espera 3 segmentos antes de play
-```
+2. **`EpgTimeline`** — lista horizontal scrollável dos próximos 4-5 programas do canal ativo, cada bloco com largura proporcional à duração. Inclui horário de início, título, e badge "AO VIVO" no programa atual.
 
-Para canais ao vivo Xtream (segmentos de ~6 s), isso adiciona até **2 s** ao
-TTFF. Vamos reduzir para `2` — dentro do mínimo recomendado pelo HLS.js para
-estabilidade, mas mais rápido. Permanece tolerância via
-`liveMaxLatencyDurationCount: 10`.
+3. **`ChannelCategoryRail`** — substitui `CategoryFilter` em desktop. Lista vertical com:
+   - ★ Favoritos (separador)
+   - # Todos os canais (contador)
+   - Categorias retornadas pela API (contador por categoria, calculado em memória)
+   - Suporte a colapsar/expandir grupos
+   - Variant `icon-only` (w-14) quando sidebar do shadcn está colapsada
 
-### 7. Painel de logs: medir essas etapas
+4. **`ChannelListItem`** — item rico da lista direita: logo, nome, "Agora: X" + progresso. Memoizado (`React.memo`) por `stream_id` + `epg_now_id` para evitar re-render.
 
-Adicionar três marcações claras no painel de logs do player:
+### Favoritos (localStorage)
+- Chave: `pixelflix:favorites:${username}` (escopado por usuário IPTV)
+- Toggle no item da lista (★ ao passar mouse) e no header do player
+- Categoria virtual "★ Favoritos" no topo da rail
 
-- `stream_token_ms` (POST /stream-token)
-- `master_playlist_ms` (1º GET /stream-proxy)
-- `nested_playlist_ms` (2º GET /stream-proxy, ou 0 se inline)
-- `first_segment_ms`
+### Navegação por teclado
+- `↑` / `↓` na lista de canais: muda canal ativo (com scroll-into-view)
+- `/`: foca o input de busca
+- `Esc`: limpa busca / fecha drawer mobile
+- `f`: favoritar canal atual
+- Implementado via `useEffect` global na página `/live` com `keydown` e ignora quando o foco está num `input/textarea`.
 
-Para conseguirmos validar o ganho real depois do deploy.
+## Performance
+
+- **Virtualização da lista de canais**: já que há provedores com 1000+ canais, usar `@tanstack/react-virtual` (ou solução manual com `IntersectionObserver`) para renderizar só os ~20 itens visíveis. Sem isso, render inicial trava com 2000 botões + imagens.
+- **`proxyImageUrl` com lazy loading**: `loading="lazy"` + `decoding="async"` + `width/height` definidos.
+- **`useDeferredValue`** no input de busca para não bloquear digitação.
+- **Memoização do filtro** (`useMemo`) já existe — manter, mas mover o sort de favoritos pra fora.
 
 ## Arquivos a alterar
 
 ```text
-supabase/functions/stream-token/index.ts        # paralelizar + waitUntil + cache
-supabase/functions/stream-proxy/index.ts        # Access-Control-Max-Age + nested inline
-supabase/functions/stream-event/index.ts        # Access-Control-Max-Age
-src/services/iptv.ts                            # reportStreamEvent fire-and-forget + keepalive
-src/components/Player.tsx                       # liveSyncDurationCount: 2 + métricas extra
-src/pages/Live.tsx (ou equivalente)             # preheat OPTIONS no mount
+src/services/iptv.ts                          # + EpgEntry, getShortEpg, decodeBase64Epg
+src/hooks/useEpgNow.ts                        # NOVO — hook react-query + tick 30s
+src/hooks/useFavorites.ts                     # NOVO — localStorage scoped por user
+src/hooks/useLiveKeyboardNav.ts               # NOVO — atalhos de teclado
+src/components/live/EpgNowNext.tsx            # NOVO
+src/components/live/EpgTimeline.tsx           # NOVO
+src/components/live/ChannelCategoryRail.tsx   # NOVO (substitui CategoryFilter no desktop)
+src/components/live/ChannelListItem.tsx       # NOVO (memoizado)
+src/components/live/VirtualChannelList.tsx    # NOVO (wrapper com virtualização)
+src/components/live/MobileChannelDrawer.tsx   # NOVO (Sheet do shadcn)
+src/components/live/PlayerInfoBar.tsx         # NOVO (info do canal + favoritar + Agora)
+src/pages/Live.tsx                            # reescrito com novo grid responsivo
+src/components/ChannelSidebar.tsx             # mantido como fallback / removido após migração
+src/components/CategoryFilter.tsx             # mantido para uso em /vod /series
 ```
+
+## Não muda
+
+- **Player.tsx**: nenhuma alteração — só recebe novos props existentes.
+- **Edge functions**: `iptv-categories` já aceita `get_short_epg`, sem deploy necessário.
+- **Banco**: nenhuma migração.
+- **Restantes das rotas (`/vod`, `/series`)**: intocadas.
 
 ## Resultado esperado
 
-| Etapa | Antes | Depois |
-|---|---|---|
-| Preflight stream-token | 743 ms | 0 (cacheado) |
-| POST stream-token | 1800 ms | ~400 ms |
-| GET master playlist | 1412 ms | ~1000 ms (warm) |
-| GET nested playlist | 1270 ms | 0 (inline em 1-variante) |
-| stream-event | bloqueia ~1100 ms | fora do caminho crítico |
-| HLS.js sync wait | ~2000 ms | ~1300 ms |
-| **Setup → Manifest** | **8772 ms** | **~2500 ms** |
-| **Manifest → 1º Frame** | 2193 ms | ~1500 ms |
-| **TTFF total** | **10965 ms** | **~4000 ms** |
-
-Sem nenhuma regressão de segurança: o token continua bound a
-sessão/IP/UA, RLS e rate limits permanecem ativos. As otimizações são
-puramente de ordenação (paralelo vs. sequencial) e de caching de
-preflights/blocos.
+| Antes | Depois |
+|---|---|
+| Sem EPG | EPG agora/próximo na lista + timeline no player |
+| Sidebar única empilhando 1000 canais | Lista virtualizada (60fps mesmo com 2000 canais) |
+| Categorias em pílulas horizontais | Rail vertical desktop + dropdown tablet + tabs mobile |
+| Mobile: scroll abaixo do player | Sheet/Drawer com botão flutuante |
+| Sem favoritos nem teclado | ★ favs + ↑↓ / Esc f atalhos |
+| ~30% viewport gasto em chrome | Player domina o viewport, info contextual |
