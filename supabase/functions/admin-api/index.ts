@@ -1174,12 +1174,20 @@ Deno.serve(async (req) => {
         }
       };
 
-      // Roda em paralelo (chunks de 6 para não estourar)
+      // Roda serial: paralelizar muitos probes em hosts inalcançáveis (TCP reset)
+      // satura sockets do worker e dispara SUPABASE_EDGE_RUNTIME_ERROR (503).
+      // Aborta o restante quando o orçamento global se esgota.
       const results: VariantResult[] = [];
-      for (let i = 0; i < limited.length; i += 6) {
-        const batch = limited.slice(i, i + 6);
-        const r = await Promise.all(batch.map(probeVariant));
-        results.push(...r);
+      let aborted = false;
+      for (const v of limited) {
+        if (remaining() < 1000) {
+          aborted = true;
+          break;
+        }
+        const r = await probeVariant(v);
+        results.push(r);
+        // Atalho: se já achou um Xtream auth=1, não precisa testar o resto
+        if (r.is_xtream && (r.xtream_auth === 1 || r.xtream_auth === "1")) break;
       }
 
       // Classifica candidatos
