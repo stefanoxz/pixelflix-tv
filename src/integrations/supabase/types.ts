@@ -25,6 +25,7 @@ export type Database = {
           ip: string | null
           iptv_username: string | null
           last_seen_at: string
+          server_url: string | null
           started_at: string
           ua_hash: string | null
         }
@@ -38,6 +39,7 @@ export type Database = {
           ip?: string | null
           iptv_username?: string | null
           last_seen_at?: string
+          server_url?: string | null
           started_at?: string
           ua_hash?: string | null
         }
@@ -51,6 +53,7 @@ export type Database = {
           ip?: string | null
           iptv_username?: string | null
           last_seen_at?: string
+          server_url?: string | null
           started_at?: string
           ua_hash?: string | null
         }
