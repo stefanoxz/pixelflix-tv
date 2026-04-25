@@ -50,13 +50,15 @@ export function SeriesDetailsDialog({
 
   const info = data?.info;
   const sourceCover = info?.cover || series?.cover;
+  const sourcePlot = series?.plot || info?.plot;
   const releaseDate = series?.releaseDate || info?.releaseDate;
   const year = releaseDate ? releaseDate.slice(0, 4) : null;
 
   // Fallback TMDB — chamado SEMPRE (antes de qualquer return) pra preservar a ordem dos hooks.
+  // Dispara quando faltar capa OU sinopse (no dialog é seguro — só 1 lookup por abertura).
   const { data: tmdb } = useTmdbFallback({
     type: "series",
-    hasCover: !!sourceCover || !series,
+    hasCover: (!!sourceCover && !!sourcePlot) || !series,
     name: series?.name,
     year: year ?? undefined,
   });
@@ -64,7 +66,7 @@ export function SeriesDetailsDialog({
   if (!series) return null;
 
   const ratingNum = series.rating_5based || 0;
-  const plot = series.plot || info?.plot;
+  const plot = sourcePlot || tmdb?.overview || null;
   const cast = series.cast || info?.cast;
   const director = series.director || info?.director;
   const genre = series.genre || info?.genre;
