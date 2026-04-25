@@ -1077,8 +1077,9 @@ Deno.serve(async (req) => {
       const originalScheme = parsed.protocol.replace(":", "") as "http" | "https";
       const originalPort = parsed.port || (originalScheme === "https" ? "443" : "80");
 
-      const HTTP_PORTS = ["80", "8080", "8000", "2052", "2086", "2095"];
-      const HTTPS_PORTS = ["443", "8443", "2053", "2083", "2096"];
+      // Conjunto reduzido para não saturar o worker em hosts inalcançáveis
+      const HTTP_PORTS = ["80", "8080", "8000"];
+      const HTTPS_PORTS = ["443", "8443"];
 
       const variants: { scheme: "http" | "https"; port: string; base: string; label: string }[] = [];
       const seen = new Set<string>();
@@ -1098,8 +1099,8 @@ Deno.serve(async (req) => {
       for (const p of HTTP_PORTS) push("http", p, `http:${p}`);
       for (const p of HTTPS_PORTS) push("https", p, `https:${p}`);
 
-      // limita custo: máx 12 variantes
-      const limited = variants.slice(0, 12);
+      // limita custo: máx 7 variantes
+      const limited = variants.slice(0, 7);
 
       type VariantResult = {
         base: string;
