@@ -553,6 +553,123 @@ Deno.serve(async (req) => {
       return ok({ ok: true });
     }
 
+    // ---------- PROBE SERVER (admin diagnostics) ----------
+    // Tenta MULTIPLAS variantes (porta + protocolo) contra o player_api de
+    // um servidor IPTV e devolve o resultado de cada uma. Não exige
+    // credenciais válidas — só queremos saber qual variante responde TCP +
+    // HTTP. 401 conta como "servidor vivo, credencial inválida".
+    if (action === "probe_server") {
+      const rawUrl = String(payload?.server_url ?? "").trim();
+      if (!rawUrl) return bad("server_url obrigatório");
+
+      const stripped = rawUrl.replace(/\/+$/, "");
+      const m = stripped.match(/^(https?):\/\/(.+)$/i);
+      const originalScheme = (m?.[1]?.toLowerCase() as "http" | "https" | undefined) ?? null;
+      const hostPort = (m?.[2] ?? stripped).replace(/\s+/g, "");
+      if (!hostPort) return bad("URL inválida");
+
+      const hasPort = /:\d+$/.test(hostPort);
+      const host = hasPort ? hostPort.replace(/:\d+$/, "") : hostPort;
+
+      // Lista completa de variantes para diagnóstico (mais ampla que o
+      // login real — aqui queremos saber TUDO).
+      const primary = originalScheme ?? "http";
+      const secondary = primary === "http" ? "https" : "http";
+      const candidatesSet = new Set<string>();
+      candidatesSet.add(`${primary}://${hostPort}`);
+      if (!hasPort) {
+        if (primary === "http") {
+          candidatesSet.add(`http://${host}:80`);
+          candidatesSet.add(`http://${host}:8080`);
+        } else {
+          candidatesSet.add(`https://${host}:443`);
+        }
+      }
+      candidatesSet.add(`${secondary}://${hostPort}`);
+      if (!hasPort) {
+        if (secondary === "http") {
+          candidatesSet.add(`http://${host}:80`);
+          candidatesSet.add(`http://${host}:8080`);
+        } else {
+          candidatesSet.add(`https://${host}:443`);
+        }
+        // Portas IPTV exóticas (no esquema primário)
+        for (const p of [2052, 2082, 2095, 8880]) {
+          candidatesSet.add(`${primary}://${host}:${p}`);
+        }
+      }
+
+      const variants = [...candidatesSet];
+      const PROBE_TIMEOUT_MS = 4000;
+      const PROBE_UA = "VLC/3.0.20 LibVLC/3.0.20";
+
+      const results = await Promise.all(
+        variants.map(async (base) => {
+          const url = `${base}/player_api.php?username=probe&password=probe`;
+          const startedAt = Date.now();
+          try {
+            const res = await fetch(url, {
+              headers: { "User-Agent": PROBE_UA, Accept: "application/json, */*" },
+              redirect: "follow",
+              signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+            });
+            const body = await res.text();
+            const elapsed = Date.now() - startedAt;
+            // Tenta parsear como JSON Xtream — se vier user_info é um IPTV real.
+            let isXtream = false;
+            let authValue: number | string | null = null;
+            try {
+              const parsed = JSON.parse(body);
+              if (parsed?.user_info) {
+                isXtream = true;
+                authValue = parsed.user_info.auth ?? null;
+              }
+            } catch { /* não é JSON */ }
+            return {
+              variant: base,
+              ok: res.ok,
+              status: res.status,
+              latency_ms: elapsed,
+              is_xtream: isXtream,
+              auth: authValue,
+              body_preview: body.slice(0, 200),
+              error: null as string | null,
+            };
+          } catch (err) {
+            const elapsed = Date.now() - startedAt;
+            const msg = err instanceof Error ? err.message : String(err);
+            return {
+              variant: base,
+              ok: false,
+              status: null as number | null,
+              latency_ms: elapsed,
+              is_xtream: false,
+              auth: null as number | string | null,
+              body_preview: "",
+              error: msg,
+            };
+          }
+        }),
+      );
+
+      // Resumo: a "melhor" variante é a que teve status 2xx OU 401 (servidor
+      // vivo) e respondeu como Xtream — ou, no pior caso, qualquer status HTTP.
+      const working = results.find((r) => r.is_xtream) ??
+        results.find((r) => r.status === 401) ??
+        results.find((r) => r.status && r.status >= 200 && r.status < 500) ??
+        null;
+
+      return ok({
+        server_url: rawUrl,
+        normalized: normalizeServer(rawUrl),
+        tested_variants: variants.length,
+        timeout_ms: PROBE_TIMEOUT_MS,
+        best_variant: working?.variant ?? null,
+        best_status: working?.status ?? null,
+        results,
+      });
+    }
+
     return bad("Ação inválida");
   } catch (e) {
     console.error("[admin-api] unhandled", e);
