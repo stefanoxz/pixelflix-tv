@@ -40,10 +40,8 @@ const FALLBACK_UAS = [
 // de eventos `reset/timeout` no dashboard.
 const FETCH_TIMEOUT_MS = 4000;
 
-// Cooldown progressivo após N falhas consecutivas. Tempo em milissegundos.
-// Cada nível dobra (capeado em 5min) — DNS quebrada para de poluir o log.
-const COOLDOWN_THRESHOLD = 5;
-const COOLDOWN_STEPS_MS = [60_000, 120_000, 180_000, 300_000];
+// Cooldown automático foi removido — toda tentativa de login é executada de fato.
+// Mantemos apenas o contador `consecutive_failures` (estatística para o admin).
 
 const NO_ACCESS_MSG =
   "Você não tem acesso a esta plataforma. Entre em contato com a sua revenda para liberar o seu servidor (DNS).";
