@@ -1,4 +1,6 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,16 +8,24 @@ import { IptvProvider } from "@/context/IptvContext";
 import { Header } from "@/components/Header";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
-import Index from "./pages/Index.tsx";
 import Login from "./pages/Login";
-import Live from "./pages/Live";
-import Movies from "./pages/Movies";
-import SeriesPage from "./pages/Series";
-import Account from "./pages/Account";
-import AdminLogin from "./pages/AdminLogin";
-import AdminResetPassword from "./pages/AdminResetPassword";
-import Admin from "./pages/Admin";
-import NotFound from "./pages/NotFound.tsx";
+
+// Lazy-load non-landing routes to reduce initial bundle size
+const Index = lazy(() => import("./pages/Index.tsx"));
+const Live = lazy(() => import("./pages/Live"));
+const Movies = lazy(() => import("./pages/Movies"));
+const SeriesPage = lazy(() => import("./pages/Series"));
+const Account = lazy(() => import("./pages/Account"));
+const AdminLogin = lazy(() => import("./pages/AdminLogin"));
+const AdminResetPassword = lazy(() => import("./pages/AdminResetPassword"));
+const Admin = lazy(() => import("./pages/Admin"));
+const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+
+const RouteFallback = () => (
+  <div className="flex justify-center items-center min-h-[60vh]">
+    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+  </div>
+);
 
 const WithChrome = ({ children }: { children: React.ReactNode }) => (
   <>
@@ -30,61 +40,63 @@ const App = () => (
         <Toaster />
         <Sonner position="top-right" theme="dark" />
         <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin/reset-password" element={<AdminResetPassword />} />
-            <Route
-              path="/admin"
-              element={
-                <AdminProtectedRoute>
-                  <Admin />
-                </AdminProtectedRoute>
-              }
-            />
+          <Suspense fallback={<RouteFallback />}>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/admin/reset-password" element={<AdminResetPassword />} />
+              <Route
+                path="/admin"
+                element={
+                  <AdminProtectedRoute>
+                    <Admin />
+                  </AdminProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Index />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/live"
-              element={
-                <ProtectedRoute>
-                  <WithChrome><Live /></WithChrome>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/movies"
-              element={
-                <ProtectedRoute>
-                  <WithChrome><Movies /></WithChrome>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/series"
-              element={
-                <ProtectedRoute>
-                  <WithChrome><SeriesPage /></WithChrome>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/account"
-              element={
-                <ProtectedRoute>
-                  <WithChrome><Account /></WithChrome>
-                </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <Index />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/live"
+                element={
+                  <ProtectedRoute>
+                    <WithChrome><Live /></WithChrome>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/movies"
+                element={
+                  <ProtectedRoute>
+                    <WithChrome><Movies /></WithChrome>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/series"
+                element={
+                  <ProtectedRoute>
+                    <WithChrome><SeriesPage /></WithChrome>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/account"
+                element={
+                  <ProtectedRoute>
+                    <WithChrome><Account /></WithChrome>
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
   </IptvProvider>
