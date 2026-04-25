@@ -57,8 +57,24 @@ const USER_AGENTS = [
 ];
 
 const TRANSIENT_STATUSES = new Set([408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 530, 444]);
+// Upstream "soft-not-found": painel respondeu mas o endpoint/conta sumiu.
+// Tratamos como resposta vazia para não quebrar a UI (evita blank screen).
+const SOFT_NOT_FOUND_STATUSES = new Set([404, 410]);
+// Actions que retornam coleção (lista) — quando o painel responde 404/410,
+// é seguro devolver `[]`. Para outras actions, devolvemos `null`.
+const COLLECTION_ACTIONS = new Set([
+  "get_live_categories",
+  "get_live_streams",
+  "get_vod_categories",
+  "get_vod_streams",
+  "get_series_categories",
+  "get_series",
+]);
 
-async function fetchWithRetries(url: string, attemptsPerUa = 1): Promise<{ ok: true; data: unknown } | { ok: false; status: number; reason: string }> {
+async function fetchWithRetries(url: string, attemptsPerUa = 1): Promise<
+  | { ok: true; data: unknown }
+  | { ok: false; status: number; reason: string; softNotFound?: boolean }
+> {
   let lastStatus = 0;
   let lastReason = "Unknown error";
 
@@ -75,6 +91,10 @@ async function fetchWithRetries(url: string, attemptsPerUa = 1): Promise<{ ok: t
           lastReason = `HTTP ${res.status}`;
           await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
           continue;
+        }
+
+        if (SOFT_NOT_FOUND_STATUSES.has(res.status)) {
+          return { ok: false, status: res.status, reason: `HTTP ${res.status}`, softNotFound: true };
         }
 
         if (!res.ok) return { ok: false, status: res.status, reason: `HTTP ${res.status}` };
