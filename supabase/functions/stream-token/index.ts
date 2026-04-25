@@ -35,6 +35,9 @@ function corsFor(req: Request): Record<string, string> {
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
+    // Cacheia o preflight por 24h. Sem isso, cada novo canal aberto pagava
+    // ~700ms de OPTIONS. Browsers respeitam até 86400s (Chromium teto).
+    "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
 }

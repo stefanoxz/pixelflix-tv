@@ -38,6 +38,9 @@ function corsFor(req: Request): Record<string, string> {
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type, range, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+    // Cacheia o preflight CORS por 24h. Cada GET de playlist/segment HLS
+    // aciona preflight; sem max-age o browser refaz o OPTIONS toda vez.
+    "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
 }
