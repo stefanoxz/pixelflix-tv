@@ -496,6 +496,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
    * para evitar que erros tardios sobrescrevam a classificação real.
    * `ok` sempre é aceita (sucesso supera qualquer falha anterior).
    */
+  const autoReportedRef = useRef(false);
+
   const setRootCauseOnce = (cause: RootCause, detail?: string | null) => {
     if (cause !== "ok" && rootCauseLockedRef.current) return;
     rootCauseLockedRef.current = cause !== "ok";
@@ -507,6 +509,38 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       label: `root_cause:${cause}`,
       details: detail ?? undefined,
     });
+
+    // Marca conteúdo como incompatível localmente + reporta automaticamente
+    // ao admin (uma vez por sessão de player).
+    if (cause === "codec_incompatible" && !autoReportedRef.current) {
+      autoReportedRef.current = true;
+      const targetUrl = rawUrl ?? src ?? "";
+      const host = hostFromUrl(targetUrl);
+      markIncompatible(host, streamId, detail ?? "codec_incompatible");
+      reportStreamEvent("user_report", {
+        url: targetUrl || undefined,
+        meta: {
+          category: "codec_incompatible_auto",
+          auto: true,
+          title: title ?? null,
+          stream_id: streamId ?? null,
+          content_kind: contentKind ?? null,
+          container_ext: containerExt ?? null,
+          host,
+          root_cause: cause,
+          detail: detail ?? null,
+          last_reason: lastReasonRef.current ?? null,
+          user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+          reported_at: new Date().toISOString(),
+        },
+      });
+      pushLog({
+        source: "diag",
+        level: "warn",
+        label: "auto_report_sent",
+        details: "codec_incompatible reportado ao admin",
+      });
+    }
   };
 
   const clearBootstrapTimeout = () => {
