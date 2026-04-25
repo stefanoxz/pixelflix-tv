@@ -114,6 +114,7 @@ interface MonitoringSession {
   anon_user_id: string;
   iptv_username: string | null;
   ip_masked: string;
+  server_url: string | null;
   started_at: string;
   last_seen_at: string;
   duration_s: number;
