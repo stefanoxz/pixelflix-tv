@@ -1,26 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { Tv2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Player } from "@/components/Player";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { LibraryShell } from "@/components/library/LibraryShell";
+import { LibraryTopBar } from "@/components/library/LibraryTopBar";
 import { CategoryRail, type RailCategory } from "@/components/library/CategoryRail";
-import { TitleList } from "@/components/library/TitleList";
-import type { TitleListItemData } from "@/components/library/TitleListItem";
-import { PreviewPanel } from "@/components/library/PreviewPanel";
-import { SeriesEpisodesPanel } from "@/components/library/SeriesEpisodesPanel";
+import { MobileCategoryDrawer } from "@/components/library/MobileCategoryDrawer";
+import { PosterGrid } from "@/components/library/PosterGrid";
+import type { PosterItem } from "@/components/library/PosterCard";
+import { SeriesDetailsDialog } from "@/components/SeriesDetailsDialog";
 import { useFavorites } from "@/hooks/useFavorites";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
 import { useIptv } from "@/context/IptvContext";
 import {
   buildSeriesEpisodeUrl,
   getSeries,
   getSeriesCategories,
-  getSeriesInfo,
   proxyImageUrl,
   type Episode,
   type Series,
@@ -40,7 +38,9 @@ const SeriesPage = () => {
   const [activeCategory, setActiveCategory] = useState<string>(SPECIAL_ALL);
   const [search, setSearch] = useState("");
   const [activeId, setActiveId] = useState<number | undefined>();
+  const [openSeries, setOpenSeries] = useState<Series | null>(null);
   const [playingEp, setPlayingEp] = useState<{ ep: Episode; coverFallback?: string } | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { isFavorite, toggle, favorites } = useFavorites(creds.username, "series");
@@ -59,6 +59,8 @@ const SeriesPage = () => {
     const openId = (location.state as { openId?: number } | null)?.openId;
     if (openId && series.length) {
       setActiveId(openId);
+      const s = series.find((x) => x.series_id === openId);
+      if (s) setOpenSeries(s);
       navigate(location.pathname, { replace: true, state: null });
     }
   }, [location.state, location.pathname, series, navigate]);
@@ -86,44 +88,35 @@ const SeriesPage = () => {
     return filtered;
   }, [filtered, activeCategory]);
 
-  const items: TitleListItemData[] = useMemo(
+  const items: PosterItem[] = useMemo(
     () =>
-      sorted.map((s) => ({
-        id: s.series_id,
-        title: s.name,
-        cover: s.cover,
-        rating: s.rating_5based,
-        subtitle: s.genre,
-      })),
+      sorted.map((s) => {
+        const yearMatch = s.name.match(/\((\d{4})\)\s*$/);
+        return {
+          id: s.series_id,
+          title: yearMatch ? s.name.replace(/\s*\(\d{4}\)\s*$/, "") : s.name,
+          cover: s.cover,
+          rating: s.rating_5based,
+          year: yearMatch
+            ? yearMatch[1]
+            : s.releaseDate
+              ? s.releaseDate.slice(0, 4)
+              : undefined,
+        };
+      }),
     [sorted],
   );
 
   useEffect(() => {
-    if (items.length === 0) {
-      setActiveId(undefined);
-      return;
-    }
-    if (activeId == null || !items.find((i) => i.id === activeId)) {
+    if (items.length === 0) setActiveId(undefined);
+    else if (activeId == null || !items.find((i) => i.id === activeId)) {
       setActiveId(items[0].id);
     }
   }, [items, activeId]);
 
-  const activeSeries: Series | null = useMemo(
-    () => sorted.find((s) => s.series_id === activeId) || null,
-    [sorted, activeId],
-  );
-
-  const debouncedActiveId = useDebouncedValue(activeId, 300);
-  const { data: seriesInfo, isLoading: loadingInfo } = useQuery({
-    queryKey: ["series-info", debouncedActiveId],
-    queryFn: () => getSeriesInfo(creds, debouncedActiveId!),
-    enabled: !!debouncedActiveId && !isMobile,
-    staleTime: 1000 * 60 * 5,
-  });
-
   const railCategories: RailCategory[] = useMemo(() => {
     const base: RailCategory[] = [
-      { id: SPECIAL_ALL, name: "Todas", variant: "all", count: series.length },
+      { id: SPECIAL_ALL, name: "Todas as séries", variant: "all", count: series.length },
       { id: SPECIAL_FAVS, name: "Favoritas", variant: "favorites", count: favorites.size },
       { id: SPECIAL_RECENT, name: "Recentes", variant: "recent" },
     ];
@@ -147,11 +140,8 @@ const SeriesPage = () => {
     }
   };
 
-  // Mobile fallback: usa modal antigo grande
-  // Para não quebrar a experiência mobile (poucas mudanças), apresenta também 3-col simplificado.
-
   useGridKeyboardNav({
-    enabled: !isMobile && !playingEp,
+    enabled: !isMobile && !playingEp && !openSeries,
     onPrev: () => {
       const idx = items.findIndex((i) => i.id === activeId);
       if (idx > 0) setActiveId(items[idx - 1].id);
@@ -170,8 +160,15 @@ const SeriesPage = () => {
         setActiveCategory(railCategories[idx + 1].id);
     },
     onSearchFocus: () => searchRef.current?.focus(),
-    onEscape: () => playingEp && setPlayingEp(null),
+    onEscape: () => {
+      if (playingEp) setPlayingEp(null);
+      else if (openSeries) setOpenSeries(null);
+    },
     onFavorite: () => activeId != null && toggle(activeId),
+    onPlay: () => {
+      const s = sorted.find((x) => x.series_id === activeId);
+      if (s) setOpenSeries(s);
+    },
   });
 
   const epUrl = playingEp
@@ -184,33 +181,38 @@ const SeriesPage = () => {
     : null;
 
   return (
-    <>
-      <LibraryShell
-        showPreview={!isMobile}
-        header={
-          <div className="flex items-baseline justify-between">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Séries</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {series.length} séries · use ↑↓ ←→ para navegar
-              </p>
-            </div>
-          </div>
-        }
-        rail={
+    <div className="mx-auto max-w-[1800px] px-3 md:px-6 py-2 md:py-3">
+      <LibraryTopBar
+        title="Séries"
+        icon={<Tv2 className="h-4 w-4" />}
+        onOpenCategoryDrawer={() => setDrawerOpen(true)}
+      />
+
+      <div
+        className="grid gap-3 md:gap-4 grid-cols-1 lg:grid-cols-[240px,minmax(0,1fr)]"
+        style={{ height: "calc(100vh - 7rem)", minHeight: 520 }}
+      >
+        <aside
+          className="hidden lg:flex flex-col rounded-xl border border-border/40 bg-card/30 backdrop-blur overflow-hidden"
+          aria-label="Categorias"
+        >
           <CategoryRail
             categories={railCategories}
             active={activeCategory}
             onChange={setActiveCategory}
           />
-        }
-        list={
-          <TitleList
+        </aside>
+
+        <section className="flex flex-col min-h-0">
+          <PosterGrid
             items={items}
             activeId={activeId}
             isFavorite={isFavorite}
-            onSelect={(it) => setActiveId(it.id)}
-            onActivate={(it) => setActiveId(it.id)}
+            onActiveChange={setActiveId}
+            onOpen={(it) => {
+              const s = sorted.find((x) => x.series_id === it.id);
+              if (s) setOpenSeries(s);
+            }}
             onToggleFavorite={toggle}
             search={search}
             onSearchChange={setSearch}
@@ -223,38 +225,30 @@ const SeriesPage = () => {
                 : "Nenhuma série encontrada."
             }
           />
-        }
-        preview={
-          <PreviewPanel
-            loading={loadingInfo}
-            cover={activeSeries?.cover}
-            backdrop={activeSeries?.cover}
-            title={activeSeries?.name}
-            rating={activeSeries?.rating_5based}
-            year={activeSeries?.releaseDate?.slice(0, 4)}
-            genre={activeSeries?.genre}
-            director={activeSeries?.director}
-            cast={activeSeries?.cast}
-            plot={activeSeries?.plot}
-            isFavorite={activeId != null && isFavorite(activeId)}
-            onToggleFavorite={activeId != null ? () => toggle(activeId) : undefined}
-            playLabel="Episódios"
-            emptyMessage="Selecione uma série à esquerda para ver os episódios."
-          >
-            {seriesInfo?.episodes && (
-              <SeriesEpisodesPanel
-                episodesBySeason={seriesInfo.episodes}
-                onPlay={(ep) =>
-                  setPlayingEp({
-                    ep,
-                    coverFallback: activeSeries?.cover,
-                  })
-                }
-                onCopyExternal={handleCopyExternal}
-              />
-            )}
-          </PreviewPanel>
-        }
+        </section>
+      </div>
+
+      <MobileCategoryDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        categories={railCategories}
+        active={activeCategory}
+        onChange={setActiveCategory}
+        title="Categorias de Séries"
+      />
+
+      <SeriesDetailsDialog
+        open={!!openSeries}
+        onOpenChange={(o) => !o && setOpenSeries(null)}
+        series={openSeries}
+        creds={creds}
+        onPlayEpisode={(ep) => {
+          setPlayingEp({ ep, coverFallback: openSeries?.cover });
+          setOpenSeries(null);
+        }}
+        onCopyExternal={handleCopyExternal}
+        isFavorite={openSeries ? isFavorite(openSeries.series_id) : false}
+        onToggleFavorite={openSeries ? () => toggle(openSeries.series_id) : undefined}
       />
 
       {playingEp && epUrl && (
@@ -281,7 +275,7 @@ const SeriesPage = () => {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 
