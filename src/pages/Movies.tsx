@@ -231,6 +231,7 @@ const Movies = () => {
               if (m) setOpenMovie(m);
             }}
             onToggleFavorite={toggle}
+            onHoverItem={prefetchInfo}
             search={search}
             onSearchChange={setSearch}
             searchInputRef={searchRef}
