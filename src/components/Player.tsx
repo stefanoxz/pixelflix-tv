@@ -69,6 +69,9 @@ import {
   reportStreamEvent,
   getHostProxyMode,
   markHostProxyRequired,
+  markHostSuccess,
+  markHostFailure,
+  shouldUseProxy,
   type PlaybackStrategy,
   type StreamMode,
 } from "@/services/iptv";
@@ -343,6 +346,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const segmentModeRef = useRef<StreamMode>("redirect");
   // Guard so we only auto-restart once per session when activating proxy.
   const proxyAutoRestartedRef = useRef(false);
+  // Guard so we only auto-switch HLS → MPEG-TS once per session.
+  const engineAutoSwitchedRef = useRef(false);
 
   // Watchdog timers
   const bootstrapTimeoutRef = useRef<number | null>(null);
@@ -396,6 +401,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     // Channel changed → reset the per-session proxy auto-restart guard so the
     // new channel gets its own opportunity to fall back to proxy.
     proxyAutoRestartedRef.current = false;
+    engineAutoSwitchedRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [upstreamHost, isLive]);
 
@@ -617,10 +623,13 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setLastReason(null);
       setStatus("connecting");
 
-      // Resolve segment mode from per-host cache. If host was previously marked
-      // as proxy_required, we already start in "stream" mode without waiting
-      // for failure.
-      segmentModeRef.current = getHostProxyMode(rawUrl ?? src);
+      // Resolve segment mode: per-host stats win when they say "this server
+      // historically misbehaves"; otherwise honour the short-lived
+      // proxy-required cache (30min). New hosts default to "redirect".
+      const decisionUrl = rawUrl ?? src;
+      segmentModeRef.current = shouldUseProxy(decisionUrl)
+        ? "stream"
+        : getHostProxyMode(decisionUrl);
       pushLog({
         source: "diag",
         level: "info",
@@ -728,6 +737,35 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         if (segmentModeRef.current === "stream") return false;
         if (proxyAutoRestartedRef.current) return false;
         const url = rawUrl ?? src;
+
+        // Engine auto-switch first: on live channels still on HLS, give
+        // mpegts a single chance before paying the proxy cost. If mpegts
+        // succeeds, onPlaying will persist it as this host's preference.
+        if (
+          isLive &&
+          engine === "hls" &&
+          !engineAutoSwitchedRef.current
+        ) {
+          engineAutoSwitchedRef.current = true;
+          markHostFailure(url, reason);
+          setPreferredEngine(safeHostFromUrl(url), "mpegts");
+          pushLog({
+            source: "diag",
+            level: "warn",
+            label: "engine_auto_switch",
+            details: `hls → mpegts (${reason})`,
+          });
+          clearBootstrapTimeout();
+          clearStallTimeout();
+          clearLoadeddataWatchdog();
+          setError(null);
+          setLoading(true);
+          updateStatus("connecting", `engine auto: ${reason}`);
+          setEngine("mpegts");
+          return true;
+        }
+
+        markHostFailure(url, reason);
         if (!markHostProxyRequired(url, reason)) return false;
         proxyAutoRestartedRef.current = true;
         pushLog({
@@ -1416,6 +1454,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         pushLog({ source: "video", level: "info", label: "first_playing", details: `TTFF=${ttff}ms` });
         updateStatus("playback_started", null);
         setRootCauseOnce("ok", `TTFF=${ttff}ms`);
+        markHostSuccess(rawUrl ?? src);
+        setPreferredEngine(safeHostFromUrl(rawUrl ?? src), engine);
         reportStreamEvent("stream_started", { url: src ?? undefined, meta: { trigger: "playing_event", ttff_ms: ttff } });
       } else if (status === "stall_timeout") {
         updateStatus("playback_started", "recuperado após stall");
@@ -1439,6 +1479,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           firstFrameAtRef.current = performance.now();
         }
         updateStatus("playback_started", null);
+        markHostSuccess(rawUrl ?? src);
+        setPreferredEngine(safeHostFromUrl(rawUrl ?? src), engine);
       }
     };
     const onError = () => {
