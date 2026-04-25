@@ -54,6 +54,7 @@ import {
   Wifi,
   Flag,
   Stethoscope,
+  UserPlus,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
