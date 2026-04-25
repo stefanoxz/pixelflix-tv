@@ -323,6 +323,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   title,
   autoPlay = true,
   onClose,
+  streamId,
+  contentKind,
 }, forwardedRef) {
   const { session } = useIptv();
   const videoRef = useRef<HTMLVideoElement>(null);
