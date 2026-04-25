@@ -46,7 +46,13 @@ const SeriesPage = () => {
   const debouncedSearch = useDebouncedValue(search, 250);
   const [activeId, setActiveId] = useState<number | undefined>();
   const [openSeries, setOpenSeries] = useState<Series | null>(null);
-  const [playingEp, setPlayingEp] = useState<{ ep: Episode; coverFallback?: string } | null>(null);
+  const [playingEp, setPlayingEp] = useState<{
+    ep: Episode;
+    seriesId: number;
+    coverFallback?: string;
+  } | null>(null);
+  const [showNextCard, setShowNextCard] = useState(false);
+  const autoplayPref = useAutoplayPreference();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
