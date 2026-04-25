@@ -874,7 +874,7 @@ const Admin = () => {
               ) : (
                 <TooltipProvider delayDuration={150}>
                   <div className="divide-y divide-border/50">
-                    <div className="grid grid-cols-14 gap-3 px-2 py-2 text-xs font-medium text-muted-foreground">
+                    <div className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-3 px-2 py-2 text-xs font-medium text-muted-foreground">
                       <div className="col-span-2">Usuário IPTV</div>
                       <div className="col-span-2">Servidor (DNS)</div>
                       <div className="col-span-2">IP</div>
@@ -920,7 +920,7 @@ const Admin = () => {
                         try { serverHost = new URL(s.server_url).host; } catch { serverHost = s.server_url; }
                       }
                       return (
-                        <div key={s.anon_user_id} className="grid grid-cols-14 gap-3 px-2 py-3 items-center text-sm">
+                        <div key={s.anon_user_id} className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-3 px-2 py-3 items-center text-sm">
                           <div className="col-span-2 font-medium truncate">{s.iptv_username || "—"}</div>
                           <div className="col-span-2 font-mono text-xs text-muted-foreground truncate" title={s.server_url ?? undefined}>
                             {serverHost ?? "—"}
