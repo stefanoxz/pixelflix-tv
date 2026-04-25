@@ -626,11 +626,11 @@ export async function invokeSafe<T = unknown>(
       return await withTimeout(enqueue(exec), timeout);
     } catch (e) {
       const cls = classifyError(e);
-      noteRequestFailure(cls);
+      noteRequestFailure(cls === "transient" ? "network" : cls);
       if (cls === "timeout") {
         return { ok: false, code: "TIMEOUT", error: "Tempo esgotado ao contatar o servidor" };
       }
-      if (cls === "network") {
+      if (cls === "network" || cls === "transient") {
         return { ok: false, code: "NETWORK_ERROR", error: "Falha de rede ao contatar o servidor" };
       }
       const msg = e instanceof Error ? e.message : String(e);
