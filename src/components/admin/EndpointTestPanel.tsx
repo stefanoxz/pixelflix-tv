@@ -26,10 +26,13 @@ import {
   Wrench,
   ArrowRight,
   Lightbulb,
+  Link2,
+  Wand2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { parseM3uUrl } from "@/lib/parseM3uUrl";
 
 type Route = "direct" | "proxy" | null;
 
@@ -393,6 +396,7 @@ interface ResolveResult {
 }
 
 export function EndpointTestPanel({ allowedServers }: Props) {
+  const [pasteUrl, setPasteUrl] = useState("");
   const [serverUrl, setServerUrl] = useState("");
   const [path, setPath] = useState("/player_api.php");
   const [username, setUsername] = useState("");
@@ -405,6 +409,43 @@ export function EndpointTestPanel({ allowedServers }: Props) {
   const [result, setResult] = useState<TestResult | null>(null);
   const [resolving, setResolving] = useState(false);
   const [resolveResult, setResolveResult] = useState<ResolveResult | null>(null);
+
+  const applyPastedUrl = (raw?: string) => {
+    const input = (raw ?? pasteUrl).trim();
+    if (!input) {
+      toast.error("Cole uma URL primeiro");
+      return;
+    }
+    if (input.length > 2000) {
+      toast.error("URL muito longa");
+      return;
+    }
+    const parsed = parseM3uUrl(input);
+    if (!parsed) {
+      toast.error("Formato não reconhecido (esperado get.php, player_api.php, /playlist/u/p ou /live/u/p/id)");
+      return;
+    }
+    setServerUrl(parsed.server);
+    setUsername(parsed.username);
+    setPassword(parsed.password);
+    if (parsed.path) setPath(parsed.path);
+    setPasteUrl("");
+    toast.success(`Extraído: ${parsed.server} (user: ${parsed.username})`);
+  };
+
+  const pasteFromClipboard = async () => {
+    try {
+      const txt = await navigator.clipboard.readText();
+      if (!txt) {
+        toast.error("Área de transferência vazia");
+        return;
+      }
+      setPasteUrl(txt);
+      applyPastedUrl(txt);
+    } catch {
+      toast.error("Sem permissão para ler a área de transferência");
+    }
+  };
 
   const run = async () => {
     if (!serverUrl.trim()) {
@@ -507,6 +548,51 @@ export function EndpointTestPanel({ allowedServers }: Props) {
           <p className="text-xs text-muted-foreground mt-1">
             Roda múltiplas sondas (raiz, auth Xtream, categorias, stream e comparativo direto vs proxy)
             e gera um veredito sobre a saúde do servidor.
+          </p>
+        </div>
+
+        <div className="space-y-1.5 p-3 rounded-md bg-primary/5 border border-primary/20">
+          <Label htmlFor="paste-url" className="flex items-center gap-1.5 text-xs">
+            <Link2 className="h-3.5 w-3.5 text-primary" />
+            Colar URL M3U / Xtream (opcional)
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              id="paste-url"
+              placeholder="http://servidor.com/get.php?username=...&password=..."
+              value={pasteUrl}
+              maxLength={2000}
+              onChange={(e) => setPasteUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  applyPastedUrl();
+                }
+              }}
+              className="font-mono text-xs"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => applyPastedUrl()}
+              disabled={!pasteUrl.trim()}
+            >
+              <Wand2 className="h-3.5 w-3.5 mr-1.5" />
+              Extrair
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={pasteFromClipboard}
+              title="Colar da área de transferência"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Aceita: <code>get.php</code>, <code>player_api.php</code>, <code>/playlist/u/p</code>, <code>/live/u/p/id.ts</code>. Servidor, usuário, senha e caminho serão preenchidos automaticamente.
           </p>
         </div>
 
