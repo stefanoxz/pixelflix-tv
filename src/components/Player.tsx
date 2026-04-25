@@ -388,6 +388,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       stallTimeoutRef.current = null;
     }
   };
+  const clearLoadeddataWatchdog = () => {
+    if (loadeddataWatchdogRef.current !== null) {
+      window.clearTimeout(loadeddataWatchdogRef.current);
+      loadeddataWatchdogRef.current = null;
+    }
+  };
 
   const teardown = () => {
     const v = videoRef.current;
@@ -418,6 +424,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     }
     clearBootstrapTimeout();
     clearStallTimeout();
+    clearLoadeddataWatchdog();
     playbackStartedRef.current = false;
     manifestReadyRef.current = false;
   };
