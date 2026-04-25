@@ -99,6 +99,130 @@ Deno.serve(async (req) => {
       if (!stillAdmin) return unauthorized("Acesso restrito a administradores");
     }
 
+    if (action === "dashboard_bundle") {
+      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const since1h = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const cutoff = new Date(Date.now() - 90_000).toISOString();
+      const eventsLimit = Math.min(Number(payload?.eventsLimit ?? 50), 200);
+
+      const [
+        eventsTotal, events24h, success24h, fail24h, online1h, distinctUsers, distinctServers, allowedCount,
+        recentUserEvents, serverEvents, allowedRows, brokenEvents, recentEvents, sessions, blocks, recentErrors, topRej,
+        usageRows,
+      ] = await Promise.all([
+        admin.from("login_events").select("id", { count: "exact", head: true }),
+        admin.from("login_events").select("id", { count: "exact", head: true }).gte("created_at", since24h),
+        admin.from("login_events").select("id", { count: "exact", head: true }).gte("created_at", since24h).eq("success", true),
+        admin.from("login_events").select("id", { count: "exact", head: true }).gte("created_at", since24h).eq("success", false),
+        admin.from("login_events").select("username").gte("created_at", since1h).eq("success", true),
+        admin.from("login_events").select("username").eq("success", true),
+        admin.from("login_events").select("server_url").eq("success", true),
+        admin.from("allowed_servers").select("id", { count: "exact", head: true }),
+        admin.from("login_events").select("username, server_url, created_at, success").order("created_at", { ascending: false }).limit(1000),
+        admin.from("login_events").select("server_url, success, created_at, username").order("created_at", { ascending: false }).limit(2000),
+        admin.from("allowed_servers").select("id, server_url, label, notes, created_at"),
+        admin.from("stream_events").select("meta").eq("event_type", "stream_error").gte("created_at", fiveMinAgo).limit(1000),
+        admin.from("login_events").select("id, username, server_url, success, reason, created_at").order("created_at", { ascending: false }).limit(eventsLimit),
+        admin.from("active_sessions").select("anon_user_id, iptv_username, ip, started_at, last_seen_at").gt("last_seen_at", cutoff).order("started_at", { ascending: false }).limit(200),
+        admin.from("user_blocks").select("anon_user_id, blocked_until, reason, created_at").gt("blocked_until", new Date().toISOString()).order("blocked_until", { ascending: false }),
+        admin.from("stream_events").select("id, anon_user_id, event_type, ip, meta, created_at").gte("created_at", since24h).in("event_type", ["stream_error", "token_rejected", "rate_limited", "user_blocked", "suspicious_pattern"]).order("created_at", { ascending: false }).limit(50),
+        admin.from("stream_events").select("ip").eq("event_type", "token_rejected").gte("created_at", since24h),
+        admin.from("usage_counters").select("anon_user_id, request_count, segment_count").gte("window_start", since24h),
+      ]);
+
+      const queryError = [eventsTotal, events24h, success24h, fail24h, online1h, distinctUsers, distinctServers, allowedCount, recentUserEvents, serverEvents, allowedRows, brokenEvents, recentEvents, sessions, blocks, recentErrors, topRej, usageRows]
+        .find((r) => r.error)?.error;
+      if (queryError) { console.error(queryError.message); return internalError(); }
+
+      const onlineSet = new Set((online1h.data ?? []).map((r: { username: string }) => r.username));
+      const usersSet = new Set((distinctUsers.data ?? []).map((r: { username: string }) => r.username));
+      const serversSet = new Set((distinctServers.data ?? []).map((r: { server_url: string }) => r.server_url));
+
+      const usersMap = new Map<string, { username: string; last_server: string; last_login: string; last_success: boolean; total: number }>();
+      for (const row of recentUserEvents.data ?? []) {
+        const key = row.username;
+        if (!usersMap.has(key)) usersMap.set(key, { username: key, last_server: row.server_url, last_login: row.created_at, last_success: row.success, total: 0 });
+        usersMap.get(key)!.total += 1;
+      }
+
+      const brokenCount = new Map<string, number>();
+      for (const row of (brokenEvents.data ?? []) as { meta: Record<string, unknown> | null }[]) {
+        const meta = row.meta ?? {};
+        if (meta.type !== "stream_no_data") continue;
+        const host = typeof meta.host === "string" ? meta.host.toLowerCase() : null;
+        if (host) brokenCount.set(host, (brokenCount.get(host) ?? 0) + 1);
+      }
+      const brokenHosts = new Set(Array.from(brokenCount.entries()).filter(([, n]) => n >= 3).map(([host]) => host));
+
+      const serverStats = new Map<string, { last_seen: string; total_logins: number; success_count: number; fail_count: number; users: Set<string> }>();
+      for (const row of serverEvents.data ?? []) {
+        const key = row.server_url;
+        if (!serverStats.has(key)) serverStats.set(key, { last_seen: row.created_at, total_logins: 0, success_count: 0, fail_count: 0, users: new Set<string>() });
+        const item = serverStats.get(key)!;
+        item.total_logins += 1;
+        if (row.success) item.success_count += 1;
+        else item.fail_count += 1;
+        item.users.add(row.username);
+      }
+
+      const allowedList = (allowedRows.data ?? []).map((a: { id: string; server_url: string; label: string | null; notes: string | null; created_at: string }) => {
+        const s = serverStats.get(a.server_url);
+        let host: string | null = null;
+        try { host = new URL(a.server_url).host.toLowerCase(); } catch { /* noop */ }
+        return {
+          id: a.id, server_url: a.server_url, label: a.label, notes: a.notes, created_at: a.created_at,
+          last_seen: s?.last_seen ?? null, total_logins: s?.total_logins ?? 0, success_count: s?.success_count ?? 0,
+          fail_count: s?.fail_count ?? 0, unique_users: s?.users?.size ?? 0, stream_broken: host ? brokenHosts.has(host) : false,
+        };
+      });
+      const allowedSet = new Set((allowedRows.data ?? []).map((a: { server_url: string }) => a.server_url));
+      const pending = Array.from(serverStats.entries()).filter(([url]) => !allowedSet.has(url)).map(([url, s]) => ({
+        server_url: url, last_seen: s.last_seen, total_logins: s.total_logins, success_count: s.success_count, fail_count: s.fail_count, unique_users: s.users.size,
+      }));
+
+      const sessionsList = (sessions.data ?? []).map((s: { anon_user_id: string; iptv_username: string | null; ip: string | null; started_at: string; last_seen_at: string }) => ({
+        anon_user_id: s.anon_user_id, iptv_username: s.iptv_username, ip_masked: maskIp(s.ip), started_at: s.started_at,
+        last_seen_at: s.last_seen_at, duration_s: Math.floor((Date.now() - new Date(s.started_at).getTime()) / 1000),
+      }));
+      const ipCounts = new Map<string, number>();
+      for (const r of (topRej.data ?? []) as { ip: string | null }[]) if (r.ip) ipCounts.set(r.ip, (ipCounts.get(r.ip) ?? 0) + 1);
+
+      const usageMap = new Map<string, { anon_user_id: string; requests: number; segments: number }>();
+      for (const row of usageRows.data ?? []) {
+        const key = row.anon_user_id;
+        if (!usageMap.has(key)) usageMap.set(key, { anon_user_id: key, requests: 0, segments: 0 });
+        const e = usageMap.get(key)!;
+        e.requests += row.request_count ?? 0;
+        e.segments += row.segment_count ?? 0;
+      }
+      const ids = Array.from(usageMap.keys());
+      let nameMap = new Map<string, string>();
+      if (ids.length > 0) {
+        const { data: sess } = await admin.from("active_sessions").select("anon_user_id, iptv_username").in("anon_user_id", ids);
+        nameMap = new Map((sess ?? []).map((s: { anon_user_id: string; iptv_username: string | null }) => [s.anon_user_id, s.iptv_username || ""]));
+      }
+
+      return ok({
+        stats: {
+          totalEvents: eventsTotal.count ?? 0, events24h: events24h.count ?? 0, success24h: success24h.count ?? 0,
+          fail24h: fail24h.count ?? 0, onlineNow: onlineSet.size, totalUsers: usersSet.size,
+          totalServers: serversSet.size, allowedServers: allowedCount.count ?? 0,
+        },
+        users: Array.from(usersMap.values()),
+        servers: { allowed: allowedList, pending },
+        events: recentEvents.data ?? [],
+        monitoring: {
+          online_now: sessionsList.length,
+          active_sessions: sessionsList,
+          active_blocks: (blocks.data ?? []).map((b: { anon_user_id: string; blocked_until: string; reason: string | null; created_at: string }) => ({ anon_user_id: b.anon_user_id, blocked_until: b.blocked_until, reason: b.reason, created_at: b.created_at })),
+          recent_errors: (recentErrors.data ?? []).map((e: { id: string; anon_user_id: string | null; event_type: string; ip: string | null; meta: Record<string, unknown> | null; created_at: string }) => ({ id: e.id, anon_user_id: e.anon_user_id, event_type: e.event_type, ip_masked: maskIp(e.ip), meta: e.meta, created_at: e.created_at })),
+          top_rejected_ips: Array.from(ipCounts.entries()).map(([ip, count]) => ({ ip_masked: maskIp(ip), count })).sort((a, b) => b.count - a.count).slice(0, 10),
+        },
+        top_consumers: Array.from(usageMap.values()).map((r) => ({ ...r, iptv_username: nameMap.get(r.anon_user_id) || "" })).sort((a, b) => b.requests - a.requests).slice(0, 20),
+      });
+    }
+
     if (action === "stats") {
       const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const since1h = new Date(Date.now() - 60 * 60 * 1000).toISOString();
