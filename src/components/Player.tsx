@@ -834,8 +834,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                     manifestReadyRef.current &&
                     fragLoadErrorCountRef.current >= FRAG_LOAD_ERROR_THRESHOLD
                   ) {
-                    setLoading(false);
                     const reason = "fragLoadError + no frames";
+                    try { hls.stopLoad(); } catch { /* noop */ }
+                    // Auto-activate segment proxy if not yet tried.
+                    if (tryActivateProxyAndRestart(reason)) return;
+
+                    setLoading(false);
                     updateStatus("stream_no_data", reason);
                     pushLog({ source: "diag", level: "error", label: "stream_no_data", details: reason });
                     setError({
@@ -851,9 +855,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                     try { if (src) upstreamHost = new URL(src).host; } catch { /* noop */ }
                     reportStreamEvent("stream_error", {
                       url: src,
-                      meta: { type: "stream_no_data", reason, host: upstreamHost },
+                      meta: { type: "stream_no_data", reason, host: upstreamHost, mode: segmentModeRef.current },
                     });
-                    try { hls.stopLoad(); } catch { /* noop */ }
                     return;
                   }
                   // Not yet at threshold — let HLS retry naturally.
