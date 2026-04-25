@@ -255,13 +255,14 @@ const SeriesPage = () => {
       />
 
       <SeriesDetailsDialog
-        open={!!openSeries}
+        open={!!openSeries && !playingEp}
         onOpenChange={(o) => !o && setOpenSeries(null)}
         series={openSeries}
         creds={creds}
         onPlayEpisode={(ep) => {
+          // Mantém `openSeries` definido — quando o player fechar,
+          // o diálogo da série reaparece automaticamente (condição `&& !playingEp`).
           setPlayingEp({ ep, coverFallback: openSeries?.cover });
-          setOpenSeries(null);
         }}
         onCopyExternal={handleCopyExternal}
         isFavorite={openSeries ? isFavorite(openSeries.series_id) : false}
