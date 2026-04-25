@@ -433,7 +433,10 @@ Deno.serve(async (req) => {
       return `${PROXY_BASE}?t=${encodeURIComponent(tok)}`;
     };
     const signNestedPlaylist = async (abs: string): Promise<string> => {
-      const exp = Math.floor(Date.now() / 1000) + 60;
+      // Aumentado de 60s → 1800s. Mesmo motivo do TTL_PLAYLIST_S em
+      // stream-token: hls.js reusa o token da nested playlist em refreshes
+      // ao longo da sessão; TTL curto = 403 após ~1min de live.
+      const exp = Math.floor(Date.now() / 1000) + 1800;
       const tok = await signToken({
         u: abs, e: exp, s: payload.s, i: payload.i, h: payload.h, n: newNonce(), k: "playlist", m: childMode,
       });

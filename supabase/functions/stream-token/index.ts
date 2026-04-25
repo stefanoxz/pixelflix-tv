@@ -63,7 +63,13 @@ function extractUserIdFromJwt(token: string): string | null {
 const MAX_SESSIONS = 2;
 const RATE_REQ_PER_MIN = 60;
 const RATE_SEG_PER_MIN = 300;
-const TTL_PLAYLIST_S = 60;
+// Aumentado de 60s → 1800s (30min). TTL curto causava 403 em massa após
+// ~60s de reprodução: o hls.js refresca a playlist a cada ~target-duration
+// segundos em live, mas a URL do <source> mantém o token original. Quando
+// o token expira, todos os refreshes seguintes dão 403 e o canal trava.
+// O token continua amarrado a sessão+IP+UA — TTL longo apenas alarga a
+// janela de uso, sem dar privilégio adicional.
+const TTL_PLAYLIST_S = 1800;
 // Increased from 30s → 45s. hls.js retries with backoff and may reuse a token
 // 20–30s after issuance; 30s caused legitimate "expired" rejections.
 const TTL_SEGMENT_S = 45;
