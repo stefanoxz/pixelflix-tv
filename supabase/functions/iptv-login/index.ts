@@ -370,16 +370,10 @@ async function attemptLogin(
 
   const runVariants = async (vs: string[]) => {
     for (const base of vs) {
-      // HTTPS só vale tentar se nenhum HTTP respondeu — TLS upstream costuma
-      // mascarar a causa real e gerar eventos `tls`/`cert_invalid` no log.
-      if (anyHttpResponded && base.startsWith("https://")) continue;
-
       const r = await tryVariant(base, username, password);
 
       if ("transportError" in r) {
-        if (!isTlsOrConnectError(r.transportError) || !anyHttpResponded) {
-          lastReason = r.transportError;
-        }
+        lastReason = r.transportError;
         continue;
       }
       if (base.startsWith("http://")) anyHttpResponded = true;
@@ -400,7 +394,7 @@ async function attemptLogin(
   // FASE 1
   const r1 = await runVariants(phase1);
   if (r1?.ok) {
-    await markServerHealthy(admin, serverRow, r1, phase1);
+    await markServerHealthy(admin, serverRow, r1.usedVariant);
     return r1;
   }
   if (r1 && !r1.ok) {
@@ -414,7 +408,7 @@ async function attemptLogin(
     const phase2 = buildVariants(serverBase, "fallback");
     const r2 = await runVariants(phase2);
     if (r2?.ok) {
-      await markServerHealthy(admin, serverRow, r2, phase2);
+      await markServerHealthy(admin, serverRow, r2.usedVariant);
       return r2;
     }
     if (r2 && !r2.ok) {
@@ -423,11 +417,9 @@ async function attemptLogin(
     }
   }
 
-  // Falha total por transporte.
+  // Falha total por transporte. Preserva a mensagem original (refused/reset/tls)
+  // para o admin classificar corretamente no dashboard.
   await markServerFailure(admin, serverRow);
-  if (isTlsOrConnectError(lastReason)) {
-    lastReason = "servidor IPTV não respondeu (verifique a DNS)";
-  }
   return { ok: false as const, status: 502, reason: lastReason, body: lastBody };
 }
 
@@ -435,24 +427,14 @@ async function attemptLogin(
 async function markServerHealthy(
   admin: any,
   serverRow: { id?: string; last_working_variant?: string | null } | null,
-  result: { ok: true; data: any } & { variant?: string },
-  triedVariants: string[],
+  usedVariant: string,
 ) {
   if (!serverRow?.id) return;
-  // A "variante boa" é a primeira do array que efetivamente respondeu OK —
-  // como tryVariant não devolve isso, reusamos: o caller passa as triedVariants
-  // em ordem. A última tentada antes do return ok é a boa, mas não temos esse
-  // dado direto. Em vez disso, gravamos a 1ª da lista (que é a cache atual ou
-  // a 1ª da fase) — a próxima execução a confirma. Para não enganar, gravamos
-  // só se a cache atual está vazia ou foi a vencedora; senão apagamos a cache
-  // para reaprender.
-  void result;
-  const newCache = triedVariants[0];
   try {
     await admin
       .from("allowed_servers")
       .update({
-        last_working_variant: newCache ?? null,
+        last_working_variant: usedVariant,
         last_working_at: new Date().toISOString(),
         consecutive_failures: 0,
         unreachable_until: null,
