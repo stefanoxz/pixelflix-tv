@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Tv2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,11 +14,13 @@ import type { PosterItem } from "@/components/library/PosterCard";
 import { SeriesDetailsDialog } from "@/components/SeriesDetailsDialog";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useIptv } from "@/context/IptvContext";
 import {
   buildSeriesEpisodeUrl,
   getSeries,
   getSeriesCategories,
+  getSeriesInfo,
   proxyImageUrl,
   type Episode,
   type Series,
