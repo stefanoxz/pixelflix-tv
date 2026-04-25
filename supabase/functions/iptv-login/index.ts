@@ -652,10 +652,7 @@ Deno.serve(async (req) => {
         );
       }
       lastReason = r.reason;
-      // Em cooldown: NÃO loga (a ideia é justamente parar de poluir o dashboard).
-      if (!("skipped" in r && r.skipped)) {
-        await logEvent({ server: row.server_url, username, success: false, reason: r.reason, ua, ip });
-      }
+      await logEvent({ server: row.server_url, username, success: false, reason: r.reason, ua, ip });
     }
 
     const { code, message } = classifyReason(lastReason);
