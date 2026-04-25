@@ -40,10 +40,8 @@ const FALLBACK_UAS = [
 // de eventos `reset/timeout` no dashboard.
 const FETCH_TIMEOUT_MS = 4000;
 
-// Cooldown progressivo após N falhas consecutivas. Tempo em milissegundos.
-// Cada nível dobra (capeado em 5min) — DNS quebrada para de poluir o log.
-const COOLDOWN_THRESHOLD = 5;
-const COOLDOWN_STEPS_MS = [60_000, 120_000, 180_000, 300_000];
+// Cooldown automático foi removido — toda tentativa de login é executada de fato.
+// Mantemos apenas o contador `consecutive_failures` (estatística para o admin).
 
 const NO_ACCESS_MSG =
   "Você não tem acesso a esta plataforma. Entre em contato com a sua revenda para liberar o seu servidor (DNS).";
@@ -301,14 +299,6 @@ function buildVariants(serverBase: string, phase: Phase): string[] {
   return [...variants];
 }
 
-/** Resolve duração de cooldown a partir do número de falhas consecutivas. */
-function cooldownMs(consecutiveFailures: number): number {
-  const idx = Math.min(
-    Math.max(consecutiveFailures - COOLDOWN_THRESHOLD, 0),
-    COOLDOWN_STEPS_MS.length - 1,
-  );
-  return COOLDOWN_STEPS_MS[idx];
-}
 
 /**
  * Tenta uma única variante (URL completa do player_api). Aplica fallback de UA
@@ -375,19 +365,7 @@ async function attemptLogin(
   serverRow: { id?: string; last_working_variant?: string | null; consecutive_failures?: number; unreachable_until?: string | null } | null,
   admin: any,
 ) {
-  // 0) Cooldown ativo → não faz nem um fetch. Para de inflar logs.
-  if (serverRow?.unreachable_until) {
-    const until = new Date(serverRow.unreachable_until).getTime();
-    if (until > Date.now()) {
-      return {
-        ok: false as const,
-        status: 503,
-        reason: `cooldown ativo até ${serverRow.unreachable_until}`,
-        body: "",
-        skipped: true as const,
-      };
-    }
-  }
+  // Cooldown removido — toda DNS é tentada de fato a cada login.
 
   // 1) Monta lista de variantes: cache primeiro, depois fase 1.
   const fast = buildVariants(serverBase, "fast");
@@ -477,7 +455,7 @@ async function markServerHealthy(
   }
 }
 
-/** Incrementa contador e ativa cooldown progressivo se passar do limite. */
+/** Incrementa contador de falhas (estatística). Cooldown automático foi removido. */
 async function markServerFailure(
   admin: any,
   serverRow: { id?: string; consecutive_failures?: number } | null,
@@ -485,9 +463,6 @@ async function markServerFailure(
   if (!serverRow?.id) return;
   const next = (serverRow.consecutive_failures ?? 0) + 1;
   const patch: Record<string, unknown> = { consecutive_failures: next };
-  if (next >= COOLDOWN_THRESHOLD) {
-    patch.unreachable_until = new Date(Date.now() + cooldownMs(next)).toISOString();
-  }
   try {
     await admin.from("allowed_servers").update(patch).eq("id", serverRow.id);
   } catch (err) {
@@ -677,10 +652,7 @@ Deno.serve(async (req) => {
         );
       }
       lastReason = r.reason;
-      // Em cooldown: NÃO loga (a ideia é justamente parar de poluir o dashboard).
-      if (!("skipped" in r && r.skipped)) {
-        await logEvent({ server: row.server_url, username, success: false, reason: r.reason, ua, ip });
-      }
+      await logEvent({ server: row.server_url, username, success: false, reason: r.reason, ua, ip });
     }
 
     const { code, message } = classifyReason(lastReason);
