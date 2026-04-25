@@ -5,7 +5,7 @@
 // retornam 200 {ok:false} em vez de 5xx — assim heartbeats que falham não
 // disparam toasts/error loops no frontend nem invalidam a sessão.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.95.0";
 import { clientIp, uaHash, urlHash } from "../_shared/stream-token.ts";
 
 const ALLOWED_SUFFIXES = [".lovable.app", ".lovableproject.com", ".lovable.dev"];
@@ -27,12 +27,21 @@ function corsFor(req: Request): Record<string, string> {
   };
 }
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-// Singleton: criar um client por request causa cold-start frequente
-// e contribuiu pra 503s SUPABASE_EDGE_RUNTIME_ERROR.
-const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+// Lazy singleton: evita crash no top-level se SUPABASE_URL/SERVICE_ROLE_KEY
+// estiverem ausentes em algum boot do worker (causa de 503
+// SUPABASE_EDGE_RUNTIME_ERROR observada nos logs). Também adia I/O do
+// createClient pra fora do path de boot.
+let _admin: SupabaseClient | null = null;
+function getAdmin(): SupabaseClient {
+  if (_admin) return _admin;
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) {
+    throw new Error("missing_env_supabase_credentials");
+  }
+  _admin = createClient(url, key, { auth: { persistSession: false } });
+  return _admin;
+}
 
 const ALLOWED_EVENTS = new Set([
   "stream_started",
@@ -96,7 +105,7 @@ Deno.serve(async (req) => {
     // Heartbeat: caminho rápido — só atualiza last_seen_at.
     if (evType === "session_heartbeat") {
       try {
-        await admin.from("active_sessions").update({
+        await getAdmin().from("active_sessions").update({
           last_seen_at: new Date().toISOString(),
           ip,
           ua_hash: await uaHash(ua),
@@ -109,7 +118,7 @@ Deno.serve(async (req) => {
     }
 
     try {
-      await admin.from("stream_events").insert({
+      await getAdmin().from("stream_events").insert({
         anon_user_id: userId,
         event_type: evType,
         ip,
