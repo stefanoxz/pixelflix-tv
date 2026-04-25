@@ -99,6 +99,52 @@ type DiagnosticStatus =
 
 type LogSource = "hls" | "video" | "diag" | "net";
 type LogLevel = "info" | "warn" | "error";
+/**
+ * Snapshot rico do estado do player capturado em todo log. Permite
+ * diagnosticar pós-mortem stalls, falhas de buffer e travas de rede sem
+ * precisar reproduzir o problema. Todos os campos são opcionais — só
+ * preenchidos quando aplicáveis.
+ */
+type LogMeta = {
+  /** video.currentTime em segundos */
+  ct?: number;
+  /** maior fim de buffered, ou null se vazio */
+  be?: number;
+  /** segundos de buffer à frente de currentTime */
+  bAhead?: number;
+  /** video.readyState (0-4) */
+  rs?: number;
+  /** video.networkState (0-3) */
+  ns?: number;
+  /** video.paused */
+  p?: boolean;
+  /** HTTP status code (eventos de rede) */
+  http?: number;
+  /** Bytes carregados (frag/level) */
+  bytes?: number;
+  /** Tempo total de carregamento em ms (request total time) */
+  loadMs?: number;
+  /** Time-to-first-byte em ms */
+  ttfb?: number;
+  /** Duração do segmento em segundos (sn duration) */
+  sd?: number;
+  /** SN do fragmento */
+  sn?: number | string;
+  /** Nível/qualidade ativo */
+  level?: number;
+  /** Bitrate atual (bps) */
+  br?: number;
+  /** URL ofensiva (truncada) */
+  url?: string;
+  /** effectiveType da Network Information API */
+  net?: string;
+  /** rtt da Network Information API */
+  rtt?: number;
+  /** downlink Mbps */
+  dl?: number;
+  /** Contadores arbitrários */
+  [k: string]: unknown;
+};
 type LogEntry = {
   t: number;
   tRel: number;
@@ -106,6 +152,7 @@ type LogEntry = {
   level: LogLevel;
   label: string;
   details?: string;
+  meta?: LogMeta;
 };
 
 /** Por onde o manifest do canal foi carregado. */
