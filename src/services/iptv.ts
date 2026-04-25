@@ -981,6 +981,81 @@ export const getSeries = (c: IptvCredentials) =>
 export const getSeriesInfo = (c: IptvCredentials, seriesId: number) =>
   iptvFetch<SeriesInfo>(c, "get_series_info", { series_id: seriesId });
 
+// ============================================================================
+// EPG (Electronic Program Guide) — Xtream "get_short_epg"
+// ============================================================================
+
+export interface EpgEntryRaw {
+  id: string;
+  epg_id?: string;
+  title: string;        // base64
+  lang?: string;
+  start: string;        // "YYYY-MM-DD HH:mm:ss" (server tz)
+  end: string;
+  description: string;  // base64
+  channel_id?: string;
+  start_timestamp: string; // unix seconds (string)
+  stop_timestamp: string;
+  now_playing?: number;
+  has_archive?: number;
+}
+
+export interface EpgEntry {
+  id: string;
+  title: string;
+  description: string;
+  startMs: number;
+  endMs: number;
+}
+
+function decodeB64(s: string | undefined | null): string {
+  if (!s) return "";
+  try {
+    // atob handles standard base64; titles may contain UTF-8.
+    const bin = atob(s);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder("utf-8").decode(bytes);
+  } catch {
+    return s;
+  }
+}
+
+function normalizeEpg(raw: EpgEntryRaw): EpgEntry {
+  return {
+    id: String(raw.id ?? raw.epg_id ?? `${raw.start}-${raw.end}`),
+    title: decodeB64(raw.title),
+    description: decodeB64(raw.description),
+    startMs: Number(raw.start_timestamp) * 1000,
+    endMs: Number(raw.stop_timestamp) * 1000,
+  };
+}
+
+/**
+ * Programa atual + próximos N do canal. Retorna lista normalizada (base64
+ * decodificado, timestamps em ms). Tolera respostas vazias/com erro.
+ */
+export async function getShortEpg(
+  c: IptvCredentials,
+  streamId: number,
+  limit = 6,
+): Promise<EpgEntry[]> {
+  try {
+    const res = await iptvFetch<{ epg_listings?: EpgEntryRaw[] } | EpgEntryRaw[]>(
+      c,
+      "get_short_epg",
+      { stream_id: streamId, limit },
+    );
+    const list = Array.isArray(res) ? res : res?.epg_listings ?? [];
+    return list
+      .map(normalizeEpg)
+      .filter((e) => e.endMs > 0 && e.startMs > 0)
+      .sort((a, b) => a.startMs - b.startMs);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Extrai o hostname (lowercase, sem porta) de uma URL — tolerante a entradas
  * sem protocolo. Retorna null se não conseguir parsear.
