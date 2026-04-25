@@ -865,33 +865,54 @@ export async function iptvLogin(
   return iptvLoginViaEdge(creds, startedAt, reason);
 }
 
+/** Mensagem amigável para cada `code` retornado pela edge `iptv-login`. */
+function messageForLoginCode(code: string, fallback: string): string {
+  switch (code) {
+    case "INVALID_CREDENTIALS":
+      return "Usuário ou senha inválidos";
+    case "SERVER_UNREACHABLE":
+      return "Servidor IPTV não respondeu. Verifique a DNS ou porta da URL.";
+    case "DNS_ERROR":
+      return "DNS do servidor IPTV não resolveu. Verifique o endereço.";
+    case "TIMEOUT":
+      return "Tempo esgotado ao contatar o servidor. Tente novamente.";
+    case "NOT_ALLOWED":
+      return fallback || "DNS não autorizada nesta plataforma.";
+    case "NETWORK_ERROR":
+      return "Falha de rede. Verifique sua conexão.";
+    case "OFFLINE":
+      return "Sem conexão com a internet";
+    case "BAD_REQUEST":
+      return fallback || "Dados inválidos para login";
+    case "SERVICE_UNAVAILABLE":
+      return "Serviço temporariamente indisponível. Tente em instantes.";
+    default:
+      return fallback || "Falha no login";
+  }
+}
+
 async function iptvLoginViaEdge(
   creds: IptvCredentials,
   startedAt: number,
   reason: string,
 ): Promise<LoginResponse & { server_url?: string }> {
-  try {
-    const data = await invokeFn<LoginResponse & { server_url?: string }>(
-      "iptv-login",
-      creds as unknown as Record<string, unknown>,
-      "login",
-    );
+  const result = await invokeSafe<LoginResponse & { server_url?: string }>(
+    "iptv-login",
+    creds as unknown as Record<string, unknown>,
+    "login",
+  );
+  if (result.ok) {
     const durationMs = Date.now() - startedAt;
     console.log("[iptv] method: edge", { reason, durationMs, result: "ok" });
-    return data;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Falha no login";
-    if (e instanceof TimeoutError || /timeout/i.test(msg)) {
-      throw new Error("Tempo esgotado ao contatar o servidor. Verifique sua conexão.");
-    }
-    if (/invalid|credenc|unauthor|401|403/i.test(msg)) {
-      throw new Error("Usuário ou senha inválidos");
-    }
-    if (/network|failed to fetch/i.test(msg)) {
-      throw new Error("Servidor inacessível. Tente novamente em instantes.");
-    }
-    throw new Error(msg);
+    return result.data;
   }
+  console.log("[iptv] method: edge", {
+    reason,
+    result: "fail",
+    code: result.code,
+    error: result.error,
+  });
+  throw new Error(messageForLoginCode(result.code, result.error));
 }
 
 export interface Episode {
