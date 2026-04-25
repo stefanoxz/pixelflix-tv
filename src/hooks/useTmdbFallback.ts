@@ -13,6 +13,7 @@ export interface TmdbFallbackInput {
 export interface TmdbFallbackResult {
   poster: string | null;
   backdrop: string | null;
+  overview: string | null;
 }
 
 /**

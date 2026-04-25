@@ -1,5 +1,5 @@
 // Edge function: tmdb-image
-// Resolves missing covers via TMDB. Caches results in `tmdb_image_cache`.
+// Resolves missing covers/synopsis via TMDB. Caches results in `tmdb_image_cache`.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -19,7 +19,8 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false },
 });
 
-const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const CACHE_TTL_HIT_MS = 30 * 24 * 60 * 60 * 1000; // 30 days for hits
+const CACHE_TTL_MISS_MS = 24 * 60 * 60 * 1000; // 1 day for misses (auto-retry)
 
 interface ReqBody {
   type: "movie" | "series";
@@ -45,6 +46,16 @@ function slug(s: string): string {
     .slice(0, 80);
 }
 
+/** Strip trailing year, season suffixes (S01E01), and " - subtitle" tails. */
+function cleanQuery(name: string): string {
+  return name
+    .replace(/\s*\(\d{4}\)\s*$/, "")
+    .replace(/\s+S\d{1,2}(E\d{1,3})?\s*$/i, "")
+    .replace(/\s+(temporada|season)\s+\d+\s*$/i, "")
+    .replace(/\s+-\s+.*$/, "")
+    .trim();
+}
+
 function buildCacheKey(p: ReqBody): string {
   const tmdbType = p.type === "series" ? "tv" : "movie";
   if (p.tmdb_id) return `${tmdbType}:id:${p.tmdb_id}`;
@@ -52,9 +63,8 @@ function buildCacheKey(p: ReqBody): string {
 }
 
 async function tmdbAuthFetch(url: string): Promise<Response> {
-  // Supports both v3 keys and v4 read-access tokens.
   const key = TMDB_API_KEY.trim();
-  // v4 tokens are JWTs (start with "ey" and contain dots)
+  // v4 read-access tokens are JWTs (start with "ey" and contain dots)
   if (key.startsWith("ey") && key.split(".").length === 3) {
     return fetch(url, {
       headers: { Authorization: `Bearer ${key}`, accept: "application/json" },
@@ -68,16 +78,22 @@ async function tmdbAuthFetch(url: string): Promise<Response> {
 }
 
 interface TmdbResult {
+  id?: number;
   poster_path?: string | null;
   backdrop_path?: string | null;
-  id?: number;
+  overview?: string | null;
+  release_date?: string | null;
+  first_air_date?: string | null;
+  popularity?: number;
 }
 
 async function fetchByTmdbId(
   tmdbType: "movie" | "tv",
   id: string | number,
 ): Promise<TmdbResult | null> {
-  const r = await tmdbAuthFetch(`${TMDB_BASE}/${tmdbType}/${id}`);
+  const r = await tmdbAuthFetch(
+    `${TMDB_BASE}/${tmdbType}/${id}?language=pt-BR`,
+  );
   if (!r.ok) return null;
   return (await r.json()) as TmdbResult;
 }
@@ -87,15 +103,48 @@ async function searchTmdb(
   name: string,
   year?: string | number | null,
 ): Promise<TmdbResult | null> {
-  const params = new URLSearchParams({ query: name, language: "pt-BR" });
-  if (year) {
-    params.set(tmdbType === "movie" ? "year" : "first_air_date_year", String(year));
+  const cleaned = cleanQuery(name);
+  // Cascade: try most specific first, then progressively relax filters.
+  const candidates: Array<{ q: string; year?: string | number | null }> = [];
+  if (year) candidates.push({ q: name, year });
+  if (year && cleaned !== name) candidates.push({ q: cleaned, year });
+  candidates.push({ q: cleaned });
+  if (cleaned !== name) candidates.push({ q: name });
+
+  for (const c of candidates) {
+    if (!c.q) continue;
+    const params = new URLSearchParams({
+      query: c.q,
+      language: "pt-BR",
+      include_adult: "false",
+    });
+    if (c.year) {
+      params.set(
+        tmdbType === "movie" ? "year" : "first_air_date_year",
+        String(c.year),
+      );
+    }
+    try {
+      const r = await tmdbAuthFetch(`${TMDB_BASE}/search/${tmdbType}?${params}`);
+      if (!r.ok) continue;
+      const data = await r.json();
+      const results = (data?.results || []) as TmdbResult[];
+      if (results.length > 0) {
+        // Sort by popularity to disambiguate common titles.
+        results.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+        console.log(
+          `[tmdb-image] hit q="${c.q}" year=${c.year ?? "-"} -> id=${results[0].id}`,
+        );
+        return results[0];
+      }
+    } catch (e) {
+      console.error("[tmdb-image] search error", c, e);
+    }
   }
-  const r = await tmdbAuthFetch(`${TMDB_BASE}/search/${tmdbType}?${params}`);
-  if (!r.ok) return null;
-  const data = await r.json();
-  const first = (data?.results || [])[0];
-  return first || null;
+  console.log(
+    `[tmdb-image] miss type=${tmdbType} name="${name}" year=${year ?? "-"}`,
+  );
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -124,19 +173,22 @@ Deno.serve(async (req) => {
   const cacheKey = buildCacheKey(body);
   const tmdbType: "movie" | "tv" = body.type === "series" ? "tv" : "movie";
 
-  // 1. Check cache
+  // 1. Cache check (split TTL: hits last 30d, misses 1d for retry)
   const { data: cached } = await supabase
     .from("tmdb_image_cache")
-    .select("poster_url,backdrop_url,fetched_at")
+    .select("poster_url,backdrop_url,overview,fetched_at")
     .eq("cache_key", cacheKey)
     .maybeSingle();
 
   if (cached) {
     const age = Date.now() - new Date(cached.fetched_at).getTime();
-    if (age < CACHE_TTL_MS) {
+    const isMiss = !cached.poster_url && !cached.backdrop_url;
+    const ttl = isMiss ? CACHE_TTL_MISS_MS : CACHE_TTL_HIT_MS;
+    if (age < ttl) {
       return jsonResponse(200, {
         poster: cached.poster_url,
         backdrop: cached.backdrop_url,
+        overview: cached.overview ?? null,
         cached: true,
       });
     }
@@ -150,6 +202,11 @@ Deno.serve(async (req) => {
     }
     if (!result && body.name) {
       result = await searchTmdb(tmdbType, body.name, body.year);
+      // Search results sometimes lack overview; fetch full details to enrich.
+      if (result?.id && !result.overview) {
+        const full = await fetchByTmdbId(tmdbType, result.id);
+        if (full) result = { ...result, ...full };
+      }
     }
   } catch (e) {
     console.error("[tmdb-image] fetch error", e);
@@ -161,17 +218,19 @@ Deno.serve(async (req) => {
   const backdrop = result?.backdrop_path
     ? `${IMG_BASE}/w1280${result.backdrop_path}`
     : null;
+  const overview = result?.overview || null;
 
-  // 3. Store in cache (even nulls — avoid hammering TMDB for unknown items)
+  // 3. Persist (even nulls — short TTL handles retries automatically)
   await supabase.from("tmdb_image_cache").upsert(
     {
       cache_key: cacheKey,
       poster_url: poster,
       backdrop_url: backdrop,
+      overview,
       fetched_at: new Date().toISOString(),
     },
     { onConflict: "cache_key" },
   );
 
-  return jsonResponse(200, { poster, backdrop, cached: false });
+  return jsonResponse(200, { poster, backdrop, overview, cached: false });
 });
