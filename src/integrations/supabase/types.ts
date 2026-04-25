@@ -80,6 +80,95 @@ export type Database = {
         }
         Relationships: []
       }
+      client_diagnostics: {
+        Row: {
+          city: string | null
+          client_error: string | null
+          country: string | null
+          created_at: string
+          device_memory: number | null
+          downlink_mbps: number | null
+          duration_ms: number | null
+          effective_type: string | null
+          hardware_concurrency: number | null
+          id: string
+          ip: string | null
+          isp: string | null
+          language: string | null
+          login_event_id: string | null
+          outcome: string
+          region: string | null
+          rtt_ms: number | null
+          save_data: boolean | null
+          screen: string | null
+          server_url: string | null
+          speed_kbps: number | null
+          timezone: string | null
+          user_agent: string | null
+          username: string | null
+        }
+        Insert: {
+          city?: string | null
+          client_error?: string | null
+          country?: string | null
+          created_at?: string
+          device_memory?: number | null
+          downlink_mbps?: number | null
+          duration_ms?: number | null
+          effective_type?: string | null
+          hardware_concurrency?: number | null
+          id?: string
+          ip?: string | null
+          isp?: string | null
+          language?: string | null
+          login_event_id?: string | null
+          outcome: string
+          region?: string | null
+          rtt_ms?: number | null
+          save_data?: boolean | null
+          screen?: string | null
+          server_url?: string | null
+          speed_kbps?: number | null
+          timezone?: string | null
+          user_agent?: string | null
+          username?: string | null
+        }
+        Update: {
+          city?: string | null
+          client_error?: string | null
+          country?: string | null
+          created_at?: string
+          device_memory?: number | null
+          downlink_mbps?: number | null
+          duration_ms?: number | null
+          effective_type?: string | null
+          hardware_concurrency?: number | null
+          id?: string
+          ip?: string | null
+          isp?: string | null
+          language?: string | null
+          login_event_id?: string | null
+          outcome?: string
+          region?: string | null
+          rtt_ms?: number | null
+          save_data?: boolean | null
+          screen?: string | null
+          server_url?: string | null
+          speed_kbps?: number | null
+          timezone?: string | null
+          user_agent?: string | null
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_diagnostics_login_event_id_fkey"
+            columns: ["login_event_id"]
+            isOneToOne: false
+            referencedRelation: "login_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       login_events: {
         Row: {
           created_at: string

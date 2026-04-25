@@ -1466,6 +1466,52 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ---------- CLIENT DIAGNOSTICS ----------
+    if (action === "client_diagnostics_list") {
+      const limit = Math.min(Math.max(Number(payload?.limit ?? 200), 1), 1000);
+      const hours = Math.min(Math.max(Number(payload?.hours ?? 24), 1), 24 * 14);
+      const outcome = typeof payload?.outcome === "string" ? payload.outcome : null;
+      const username = typeof payload?.username === "string" && payload.username.trim() ? payload.username.trim() : null;
+      const server_url = typeof payload?.server_url === "string" && payload.server_url.trim() ? payload.server_url.trim() : null;
+      const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+
+      let q = admin
+        .from("client_diagnostics")
+        .select("*")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (outcome) q = q.eq("outcome", outcome);
+      if (username) q = q.ilike("username", `%${username}%`);
+      if (server_url) q = q.ilike("server_url", `%${server_url}%`);
+
+      const { data, error } = await q;
+      if (error) { console.error(error.message); return internalError(); }
+
+      // Resumo simples
+      const rows = data ?? [];
+      const total = rows.length;
+      const byOutcome: Record<string, number> = {};
+      let downSum = 0, downN = 0, rttSum = 0, rttN = 0, durSum = 0, durN = 0;
+      for (const r of rows) {
+        byOutcome[r.outcome] = (byOutcome[r.outcome] ?? 0) + 1;
+        if (typeof r.downlink_mbps === "number") { downSum += r.downlink_mbps; downN++; }
+        if (typeof r.rtt_ms === "number") { rttSum += r.rtt_ms; rttN++; }
+        if (typeof r.duration_ms === "number") { durSum += r.duration_ms; durN++; }
+      }
+
+      return ok({
+        rows,
+        summary: {
+          total,
+          by_outcome: byOutcome,
+          avg_downlink_mbps: downN ? Number((downSum / downN).toFixed(2)) : null,
+          avg_rtt_ms: rttN ? Math.round(rttSum / rttN) : null,
+          avg_duration_ms: durN ? Math.round(durSum / durN) : null,
+        },
+      });
+    }
+
     return bad("Ação inválida");
   } catch (e) {
     console.error("[admin-api] unhandled", e);
