@@ -1227,20 +1227,56 @@ export function proxyUrl(url: string): string {
  * (images.weserv.nl) — necessário porque o app roda em HTTPS e o provedor
  * IPTV serve `stream_icon` em HTTP, o que o navegador bloqueia como mixed
  * content. Não usa nossa edge para não consumir cota com tráfego de imagem.
+ *
+ * Aceita opções de redimensionamento — quando passadas, força a CDN a
+ * retornar uma versão WebP otimizada e bem menor que o original. Funciona
+ * mesmo para URLs já HTTPS (passamos por weserv pra ter o resize).
  */
-export function proxyImageUrl(url: string | null | undefined): string {
+export interface ImageOpts {
+  /** Largura desejada em pixels (a CDN faz fit=cover). */
+  w?: number;
+  /** Altura desejada — opcional; se ausente, mantém proporção. */
+  h?: number;
+  /** Qualidade 1-100 (default 75 quando otimizado). */
+  q?: number;
+}
+
+export function proxyImageUrl(
+  url: string | null | undefined,
+  opts?: ImageOpts,
+): string {
   if (!url) return "";
   const trimmed = url.trim();
   if (!trimmed) return "";
-  // Já é HTTPS ou data: → passa direto.
-  if (/^(https:|data:)/i.test(trimmed)) return trimmed;
-  // Página em HTTP (dev local) → não precisa de proxy.
-  if (typeof window !== "undefined" && window.location.protocol !== "https:") {
+
+  const wantsResize = !!opts && (opts.w || opts.h);
+
+  // HTTPS ou data: sem resize → passa direto (zero overhead).
+  if (!wantsResize && /^(https:|data:)/i.test(trimmed)) return trimmed;
+
+  // Página em HTTP (dev local) sem resize → idem.
+  if (
+    !wantsResize &&
+    typeof window !== "undefined" &&
+    window.location.protocol !== "https:"
+  ) {
     return trimmed;
   }
-  // HTTP em página HTTPS → reescreve via weserv (entende host+path sem protocolo).
+
+  // data: nunca passa por CDN.
+  if (/^data:/i.test(trimmed)) return trimmed;
+
   const stripped = trimmed.replace(/^https?:\/\//i, "");
-  return `https://images.weserv.nl/?url=${encodeURIComponent(stripped)}`;
+  const params = new URLSearchParams();
+  params.set("url", stripped);
+  if (opts?.w) params.set("w", String(opts.w));
+  if (opts?.h) params.set("h", String(opts.h));
+  if (wantsResize) {
+    params.set("fit", "cover");
+    params.set("output", "webp");
+    params.set("q", String(opts?.q ?? 75));
+  }
+  return `https://images.weserv.nl/?${params.toString()}`;
 }
 
 export type StreamKind = "playlist" | "segment";
