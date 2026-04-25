@@ -55,25 +55,26 @@ export function MovieDetailsDialog({
   })();
   const incompatible = useIsIncompatible(upstreamHost, movie?.stream_id ?? null);
 
-  if (!movie) return null;
-
   const info = data?.info;
-  const sourceCover = info?.movie_image || info?.cover_big || movie.stream_icon;
+  const sourceCover = info?.movie_image || info?.cover_big || movie?.stream_icon;
   const sourceBackdrop = Array.isArray(info?.backdrop_path)
     ? info!.backdrop_path[0]
     : (info?.backdrop_path as string | undefined) || sourceCover;
   const releaseDate = info?.releasedate || info?.release_date;
   const year = releaseDate ? releaseDate.slice(0, 4) : null;
-  const ratingNum = movie.rating_5based || (info?.rating_5based ?? 0);
 
-  // Fallback TMDB quando a fonte IPTV não retorna capa/backdrop.
+  // Fallback TMDB — chamado SEMPRE (antes de qualquer return) pra preservar a ordem dos hooks.
   const { data: tmdb } = useTmdbFallback({
     type: "movie",
-    hasCover: !!sourceCover,
+    hasCover: !!sourceCover || !movie,
     tmdb_id: info?.tmdb_id ?? undefined,
-    name: movie.name,
+    name: movie?.name,
     year: year ?? undefined,
   });
+
+  if (!movie) return null;
+
+  const ratingNum = movie.rating_5based || (info?.rating_5based ?? 0);
   const cover = sourceCover || tmdb?.poster || null;
   const backdrop = sourceBackdrop || tmdb?.backdrop || cover;
 
