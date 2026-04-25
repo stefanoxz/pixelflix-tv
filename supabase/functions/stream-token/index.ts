@@ -144,155 +144,192 @@ Deno.serve(async (req) => {
     const ua = req.headers.get("user-agent") || "";
     const ip = clientIp(req);
 
-  // 1) Auth
-  const authHeader = req.headers.get("Authorization") || "";
-  const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
-  if (!jwt) return json({ error: "Missing token" }, 401, cors);
+    // 1) Auth
+    const authHeader = req.headers.get("Authorization") || "";
+    const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!jwt) return json({ error: "Missing token" }, 401, cors);
 
-  // Extrai user id direto do JWT — evita roundtrip ao /auth/v1/user a cada
-  // request. Players fazem dezenas de requests/min; o getUser anterior era
-  // a maior fonte de latência e cold-start nesta função.
-  const userId = extractUserIdFromJwt(jwt);
-  if (!userId) return json({ error: "Invalid session" }, 401, cors);
+    // Extrai user id direto do JWT — evita roundtrip ao /auth/v1/user.
+    const userId = extractUserIdFromJwt(jwt);
+    if (!userId) return json({ error: "Invalid session" }, 401, cors);
 
-  // 2) Body
-  let body: { url?: string; kind?: TokenKind; iptv_username?: string; mode?: TokenMode };
-  try {
-    body = await req.json();
-  } catch {
-    return json({ error: "Invalid body" }, 400, cors);
-  }
-  const target = (body.url || "").trim();
-  const kind: TokenKind = body.kind === "segment" ? "segment" : "playlist";
-  const mode: TokenMode = body.mode === "stream" ? "stream" : "redirect";
-  if (!target || !/^https?:\/\//i.test(target)) {
-    return json({ error: "Invalid url" }, 400, cors);
-  }
-
-  // 3) Block check
-  const { data: blockRow } = await admin
-    .from("user_blocks")
-    .select("blocked_until, reason")
-    .eq("anon_user_id", userId)
-    .maybeSingle();
-
-  if (blockRow && new Date(blockRow.blocked_until).getTime() > Date.now()) {
-    await logEvent(userId, "token_rejected", ip, ua, target, { reason: "blocked" });
-    return json(
-      {
-        error: "Acesso temporariamente bloqueado",
-        blocked_until: blockRow.blocked_until,
-      },
-      403,
-      cors,
-    );
-  }
-
-  // 4) Rate limit (UPSERT counter for current minute)
-  const now = new Date();
-  const winStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), 0, 0).toISOString();
-
-  const { data: cur } = await admin
-    .from("usage_counters")
-    .select("request_count, segment_count")
-    .eq("anon_user_id", userId)
-    .eq("window_start", winStart)
-    .maybeSingle();
-
-  const nextReq = (cur?.request_count ?? 0) + 1;
-  const nextSeg = (cur?.segment_count ?? 0) + (kind === "segment" ? 1 : 0);
-
-  if (nextReq > RATE_REQ_PER_MIN || nextSeg > RATE_SEG_PER_MIN) {
-    await logEvent(userId, "rate_limited", ip, ua, target, { nextReq, nextSeg });
-
-    // Escalating block on repeat offenders (>3 rate_limited in 10min)
-    const since = new Date(Date.now() - 10 * 60_000).toISOString();
-    const { count: viol } = await admin
-      .from("stream_events")
-      .select("id", { count: "exact", head: true })
-      .eq("anon_user_id", userId)
-      .eq("event_type", "rate_limited")
-      .gte("created_at", since);
-
-    if ((viol ?? 0) > 3) {
-      const minutes = (viol ?? 0) > 10 ? 60 : (viol ?? 0) > 6 ? 15 : 5;
-      const until = new Date(Date.now() + minutes * 60_000).toISOString();
-      await admin.from("user_blocks").upsert(
-        { anon_user_id: userId, blocked_until: until, reason: `rate_limit_x${viol}` },
-        { onConflict: "anon_user_id" },
-      );
-      await logEvent(userId, "user_blocked", ip, ua, null, { minutes, reason: "rate_limit" });
+    // 2) Body
+    let body: { url?: string; kind?: TokenKind; iptv_username?: string; mode?: TokenMode };
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "Invalid body" }, 400, cors);
     }
-    return json({ error: "Too many requests" }, 429, cors, { "Retry-After": "60" });
-  }
+    const target = (body.url || "").trim();
+    const kind: TokenKind = body.kind === "segment" ? "segment" : "playlist";
+    const mode: TokenMode = body.mode === "stream" ? "stream" : "redirect";
+    if (!target || !/^https?:\/\//i.test(target)) {
+      return json({ error: "Invalid url" }, 400, cors);
+    }
 
-  await admin.from("usage_counters").upsert(
-    { anon_user_id: userId, window_start: winStart, request_count: nextReq, segment_count: nextSeg },
-    { onConflict: "anon_user_id,window_start" },
-  );
+    const iptvUser = (body.iptv_username || "").slice(0, 120) || null;
 
-  // Opportunistic cleanup of old counters
-  if (Math.random() < 0.05) {
-    const cutoff = new Date(Date.now() - 60 * 60_000).toISOString();
-    admin.from("usage_counters").delete().lt("window_start", cutoff).then(() => {});
-  }
+    // 3) Janela de rate limit (minuto atual)
+    const now = new Date();
+    const winStart = new Date(
+      now.getFullYear(), now.getMonth(), now.getDate(),
+      now.getHours(), now.getMinutes(), 0, 0,
+    ).toISOString();
 
-  // 5) Session upsert + enforce MAX_SESSIONS
-  const uah = await uaHash(ua);
-  const cutoff = new Date(Date.now() - 90_000).toISOString();
-  const iptvUser = (body.iptv_username || "").slice(0, 120) || null;
-
-  // Count active sessions for this iptv account (excluding this user)
-  if (iptvUser) {
-    const { data: actives } = await admin
-      .from("active_sessions")
-      .select("anon_user_id, last_seen_at, started_at")
-      .eq("iptv_username", iptvUser)
-      .gt("last_seen_at", cutoff)
-      .neq("anon_user_id", userId)
-      .order("started_at", { ascending: true });
-
-    const total = (actives?.length ?? 0) + 1;
-    if (total > MAX_SESSIONS) {
-      const evictCount = total - MAX_SESSIONS;
-      const toEvict = (actives ?? []).slice(0, evictCount).map((r) => r.anon_user_id);
-      if (toEvict.length > 0) {
-        await admin.from("active_sessions").delete().in("anon_user_id", toEvict);
-        await logEvent(userId, "session_evicted", ip, ua, null, { evicted: toEvict, iptv_username: iptvUser });
+    // 4) Cache hit de bloqueio (TTL 30s)? Caminho rápido, sem I/O.
+    const cachedBlock = blockCache.get(userId);
+    if (cachedBlock && cachedBlock.until > Date.now()) {
+      if (cachedBlock.blockedUntil && new Date(cachedBlock.blockedUntil).getTime() > Date.now()) {
+        background(logEvent(userId, "token_rejected", ip, ua, target, { reason: "blocked", cache: true }));
+        return json(
+          { error: "Acesso temporariamente bloqueado", blocked_until: cachedBlock.blockedUntil },
+          403,
+          cors,
+        );
       }
     }
-  }
 
-  await admin.from("active_sessions").upsert(
-    {
-      anon_user_id: userId,
-      iptv_username: iptvUser,
-      ip,
-      ua_hash: uah,
-      last_seen_at: new Date().toISOString(),
-    },
-    { onConflict: "anon_user_id" },
-  );
+    // 5) Counter local? Caminho rápido para early rate-limit reject.
+    const cachedCounter = counterCache.get(userId);
+    if (cachedCounter && cachedCounter.winStart === winStart) {
+      const projReq = cachedCounter.req + 1;
+      const projSeg = cachedCounter.seg + (kind === "segment" ? 1 : 0);
+      if (projReq > RATE_REQ_PER_MIN || projSeg > RATE_SEG_PER_MIN) {
+        background(logEvent(userId, "rate_limited", ip, ua, target, { projReq, projSeg, cache: true }));
+        return json({ error: "Too many requests" }, 429, cors, { "Retry-After": "60" });
+      }
+    }
 
-  // 6) Sign token
-  const ttl = kind === "segment" ? TTL_SEGMENT_S : TTL_PLAYLIST_S;
-  const exp = Math.floor(Date.now() / 1000) + ttl;
-  const nonce = newNonce();
-  const token = await signToken({
-    u: target,
-    e: exp,
-    s: userId,
-    i: ipPrefix(ip),
-    h: uah,
-    n: nonce,
-    k: kind,
-    m: mode,
-  });
+    // 6) Paralelizar todas as leituras restantes + uaHash. Antes era
+    // sequencial: 3 SELECTs * ~150ms cada = ~450ms só de I/O.
+    const cutoff90 = new Date(Date.now() - 90_000).toISOString();
+    const needsBlockFetch = !cachedBlock || cachedBlock.until <= Date.now();
+    const needsCounterFetch = !cachedCounter || cachedCounter.winStart !== winStart;
 
-  await logEvent(userId, "token_issued", ip, ua, target, { kind, mode });
+    const [
+      blockRes,
+      counterRes,
+      sessionsRes,
+      uahHashed,
+    ] = await Promise.all([
+      needsBlockFetch
+        ? admin.from("user_blocks").select("blocked_until").eq("anon_user_id", userId).maybeSingle()
+        : Promise.resolve({ data: null as null | { blocked_until: string } }),
+      needsCounterFetch
+        ? admin.from("usage_counters").select("request_count, segment_count").eq("anon_user_id", userId).eq("window_start", winStart).maybeSingle()
+        : Promise.resolve({ data: { request_count: cachedCounter!.req, segment_count: cachedCounter!.seg } }),
+      iptvUser
+        ? admin.from("active_sessions").select("anon_user_id").eq("iptv_username", iptvUser).gt("last_seen_at", cutoff90).neq("anon_user_id", userId).order("started_at", { ascending: true })
+        : Promise.resolve({ data: [] as { anon_user_id: string }[] }),
+      uaHash(ua),
+    ]);
 
-  const proxied = `${PROXY_BASE}?t=${encodeURIComponent(token)}`;
-  return json({ url: proxied, expires_at: exp }, 200, cors);
+    const uah = uahHashed;
+
+    // 7) Update cache de bloqueio com o que veio do DB.
+    const dbBlockedUntil = blockRes.data?.blocked_until ?? null;
+    blockCache.set(userId, { until: Date.now() + BLOCK_CACHE_TTL_MS, blockedUntil: dbBlockedUntil });
+    if (dbBlockedUntil && new Date(dbBlockedUntil).getTime() > Date.now()) {
+      background(logEvent(userId, "token_rejected", ip, ua, target, { reason: "blocked" }));
+      return json(
+        { error: "Acesso temporariamente bloqueado", blocked_until: dbBlockedUntil },
+        403,
+        cors,
+      );
+    }
+
+    // 8) Rate limit final com valor do DB.
+    const dbReq = counterRes.data?.request_count ?? 0;
+    const dbSeg = counterRes.data?.segment_count ?? 0;
+    const nextReq = dbReq + 1;
+    const nextSeg = dbSeg + (kind === "segment" ? 1 : 0);
+
+    if (nextReq > RATE_REQ_PER_MIN || nextSeg > RATE_SEG_PER_MIN) {
+      // Atualiza cache e dispara verificação de escalonamento em background.
+      counterCache.set(userId, { winStart, req: dbReq, seg: dbSeg });
+      background((async () => {
+        await logEvent(userId, "rate_limited", ip, ua, target, { nextReq, nextSeg });
+        const since = new Date(Date.now() - 10 * 60_000).toISOString();
+        const { count: viol } = await admin
+          .from("stream_events")
+          .select("id", { count: "exact", head: true })
+          .eq("anon_user_id", userId)
+          .eq("event_type", "rate_limited")
+          .gte("created_at", since);
+        if ((viol ?? 0) > 3) {
+          const minutes = (viol ?? 0) > 10 ? 60 : (viol ?? 0) > 6 ? 15 : 5;
+          const until = new Date(Date.now() + minutes * 60_000).toISOString();
+          await admin.from("user_blocks").upsert(
+            { anon_user_id: userId, blocked_until: until, reason: `rate_limit_x${viol}` },
+            { onConflict: "anon_user_id" },
+          );
+          // Invalida cache local pra próximo request bloquear sem espera.
+          blockCache.set(userId, { until: Date.now() + BLOCK_CACHE_TTL_MS, blockedUntil: until });
+          await logEvent(userId, "user_blocked", ip, ua, null, { minutes, reason: "rate_limit" });
+        }
+      })());
+      return json({ error: "Too many requests" }, 429, cors, { "Retry-After": "60" });
+    }
+
+    // 9) Atualiza counter local imediatamente.
+    counterCache.set(userId, { winStart, req: nextReq, seg: nextSeg });
+
+    // 10) Sign token agora — caminho crítico mínimo.
+    const ttl = kind === "segment" ? TTL_SEGMENT_S : TTL_PLAYLIST_S;
+    const exp = Math.floor(Date.now() / 1000) + ttl;
+    const nonce = newNonce();
+    const token = await signToken({
+      u: target, e: exp, s: userId, i: ipPrefix(ip), h: uah, n: nonce, k: kind, m: mode,
+    });
+
+    const proxied = `${PROXY_BASE}?t=${encodeURIComponent(token)}`;
+    const response = json({ url: proxied, expires_at: exp }, 200, cors);
+
+    // 11) Persistência em background — não bloqueia o response. Custos antes:
+    // ~300-500ms (counter upsert + sessions select/upsert + log_event).
+    background((async () => {
+      // Counter upsert com valores autoritativos.
+      await admin.from("usage_counters").upsert(
+        { anon_user_id: userId, window_start: winStart, request_count: nextReq, segment_count: nextSeg },
+        { onConflict: "anon_user_id,window_start" },
+      );
+
+      // Cleanup oportunístico.
+      if (Math.random() < 0.05) {
+        const cutoff = new Date(Date.now() - 60 * 60_000).toISOString();
+        await admin.from("usage_counters").delete().lt("window_start", cutoff);
+      }
+
+      // MAX_SESSIONS enforcement.
+      if (iptvUser) {
+        const actives = sessionsRes.data ?? [];
+        const total = actives.length + 1;
+        if (total > MAX_SESSIONS) {
+          const evictCount = total - MAX_SESSIONS;
+          const toEvict = actives.slice(0, evictCount).map((r) => r.anon_user_id);
+          if (toEvict.length > 0) {
+            await admin.from("active_sessions").delete().in("anon_user_id", toEvict);
+            await logEvent(userId, "session_evicted", ip, ua, null, { evicted: toEvict, iptv_username: iptvUser });
+          }
+        }
+      }
+
+      // Active session upsert.
+      await admin.from("active_sessions").upsert(
+        {
+          anon_user_id: userId,
+          iptv_username: iptvUser,
+          ip,
+          ua_hash: uah,
+          last_seen_at: new Date().toISOString(),
+        },
+        { onConflict: "anon_user_id" },
+      );
+
+      await logEvent(userId, "token_issued", ip, ua, target, { kind, mode });
+    })());
+
+    return response;
   } catch (e) {
     console.error("[stream-token] unhandled", e);
     return json({ error: "internal_error" }, 500, cors);
