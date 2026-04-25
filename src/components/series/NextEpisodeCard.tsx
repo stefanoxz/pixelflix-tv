@@ -35,16 +35,19 @@ export function NextEpisodeCard({
   episodeNumber,
   coverFallback,
   autoplaySeconds = 10,
+  prefetchLeadSeconds = 1.5,
   autoplayEnabled,
   onAutoplayToggle,
   onPlayNow,
   onCancel,
+  onPrefetch,
 }: Props) {
   const [progress, setProgress] = useState(0); // 0..1
   const [secondsLeft, setSecondsLeft] = useState(autoplaySeconds);
   const rafRef = useRef<number | null>(null);
   const startRef = useRef<number | null>(null);
   const firedRef = useRef(false);
+  const prefetchedRef = useRef(false);
 
   useEffect(() => {
     if (!open || !episode) {
@@ -52,6 +55,7 @@ export function NextEpisodeCard({
       setSecondsLeft(autoplaySeconds);
       startRef.current = null;
       firedRef.current = false;
+      prefetchedRef.current = false;
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
       return;
@@ -64,15 +68,22 @@ export function NextEpisodeCard({
     }
 
     firedRef.current = false;
+    prefetchedRef.current = false;
     startRef.current = performance.now();
+    const totalMs = autoplaySeconds * 1000;
+    const prefetchAtMs = Math.max(0, totalMs - prefetchLeadSeconds * 1000);
 
     const tick = (now: number) => {
       if (startRef.current === null) return;
       const elapsedMs = now - startRef.current;
-      const totalMs = autoplaySeconds * 1000;
       const p = Math.min(1, elapsedMs / totalMs);
       setProgress(p);
       setSecondsLeft(Math.max(0, Math.ceil((totalMs - elapsedMs) / 1000)));
+      // Dispara prefetch ~prefetchLeadSeconds antes do fim do countdown.
+      if (!prefetchedRef.current && elapsedMs >= prefetchAtMs && onPrefetch) {
+        prefetchedRef.current = true;
+        try { onPrefetch(); } catch { /* ignore */ }
+      }
       if (p >= 1) {
         if (!firedRef.current) {
           firedRef.current = true;
@@ -88,7 +99,7 @@ export function NextEpisodeCard({
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [open, episode, autoplayEnabled, autoplaySeconds, onPlayNow]);
+  }, [open, episode, autoplayEnabled, autoplaySeconds, prefetchLeadSeconds, onPlayNow, onPrefetch]);
 
   // Atalhos: Enter = tocar agora, Esc = cancelar
   useEffect(() => {
