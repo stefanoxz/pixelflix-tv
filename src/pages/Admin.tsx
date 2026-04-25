@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { DnsErrorTrendChart } from "@/components/admin/DnsErrorTrendChart";
+import { ServerProbeDialog } from "@/components/admin/ServerProbeDialog";
 import {
   Users,
   UserCheck,
@@ -45,6 +46,7 @@ import {
   X,
   Pencil,
   AlertOctagon,
+  Wifi,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
@@ -428,6 +430,7 @@ const Admin = () => {
   const [newLabel, setNewLabel] = useState("");
   const [newNotes, setNewNotes] = useState("");
   const [editingServer, setEditingServer] = useState<AllowedServer | null>(null);
+  const [probeServer, setProbeServer] = useState<AllowedServer | null>(null);
 
   const [health, setHealth] = useState<Record<string, HealthStatus>>({});
   const [healthLoading, setHealthLoading] = useState(false);
@@ -1449,6 +1452,14 @@ const Admin = () => {
                             <Button
                               variant="outline"
                               size="sm"
+                              onClick={() => setProbeServer(s)}
+                            >
+                              <Wifi className="h-4 w-4 mr-2" />
+                              Testar
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
                               onClick={() => {
                                 setEditingServer(s);
                                 setNewUrl(s.server_url);
@@ -1612,6 +1623,13 @@ const Admin = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ServerProbeDialog
+        open={!!probeServer}
+        onOpenChange={(o) => !o && setProbeServer(null)}
+        serverUrl={probeServer?.server_url ?? null}
+        serverLabel={probeServer?.label ?? null}
+      />
     </div>
   );
 };
