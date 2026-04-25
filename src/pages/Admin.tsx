@@ -1050,6 +1050,7 @@ const Admin = () => {
                   />
 
                   <Card className="p-6 bg-gradient-card border-border/50">
+                    <h2 className="text-lg font-semibold mb-4">Por servidor (DNS)</h2>
                     {!dnsErrors?.servers.length ? (
                       <p className="text-sm text-muted-foreground py-6 text-center">
                         Sem dados na janela selecionada.
