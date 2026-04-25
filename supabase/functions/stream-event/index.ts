@@ -5,7 +5,7 @@
 // retornam 200 {ok:false} em vez de 5xx — assim heartbeats que falham não
 // disparam toasts/error loops no frontend nem invalidam a sessão.
 
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.95.0";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
 import { clientIp, uaHash, urlHash } from "../_shared/stream-token.ts";
 
 const ALLOWED_SUFFIXES = [".lovable.app", ".lovableproject.com", ".lovable.dev"];
