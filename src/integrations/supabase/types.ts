@@ -46,25 +46,37 @@ export type Database = {
       }
       allowed_servers: {
         Row: {
+          consecutive_failures: number
           created_at: string
           id: string
           label: string | null
+          last_working_at: string | null
+          last_working_variant: string | null
           notes: string | null
           server_url: string
+          unreachable_until: string | null
         }
         Insert: {
+          consecutive_failures?: number
           created_at?: string
           id?: string
           label?: string | null
+          last_working_at?: string | null
+          last_working_variant?: string | null
           notes?: string | null
           server_url: string
+          unreachable_until?: string | null
         }
         Update: {
+          consecutive_failures?: number
           created_at?: string
           id?: string
           label?: string | null
+          last_working_at?: string | null
+          last_working_variant?: string | null
           notes?: string | null
           server_url?: string
+          unreachable_until?: string | null
         }
         Relationships: []
       }

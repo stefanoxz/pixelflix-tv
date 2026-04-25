@@ -628,19 +628,16 @@ function buildClientVariants(serverBase: string): string[] {
   if (!hostPort) return [];
   const hasPort = /:\d+$/.test(hostPort);
   const host = hasPort ? hostPort.replace(/:\d+$/, "") : hostPort;
+
+  // Fase 1 (rápida): apenas as variantes mais prováveis. Portas exóticas
+  // (2052/2082/2095/8880) ficam para a edge tentar — o navegador trava em
+  // CORS/mixed-content nelas, então testar do client é desperdício.
   const candidates = [`${proto}://${hostPort}`];
   if (!hasPort) {
-    // Espelha as portas testadas pela edge (buildVariants), mas sem testar
-    // todas — o navegador trava em mixed-content/CORS antes da edge, então
-    // só vale tentar as mais prováveis para login direto via fetch.
     candidates.push(
       `http://${host}:80`,
       `http://${host}:8080`,
-      `http://${host}:2052`,
-      `http://${host}:2082`,
-      `http://${host}:8880`,
       `https://${host}:443`,
-      `https://${host}:2095`,
     );
   }
   for (const c of candidates) {
