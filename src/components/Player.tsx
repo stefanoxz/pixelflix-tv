@@ -132,29 +132,32 @@ type RootCause =
 const HLS_CONFIG: Partial<Hls["config"]> = {
   lowLatencyMode: true,
   enableWorker: true,
-  // Buffer alvo no início — começa a tocar com pouco buffer, não com 30s.
-  maxBufferLength: 12,
-  maxMaxBufferLength: 30,
-  maxBufferSize: 30 * 1000 * 1000,
-  // Live: ficar próximo do edge.
-  liveSyncDurationCount: 2,
-  liveMaxLatencyDurationCount: 6,
+  // Buffer um pouco maior: reduz quedas em IPTV instável sem deixar o live muito atrasado.
+  maxBufferLength: 20,
+  maxMaxBufferLength: 60,
+  maxBufferSize: 60 * 1000 * 1000,
+  // Live: tolera mais latência para evitar levelLoadError em servidores lentos.
+  liveSyncDurationCount: 3,
+  liveMaxLatencyDurationCount: 10,
   // Otimizações de TTFF
   startLevel: 0,                // começa pelo menor bitrate (instantâneo), ABR sobe depois
   startFragPrefetch: true,      // pré-busca o próximo fragmento já no manifest
   backBufferLength: 0,          // não acumula histórico — libera memória pro start
-  maxBufferHole: 0.1,           // tolera pequenos gaps sem stall
+  maxBufferHole: 0.5,           // tolera gaps comuns em listas IPTV
   highBufferWatchdogPeriod: 1,  // reage rápido a stalls
-  // Timeouts mais curtos do que os defaults (~20s).
-  manifestLoadingTimeOut: 8_000,
-  manifestLoadingMaxRetry: 2,
-  manifestLoadingRetryDelay: 500,
-  levelLoadingTimeOut: 8_000,
-  levelLoadingMaxRetry: 2,
-  levelLoadingRetryDelay: 500,
-  fragLoadingTimeOut: 12_000,
-  fragLoadingMaxRetry: 4,
-  fragLoadingRetryDelay: 500,
+  // IPTV costuma oscilar: retries maiores evitam erro fatal em falhas transitórias.
+  manifestLoadingTimeOut: 12_000,
+  manifestLoadingMaxRetry: 3,
+  manifestLoadingRetryDelay: 800,
+  manifestLoadingMaxRetryTimeout: 12_000,
+  levelLoadingTimeOut: 12_000,
+  levelLoadingMaxRetry: 8,
+  levelLoadingRetryDelay: 1_000,
+  levelLoadingMaxRetryTimeout: 12_000,
+  fragLoadingTimeOut: 20_000,
+  fragLoadingMaxRetry: 8,
+  fragLoadingRetryDelay: 800,
+  fragLoadingMaxRetryTimeout: 12_000,
 };
 
 const HEARTBEAT_INTERVAL_MS = 45_000;
@@ -167,6 +170,10 @@ const STALL_TIMEOUT_MS = 8_000;
  * `markHostProxyRequired`) sem esperar o bootstrap watchdog de 12s.
  */
 const LOADEDDATA_WATCHDOG_MS = 6_000;
+const HLS_FATAL_NETWORK_RETRY_LIMIT = 10;
+const HLS_FATAL_MEDIA_RETRY_LIMIT = 4;
+const HLS_FATAL_RETRY_BASE_DELAY_MS = 1_200;
+const HLS_FATAL_RETRY_MAX_DELAY_MS = 10_000;
 
 const STATUS_LABEL: Record<DiagnosticStatus, string> = {
   connecting: "Conectando",
@@ -819,11 +826,13 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                 segmentModeRef.current === "stream"
                   ? {
                       ...HLS_CONFIG,
-                      maxBufferLength: 20,
-                      liveSyncDurationCount: 3,
-                      liveMaxLatencyDurationCount: 8,
-                      maxBufferHole: 0.3,
-                      fragLoadingMaxRetry: 6,
+                      maxBufferLength: 30,
+                      maxMaxBufferLength: 90,
+                      liveSyncDurationCount: 4,
+                      liveMaxLatencyDurationCount: 12,
+                      maxBufferHole: 0.8,
+                      levelLoadingMaxRetry: 10,
+                      fragLoadingMaxRetry: 10,
                     }
                   : HLS_CONFIG;
               const hls = new Hls(hlsConfig);
@@ -855,6 +864,16 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                 setLastReason("manifest carregado");
                 pushLog({ source: "hls", level: "info", label: "manifest_parsed" });
                 // play() já foi disparado em MEDIA_ATTACHED.
+              });
+
+              hls.on(Hls.Events.LEVEL_LOADED, () => {
+                if (cancelled) return;
+                if (retryCountRef.current > 0) retryCountRef.current = 0;
+              });
+
+              hls.on(Hls.Events.FRAG_LOADED, () => {
+                if (cancelled) return;
+                if (fragLoadErrorCountRef.current > 0) fragLoadErrorCountRef.current = 0;
               });
 
               hls.on(Hls.Events.ERROR, (_evt, data: ErrorData) => {
@@ -939,15 +958,31 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
                 if (!data.fatal) return;
 
-                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCountRef.current < 3) {
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryCountRef.current < HLS_FATAL_NETWORK_RETRY_LIMIT) {
                   retryCountRef.current += 1;
+                  const delay = Math.min(
+                    HLS_FATAL_RETRY_MAX_DELAY_MS,
+                    HLS_FATAL_RETRY_BASE_DELAY_MS * retryCountRef.current,
+                  );
+                  pushLog({
+                    source: "diag",
+                    level: "warn",
+                    label: "hls_network_recover",
+                    details: `${retryCountRef.current}/${HLS_FATAL_NETWORK_RETRY_LIMIT} in ${delay}ms`,
+                  });
                   setTimeout(() => {
                     try { hls.startLoad(); } catch { /* noop */ }
-                  }, 2000 * retryCountRef.current);
+                  }, delay);
                   return;
                 }
-                if (data.type === Hls.ErrorTypes.MEDIA_ERROR && retryCountRef.current < 3) {
+                if (data.type === Hls.ErrorTypes.MEDIA_ERROR && retryCountRef.current < HLS_FATAL_MEDIA_RETRY_LIMIT) {
                   retryCountRef.current += 1;
+                  pushLog({
+                    source: "diag",
+                    level: "warn",
+                    label: "hls_media_recover",
+                    details: `${retryCountRef.current}/${HLS_FATAL_MEDIA_RETRY_LIMIT}`,
+                  });
                   try { hls.recoverMediaError(); return; } catch { /* fallthrough */ }
                 }
                 setLoading(false);
