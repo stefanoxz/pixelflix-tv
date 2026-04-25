@@ -374,7 +374,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const isLive = useMemo(() => isLiveXtreamUrl(rawUrl ?? src ?? null), [rawUrl, src]);
   const [engine, setEngine] = useState<PlaybackEngine>(() => {
     if (!isLive) return "hls";
-    return getPreferredEngine(safeHostFromUrl(rawUrl ?? src)) ?? "hls";
+    return getPreferredEngine(rawUrl ?? src) ?? "hls";
   });
   // Re-sincroniza engine quando o canal muda de host.
   useEffect(() => {
@@ -382,7 +382,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setEngine("hls");
       return;
     }
-    const pref = getPreferredEngine(safeHostFromUrl(rawUrl ?? src)) ?? "hls";
+    const pref = getPreferredEngine(rawUrl ?? src) ?? "hls";
     setEngine(pref);
     // Channel changed → reset the per-session proxy auto-restart guard so the
     // new channel gets its own opportunity to fall back to proxy.
