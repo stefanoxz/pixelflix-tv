@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Loader2, Search } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PosterCard, type PosterItem } from "./PosterCard";
 import { useIncompatibleKeys } from "@/hooks/useIncompatibleKeys";
 
@@ -24,6 +25,8 @@ interface Props {
   pageSize?: number;
   /** Quantos itens adicionar a cada vez que o sentinela entrar em view. */
   pageIncrement?: number;
+  /** Se true e items vazio, renderiza skeletons em vez de mensagem vazia. */
+  isLoading?: boolean;
 }
 
 // Mapeia largura do container → colunas (mesmo do tailwind grid antigo).

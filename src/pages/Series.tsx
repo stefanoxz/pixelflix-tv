@@ -227,6 +227,7 @@ const SeriesPage = () => {
         <section className="flex flex-col min-h-0">
           <PosterGrid
             items={items}
+            isLoading={seriesLoading}
             activeId={activeId}
             isFavorite={isFavorite}
             onActiveChange={setActiveId}

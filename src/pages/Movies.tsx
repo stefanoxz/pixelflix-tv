@@ -228,6 +228,7 @@ const Movies = () => {
         <section className="flex flex-col min-h-0">
           <PosterGrid
             items={items}
+            isLoading={moviesLoading}
             activeId={activeId}
             isFavorite={isFavorite}
             onActiveChange={setActiveId}
