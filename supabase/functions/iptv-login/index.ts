@@ -157,6 +157,20 @@ function classifyReason(reason: string): { code: string; message: string } {
   return { code: "UNKNOWN_ERROR", message: reason || "Erro desconhecido ao contatar o servidor" };
 }
 
+/**
+ * Detecta o padrão "404 com corpo curto não-JSON" — típico de Cloudflare na
+ * frente de um origin Xtream desligado. Devolve uma dica amigável ou null.
+ * NÃO altera status HTTP nem código de erro — só anexa um campo `hint`.
+ */
+function maybeOriginSuspectHint(status: number | undefined, body: string | undefined): string | null {
+  if (status !== 404) return null;
+  const b = (body ?? "").trim();
+  if (!b || b.length > 200) return null;
+  try { JSON.parse(b); return null; } catch { /* não é JSON, segue */ }
+  return "O servidor respondeu mas não parece ser um endpoint Xtream válido. " +
+         "Sua DNS pode estar desatualizada — peça uma nova ao provedor.";
+}
+
 function normalizeServer(url: string) {
   let u = url.trim().toLowerCase();
   if (!/^https?:\/\//.test(u)) u = `http://${u}`;
