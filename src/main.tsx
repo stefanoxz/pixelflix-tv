@@ -1,16 +1,42 @@
 import { createRoot } from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryCache } from "@tanstack/react-query";
 import { persistQueryClient } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import App from "./App.tsx";
+import { toast } from "sonner";
+import { MaxConnectionsError } from "./services/iptv";
 import "./index.css";
 
+// Toast deduplicado: se várias queries falharem ao mesmo tempo com
+// MAX_CONNECTIONS, o usuário vê uma única notificação por janela curta.
+let lastMaxConnToastAt = 0;
+function notifyMaxConnections(message: string) {
+  const now = Date.now();
+  if (now - lastMaxConnToastAt < 5_000) return;
+  lastMaxConnToastAt = now;
+  toast.error("Limite de telas atingido", {
+    description: message,
+    duration: 6000,
+  });
+}
+
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (err) => {
+      if (err instanceof MaxConnectionsError) {
+        notifyMaxConnections(err.message);
+      }
+    },
+  }),
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
       gcTime: 24 * 60 * 60 * 1000,
-      retry: 1,
+      retry: (failureCount, error) => {
+        // Não retentar erros lógicos do servidor.
+        if (error instanceof MaxConnectionsError) return false;
+        return failureCount < 1;
+      },
       refetchOnWindowFocus: false,
     },
   },
