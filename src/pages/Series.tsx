@@ -176,6 +176,17 @@ const SeriesPage = () => {
     },
   });
 
+  const prefetchSeriesInfo = useCallback(
+    (it: PosterItem) => {
+      queryClient.prefetchQuery({
+        queryKey: ["series-info", it.id],
+        queryFn: () => getSeriesInfo(creds, it.id),
+        staleTime: 1000 * 60 * 5,
+      });
+    },
+    [queryClient, creds],
+  );
+
   const epUrl = playingEp
     ? buildSeriesEpisodeUrl(
         creds,
