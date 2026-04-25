@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { DnsErrorTrendChart } from "@/components/admin/DnsErrorTrendChart";
+import { ServerProbeDialog } from "@/components/admin/ServerProbeDialog";
 import {
   Users,
   UserCheck,
