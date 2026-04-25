@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIptv } from "@/context/IptvContext";
-import { iptvLogin, resolveStreamBase } from "@/services/iptv";
+import { iptvLogin, iptvLoginM3u, resolveStreamBase } from "@/services/iptv";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { parseM3uUrl } from "@/lib/parseM3uUrl";
