@@ -1476,8 +1476,86 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     setEngine(next);
   };
 
-  // Auto-scroll the logs list to the bottom when new logs arrive
+  // ===== Playback rate + skip controls =====
+  const setPlaybackRate = (rate: number) => {
+    setPlaybackRateState(rate);
+    try {
+      localStorage.setItem("player.rate", String(rate));
+    } catch {
+      /* noop */
+    }
+    if (videoRef.current) videoRef.current.playbackRate = rate;
+  };
+
+  // Aplica rate sempre que o vídeo (re)cria.
   useEffect(() => {
+    if (videoRef.current) videoRef.current.playbackRate = playbackRate;
+  }, [playbackRate, src, retryNonce]);
+
+  const skipBy = (delta: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (isLive) return; // não tem efeito em live
+    const dur = Number.isFinite(v.duration) ? v.duration : 0;
+    const target = Math.max(0, Math.min(dur > 0 ? dur - 1 : v.currentTime + delta, v.currentTime + delta));
+    v.currentTime = target;
+  };
+
+  // Atalhos de teclado: ← → ±10s, Espaço play/pause, > < velocidade
+  useEffect(() => {
+    if (!src || error) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+      switch (e.key) {
+        case "ArrowLeft":
+          if (!isLive) {
+            e.preventDefault();
+            skipBy(-10);
+          }
+          break;
+        case "ArrowRight":
+          if (!isLive) {
+            e.preventDefault();
+            skipBy(10);
+          }
+          break;
+        case " ": {
+          const v = videoRef.current;
+          if (v) {
+            e.preventDefault();
+            if (v.paused) v.play().catch(() => {});
+            else v.pause();
+          }
+          break;
+        }
+        case ">":
+        case ".":
+          setPlaybackRate(Math.min(2, +(playbackRate + 0.25).toFixed(2)));
+          break;
+        case "<":
+        case ",":
+          setPlaybackRate(Math.max(0.5, +(playbackRate - 0.25).toFixed(2)));
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src, error, isLive, playbackRate]);
+
+  const reportSnapshot: ReportSnapshot = {
+    title,
+    url: copyTarget,
+    containerExt,
+    engine: ENGINE_LABEL[engine],
+    loadMethod: LOAD_METHOD_LABEL[loadMethod],
+    rootCause: ROOT_CAUSE_LABEL[rootCause],
+    lastReason,
+    upstreamHost,
+    status: STATUS_LABEL[status],
+  };
     if (!logsPanelOpen) return;
     const el = logsListRef.current;
     if (el) el.scrollTop = el.scrollHeight;
