@@ -403,6 +403,7 @@ Deno.serve(async (req) => {
         "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
         Referer: `${decoded.protocol}//${decoded.host}/`,
         Accept: "*/*",
+        Connection: "keep-alive",
       },
     });
     const finalUrl = new URL(upstream.url || payload.u);
