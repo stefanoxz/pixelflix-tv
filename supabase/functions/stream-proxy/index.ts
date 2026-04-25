@@ -325,6 +325,7 @@ Deno.serve(async (req) => {
         "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
         Referer: `${decoded.protocol}//${decoded.host}/`,
         Accept: "*/*",
+        Connection: "keep-alive",
       };
       const range = req.headers.get("range");
       if (range) upstreamHeaders["Range"] = range;
@@ -403,6 +404,7 @@ Deno.serve(async (req) => {
         "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
         Referer: `${decoded.protocol}//${decoded.host}/`,
         Accept: "*/*",
+        Connection: "keep-alive",
       },
     });
     const finalUrl = new URL(upstream.url || payload.u);
@@ -430,41 +432,79 @@ Deno.serve(async (req) => {
       });
       return `${PROXY_BASE}?t=${encodeURIComponent(tok)}`;
     };
+    const signNestedPlaylist = async (abs: string): Promise<string> => {
+      const exp = Math.floor(Date.now() / 1000) + 60;
+      const tok = await signToken({
+        u: abs, e: exp, s: payload.s, i: payload.i, h: payload.h, n: newNonce(), k: "playlist", m: childMode,
+      });
+      return `${PROXY_BASE}?t=${encodeURIComponent(tok)}`;
+    };
 
+    // ===== Pass 1: parse — collect signing jobs synchronously =====
+    type Job = { kind: "segment" | "nested" | "uri-tag"; abs: string; line: string };
     const lines = text.split("\n");
-    const out: string[] = [];
-    for (const line of lines) {
+    const jobs: (Job | null)[] = new Array(lines.length).fill(null);
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       const trimmed = line.trim();
-      if (!trimmed) { out.push(line); continue; }
+      if (!trimmed) continue;
       if (trimmed.startsWith("#")) {
-        // Rewrite URI="..." inside tags (keys, maps, etc.)
         const m = line.match(/URI="([^"]+)"/);
         if (m) {
           try {
             const abs = new URL(m[1], baseHref).toString();
-            const signed = await signSegment(abs);
-            out.push(line.replace(/URI="([^"]+)"/, `URI="${signed}"`));
-            continue;
-          } catch { /* fallthrough */ }
+            jobs[i] = { kind: "uri-tag", abs, line };
+          } catch { /* keep line as-is */ }
         }
-        out.push(line);
         continue;
       }
       try {
         const abs = new URL(trimmed, baseHref).toString();
-        // Nested playlists (rare) → re-sign as playlist; otherwise segment.
         const isNestedPlaylist = abs.toLowerCase().includes(".m3u8");
-        if (isNestedPlaylist) {
-          const exp = Math.floor(Date.now() / 1000) + 60;
-          const tok = await signToken({
-            u: abs, e: exp, s: payload.s, i: payload.i, h: payload.h, n: newNonce(), k: "playlist", m: childMode,
-          });
-          out.push(`${PROXY_BASE}?t=${encodeURIComponent(tok)}`);
-        } else {
-          out.push(await signSegment(abs));
+        jobs[i] = { kind: isNestedPlaylist ? "nested" : "segment", abs, line };
+      } catch { /* keep line as-is */ }
+    }
+
+    // ===== Pass 2: sign with bounded concurrency (5 parallel) =====
+    const indexedJobs = jobs
+      .map((j, idx) => (j ? { idx, job: j } : null))
+      .filter((x): x is { idx: number; job: Job } => x !== null);
+    const signed: Map<number, string> = new Map();
+    const CONCURRENCY = 5;
+    let cursor = 0;
+    const workers: Promise<void>[] = [];
+    for (let w = 0; w < CONCURRENCY; w++) {
+      workers.push((async () => {
+        while (true) {
+          const myIdx = cursor++;
+          if (myIdx >= indexedJobs.length) return;
+          const { idx, job } = indexedJobs[myIdx];
+          try {
+            if (job.kind === "nested") {
+              signed.set(idx, await signNestedPlaylist(job.abs));
+            } else {
+              signed.set(idx, await signSegment(job.abs));
+            }
+          } catch {
+            // leave unsigned → original line will be used
+          }
         }
-      } catch {
-        out.push(line);
+      })());
+    }
+    await Promise.all(workers);
+
+    // ===== Pass 3: assemble output synchronously =====
+    const out: string[] = new Array(lines.length);
+    for (let i = 0; i < lines.length; i++) {
+      const job = jobs[i];
+      const line = lines[i];
+      const sig = signed.get(i);
+      if (!job || !sig) { out[i] = line; continue; }
+      if (job.kind === "uri-tag") {
+        out[i] = line.replace(/URI="([^"]+)"/, `URI="${sig}"`);
+      } else {
+        out[i] = sig;
       }
     }
 

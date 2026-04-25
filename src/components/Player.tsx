@@ -779,7 +779,20 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
           if (strategy.type === "hls") {
             if (Hls.isSupported()) {
-              const hls = new Hls(HLS_CONFIG);
+              // Em modo proxy (stream), latência por segmento é maior.
+              // Aumenta buffer alvo e tolerância a gaps para evitar stalls.
+              const hlsConfig: Partial<Hls["config"]> =
+                segmentModeRef.current === "stream"
+                  ? {
+                      ...HLS_CONFIG,
+                      maxBufferLength: 20,
+                      liveSyncDurationCount: 3,
+                      liveMaxLatencyDurationCount: 8,
+                      maxBufferHole: 0.3,
+                      fragLoadingMaxRetry: 6,
+                    }
+                  : HLS_CONFIG;
+              const hls = new Hls(hlsConfig);
               hlsRef.current = hls;
 
               // Safe bootstrap: attach FIRST, then load source after attached.
@@ -1050,7 +1063,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       setLoading(false);
       clearBootstrapTimeout();
       clearStallTimeout();
-      pushLog({ source: "video", level: "info", label: "loadeddata" });
+      const ttff = setupStartRef.current
+        ? Math.round(performance.now() - setupStartRef.current)
+        : 0;
+      pushLog({ source: "video", level: "info", label: "loadeddata", details: `TTFF=${ttff}ms` });
       if (wasFirst) {
         if (firstFrameAtRef.current === null) {
           firstFrameAtRef.current = performance.now();
