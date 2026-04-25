@@ -52,6 +52,7 @@ import {
   FlaskConical,
   Wifi,
   Flag,
+  Stethoscope,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
