@@ -376,7 +376,9 @@ Deno.serve(async (req) => {
       };
       const map = new Map<string, Agg>();
       const buckets0 = (): Record<Bucket, number> => ({
-        refused: 0, reset: 0, http_404: 0, http_444: 0, http_5xx: 0, tls: 0, timeout: 0, dns: 0, other: 0,
+        refused: 0, reset: 0, http_404: 0, http_444: 0, http_5xx: 0,
+        tls: 0, cert_invalid: 0, timeout: 0, io_timeout: 0,
+        dns: 0, no_route: 0, net_unreach: 0, protocol: 0, other: 0,
       });
 
       for (const row of (data ?? []) as { server_url: string; success: boolean; reason: string | null; created_at: string }[]) {
