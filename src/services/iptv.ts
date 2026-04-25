@@ -901,6 +901,8 @@ export async function iptvLoginM3u(
   console.log("[iptv] method: m3u_register fail", { code: result.code, error: result.error });
   throw new Error(messageForLoginCode(result.code, result.error));
 }
+
+/** Mensagem amigável para cada `code` retornado pela edge `iptv-login`. */
 function messageForLoginCode(code: string, fallback: string): string {
   switch (code) {
     case "INVALID_CREDENTIALS":
