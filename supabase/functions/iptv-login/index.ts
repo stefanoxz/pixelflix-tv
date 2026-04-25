@@ -174,16 +174,25 @@ async function attemptLogin(serverBase: string, username: string, password: stri
   const variants = buildVariants(serverBase);
   let lastReason = "credenciais inválidas";
   let lastBody = "";
+  let httpResponded = false; // se algum HTTP respondeu (mesmo com falha de cred), não vale a pena tentar HTTPS
 
   for (const base of variants) {
+    // Pula HTTPS se já recebemos qualquer resposta válida via HTTP — evita
+    // mascarar a causa real com erro de TLS do upstream.
+    if (httpResponded && base.startsWith("https://")) continue;
+
     const url = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
     const result = await tryFetch(url);
     if ("error" in result) {
-      lastReason = result.error;
-      lastBody = result.body ?? "";
+      // Não sobrescreve um motivo "real" anterior com um erro de TLS.
+      if (!isTlsOrConnectError(result.error) || !httpResponded) {
+        lastReason = result.error;
+        lastBody = result.body ?? "";
+      }
       continue;
     }
     const { res } = result;
+    if (base.startsWith("http://")) httpResponded = true;
     if (!res.ok) {
       lastReason = `HTTP ${res.status}`;
       lastBody = await res.text();
@@ -204,6 +213,10 @@ async function attemptLogin(serverBase: string, username: string, password: stri
     return { ok: true as const, data };
   }
 
+  // Sanitiza o motivo final: erros de TLS são confusos para o usuário final.
+  if (isTlsOrConnectError(lastReason)) {
+    lastReason = "servidor IPTV não respondeu (verifique a DNS)";
+  }
   return { ok: false as const, status: 502, reason: lastReason, body: lastBody };
 }
 
