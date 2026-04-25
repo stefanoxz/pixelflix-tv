@@ -300,7 +300,7 @@ const SeriesPage = () => {
                         <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
                           {episodes.length === 0 ? (
                             <p className="text-sm text-muted-foreground py-6 text-center">
-                              Nenhum episódio compatível nesta temporada.
+                              Nenhum episódio nesta temporada.
                             </p>
                           ) : (
                             episodes.map((ep) => {
