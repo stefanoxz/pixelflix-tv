@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Tv2, X } from "lucide-react";
+import { Tv2 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Player } from "@/components/Player";
+import { PlayerOverlay } from "@/components/PlayerOverlay";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { LibraryTopBar } from "@/components/library/LibraryTopBar";
 import { CategoryRail, type RailCategory } from "@/components/library/CategoryRail";
@@ -268,32 +268,22 @@ const SeriesPage = () => {
         onToggleFavorite={openSeries ? () => toggle(openSeries.series_id) : undefined}
       />
 
-      {playingEp && epUrl && (
-        <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="relative w-full max-w-5xl">
-            <Button
-              variant="secondary"
-              size="icon"
-              className="absolute -top-12 right-0 z-10"
-              onClick={() => setPlayingEp(null)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-            <Player
-              src={epUrl}
-              rawUrl={epUrl}
-              containerExt={playingEp.ep.container_extension}
-              title={playingEp.ep.title}
-              poster={proxyImageUrl(
-                playingEp.ep.info?.movie_image || playingEp.coverFallback || "",
-              )}
-              onClose={() => setPlayingEp(null)}
-              streamId={playingEp.ep.id}
-              contentKind="episode"
-            />
-          </div>
-        </div>
-      )}
+      <PlayerOverlay open={!!(playingEp && epUrl)} onClose={() => setPlayingEp(null)}>
+        {playingEp && epUrl && (
+          <Player
+            src={epUrl}
+            rawUrl={epUrl}
+            containerExt={playingEp.ep.container_extension}
+            title={playingEp.ep.title}
+            poster={proxyImageUrl(
+              playingEp.ep.info?.movie_image || playingEp.coverFallback || "",
+            )}
+            onClose={() => setPlayingEp(null)}
+            streamId={playingEp.ep.id}
+            contentKind="episode"
+          />
+        )}
+      </PlayerOverlay>
     </div>
   );
 };
