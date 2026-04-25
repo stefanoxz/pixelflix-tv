@@ -40,9 +40,25 @@ function corsFor(req: Request): Record<string, string> {
 }
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+// Singleton: criar client por request causa cold-start frequente e contribui
+// para 503 SUPABASE_EDGE_RUNTIME_ERROR sob carga.
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+// Decodifica JWT sem validar criptograficamente (só pega `sub`).
+// O Supabase Gateway já valida o JWT antes da requisição chegar aqui (verify_jwt=true).
+function extractUserIdFromJwt(token: string): string | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
+    );
+    return typeof payload?.sub === "string" ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
 
 const MAX_SESSIONS = 2;
 const RATE_REQ_PER_MIN = 60;
@@ -88,21 +104,20 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
 
-  const ua = req.headers.get("user-agent") || "";
-  const ip = clientIp(req);
+  try {
+    const ua = req.headers.get("user-agent") || "";
+    const ip = clientIp(req);
 
   // 1) Auth
   const authHeader = req.headers.get("Authorization") || "";
   const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!jwt) return json({ error: "Missing token" }, 401, cors);
 
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: `Bearer ${jwt}` } },
-    auth: { persistSession: false },
-  });
-  const { data: udata, error: uerr } = await userClient.auth.getUser();
-  if (uerr || !udata?.user) return json({ error: "Invalid session" }, 401, cors);
-  const userId = udata.user.id;
+  // Extrai user id direto do JWT — evita roundtrip ao /auth/v1/user a cada
+  // request. Players fazem dezenas de requests/min; o getUser anterior era
+  // a maior fonte de latência e cold-start nesta função.
+  const userId = extractUserIdFromJwt(jwt);
+  if (!userId) return json({ error: "Invalid session" }, 401, cors);
 
   // 2) Body
   let body: { url?: string; kind?: TokenKind; iptv_username?: string; mode?: TokenMode };
@@ -242,4 +257,8 @@ Deno.serve(async (req) => {
 
   const proxied = `${PROXY_BASE}?t=${encodeURIComponent(token)}`;
   return json({ url: proxied, expires_at: exp }, 200, cors);
+  } catch (e) {
+    console.error("[stream-token] unhandled", e);
+    return json({ error: "internal_error" }, 500, cors);
+  }
 });
