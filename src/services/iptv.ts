@@ -615,7 +615,7 @@ export async function invokeSafe<T = unknown>(
 
   let out = await attempt();
   for (let i = 0; i < MAX_RUNTIME_RETRIES; i++) {
-    if (out.ok) break;
+    if (out.ok === true) break;
     if (!isEdgeRuntimeTransient(out.status, out.code, out.error)) break;
     console.warn(`[invokeSafe] ${name}: edge runtime 503, retry ${i + 1}/${MAX_RUNTIME_RETRIES}`);
     await new Promise((r) => setTimeout(r, RUNTIME_BACKOFFS_MS[i] ?? 1500));
