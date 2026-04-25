@@ -630,6 +630,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
       // Reset diagnóstico para novo ciclo
       rootCauseLockedRef.current = false;
+      autoReportedRef.current = false;
       setRootCause("unknown");
       setRootCauseDetail(null);
       setLoadMethod("unknown");
