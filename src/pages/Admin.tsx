@@ -56,6 +56,7 @@ import {
   Flag,
   Stethoscope,
   UserPlus,
+  HelpCircle,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
