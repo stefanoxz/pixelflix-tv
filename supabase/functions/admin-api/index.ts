@@ -181,9 +181,10 @@ Deno.serve(async (req) => {
         server_url: url, last_seen: s.last_seen, total_logins: s.total_logins, success_count: s.success_count, fail_count: s.fail_count, unique_users: s.users.size,
       }));
 
-      const sessionsList = (sessions.data ?? []).map((s: { anon_user_id: string; iptv_username: string | null; ip: string | null; started_at: string; last_seen_at: string }) => ({
+      const sessionsList = (sessions.data ?? []).map((s: { anon_user_id: string; iptv_username: string | null; ip: string | null; started_at: string; last_seen_at: string; content_kind: string | null; content_title: string | null; content_id: string | null; content_started_at: string | null }) => ({
         anon_user_id: s.anon_user_id, iptv_username: s.iptv_username, ip_masked: maskIp(s.ip), started_at: s.started_at,
         last_seen_at: s.last_seen_at, duration_s: Math.floor((Date.now() - new Date(s.started_at).getTime()) / 1000),
+        content_kind: s.content_kind, content_title: s.content_title, content_id: s.content_id, content_started_at: s.content_started_at,
       }));
       const ipCounts = new Map<string, number>();
       for (const r of (topRej.data ?? []) as { ip: string | null }[]) if (r.ip) ipCounts.set(r.ip, (ipCounts.get(r.ip) ?? 0) + 1);
