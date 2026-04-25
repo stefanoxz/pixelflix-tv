@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { DnsErrorTrendChart } from "@/components/admin/DnsErrorTrendChart";
 import {
   Users,
   UserCheck,
