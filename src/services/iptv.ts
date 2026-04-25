@@ -888,22 +888,43 @@ export async function iptvLoginM3u(
   creds: IptvCredentials,
 ): Promise<LoginResponse & { server_url?: string; auto_registered?: boolean }> {
   const startedAt = Date.now();
+  // Speed probe em paralelo, sem bloquear o login.
+  const speedPromise = runQuickSpeedProbe(2500);
   const result: SafeResult<LoginResponse & { server_url?: string; auto_registered?: boolean }> =
     await invokeSafe<LoginResponse & { server_url?: string; auto_registered?: boolean }>(
       "iptv-login",
       { mode: "m3u_register", ...creds } as unknown as Record<string, unknown>,
       "login",
     );
+  const durationMs = Date.now() - startedAt;
+  const speed_kbps = await speedPromise.catch(() => null);
+
   if (result.ok === true) {
-    const durationMs = Date.now() - startedAt;
     console.log("[iptv] method: m3u_register", {
       durationMs,
       auto_registered: (result.data as any)?.auto_registered,
       server: (result.data as any)?.server_url,
     });
+    void reportDiagnostic({
+      outcome: "success",
+      username: creds.username,
+      server_url: (result.data as any)?.server_url ?? creds.server ?? null,
+      duration_ms: durationMs,
+      speed_kbps,
+    });
     return result.data;
   }
   console.log("[iptv] method: m3u_register fail", { code: result.code, error: result.error });
+  const outcome: "timeout" | "fail" =
+    result.code === "TIMEOUT" || result.code === "OFFLINE" ? "timeout" : "fail";
+  void reportDiagnostic({
+    outcome,
+    username: creds.username,
+    server_url: creds.server ?? null,
+    client_error: `${result.code}: ${result.error}`.slice(0, 480),
+    duration_ms: durationMs,
+    speed_kbps,
+  });
   throw new Error(messageForLoginCode(result.code, result.error));
 }
 
