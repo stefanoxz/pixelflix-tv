@@ -299,14 +299,6 @@ function buildVariants(serverBase: string, phase: Phase): string[] {
   return [...variants];
 }
 
-/** Resolve duração de cooldown a partir do número de falhas consecutivas. */
-function cooldownMs(consecutiveFailures: number): number {
-  const idx = Math.min(
-    Math.max(consecutiveFailures - COOLDOWN_THRESHOLD, 0),
-    COOLDOWN_STEPS_MS.length - 1,
-  );
-  return COOLDOWN_STEPS_MS[idx];
-}
 
 /**
  * Tenta uma única variante (URL completa do player_api). Aplica fallback de UA
