@@ -201,6 +201,64 @@ const SeriesPage = () => {
     [queryClient, creds],
   );
 
+  // Calcula próximo episódio cruzando o ep atual com o SeriesInfo cacheado.
+  const nextEpisodeInfo = useMemo<{
+    ep: Episode;
+    season: number;
+    episodeNumber: number;
+  } | null>(() => {
+    if (!playingEp) return null;
+    const info = queryClient.getQueryData<SeriesInfo>([
+      "series-info",
+      playingEp.seriesId,
+    ]);
+    if (!info?.episodes) return null;
+    // Ordena temporadas numericamente
+    const seasonNums = Object.keys(info.episodes)
+      .map((k) => Number(k))
+      .filter((n) => Number.isFinite(n))
+      .sort((a, b) => a - b);
+    for (let i = 0; i < seasonNums.length; i++) {
+      const sNum = seasonNums[i];
+      const list = info.episodes[String(sNum)] ?? [];
+      const idx = list.findIndex((e) => String(e.id) === String(playingEp.ep.id));
+      if (idx === -1) continue;
+      // Próximo da mesma temporada
+      if (idx + 1 < list.length) {
+        const nextEp = list[idx + 1];
+        return { ep: nextEp, season: sNum, episodeNumber: nextEp.episode_num ?? idx + 2 };
+      }
+      // Primeiro da próxima temporada
+      const nextS = seasonNums[i + 1];
+      if (nextS != null) {
+        const nextList = info.episodes[String(nextS)] ?? [];
+        if (nextList.length > 0) {
+          const nextEp = nextList[0];
+          return { ep: nextEp, season: nextS, episodeNumber: nextEp.episode_num ?? 1 };
+        }
+      }
+      return null;
+    }
+    return null;
+  }, [playingEp, queryClient]);
+
+  const handleEpisodeEnded = useCallback(() => {
+    setShowNextCard(true);
+  }, []);
+
+  const handlePlayNext = useCallback(() => {
+    if (!nextEpisodeInfo || !playingEp) {
+      setShowNextCard(false);
+      return;
+    }
+    setShowNextCard(false);
+    setPlayingEp({
+      ep: nextEpisodeInfo.ep,
+      seriesId: playingEp.seriesId,
+      coverFallback: playingEp.coverFallback,
+    });
+  }, [nextEpisodeInfo, playingEp]);
+
   const epUrl = playingEp
     ? buildSeriesEpisodeUrl(
         creds,
