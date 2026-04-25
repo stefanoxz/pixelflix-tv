@@ -775,6 +775,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       const start = async () => {
         try {
           const kind = strategy.type === "hls" ? "playlist" : "segment";
+          const tokenStart = performance.now();
+          pushLog({ source: "net", level: "info", label: "token_request", details: kind });
           const tokenResp = await requestStreamToken({
             url: src,
             kind,
@@ -782,11 +784,18 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
             mode: segmentModeRef.current,
           });
           if (cancelled) return;
+          const tokenMs = Math.round(performance.now() - tokenStart);
           const safeSrc = tokenResp.url;
           const method = detectLoadMethod(safeSrc);
           setLoadMethod(method);
-          pushLog({ source: "net", level: "info", label: "token_ok", details: `${kind} via ${method} mode=${segmentModeRef.current}` });
-          console.log("[player] manifest_method:", method, { kind, host: extractUpstreamHost(src), mode: segmentModeRef.current });
+          pushLog({
+            source: "net",
+            level: tokenMs > 1500 ? "warn" : "info",
+            label: "token_ok",
+            details: `${kind} via ${method} mode=${segmentModeRef.current} (${tokenMs}ms)`,
+            meta: { tokenMs, kind, method, mode: segmentModeRef.current },
+          });
+          console.log("[player] manifest_method:", method, { kind, host: extractUpstreamHost(src), mode: segmentModeRef.current, tokenMs });
 
           // Heartbeat (renew session lifecycle on backend every 45s)
           heartbeatRef.current = window.setInterval(() => {
