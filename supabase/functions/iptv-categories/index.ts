@@ -166,7 +166,17 @@ Deno.serve(async (req) => {
 
     const result = await fetchWithRetries(url);
     if (!result.ok) {
-      // 404/410 do painel: trate como "vazio" para a UI continuar viva.
+      // Limite de telas/conexões atingido — sinaliza explicitamente à UI.
+      if (result.reason === "MAX_CONNECTIONS") {
+        return new Response(
+          JSON.stringify({
+            error: "Limite de telas atingido. Feche outras conexões e tente novamente.",
+            code: "MAX_CONNECTIONS",
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      // 401/403/404/410 do painel: trate como "vazio" para a UI continuar viva.
       // Para listas, devolve [] e status 200; para detalhes (ex: get_series_info),
       // devolve null com status 200.
       if (result.softNotFound) {
