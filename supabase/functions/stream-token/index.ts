@@ -104,8 +104,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
 
-  const ua = req.headers.get("user-agent") || "";
-  const ip = clientIp(req);
+  try {
+    const ua = req.headers.get("user-agent") || "";
+    const ip = clientIp(req);
 
   // 1) Auth
   const authHeader = req.headers.get("Authorization") || "";
