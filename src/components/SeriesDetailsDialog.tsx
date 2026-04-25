@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Heart, Loader2, Star, X } from "lucide-react";
+import { Heart, Loader2, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
