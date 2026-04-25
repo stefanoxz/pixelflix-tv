@@ -134,6 +134,88 @@ interface TopConsumer {
   segments: number;
 }
 
+type ErrorBucket =
+  | "refused"
+  | "reset"
+  | "http_404"
+  | "http_444"
+  | "http_5xx"
+  | "tls"
+  | "timeout"
+  | "dns"
+  | "other";
+
+interface DnsErrorServer {
+  server_url: string;
+  total: number;
+  success: number;
+  fail: number;
+  last_seen: string | null;
+  last_error: string | null;
+  last_error_at: string | null;
+  buckets: Record<ErrorBucket, number>;
+}
+
+interface DnsErrorOverview {
+  since: string;
+  hours: number;
+  totals: {
+    total: number;
+    success: number;
+    fail: number;
+    buckets: Record<ErrorBucket, number>;
+  };
+  servers: DnsErrorServer[];
+}
+
+const ERROR_BUCKET_META: Record<ErrorBucket, { label: string; cls: string; tip: string }> = {
+  refused: {
+    label: "Connection refused",
+    cls: "text-destructive bg-destructive/10",
+    tip: "Servidor recusou a conexão TCP (porta fechada / serviço parado).",
+  },
+  reset: {
+    label: "Reset by peer",
+    cls: "text-destructive bg-destructive/10",
+    tip: "Servidor derrubou a conexão durante o handshake (firewall / anti-bot).",
+  },
+  http_404: {
+    label: "HTTP 404",
+    cls: "text-warning bg-warning/10",
+    tip: "Endpoint /player_api.php não encontrado nessa DNS.",
+  },
+  http_444: {
+    label: "HTTP 444",
+    cls: "text-warning bg-warning/10",
+    tip: "Servidor encerrou sem resposta (anti-scraping nginx).",
+  },
+  http_5xx: {
+    label: "HTTP 5xx",
+    cls: "text-warning bg-warning/10",
+    tip: "Erro interno do servidor (sobrecarga ou falha).",
+  },
+  tls: {
+    label: "TLS / SSL",
+    cls: "text-warning bg-warning/10",
+    tip: "Falha de TLS/SSL (certificado, handshake, UnrecognisedName).",
+  },
+  timeout: {
+    label: "Timeout",
+    cls: "text-warning bg-warning/10",
+    tip: "Servidor não respondeu no tempo limite.",
+  },
+  dns: {
+    label: "DNS off",
+    cls: "text-destructive bg-destructive/10",
+    tip: "Domínio não resolveu (DNS inválido ou removido).",
+  },
+  other: {
+    label: "Outros",
+    cls: "text-muted-foreground bg-muted/40",
+    tip: "Outras falhas (incluindo credenciais inválidas).",
+  },
+};
+
 async function callAdmin<T>(action: string, payload?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("admin-api", {
     body: { action, payload },
