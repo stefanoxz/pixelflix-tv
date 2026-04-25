@@ -179,10 +179,17 @@ function ProbeRow({ probe }: { probe: Probe }) {
   const count = meta?.count as number | undefined;
   return (
     <div className="border border-border/50 rounded-md bg-muted/20">
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 p-2.5 text-left hover:bg-muted/30 rounded-md transition-colors"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((v) => !v);
+          }
+        }}
+        className="w-full flex items-center gap-2 p-2.5 text-left hover:bg-muted/30 rounded-md transition-colors cursor-pointer select-none"
       >
         {open ? (
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -198,7 +205,7 @@ function ProbeRow({ probe }: { probe: Probe }) {
         <span className="text-xs text-muted-foreground tabular-nums w-14 text-right">
           {probe.latency_ms}ms
         </span>
-      </button>
+      </div>
       {open && (
         <div className="px-3 pb-3 pt-1 space-y-2 text-xs border-t border-border/40">
           <div className="space-y-1">
