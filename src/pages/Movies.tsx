@@ -185,6 +185,18 @@ const Movies = () => {
     },
   });
 
+  // Prefetch da sinopse ao passar o mouse / focar — fica instantâneo no clique.
+  const prefetchInfo = useCallback(
+    (it: PosterItem) => {
+      queryClient.prefetchQuery({
+        queryKey: ["vod-info", it.id],
+        queryFn: () => getVodInfo(creds, it.id),
+        staleTime: 1000 * 60 * 5,
+      });
+    },
+    [queryClient, creds],
+  );
+
   return (
     <div className="mx-auto max-w-[1800px] px-3 md:px-6 py-2 md:py-3">
       <LibraryTopBar
