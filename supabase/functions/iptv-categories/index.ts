@@ -103,7 +103,9 @@ async function fetchWithRetries(url: string, attemptsPerUa = 1): Promise<
           let bodyText = "";
           try { bodyText = (await res.text()).slice(0, 200); } catch { /* ignore */ }
           const upper = bodyText.toUpperCase();
-          if (/LIMITE DE TELAS|MAX[_ ]?CONNECTIONS|TOO MANY CONNECTIONS|CONEX[ÃA]O/.test(upper)) {
+          // Detecta APENAS mensagens explícitas de limite de telas/conexões.
+          // Evita falsos positivos com strings genéricas (ex.: "ERRO DE CONEXÃO").
+          if (/LIMITE DE TELAS|MAX(IMUM)?[_ ]?CONNECTIONS?[_ ]?REACHED|TOO MANY CONNECTIONS|LIMITE DE CONEX[ÃA]O|CONNECTION[_ ]?LIMIT/.test(upper)) {
             return { ok: false, status: 429, reason: "MAX_CONNECTIONS" };
           }
           return { ok: false, status: res.status, reason: `HTTP ${res.status}`, softNotFound: true };
