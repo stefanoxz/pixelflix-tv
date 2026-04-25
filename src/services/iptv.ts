@@ -912,7 +912,8 @@ async function iptvLoginViaEdge(
     );
   if (result.ok === true) {
     const durationMs = Date.now() - startedAt;
-    console.log("[iptv] method: edge", { reason, durationMs, result: "ok" });
+    const route = (result.data as any)?.route ?? "direct";
+    console.log("[iptv] method: edge", { reason, durationMs, route, result: "ok" });
     return result.data;
   }
   console.log("[iptv] method: edge", {
