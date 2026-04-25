@@ -820,6 +820,10 @@ const Admin = () => {
             <ClientDiagnosticsPanel />
           </TabsContent>
 
+          <TabsContent value="pending-signups" className="space-y-6 mt-0">
+            <PendingSignupsPanel />
+          </TabsContent>
+
           <TabsContent value="monitoring" className="space-y-6 mt-0">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <Card className="p-5 bg-gradient-card border-border/50">
