@@ -51,10 +51,8 @@ const Sync = () => {
           key: "live",
           label: "TV ao vivo",
           run: async () => {
-            const [cats, streams] = await Promise.all([
-              getLiveCategories(creds),
-              getLiveStreams(creds),
-            ]);
+            const cats = await getLiveCategories(creds);
+            const streams = await getLiveStreams(creds);
             queryClient.setQueryData(["live-cats", creds.username], cats);
             queryClient.setQueryData(["live-streams", creds.username], streams);
           },
@@ -63,10 +61,8 @@ const Sync = () => {
           key: "movies",
           label: "Filmes",
           run: async () => {
-            const [cats, streams] = await Promise.all([
-              getVodCategories(creds),
-              getVodStreams(creds),
-            ]);
+            const cats = await getVodCategories(creds);
+            const streams = await getVodStreams(creds);
             queryClient.setQueryData(["vod-cats", creds.username], cats);
             queryClient.setQueryData(["vod-streams", creds.username], streams);
           },
@@ -75,10 +71,8 @@ const Sync = () => {
           key: "series",
           label: "Séries",
           run: async () => {
-            const [cats, list] = await Promise.all([
-              getSeriesCategories(creds),
-              getSeries(creds),
-            ]);
+            const cats = await getSeriesCategories(creds);
+            const list = await getSeries(creds);
             queryClient.setQueryData(["series-cats", creds.username], cats);
             queryClient.setQueryData(["series", creds.username], list);
           },
