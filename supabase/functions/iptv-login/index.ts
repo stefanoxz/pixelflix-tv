@@ -26,12 +26,24 @@ function corsFor(req: Request): Record<string, string> {
   };
 }
 
-const USER_AGENTS = [
-  "VLC/3.0.20 LibVLC/3.0.20",
+// VLC é o User-Agent padrão (servidores Xtream aceitam quase universalmente).
+// Os fallbacks só entram em jogo quando a resposta indica anti-scraping
+// (HTTP 403/444), nunca em loop cego — isso elimina ~75% das requisições.
+const PRIMARY_UA = "VLC/3.0.20 LibVLC/3.0.20";
+const FALLBACK_UAS = [
   "IPTVSmarters/1.0",
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   "Lavf/58.76.100",
 ];
+
+// Timeout agressivo em cada fetch — sockets pendurados são a maior fonte
+// de eventos `reset/timeout` no dashboard.
+const FETCH_TIMEOUT_MS = 4000;
+
+// Cooldown progressivo após N falhas consecutivas. Tempo em milissegundos.
+// Cada nível dobra (capeado em 5min) — DNS quebrada para de poluir o log.
+const COOLDOWN_THRESHOLD = 5;
+const COOLDOWN_STEPS_MS = [60_000, 120_000, 180_000, 300_000];
 
 const NO_ACCESS_MSG =
   "Você não tem acesso a esta plataforma. Entre em contato com a sua revenda para liberar o seu servidor (DNS).";
