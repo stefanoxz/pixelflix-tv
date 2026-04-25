@@ -1452,6 +1452,14 @@ const Admin = () => {
                             <Button
                               variant="outline"
                               size="sm"
+                              onClick={() => setProbeServer(s)}
+                            >
+                              <Wifi className="h-4 w-4 mr-2" />
+                              Testar
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
                               onClick={() => {
                                 setEditingServer(s);
                                 setNewUrl(s.server_url);
