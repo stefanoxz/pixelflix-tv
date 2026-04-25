@@ -7,7 +7,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { VisuallyHidden } from "@/components/ui/visually-hidden";
+
 import { cn } from "@/lib/utils";
 import {
   getVodInfo,
@@ -56,12 +56,8 @@ export function MovieDetailsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl p-0 overflow-hidden border-border/50 bg-card">
-        <VisuallyHidden asChild>
-          <DialogTitle>{movie.name}</DialogTitle>
-        </VisuallyHidden>
-        <VisuallyHidden asChild>
-          <DialogDescription>Detalhes do filme</DialogDescription>
-        </VisuallyHidden>
+        <DialogTitle className="sr-only">{movie.name}</DialogTitle>
+        <DialogDescription className="sr-only">Detalhes do filme</DialogDescription>
 
         {/* Hero / backdrop */}
         <div className="relative h-48 md:h-64 w-full overflow-hidden">
