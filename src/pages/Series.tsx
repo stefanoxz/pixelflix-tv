@@ -70,6 +70,7 @@ const SeriesPage = () => {
   }, [location.state, location.pathname, series, navigate]);
 
   const filtered = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
     return series.filter((s) => {
       if (activeCategory === SPECIAL_FAVS) {
         if (!favorites.has(s.series_id)) return false;
@@ -78,10 +79,10 @@ const SeriesPage = () => {
       } else if (activeCategory !== SPECIAL_ALL && s.category_id !== activeCategory) {
         return false;
       }
-      if (search && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (q && !s.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [series, activeCategory, search, favorites]);
+  }, [series, activeCategory, debouncedSearch, favorites]);
 
   const sorted = useMemo(() => {
     if (activeCategory === SPECIAL_RECENT) {
