@@ -43,6 +43,7 @@ import {
   Ban,
   X,
   Pencil,
+  AlertOctagon,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
