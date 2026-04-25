@@ -365,19 +365,7 @@ async function attemptLogin(
   serverRow: { id?: string; last_working_variant?: string | null; consecutive_failures?: number; unreachable_until?: string | null } | null,
   admin: any,
 ) {
-  // 0) Cooldown ativo → não faz nem um fetch. Para de inflar logs.
-  if (serverRow?.unreachable_until) {
-    const until = new Date(serverRow.unreachable_until).getTime();
-    if (until > Date.now()) {
-      return {
-        ok: false as const,
-        status: 503,
-        reason: `cooldown ativo até ${serverRow.unreachable_until}`,
-        body: "",
-        skipped: true as const,
-      };
-    }
-  }
+  // Cooldown removido — toda DNS é tentada de fato a cada login.
 
   // 1) Monta lista de variantes: cache primeiro, depois fase 1.
   const fast = buildVariants(serverBase, "fast");
