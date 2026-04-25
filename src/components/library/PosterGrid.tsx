@@ -203,9 +203,23 @@ export function PosterGrid({
       </div>
 
       {items.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6 text-center">
-          {emptyMessage}
-        </div>
+        isLoading ? (
+          <div
+            className="flex-1 overflow-hidden grid gap-2 md:gap-3 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7"
+            aria-label="Carregando catálogo"
+          >
+            {Array.from({ length: 18 }).map((_, i) => (
+              <Skeleton
+                key={i}
+                className="w-full aspect-[2/3] rounded-md"
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-6 text-center">
+            {emptyMessage}
+          </div>
+        )
       ) : (
         <div
           ref={containerRef}
