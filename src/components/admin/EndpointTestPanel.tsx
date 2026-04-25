@@ -368,6 +368,30 @@ function buildReport(r: TestResult): string {
   return lines.join("\n");
 }
 
+interface ResolveCandidate {
+  base: string;
+  scheme: "http" | "https";
+  port: string;
+  label: string;
+  status: number | null;
+  latency_ms: number;
+  route: "direct" | "proxy" | null;
+  is_xtream: boolean;
+  xtream_auth: number | string | null;
+  xtream_status: string | null;
+  error: string | null;
+  score: number;
+}
+
+interface ResolveResult {
+  original: { scheme: string; port: string; base: string };
+  variants_tested: number;
+  candidates: ResolveCandidate[];
+  best: { base: string; scheme: string; port: string; score: number } | null;
+  suggestions: string[];
+  proxy_configured: boolean;
+}
+
 export function EndpointTestPanel({ allowedServers }: Props) {
   const [serverUrl, setServerUrl] = useState("");
   const [path, setPath] = useState("/player_api.php");
