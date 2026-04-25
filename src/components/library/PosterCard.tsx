@@ -80,6 +80,18 @@ export const PosterCard = forwardRef<HTMLButtonElement, Props>(function PosterCa
             {item.rating.toFixed(1)}
           </div>
         )}
+
+        {incompatible && (
+          <div
+            className="absolute inset-0 bg-black/55 flex items-end justify-center pb-10 pointer-events-none"
+            aria-hidden
+          >
+            <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-destructive/90 text-destructive-foreground text-[10px] font-semibold shadow-lg">
+              <AlertTriangle className="h-3 w-3" />
+              Incompatível
+            </div>
+          </div>
+        )}
       </button>
 
       {onToggleFavorite && (
