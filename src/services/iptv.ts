@@ -982,6 +982,47 @@ export const getSeriesInfo = (c: IptvCredentials, seriesId: number) =>
   iptvFetch<SeriesInfo>(c, "get_series_info", { series_id: seriesId });
 
 // ============================================================================
+// VOD details (sinopse, capa, metadados) — Xtream "get_vod_info"
+// ============================================================================
+
+export interface VodInfoMovieData {
+  stream_id: number;
+  name: string;
+  added: string;
+  category_id: string;
+  container_extension: string;
+  custom_sid?: string;
+  direct_source?: string;
+}
+
+export interface VodInfoDetails {
+  movie_image?: string;
+  cover_big?: string;
+  backdrop_path?: string[] | string;
+  tmdb_id?: string | number;
+  genre?: string;
+  plot?: string;
+  cast?: string;
+  rating?: string | number;
+  rating_5based?: number;
+  director?: string;
+  releasedate?: string;
+  release_date?: string;
+  duration?: string;
+  duration_secs?: number;
+  youtube_trailer?: string;
+  country?: string;
+}
+
+export interface VodInfoResponse {
+  info: VodInfoDetails;
+  movie_data: VodInfoMovieData;
+}
+
+export const getVodInfo = (c: IptvCredentials, vodId: number) =>
+  iptvFetch<VodInfoResponse>(c, "get_vod_info", { vod_id: vodId });
+
+// ============================================================================
 // EPG (Electronic Program Guide) — Xtream "get_short_epg"
 // ============================================================================
 
