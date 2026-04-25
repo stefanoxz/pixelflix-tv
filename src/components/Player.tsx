@@ -348,6 +348,15 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const [copied, setCopied] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [playbackRate, setPlaybackRateState] = useState<number>(() => {
+    try {
+      const v = parseFloat(localStorage.getItem("player.rate") || "1");
+      return Number.isFinite(v) && v > 0 ? v : 1;
+    } catch {
+      return 1;
+    }
+  });
 
   const [status, setStatus] = useState<DiagnosticStatus>("connecting");
   const [lastReason, setLastReason] = useState<string | null>(null);
