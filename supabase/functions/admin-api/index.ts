@@ -792,6 +792,7 @@ Deno.serve(async (req) => {
       return ok({ ok: true });
     }
 
+    // ---------- PROBE SERVER (admin diagnostics) ----------
     // Tenta MULTIPLAS variantes (porta + protocolo) contra o player_api de
     // um servidor IPTV e devolve o resultado de cada uma. Não exige
     // credenciais válidas — só queremos saber qual variante responde TCP +
