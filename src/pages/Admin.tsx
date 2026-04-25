@@ -1041,8 +1041,15 @@ const Admin = () => {
                     )}
                   </Card>
 
+                  <DnsErrorTrendChart
+                    series={dnsErrors?.series ?? []}
+                    perServerSeries={dnsErrors?.per_server_series}
+                    bucketMeta={ERROR_BUCKET_META}
+                    serverPalette={SERVER_PALETTE}
+                    stepMs={dnsErrors?.step_ms}
+                  />
+
                   <Card className="p-6 bg-gradient-card border-border/50">
-                    <h2 className="text-lg font-semibold mb-4">Por servidor (DNS)</h2>
                     {!dnsErrors?.servers.length ? (
                       <p className="text-sm text-muted-foreground py-6 text-center">
                         Sem dados na janela selecionada.
