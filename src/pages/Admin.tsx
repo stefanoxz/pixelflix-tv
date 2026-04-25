@@ -28,6 +28,7 @@ import { ServerProbeDialog } from "@/components/admin/ServerProbeDialog";
 import { EndpointTestPanel } from "@/components/admin/EndpointTestPanel";
 import { UserReportsPanel } from "@/components/admin/UserReportsPanel";
 import ClientDiagnosticsPanel from "@/components/admin/ClientDiagnosticsPanel";
+import PendingSignupsPanel from "@/components/admin/PendingSignupsPanel";
 import {
   Users,
   UserCheck,
@@ -54,6 +55,7 @@ import {
   Wifi,
   Flag,
   Stethoscope,
+  UserPlus,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
@@ -711,6 +713,7 @@ const Admin = () => {
             { id: "servers", label: "DNS / Servidores", icon: Server },
             { id: "endpoint-test", label: "Testar endpoint", icon: FlaskConical },
             { id: "client-diagnostics", label: "Diagnóstico de clientes", icon: Stethoscope },
+            { id: "pending-signups", label: "Novos cadastros", icon: UserPlus },
           ].map((item) => (
             <button
               key={item.id}
@@ -764,6 +767,7 @@ const Admin = () => {
                 : tab === "users" ? "Usuários"
                 : tab === "endpoint-test" ? "Testar endpoint"
                 : tab === "client-diagnostics" ? "Diagnóstico de clientes"
+                : tab === "pending-signups" ? "Novos cadastros"
                 : "DNS / Servidores"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
@@ -774,6 +778,7 @@ const Admin = () => {
                 : tab === "users" ? "Quem está acessando a plataforma"
                 : tab === "endpoint-test" ? "Diagnóstico de uma DNS específica — exibe se a resposta veio direto ou via proxy"
                 : tab === "client-diagnostics" ? "Tentativas de login dos usuários com provedor, velocidade e localização — atualiza a cada 15s"
+                : tab === "pending-signups" ? "Cadastros aguardando sua aprovação para acessar o painel admin"
                 : "Cadastre as DNS autorizadas. Sem cadastro prévio, o cliente não consegue logar."}
             </p>
           </div>
@@ -813,6 +818,10 @@ const Admin = () => {
 
           <TabsContent value="client-diagnostics" className="space-y-6 mt-0">
             <ClientDiagnosticsPanel />
+          </TabsContent>
+
+          <TabsContent value="pending-signups" className="space-y-6 mt-0">
+            <PendingSignupsPanel />
           </TabsContent>
 
           <TabsContent value="monitoring" className="space-y-6 mt-0">

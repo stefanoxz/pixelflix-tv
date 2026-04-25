@@ -59,6 +59,8 @@ const MUTATING_ACTIONS = new Set([
   "remove_server",
   "unblock_user",
   "evict_session",
+  "approve_signup",
+  "reject_signup",
 ]);
 
 Deno.serve(async (req) => {
@@ -748,6 +750,45 @@ Deno.serve(async (req) => {
       if (!id) return bad("anon_user_id obrigatório");
       const { error } = await admin.from("active_sessions").delete().eq("anon_user_id", id);
       if (error) { console.error(error.message); return internalError(); }
+      return ok({ ok: true });
+    }
+
+    // ---------- PENDING ADMIN SIGNUPS ----------
+    if (action === "list_pending_signups") {
+      const { data, error } = await admin
+        .from("pending_admin_signups")
+        .select("user_id, email, created_at")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) { console.error(error.message); return internalError(); }
+      return ok({ pending: data ?? [] });
+    }
+
+    if (action === "approve_signup") {
+      const id = String(payload?.user_id ?? "");
+      if (!id) return bad("user_id obrigatório");
+      const { error: roleErr } = await admin
+        .from("user_roles")
+        .insert({ user_id: id, role: "admin" });
+      if (roleErr && !roleErr.message.includes("duplicate")) {
+        console.error(roleErr.message); return internalError();
+      }
+      const { error: delErr } = await admin
+        .from("pending_admin_signups").delete().eq("user_id", id);
+      if (delErr) { console.error(delErr.message); return internalError(); }
+      return ok({ ok: true });
+    }
+
+    if (action === "reject_signup") {
+      const id = String(payload?.user_id ?? "");
+      if (!id) return bad("user_id obrigatório");
+      const { error: authErr } = await admin.auth.admin.deleteUser(id);
+      if (authErr) {
+        console.error("[admin-api] deleteUser failed", authErr.message);
+        return internalError();
+      }
+      // Trigger ON DELETE CASCADE não cobre pending (sem FK), limpa manualmente.
+      await admin.from("pending_admin_signups").delete().eq("user_id", id);
       return ok({ ok: true });
     }
 
