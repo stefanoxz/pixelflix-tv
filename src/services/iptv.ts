@@ -906,13 +906,14 @@ async function iptvLoginViaEdge(
     console.log("[iptv] method: edge", { reason, durationMs, result: "ok" });
     return result.data;
   }
+  const { code, error } = result;
   console.log("[iptv] method: edge", {
     reason,
     result: "fail",
-    code: result.code,
-    error: result.error,
+    code,
+    error,
   });
-  throw new Error(messageForLoginCode(result.code, result.error));
+  throw new Error(messageForLoginCode(code, error));
 }
 
 export interface Episode {
