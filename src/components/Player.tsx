@@ -952,39 +952,130 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                 }
               });
 
-              hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              hls.on(Hls.Events.MANIFEST_PARSED, (_evt, data) => {
                 if (cancelled) return;
                 manifestReadyRef.current = true;
                 manifestParsedAtRef.current = performance.now();
                 lastReasonRef.current = "manifest carregado";
                 setLastReason("manifest carregado");
-                pushLog({ source: "hls", level: "info", label: "manifest_parsed" });
-                // play() já foi disparado em MEDIA_ATTACHED.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const levels = (data as any)?.levels?.length ?? 0;
+                pushLog({
+                  source: "hls",
+                  level: "info",
+                  label: "manifest_parsed",
+                  details: `levels=${levels}`,
+                  meta: { ...captureNetMeta(), levels },
+                });
               });
 
-              hls.on(Hls.Events.LEVEL_LOADED, () => {
+              hls.on(Hls.Events.LEVEL_LOADED, (_evt, data) => {
                 if (cancelled) return;
                 if (retryCountRef.current > 0) retryCountRef.current = 0;
                 // Sucesso de rede: cancela o watchdog de stall (HLS está vivo).
                 clearStallTimeout();
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const d = data as any;
+                const lvl = typeof d?.level === "number" ? d.level : undefined;
+                const stats = d?.stats ?? {};
+                const ttfb = stats.tfirst && stats.trequest ? Math.round(stats.tfirst - stats.trequest) : undefined;
+                const loadMs = stats.tload && stats.trequest ? Math.round(stats.tload - stats.trequest) : undefined;
+                const fragCount = d?.details?.fragments?.length;
+                pushLog({
+                  source: "hls",
+                  level: "info",
+                  label: "level_loaded",
+                  details: `lvl=${lvl} frags=${fragCount ?? "?"} ttfb=${ttfb ?? "?"}ms`,
+                  meta: { level: lvl, ttfb, loadMs, frags: fragCount },
+                });
               });
 
-              hls.on(Hls.Events.FRAG_LOADED, () => {
+              hls.on(Hls.Events.FRAG_LOADED, (_evt, data) => {
                 if (cancelled) return;
                 if (fragLoadErrorCountRef.current > 0) fragLoadErrorCountRef.current = 0;
                 // Fragmento chegou: cancela o watchdog de stall.
                 clearStallTimeout();
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const d = data as any;
+                const frag = d?.frag ?? {};
+                const stats = d?.payload ? { total: d.payload.byteLength } : (frag.stats ?? {});
+                const ttfb = stats.tfirst && stats.trequest ? Math.round(stats.tfirst - stats.trequest) : undefined;
+                const loadMs = stats.tload && stats.trequest ? Math.round(stats.tload - stats.trequest) : undefined;
+                const bytes = stats.total ?? stats.loaded;
+                pushLog({
+                  source: "hls",
+                  level: "info",
+                  label: "frag_loaded",
+                  details: `sn=${frag.sn} ${bytes ? `${Math.round(bytes / 1024)}KB` : ""} ${loadMs ?? "?"}ms`,
+                  meta: {
+                    sn: frag.sn,
+                    sd: frag.duration,
+                    bytes,
+                    ttfb,
+                    loadMs,
+                    level: frag.level,
+                  },
+                });
+              });
+
+              hls.on(Hls.Events.LEVEL_SWITCHED, (_evt, data) => {
+                if (cancelled) return;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const d = data as any;
+                const lvl = d?.level;
+                const br = hls.levels?.[lvl]?.bitrate;
+                pushLog({
+                  source: "hls",
+                  level: "info",
+                  label: "level_switched",
+                  details: `lvl=${lvl} ${br ? `${Math.round(br / 1000)}kbps` : ""}`,
+                  meta: { level: lvl, br },
+                });
+              });
+
+              hls.on(Hls.Events.FRAG_LOAD_EMERGENCY_ABORTED, (_evt, data) => {
+                if (cancelled) return;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const frag = (data as any)?.frag ?? {};
+                pushLog({
+                  source: "hls",
+                  level: "warn",
+                  label: "frag_emergency_aborted",
+                  details: `sn=${frag.sn} — bitrate baixou`,
+                  meta: { sn: frag.sn, level: frag.level },
+                });
               });
 
               hls.on(Hls.Events.ERROR, (_evt, data: ErrorData) => {
                 const detail = `${data.type}/${data.details}`;
                 lastReasonRef.current = detail;
                 setLastReason(detail);
+                // Extrai info HTTP/URL pra diagnóstico
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const d = data as any;
+                const ctx = d?.context ?? d?.networkDetails ?? {};
+                const httpStatus =
+                  typeof d?.response?.code === "number" ? d.response.code :
+                  typeof ctx?.status === "number" ? ctx.status :
+                  undefined;
+                const offendingUrl: string | undefined =
+                  d?.frag?.url ?? d?.url ?? ctx?.responseURL ?? d?.context?.url;
+                const truncatedUrl = offendingUrl
+                  ? offendingUrl.length > 120 ? `${offendingUrl.slice(0, 60)}…${offendingUrl.slice(-50)}` : offendingUrl
+                  : undefined;
                 pushLog({
                   source: "hls",
                   level: data.fatal ? "error" : "warn",
                   label: "error",
-                  details: `${detail} fatal=${data.fatal}`,
+                  details: `${detail} fatal=${data.fatal}${httpStatus ? ` http=${httpStatus}` : ""}`,
+                  meta: {
+                    http: httpStatus,
+                    url: truncatedUrl,
+                    sn: d?.frag?.sn,
+                    level: d?.frag?.level ?? d?.level,
+                    bytes: d?.frag?.stats?.loaded,
+                    ...captureNetMeta(),
+                  },
                 });
 
                 // Codec / decode → mark immediately
