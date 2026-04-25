@@ -32,6 +32,7 @@ export const PosterCard = forwardRef<HTMLButtonElement, Props>(function PosterCa
 ) {
   const [imgFailed, setImgFailed] = useState(false);
   const cover = item.cover ? proxyImageUrl(item.cover) : null;
+  const incompatible = useIsIncompatible(item.host, item.id);
 
   return (
     <div className="relative group">
