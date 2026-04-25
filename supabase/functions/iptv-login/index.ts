@@ -644,10 +644,13 @@ Deno.serve(async (req) => {
     for (const row of candidateRows) {
       const r = await attemptLogin(row.server_url, username, password, row, admin);
       if (r.ok) {
-        await logEvent({ server: row.server_url, username, success: true, ua, ip });
+        // @ts-ignore - route só existe no caminho ok
+        const route: "direct" | "proxy" = (r as any).route ?? "direct";
+        await logEvent({ server: row.server_url, username, success: true, reason: `route=${route}`, ua, ip });
+        console.log(`[iptv-login] SUCCESS server=${row.server_url} route=${route}`);
         return jsonResponse(
           200,
-          { success: true, ...r.data, server_url: row.server_url, allowed_servers: allowedList },
+          { success: true, ...r.data, server_url: row.server_url, allowed_servers: allowedList, route },
           corsHeaders,
         );
       }
