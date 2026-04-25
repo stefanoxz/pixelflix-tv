@@ -571,13 +571,14 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
             url: src,
             kind,
             iptvUsername: session?.creds.username,
+            mode: segmentModeRef.current,
           });
           if (cancelled) return;
           const safeSrc = tokenResp.url;
           const method = detectLoadMethod(safeSrc);
           setLoadMethod(method);
-          pushLog({ source: "net", level: "info", label: "token_ok", details: `${kind} via ${method}` });
-          console.log("[player] manifest_method:", method, { kind, host: extractUpstreamHost(src) });
+          pushLog({ source: "net", level: "info", label: "token_ok", details: `${kind} via ${method} mode=${segmentModeRef.current}` });
+          console.log("[player] manifest_method:", method, { kind, host: extractUpstreamHost(src), mode: segmentModeRef.current });
 
           // Heartbeat (renew session lifecycle on backend every 45s)
           heartbeatRef.current = window.setInterval(() => {
