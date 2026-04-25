@@ -1229,10 +1229,10 @@ export function reportStreamEvent(
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stream-event`;
       // fetch com keepalive: o request continua mesmo se a aba for fechada
       // ou se o player descartar o effect. Não awaitamos o response.
+      // priority é Fetch Priority API (Chromium); usamos cast pra silenciar TS.
       await fetch(url, {
         method: "POST",
         keepalive: true,
-        // @ts-expect-error: priority é Fetch Priority API (Chromium)
         priority: "low",
         headers: {
           "Content-Type": "application/json",
@@ -1240,7 +1240,7 @@ export function reportStreamEvent(
           "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ event_type, ...payload }),
-      });
+      } as RequestInit & { priority: "low" | "high" | "auto" });
     } catch {
       // best-effort — telemetria nunca derruba o caller.
     }
