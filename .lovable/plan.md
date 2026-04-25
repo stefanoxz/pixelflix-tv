@@ -1,39 +1,49 @@
-## Tela de Sincronização Inicial
+## Diagnóstico
 
-Criar uma tela de "sincronização" que pré-carrega categorias e listas (Live, Filmes, Séries) logo após o login, alimentando o cache do React Query. Quando o usuário navegar até Filmes/Séries/Live, os dados aparecem instantaneamente, sem o "carregando" atual.
+A tela de carregamento que aparece **depois** do sync **não é dos dados** (esses já estão em cache populados pelo `Sync.tsx`). Vêm de três outras fontes:
 
-### Fluxo proposto
+1. **Suspense fallback do lazy import (causa principal).** No `App.tsx`, todas as rotas (`Index`, `Live`, `Movies`, `Series`, `Account`) usam `React.lazy(...)`. O `Sync.tsx` pré-carrega os **dados** mas não os **chunks JS** dessas páginas. Quando o usuário clica em "Filmes" / "Séries" / "TV ao vivo", o navegador ainda precisa baixar o `.js` daquela rota, e o `<Suspense fallback={<RouteFallback />}>` exibe o spinner grande de tela cheia.
 
-1. Usuário faz login em `/login` → redireciona para `/sync` (em vez de `/`).
-2. Tela `/sync` mostra progresso e dispara em paralelo (controlado):
-   - `getLiveCategories` + `getLiveStreams`
-   - `getVodCategories` + `getVodStreams`
-   - `getSeriesCategories` + `getSeries`
-3. Cada chamada bem-sucedida é gravada no cache do React Query usando a **mesma `queryKey`** já usada pelas páginas (`["vod-streams", username]`, etc.) com `setQueryData` + `staleTime` longo (ex.: 30 min).
-4. Barra de progresso mostra etapas concluídas (X de 6) com nome amigável ("Carregando filmes…").
-5. Tratamento de falha: se uma etapa falhar, a tela mostra o erro com botão "Tentar novamente" e "Pular e continuar" (a página depois fará o fetch sob demanda como hoje — fallback seguro).
-6. Ao concluir, navega para `/` (Highlights) automaticamente.
+2. **Gate `loadingMovies && movies.length === 0` no `Highlights.tsx`** (linha 96). Mostra spinner enquanto a primeira query de filmes está `pending`. Em fluxo normal isso não dispara (o cache vem do Sync), mas é redundante e pode piscar em casos de borda.
 
-### Onde mexer
+3. **Skeletons das imagens dos pôsteres** (cada `<img>` carrega individualmente via `proxy-image`). É algo cosmético e separado — não é "tela de carregamento", é só o lazy-loading de capas.
 
-- **Nova rota** `/sync` em `src/App.tsx`, protegida por `ProtectedRoute`.
-- **Novo arquivo** `src/pages/Sync.tsx` com a UI (logo, barra de progresso, lista de etapas com check/spinner) usando componentes existentes (`Progress`, `Loader2`).
-- **`src/pages/Login.tsx`** e **`src/pages/AdminLogin.tsx` (apenas usuário comum)**: após login bem-sucedido, navegar para `/sync` em vez de `/`.
-- **Persistência leve do cache** (opcional, recomendado): adicionar `@tanstack/react-query-persist-client` com `localStorage` para que ao recarregar a página em até X horas o conteúdo continue instantâneo. Se preferir manter simples, pulamos esta parte e a sync roda só no login.
-- **Botão "Sincronizar novamente"** na página `/account` para reexecutar a sync manualmente quando o catálogo do provedor mudar.
+## O que fazer
 
-### Detalhes técnicos
+### 1. Pré-carregar os chunks das rotas durante o Sync
 
-- Concorrência: as 6 chamadas já passam pelo `enqueue`/`invokeFn` global de `src/services/iptv.ts`, que limita concorrência (3-4 simultâneas), então não vamos sobrecarregar o painel.
-- Chaves de cache devem **bater exatamente** com as páginas (auditar `Live.tsx`, `Movies.tsx`, `Series.tsx`) — caso contrário a sync não tem efeito.
-- `staleTime` no `setQueryData` deve ser maior que o padrão (sugestão: 30 min) para evitar refetch imediato ao montar a página.
-- Não adicionamos prefetch de capas/posters (seriam centenas de MB); só metadados JSON.
-- A primeira sync após instalação pode levar 5-15 s dependendo do servidor IPTV — mostramos isso na UI ("Esta etapa só roda uma vez por sessão").
+Em `src/App.tsx`, exportar funções de preload para os lazy imports e, no `Sync.tsx`, dispará-las em paralelo com a busca de dados. Quando o sync terminar e redirecionar para `/`, os bundles de `Movies/Series/Live/Account` já estarão no cache do navegador — o `Suspense` resolve sincronamente e nenhum fallback aparece.
 
-### O que NÃO entra agora
+Padrão:
+```ts
+// App.tsx
+const Movies = lazy(() => import("./pages/Movies"));
+export const preloadMovies = () => import("./pages/Movies");
+// idem para Series, Live, Account, Index
+```
 
-- Detalhes de filme/série individuais (`getVodInfo`, `getSeriesInfo`) continuam sob demanda (já têm prefetch ao hover).
-- EPG completo (muito pesado).
-- Capas/imagens.
+```ts
+// Sync.tsx
+import { preloadMovies, preloadSeries, preloadLive, preloadAccount, preloadIndex } from "@/App";
 
-Resultado: ao entrar em Filmes/Séries/Live, a grade aparece imediatamente, sem o spinner inicial.
+// disparar logo no início do runSync (sem await — paralelo com fetches)
+[preloadIndex, preloadMovies, preloadSeries, preloadLive, preloadAccount].forEach(fn => fn());
+```
+
+### 2. Remover o spinner redundante do Highlights
+
+Em `src/pages/Highlights.tsx`, eliminar o bloco `if (loadingMovies && movies.length === 0)` (linhas 96-102). A página já lida bem com listas vazias: as seções "TOP MOVIES" e "TOP SERIES" têm `topMovies.length > 0 && (...)` que esconde a seção até os dados chegarem, e o hero usa `featured?.title || "Bem-vindo ao SuperTech"` como fallback. Sem o gate global, a transição do Sync → "/" é imediata e qualquer dado faltante aparece progressivamente.
+
+### 3. (Opcional) Reduzir o flash do `RouteFallback` em transições futuras
+
+Trocar o fallback do `<Suspense>` em `App.tsx` por `null` (ou um placeholder mínimo invisível por ~100ms) para evitar piscar mesmo em redes lentas. Como o passo 1 já garante que os chunks estão pré-carregados, o fallback praticamente não será exibido — mas deixar `null` é uma rede de segurança elegante.
+
+## Arquivos a editar
+
+- `src/App.tsx` — exportar funções `preload*` ao lado dos `lazy(...)`.
+- `src/pages/Sync.tsx` — chamar os `preload*` no início do `runSync`.
+- `src/pages/Highlights.tsx` — remover o bloco `if (loadingMovies && movies.length === 0)`.
+
+## Resultado esperado
+
+Após o sync terminar e redirecionar para `/`, o usuário vê o Highlights instantaneamente. Clicar em **Filmes**, **Séries** ou **TV ao vivo** abre a página **sem nenhum spinner intermediário** — dados em cache + chunk JS já baixado.
