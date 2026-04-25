@@ -350,6 +350,8 @@ const Admin = () => {
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [monitoring, setMonitoring] = useState<MonitoringOverview | null>(null);
   const [topConsumers, setTopConsumers] = useState<TopConsumer[]>([]);
+  const [dnsErrors, setDnsErrors] = useState<DnsErrorOverview | null>(null);
+  const [dnsErrorsHours, setDnsErrorsHours] = useState<number>(24);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [signingOut, setSigningOut] = useState(false);
