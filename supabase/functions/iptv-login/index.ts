@@ -359,6 +359,16 @@ async function tryVariant(
     if (!data?.user_info || data.user_info.auth === 0) {
       return { ok: false, status: 401, body, reason: "credenciais inválidas" };
     }
+    // Detecta limite de telas/conexões: painel autentica mas active_cons >= max_connections.
+    const maxC = Number(data.user_info.max_connections);
+    const actC = Number(data.user_info.active_cons);
+    const msg = String(data.user_info.message || "").toUpperCase();
+    if (
+      (Number.isFinite(maxC) && Number.isFinite(actC) && maxC > 0 && actC >= maxC) ||
+      /LIMITE DE TELAS|MAX[_ ]?CONNECTIONS|TOO MANY CONNECTIONS/.test(msg)
+    ) {
+      return { ok: false, status: 429, body, reason: "MAX_CONNECTIONS" };
+    }
     return { ok: true, data, usedVariant: base, route };
   }
 
