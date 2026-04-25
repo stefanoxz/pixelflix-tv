@@ -97,6 +97,15 @@ async function fetchWithRetries(url: string, attemptsPerUa = 1): Promise<
         }
 
         if (SOFT_NOT_FOUND_STATUSES.has(res.status)) {
+          // Tenta ler o corpo: muitos painéis devolvem "LIMITE DE TELAS" /
+          // "MAX CONNECTIONS REACHED" com 401/403. Detectamos para
+          // sinalizar à UI em vez de devolver lista vazia silenciosa.
+          let bodyText = "";
+          try { bodyText = (await res.text()).slice(0, 200); } catch { /* ignore */ }
+          const upper = bodyText.toUpperCase();
+          if (/LIMITE DE TELAS|MAX[_ ]?CONNECTIONS|TOO MANY CONNECTIONS|CONEX[ÃA]O/.test(upper)) {
+            return { ok: false, status: 429, reason: "MAX_CONNECTIONS" };
+          }
           return { ok: false, status: res.status, reason: `HTTP ${res.status}`, softNotFound: true };
         }
 
@@ -157,7 +166,17 @@ Deno.serve(async (req) => {
 
     const result = await fetchWithRetries(url);
     if (!result.ok) {
-      // 404/410 do painel: trate como "vazio" para a UI continuar viva.
+      // Limite de telas/conexões atingido — sinaliza explicitamente à UI.
+      if (result.reason === "MAX_CONNECTIONS") {
+        return new Response(
+          JSON.stringify({
+            error: "Limite de telas atingido. Feche outras conexões e tente novamente.",
+            code: "MAX_CONNECTIONS",
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      // 401/403/404/410 do painel: trate como "vazio" para a UI continuar viva.
       // Para listas, devolve [] e status 200; para detalhes (ex: get_series_info),
       // devolve null com status 200.
       if (result.softNotFound) {
