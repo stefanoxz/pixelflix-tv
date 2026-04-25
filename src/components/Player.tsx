@@ -595,10 +595,11 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         clearBootstrapTimeout();
         clearStallTimeout();
         clearLoadeddataWatchdog();
-        try { if (src) upstreamHost = new URL(src).host; } catch { /* noop */ }
+        let evHost: string | null = null;
+        try { if (src) evHost = new URL(src).host; } catch { /* noop */ }
         reportStreamEvent("stream_error", {
           url: src,
-          meta: { type: "stream_no_data", reason, host: upstreamHost, mode: segmentModeRef.current },
+          meta: { type: "stream_no_data", reason, host: evHost, mode: segmentModeRef.current },
         });
       };
 
