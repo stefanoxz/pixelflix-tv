@@ -86,7 +86,48 @@ const Login = () => {
       );
       return;
     }
-    await performLogin(parsed.server, parsed.username, parsed.password);
+    setLoading(true);
+    try {
+      const data = await iptvLoginM3u({
+        server: parsed.server,
+        username: parsed.username,
+        password: parsed.password,
+      });
+      const resolvedServer = data.server_url ?? parsed.server;
+      const streamBase = resolveStreamBase(
+        data.server_info,
+        resolvedServer,
+        data.allowed_servers,
+      );
+
+      const { data: cur } = await supabase.auth.getSession();
+      if (!cur.session) {
+        const { error: anonErr } = await supabase.auth.signInAnonymously();
+        if (anonErr) throw new Error("Falha ao iniciar sessão segura");
+      }
+
+      setSession({
+        creds: {
+          server: resolvedServer,
+          username: parsed.username,
+          password: parsed.password,
+          streamBase,
+        },
+        userInfo: data.user_info,
+        serverInfo: data.server_info,
+      });
+      if (data.auto_registered) {
+        toast.success(`Bem-vindo, ${data.user_info.username}! Servidor cadastrado automaticamente.`);
+      } else {
+        toast.success(`Bem-vindo, ${data.user_info.username}!`);
+      }
+      navigate("/");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro desconhecido";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
