@@ -183,8 +183,11 @@ const HLS_CONFIG: Partial<Hls["config"]> = {
   maxBufferLength: 20,
   maxMaxBufferLength: 60,
   maxBufferSize: 60 * 1000 * 1000,
-  // Live: tolera mais latência para evitar levelLoadError em servidores lentos.
-  liveSyncDurationCount: 3,
+  // Live: hls.js só começa a tocar depois de bufferar liveSyncDurationCount
+  // segmentos. Com segmentos de ~6s, 2 = ~12s de wait vs 3 = ~18s. Reduz
+  // ~6s no TTFF mantendo estabilidade — liveMaxLatencyDurationCount=10
+  // continua dando margem em redes oscilantes.
+  liveSyncDurationCount: 2,
   liveMaxLatencyDurationCount: 10,
   // Otimizações de TTFF
   startLevel: 0,                // começa pelo menor bitrate (instantâneo), ABR sobe depois
