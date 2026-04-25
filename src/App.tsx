@@ -16,6 +16,7 @@ const Live = lazy(() => import("./pages/Live"));
 const Movies = lazy(() => import("./pages/Movies"));
 const SeriesPage = lazy(() => import("./pages/Series"));
 const Account = lazy(() => import("./pages/Account"));
+const Sync = lazy(() => import("./pages/Sync"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 const AdminResetPassword = lazy(() => import("./pages/AdminResetPassword"));
 const Admin = lazy(() => import("./pages/Admin"));
@@ -59,6 +60,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Index />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/sync"
+                element={
+                  <ProtectedRoute>
+                    <Sync />
                   </ProtectedRoute>
                 }
               />

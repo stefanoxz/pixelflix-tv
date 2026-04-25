@@ -1,0 +1,240 @@
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { useIptv } from "@/context/IptvContext";
+import {
+  getLiveCategories,
+  getLiveStreams,
+  getVodCategories,
+  getVodStreams,
+  getSeriesCategories,
+  getSeries,
+} from "@/services/iptv";
+
+const logoSuperTech = "/logo-supertech.webp";
+
+type StepStatus = "pending" | "loading" | "done" | "error";
+
+interface SyncStep {
+  key: string;
+  label: string;
+  queryKey: readonly unknown[];
+  run: () => Promise<unknown>;
+}
+
+const Sync = () => {
+  const navigate = useNavigate();
+  const { session } = useIptv();
+  const queryClient = useQueryClient();
+  const startedRef = useRef(false);
+
+  const creds = session?.creds;
+
+  const [statuses, setStatuses] = useState<Record<string, StepStatus>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [allDone, setAllDone] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  const steps: SyncStep[] = creds
+    ? [
+        {
+          key: "live-cats",
+          label: "Categorias de TV ao vivo",
+          queryKey: ["live-cats", creds.username],
+          run: () => getLiveCategories(creds),
+        },
+        {
+          key: "live-streams",
+          label: "Canais de TV",
+          queryKey: ["live-streams", creds.username],
+          run: () => getLiveStreams(creds),
+        },
+        {
+          key: "vod-cats",
+          label: "Categorias de filmes",
+          queryKey: ["vod-cats", creds.username],
+          run: () => getVodCategories(creds),
+        },
+        {
+          key: "vod-streams",
+          label: "Catálogo de filmes",
+          queryKey: ["vod-streams", creds.username],
+          run: () => getVodStreams(creds),
+        },
+        {
+          key: "series-cats",
+          label: "Categorias de séries",
+          queryKey: ["series-cats", creds.username],
+          run: () => getSeriesCategories(creds),
+        },
+        {
+          key: "series",
+          label: "Catálogo de séries",
+          queryKey: ["series", creds.username],
+          run: () => getSeries(creds),
+        },
+      ]
+    : [];
+
+  const runSync = async () => {
+    if (!creds) return;
+    setHasError(false);
+    setAllDone(false);
+    setErrors({});
+    setStatuses(Object.fromEntries(steps.map((s) => [s.key, "pending"])));
+
+    let anyError = false;
+
+    // Roda em paralelo — o queue global de iptv.ts limita a concorrência.
+    await Promise.all(
+      steps.map(async (step) => {
+        setStatuses((prev) => ({ ...prev, [step.key]: "loading" }));
+        try {
+          const data = await step.run();
+          queryClient.setQueryData(step.queryKey, data);
+          setStatuses((prev) => ({ ...prev, [step.key]: "done" }));
+        } catch (e) {
+          anyError = true;
+          const msg = e instanceof Error ? e.message : "Erro";
+          setErrors((prev) => ({ ...prev, [step.key]: msg }));
+          setStatuses((prev) => ({ ...prev, [step.key]: "error" }));
+        }
+      }),
+    );
+
+    if (anyError) {
+      setHasError(true);
+    } else {
+      setAllDone(true);
+      setTimeout(() => navigate("/", { replace: true }), 600);
+    }
+  };
+
+  useEffect(() => {
+    if (!creds) {
+      navigate("/login", { replace: true });
+      return;
+    }
+    if (startedRef.current) return;
+    startedRef.current = true;
+    runSync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const total = steps.length || 1;
+  const doneCount = Object.values(statuses).filter((s) => s === "done").length;
+  const progress = Math.round((doneCount / total) * 100);
+
+  return (
+    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-glow opacity-60" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,hsl(214_100%_56%/0.15),transparent_50%)]" />
+
+      <Card className="relative w-full max-w-md p-8 bg-gradient-card border-border/50 shadow-card animate-scale-in">
+        <div className="text-center mb-6">
+          <img
+            src={logoSuperTech}
+            alt="SuperTech"
+            width={80}
+            height={80}
+            className="mx-auto h-20 w-20 object-contain mb-3 drop-shadow-[0_0_24px_hsl(var(--primary)/0.45)]"
+          />
+          <h1 className="text-2xl font-bold tracking-tight">
+            Sincronizando seu <span className="text-gradient">conteúdo</span>
+          </h1>
+          <p className="text-xs text-muted-foreground mt-2">
+            Carregando catálogo para navegação instantânea
+          </p>
+        </div>
+
+        <div className="mb-6">
+          <Progress value={progress} className="h-2" />
+          <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+            <span>{doneCount} de {total}</span>
+            <span>{progress}%</span>
+          </div>
+        </div>
+
+        <ul className="space-y-2 mb-6">
+          {steps.map((step) => {
+            const status = statuses[step.key] ?? "pending";
+            return (
+              <li
+                key={step.key}
+                className="flex items-center gap-3 text-sm py-1.5 px-2 rounded-md"
+              >
+                <span className="w-5 flex items-center justify-center shrink-0">
+                  {status === "loading" && (
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  )}
+                  {status === "done" && (
+                    <CheckCircle2 className="h-4 w-4 text-primary" />
+                  )}
+                  {status === "error" && (
+                    <AlertCircle className="h-4 w-4 text-destructive" />
+                  )}
+                  {status === "pending" && (
+                    <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
+                  )}
+                </span>
+                <span
+                  className={
+                    status === "error"
+                      ? "text-destructive"
+                      : status === "done"
+                        ? "text-foreground"
+                        : "text-muted-foreground"
+                  }
+                >
+                  {step.label}
+                </span>
+                {status === "error" && errors[step.key] && (
+                  <span className="ml-auto text-[11px] text-destructive/80 truncate max-w-[140px]">
+                    {errors[step.key]}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+
+        {hasError && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground text-center">
+              Algumas etapas falharam. Você pode tentar de novo ou continuar — o
+              app carregará os itens faltantes ao abrir cada seção.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => runSync()}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Tentar novamente
+              </Button>
+              <Button
+                className="flex-1 bg-gradient-primary hover:opacity-90"
+                onClick={() => navigate("/", { replace: true })}
+              >
+                Continuar
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {allDone && (
+          <p className="text-xs text-center text-muted-foreground">
+            Tudo pronto! Redirecionando…
+          </p>
+        )}
+      </Card>
+    </div>
+  );
+};
+
+export default Sync;
