@@ -818,6 +818,14 @@ const Admin = () => {
             <UserReportsPanel />
           </TabsContent>
 
+          <TabsContent value="team" className="space-y-6 mt-0">
+            <TeamPanel />
+          </TabsContent>
+
+          <TabsContent value="stats" className="space-y-6 mt-0">
+            <StatsPanel />
+          </TabsContent>
+
           <TabsContent value="endpoint-test" className="space-y-6 mt-0">
             <EndpointTestPanel
               allowedServers={allowed.map((s) => ({
