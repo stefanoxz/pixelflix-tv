@@ -184,14 +184,14 @@ const Highlights = () => {
   // já se escondem sozinhas enquanto não houver dados (renderização progressiva).
 
   return (
-    <div className="space-y-12 pb-12">
+    <div className="space-y-12 pb-12 animate-fade-in">
       {/* HERO ROTATIVO */}
       <section
-        className="relative h-[60vh] min-h-[420px] w-full overflow-hidden"
+        className="relative h-[60vh] md:h-[68vh] min-h-[460px] w-full overflow-hidden"
         onMouseEnter={() => (pausedRef.current = true)}
         onMouseLeave={() => (pausedRef.current = false)}
       >
-        {/* camadas de fundo cross-fade */}
+        {/* camadas de fundo cross-fade — opacity sutil + scale leve no ativo (Ken Burns) */}
         {featuredQueue.map((item, i) => (
           <img
             key={`${item.kind}-${item.id}`}
@@ -199,32 +199,65 @@ const Highlights = () => {
             alt=""
             aria-hidden
             className={cn(
-              "absolute inset-0 h-full w-full object-cover transition-opacity duration-700",
-              i === activeIdx ? "opacity-40" : "opacity-0",
+              "absolute inset-0 h-full w-full object-cover transition-all duration-1000",
+              i === activeIdx
+                ? "opacity-30 scale-105"
+                : "opacity-0 scale-100",
             )}
             onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
           />
         ))}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/50 to-transparent" />
+        {/* Vinheta + gradient lateral mais forte pra texto sempre legível */}
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/85 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/70 to-transparent" />
+        {/* Glow sutil no canto superior */}
+        <div className="absolute -top-20 -left-20 h-96 w-96 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
 
-        <div className="relative h-full flex items-end pb-12 mx-auto max-w-[1600px] px-4 md:px-8">
+        <div className="relative h-full flex items-end pb-12 mx-auto max-w-[1800px] px-4 md:px-8">
           <div key={featured?.id ?? "empty"} className="max-w-2xl space-y-4 animate-fade-in">
-            <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-xs font-medium text-primary">
+            <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-xs font-medium text-primary backdrop-blur">
               ✨ Em destaque {featured?.kind === "series" ? "· Série" : featured?.kind === "movie" ? "· Filme" : ""}
             </span>
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-tight">
+            <h1 className="hero-title">
               {featured?.title || "Bem-vindo ao SuperTech"}
             </h1>
+
+            {/* Metadata real do TMDB */}
+            {(featured?.tmdb || featured?.title) && (
+              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                {featured?.tmdb?.vote_average ? (
+                  <span className="inline-flex items-center gap-1 text-warning font-semibold">
+                    ★ {featured.tmdb.vote_average.toFixed(1)}
+                    {featured.tmdb.vote_count ? (
+                      <span className="text-[11px] text-muted-foreground font-normal">
+                        ({featured.tmdb.vote_count.toLocaleString("pt-BR")} votos)
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+                {featured && extractYear(featured.title) && (
+                  <>
+                    <span className="opacity-50">·</span>
+                    <span>{extractYear(featured.title)}</span>
+                  </>
+                )}
+                <span className="opacity-50">·</span>
+                <span className="uppercase tracking-wider text-[11px]">
+                  {featured?.kind === "series" ? "Série" : "Filme"}
+                </span>
+              </div>
+            )}
+
             <p className="text-base md:text-lg text-muted-foreground max-w-xl">
               Descubra milhares de filmes, séries e canais ao vivo em alta qualidade.
               Streaming sem limites, em qualquer dispositivo.
             </p>
+
             <div className="flex flex-wrap gap-3 pt-2">
               <Button
                 size="lg"
                 onClick={() => featured && openFeatured(featured)}
-                className="bg-gradient-primary hover:opacity-90 shadow-glow gap-2"
+                className="bg-gradient-primary hover:opacity-100 hover:scale-[1.03] hover:shadow-[0_0_32px_-4px_hsl(var(--primary)/0.6)] shadow-glow gap-2 transition-all duration-200 font-semibold"
                 disabled={!featured}
               >
                 <Play className="h-4 w-4 fill-current" />
@@ -234,7 +267,7 @@ const Highlights = () => {
                 size="lg"
                 variant="secondary"
                 onClick={() => featured && openFeatured(featured)}
-                className="gap-2"
+                className="gap-2 backdrop-blur bg-secondary/70 hover:bg-secondary"
                 disabled={!featured}
               >
                 <Info className="h-4 w-4" />
@@ -242,42 +275,62 @@ const Highlights = () => {
               </Button>
             </div>
 
-            {/* Indicadores */}
+            {/* Indicadores — limitados a 7 com fade nas extremidades */}
             {featuredQueue.length > 1 && (
-              <div className="flex gap-1.5 pt-3">
-                {featuredQueue.map((_, i) => (
+              <div className="flex items-center gap-1.5 pt-3">
+                {featuredQueue.slice(0, 7).map((_, i) => (
                   <button
                     key={i}
                     aria-label={`Ir para destaque ${i + 1}`}
                     onClick={() => setActiveIdx(i)}
                     className={cn(
-                      "h-1.5 rounded-full transition-all",
-                      i === activeIdx ? "w-8 bg-primary" : "w-3 bg-foreground/30 hover:bg-foreground/50",
+                      "h-1.5 rounded-full transition-all duration-300",
+                      i === activeIdx
+                        ? "w-8 bg-primary shadow-[0_0_12px_hsl(var(--primary)/0.6)]"
+                        : "w-3 bg-foreground/25 hover:bg-foreground/50",
                     )}
                   />
                 ))}
+                {featuredQueue.length > 7 && (
+                  <span className="text-[10px] text-muted-foreground ml-1 tabular-nums">
+                    +{featuredQueue.length - 7}
+                  </span>
+                )}
               </div>
             )}
           </div>
         </div>
       </section>
 
-      <div className="mx-auto max-w-[1600px] px-4 md:px-8 space-y-12">
+      <div className="mx-auto max-w-[1800px] px-4 md:px-8 space-y-12">
         {/* QUICK STATS */}
-        <section className="grid grid-cols-3 gap-4">
+        <section className="grid grid-cols-3 gap-3 md:gap-4">
           {[
-            { icon: Tv, label: "Canais ao vivo", value: live.length, to: "/live" },
-            { icon: Film, label: "Filmes", value: movies.length, to: "/movies" },
-            { icon: Clapperboard, label: "Séries", value: series.length, to: "/series" },
+            { icon: Tv, label: "Canais ao vivo", value: live.length, to: "/live", color: "from-rose-500/20 to-rose-500/5" },
+            { icon: Film, label: "Filmes", value: movies.length, to: "/movies", color: "from-primary/20 to-primary/5" },
+            { icon: Clapperboard, label: "Séries", value: series.length, to: "/series", color: "from-violet-500/20 to-violet-500/5" },
           ].map((s) => (
             <button
               key={s.label}
               onClick={() => navigate(s.to)}
-              className="rounded-lg bg-gradient-card border border-border/50 p-4 md:p-6 text-left transition-smooth hover:border-primary/50 hover:shadow-glow group"
+              className="relative overflow-hidden rounded-xl bg-gradient-card border border-border/50 p-4 md:p-6 text-left transition-all duration-300 hover:border-primary/60 hover:shadow-hover hover:-translate-y-1 group"
             >
-              <s.icon className="h-5 w-5 text-primary mb-2 group-hover:scale-110 transition-bounce" />
-              <p className="text-2xl md:text-3xl font-bold">{s.value.toLocaleString("pt-BR")}</p>
-              <p className="text-xs md:text-sm text-muted-foreground mt-1">{s.label}</p>
+              <div className={cn(
+                "absolute -top-12 -right-12 h-32 w-32 rounded-full bg-gradient-to-br blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500",
+                s.color,
+              )} />
+              <div className="relative">
+                <div className="h-9 w-9 md:h-10 md:w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-300">
+                  <s.icon className="h-4 w-4 md:h-5 md:w-5" />
+                </div>
+                <p className="text-2xl md:text-3xl font-bold tabular-nums">
+                  {s.value.toLocaleString("pt-BR")}
+                </p>
+                <p className="text-xs md:text-sm text-muted-foreground mt-1">{s.label}</p>
+              </div>
+              <span className="absolute top-4 right-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-1 transition-all duration-300">
+                →
+              </span>
             </button>
           ))}
         </section>
@@ -286,7 +339,7 @@ const Highlights = () => {
         {topMovies.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold">Filmes populares</h2>
+              <h2 className="section-title text-2xl">Filmes populares</h2>
               <Button variant="ghost" size="sm" onClick={() => navigate("/movies")}>
                 Ver todos →
               </Button>
@@ -310,7 +363,7 @@ const Highlights = () => {
         {topSeries.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold">Séries em alta</h2>
+              <h2 className="section-title text-2xl">Séries em alta</h2>
               <Button variant="ghost" size="sm" onClick={() => navigate("/series")}>
                 Ver todas →
               </Button>
