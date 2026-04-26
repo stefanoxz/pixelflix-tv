@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useDisplayName } from "@/lib/displayName";
 
 const navItems = [
   { to: "/", label: "Destaques", icon: Sparkles },
@@ -39,6 +40,8 @@ export function Header() {
   };
 
   const username = session?.userInfo?.username ?? "";
+  const displayName = useDisplayName(username);
+  const primaryName = displayName || username;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
