@@ -1,9 +1,7 @@
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Tv, Film, Clapperboard, User, LogOut, Sparkles, Menu, X, Settings } from "lucide-react";
+import { Tv, Film, Clapperboard, User, LogOut, Sparkles, Settings } from "lucide-react";
 const logoSuperTech = "/logo-supertech.webp";
-import { useState } from "react";
 import { useIptv } from "@/context/IptvContext";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
