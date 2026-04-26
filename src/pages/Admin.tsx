@@ -23,6 +23,17 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeAdminApi } from "@/lib/adminApi";
+import { useAdminRole } from "@/hooks/useAdminRole";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { DnsErrorTrendChart } from "@/components/admin/DnsErrorTrendChart";
 import { ServerProbeDialog } from "@/components/admin/ServerProbeDialog";
 import { EndpointTestPanel } from "@/components/admin/EndpointTestPanel";
