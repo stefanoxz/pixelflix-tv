@@ -119,26 +119,30 @@ Deno.serve(async (req) => {
     }
     const user = { id: claimsData.claims.sub as string, email: (claimsData.claims.email as string | undefined) ?? null };
 
-    const { data: isAdmin, error: roleErr } = await admin.rpc("has_role", {
-      _user_id: user.id,
-      _role: "admin",
-    });
-    if (roleErr) {
-      console.error("[admin-api] role check error", roleErr.message);
+    // Verifica papéis do usuário (admin OU moderator).
+    const [{ data: isAdmin, error: adminErr }, { data: isModerator, error: modErr }] = await Promise.all([
+      admin.rpc("has_role", { _user_id: user.id, _role: "admin" }),
+      admin.rpc("has_role", { _user_id: user.id, _role: "moderator" }),
+    ]);
+    if (adminErr || modErr) {
+      console.error("[admin-api] role check error", adminErr?.message ?? modErr?.message);
       return internalError();
     }
-    if (!isAdmin) return unauthorized("Acesso restrito a administradores");
+    if (!isAdmin && !isModerator) {
+      return unauthorized("Acesso restrito ao painel administrativo");
+    }
 
     const body = await req.json().catch(() => ({}));
     const { action, payload } = body as { action?: string; payload?: Record<string, unknown> };
 
-    // Re-check admin role for any mutating action (defence in depth)
-    if (action && MUTATING_ACTIONS.has(action)) {
+    // Re-check role para ações restritas a admin (defence in depth).
+    if (action && ADMIN_ONLY_ACTIONS.has(action)) {
       const { data: stillAdmin } = await admin.rpc("has_role", {
         _user_id: user.id, _role: "admin",
       });
-      if (!stillAdmin) return unauthorized("Acesso restrito a administradores");
+      if (!stillAdmin) return unauthorized("Apenas administradores podem executar esta ação");
     }
+    void MODERATOR_WRITE_ACTIONS; // mantida para documentação
 
     if (action === "dashboard_bundle") {
       const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
