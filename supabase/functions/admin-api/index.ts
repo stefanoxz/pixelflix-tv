@@ -782,6 +782,7 @@ Deno.serve(async (req) => {
       if (!id) return bad("anon_user_id obrigatório");
       const { error } = await admin.from("user_blocks").delete().eq("anon_user_id", id);
       if (error) { console.error(error.message); return internalError(); }
+      await logAudit(user.id, user.email, "unblock_user", { user_id: id });
       return ok({ ok: true });
     }
 
@@ -790,6 +791,7 @@ Deno.serve(async (req) => {
       if (!id) return bad("anon_user_id obrigatório");
       const { error } = await admin.from("active_sessions").delete().eq("anon_user_id", id);
       if (error) { console.error(error.message); return internalError(); }
+      await logAudit(user.id, user.email, "evict_session", { user_id: id });
       return ok({ ok: true });
     }
 
