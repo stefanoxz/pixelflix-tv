@@ -714,12 +714,50 @@ Deno.serve(async (req) => {
         console.warn("[iptv-login] m3u_register: lookup failed", err);
       }
 
-      const r = await attemptLogin(fullBase, username, password, existingRow, admin);
+      let r = await attemptLogin(fullBase, username, password, existingRow, admin);
+
+      // Fallback playlist-mode: o servidor respondeu HTTP mas não em formato
+      // Xtream (HTML, M3U cru, JSON sem user_info). Tenta /get.php?type=m3u_plus
+      // antes de devolver erro — cobre painéis tipo maxtv.uk que só servem M3U.
+      if (
+        !r.ok &&
+        ((r as { reason?: string }).reason === "resposta não JSON" ||
+          (r as { reason?: string }).reason === "credenciais inválidas") &&
+        ((r as { status?: number }).status === 200 ||
+          (r as { status?: number }).status === 401)
+      ) {
+        const pl = await tryPlaylistFallback(fullBase, username, password);
+        if (pl.ok) {
+          console.log(
+            `[iptv-login] m3u_register PLAYLIST_FALLBACK_OK server=${fullBase} variant=${pl.usedVariant}`,
+          );
+          r = { ok: true as const, data: pl.data, usedVariant: pl.usedVariant, route: "direct" } as any;
+        }
+      }
+
       if (!r.ok) {
         await logEvent({ server: fullBase, username, success: false, reason: `m3u_register:${r.reason}`, ua, ip });
         const { code, message } = classifyReason(r.reason);
         const hint = maybeOriginSuspectHint((r as { status?: number }).status, (r as { body?: string }).body);
-        return errorResponse(code, message, corsHeaders, { reason: r.reason, ...(hint ? { hint } : {}) });
+        const rawBody = String((r as { body?: string }).body ?? "");
+        const bodyPreview = rawBody.slice(0, 300);
+        const debug = {
+          httpStatus: (r as { status?: number }).status,
+          contentType: (r as { contentType?: string }).contentType ?? null,
+          variant: (r as { variant?: string }).variant ?? fullBase,
+          bodyPreview,
+          looksLikeHtml: /^\s*<(!doctype|html|head|body)/i.test(rawBody),
+          looksLikeM3u: /^\s*#extm3u/i.test(rawBody),
+          reason: r.reason,
+        };
+        console.log(
+          `[iptv-login] m3u_register FAIL host=${fullBase} reason=${r.reason} status=${debug.httpStatus} ct=${debug.contentType} preview=${bodyPreview.slice(0, 120).replace(/\s+/g, " ")}`,
+        );
+        return errorResponse(code, message, corsHeaders, {
+          reason: r.reason,
+          ...(hint ? { hint } : {}),
+          debug,
+        });
       }
 
       // @ts-ignore - usedVariant existe no caminho ok
