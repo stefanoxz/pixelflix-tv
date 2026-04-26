@@ -107,22 +107,42 @@ const Login = () => {
 
   const handleSubmitCreds = async (e: FormEvent) => {
     e.preventDefault();
-    if (!username || !password) {
-      toast.error("Preencha usuário e senha");
+    const result = credsSchema.safeParse({ username, password });
+    if (!result.success) {
+      const fieldErrors: FieldErrors = {};
+      for (const issue of result.error.issues) {
+        const key = issue.path[0] as keyof FieldErrors;
+        if (key && !fieldErrors[key]) fieldErrors[key] = issue.message;
+      }
+      setErrors(fieldErrors);
+      // Foca o primeiro campo inválido pra acessibilidade.
+      const firstInvalid = (fieldErrors.username && "username") || (fieldErrors.password && "password");
+      if (firstInvalid) {
+        document.getElementById(firstInvalid)?.focus();
+      }
       return;
     }
-    await performLogin(undefined, username.trim(), password);
+    setErrors({});
+    await performLogin(undefined, result.data.username, result.data.password);
   };
 
   const handleSubmitM3u = async (e: FormEvent) => {
     e.preventDefault();
-    const parsed = parseM3uUrl(m3uUrl);
-    if (!parsed) {
-      toast.error(
-        "URL inválida. Use formato get.php ou /playlist/usuario/senha",
-      );
+    const basic = m3uSchema.safeParse(m3uUrl);
+    if (!basic.success) {
+      setErrors({ m3u: basic.error.issues[0]?.message ?? "URL inválida" });
+      document.getElementById("m3u")?.focus();
       return;
     }
+    const parsed = parseM3uUrl(basic.data);
+    if (!parsed) {
+      setErrors({
+        m3u: "Não foi possível extrair usuário/senha. Use o formato get.php?username=…&password=… ou /playlist/usuario/senha",
+      });
+      document.getElementById("m3u")?.focus();
+      return;
+    }
+    setErrors({});
     setLoading(true);
     try {
       const data = await iptvLoginM3u({
