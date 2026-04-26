@@ -167,10 +167,11 @@ Deno.serve(async (req) => {
     const url = `${match}/player_api.php?${params.toString()}`;
 
     // Retry com backoff quando o painel devolve MAX_CONNECTIONS.
-    // Conexões "fantasma" do próprio painel costumam liberar em poucos segundos.
+    // Conexões "fantasma" do próprio painel costumam liberar em poucos segundos,
+    // mas painéis mais lentos podem precisar de até ~10s.
     let result = await fetchWithRetries(url);
     if (!result.ok && result.reason === "MAX_CONNECTIONS") {
-      const delays = [1500, 3000, 5000];
+      const delays = [2000, 4000, 8000];
       for (const delay of delays) {
         await new Promise((r) => setTimeout(r, delay));
         result = await fetchWithRetries(url);
