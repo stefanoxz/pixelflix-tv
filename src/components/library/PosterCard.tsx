@@ -69,11 +69,11 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
         onFocus={onHover}
         data-active={active}
         className={cn(
-          "block w-full aspect-[2/3] rounded-md overflow-hidden bg-secondary/60 relative",
-          "transition-all duration-200",
-          "hover:ring-2 hover:ring-primary/70 hover:-translate-y-0.5",
+          "block w-full aspect-[2/3] rounded-lg overflow-hidden bg-secondary/60 relative",
+          "transition-all duration-300 ease-out",
+          "hover:ring-2 hover:ring-primary/70 hover:-translate-y-1 hover:shadow-[0_12px_32px_-8px_hsl(var(--primary)/0.5)]",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-          active && "ring-2 ring-primary shadow-glow",
+          active && "ring-2 ring-primary shadow-[0_0_24px_-4px_hsl(var(--primary)/0.6)]",
         )}
         aria-label={item.title}
       >
@@ -85,10 +85,8 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
             decoding="async"
             width={200}
             height={300}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
             onError={() => {
-              // Se a capa original falhar e ainda não temos fallback, marca falha
-              // pra disparar o lookup TMDB no próximo render.
               if (!imgFailed) setImgFailed(true);
             }}
           />
@@ -98,29 +96,38 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
           </div>
         )}
 
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-2 pt-6">
+        {/* Gradient inferior — mais sutil em repouso, mais forte no hover */}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-2 pt-8 opacity-90 group-hover:opacity-100 transition-opacity">
           <p className="text-[11px] md:text-xs font-semibold text-white leading-tight line-clamp-2 drop-shadow">
             {item.title}
             {item.year ? (
-              <span className="font-normal opacity-80"> ({item.year})</span>
+              <span className="font-normal opacity-75"> ({item.year})</span>
             ) : null}
           </p>
         </div>
 
         {(() => {
-          // Prefer real TMDB rating (0-10) when we have a meaningful vote count.
           const tv = item.tmdbRating?.vote_count ?? 0;
           const ta = item.tmdbRating?.vote_average ?? 0;
           const useTmdb = tv >= 20 && ta > 0;
-          // Fallback: provider rating in 0-5 scale, hiding the "5.0 default"
-          // and "0" — both are uninformative noise for the user.
           const showProvider =
             !useTmdb && item.rating != null && item.rating > 0 && item.rating < 5;
           const label = useTmdb ? ta.toFixed(1) : showProvider ? item.rating!.toFixed(1) : null;
           if (!label) return null;
+          // Cor por faixa de nota: alto (verde), médio (amarelo), baixo (cinza)
+          const score = useTmdb ? ta : (item.rating ?? 0) * 2;
+          const tone =
+            score >= 7.5
+              ? "bg-emerald-500/85 text-white"
+              : score >= 6
+                ? "bg-amber-500/85 text-white"
+                : "bg-black/65 text-white";
           return (
-            <div className="absolute top-1.5 left-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-black/65 backdrop-blur-sm text-[10px] text-white font-medium">
-              <Star className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
+            <div className={cn(
+              "absolute top-1.5 left-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md backdrop-blur-sm text-[10px] font-bold tabular-nums shadow-md",
+              tone,
+            )}>
+              <Star className="h-2.5 w-2.5 fill-current" />
               {label}
             </div>
           );
@@ -149,7 +156,7 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
           className={cn(
             "absolute top-1.5 right-1.5 h-7 w-7 rounded-full flex items-center justify-center",
             "bg-black/60 backdrop-blur-sm text-white opacity-0 group-hover:opacity-100 focus:opacity-100",
-            "transition-opacity",
+            "transition-all duration-200 hover:scale-110 hover:bg-black/80",
             isFavorite && "opacity-100",
           )}
           aria-label={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}

@@ -22,6 +22,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LibraryTopBar } from "@/components/library/LibraryTopBar";
+import { cn } from "@/lib/utils";
 import { readFavoriteIds } from "@/hooks/useFavorites";
 import {
   getLiveStreams,
@@ -212,47 +213,75 @@ const Account = () => {
         </Card>
       )}
 
-      <Card className="p-6 md:p-8 bg-gradient-card border-border/50 shadow-card">
-        <div className="flex items-center gap-5 mb-6">
+      <Card className="p-6 md:p-8 bg-gradient-card border-border/40 shadow-card overflow-hidden relative">
+        {/* Glow decorativo */}
+        <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-primary/15 blur-3xl" />
+
+        <div className="relative flex flex-col md:flex-row md:items-center gap-5 mb-6">
           <div className="relative shrink-0">
-            <div className="absolute inset-0 rounded-full bg-primary/30 blur-xl" />
-            <div className="relative h-16 w-16 rounded-full bg-primary/10 ring-2 ring-primary/40 flex items-center justify-center">
-              <UserIcon className="h-8 w-8 text-primary" />
+            <div className="absolute inset-0 rounded-full bg-gradient-primary blur-xl opacity-60" />
+            <div className="relative h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-primary text-primary-foreground ring-2 ring-primary/40 flex items-center justify-center text-2xl md:text-3xl font-bold shadow-glow">
+              {(u.username || "U").charAt(0).toUpperCase()}
             </div>
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2 className="text-2xl md:text-3xl font-bold truncate">{u.username}</h2>
-            <Badge
-              variant="outline"
-              className={isActive
-                ? "mt-2 border-success/40 bg-success/10 text-success hover:bg-success/15"
-                : "mt-2 border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15"}
-            >
-              {isActive ? "Ativo" : "Inativo"}
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <Badge
+                variant="outline"
+                className={isActive
+                  ? "border-success/40 bg-success/10 text-success hover:bg-success/15"
+                  : "border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15"}
+              >
+                <span className={cn(
+                  "mr-1.5 inline-block h-1.5 w-1.5 rounded-full",
+                  isActive ? "bg-success animate-pulse" : "bg-destructive",
+                )} />
+                {isActive ? "Ativo" : "Inativo"}
+              </Badge>
+              {isTrial && (
+                <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">
+                  Trial
+                </Badge>
+              )}
+            </div>
           </div>
+          {mySession && (
+            <Button variant="outline" size="sm" onClick={endSession} className="gap-2 self-start md:self-center">
+              <X className="h-4 w-4" /> Encerrar sessão
+            </Button>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="relative grid grid-cols-2 md:grid-cols-4 gap-3">
           {infoCards.map((c) => (
-            <div key={c.label} className="rounded-xl border border-border/50 bg-card/40 p-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <c.icon className="h-5 w-5" />
+            <div key={c.label} className="rounded-xl border border-border/40 bg-card/50 p-3 md:p-4">
+              <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                <c.icon className="h-3.5 w-3.5" />
+                <p className="text-[10px] font-semibold uppercase tracking-wider">{c.label}</p>
               </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{c.label}</p>
-                <p className="text-base font-semibold mt-0.5 truncate">{c.value}</p>
-              </div>
+              <p className="text-base md:text-lg font-bold tabular-nums truncate">{c.value}</p>
             </div>
           ))}
         </div>
 
+        {mySession && (
+          <div className="relative mt-4 flex items-center gap-2 text-xs text-muted-foreground border-t border-border/40 pt-4">
+            <Monitor className="h-3.5 w-3.5 text-primary" />
+            <span>
+              Sessão de streaming ativa desde <span className="text-foreground font-medium">{fmtDateTime(mySession.started_at)}</span>
+              <span className="opacity-50"> · </span>
+              último sinal {fmtDateTime(mySession.last_seen_at)}
+            </span>
+          </div>
+        )}
+
         {allowedFormats.length > 0 && (
-          <div className="mt-6">
-            <p className="text-sm text-muted-foreground mb-2">Formatos permitidos</p>
+          <div className="relative mt-4 pt-4 border-t border-border/40">
+            <p className="text-[11px] text-muted-foreground mb-2 uppercase tracking-wider font-semibold">Formatos permitidos</p>
             <div className="flex flex-wrap gap-2">
               {allowedFormats.map((f) => (
-                <span key={f} className="px-3 py-1 rounded-md bg-secondary text-secondary-foreground text-xs font-mono uppercase tracking-wider border border-border/50">
+                <span key={f} className="px-2.5 py-1 rounded-md bg-secondary/70 text-secondary-foreground text-[11px] font-mono uppercase tracking-wider border border-border/40">
                   {f}
                 </span>
               ))}
@@ -261,77 +290,45 @@ const Account = () => {
         )}
       </Card>
 
-      <Card className="p-6 md:p-8 bg-gradient-card border-border/50 shadow-card">
-        <div className="flex items-center gap-2 mb-5">
-          <Monitor className="h-5 w-5 text-primary" />
-          <h2 className="text-lg md:text-xl font-bold">Sessão atual</h2>
-        </div>
-        {mySession ? (
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 bg-card/40 p-4">
-            <div className="min-w-0">
-              <p className="text-sm font-medium">Iniciada em {fmtDateTime(mySession.started_at)}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Último sinal: {fmtDateTime(mySession.last_seen_at)}
-              </p>
-            </div>
-            <Button variant="outline" size="sm" onClick={endSession} className="gap-2">
-              <X className="h-4 w-4" /> Encerrar
-            </Button>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">Nenhuma sessão de streaming ativa.</p>
-        )}
-      </Card>
-
-      <Card className="p-6 md:p-8 bg-gradient-card border-border/50 shadow-card">
+      <Card className="p-6 md:p-8 bg-gradient-card border-border/40 shadow-card">
         <div className="flex items-center gap-2 mb-5">
           <Heart className="h-5 w-5 text-primary fill-primary/30" />
-          <h2 className="text-lg md:text-xl font-bold">Favoritos</h2>
+          <h2 className="section-title">Favoritos</h2>
+          <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+            {favLive.length + favVod.length + favSeries.length} no total
+          </span>
         </div>
 
-        {/* Contadores */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {favSections.map((s) => (
-            <button
-              key={s.key}
-              onClick={() => navigate(s.route)}
-              className="text-left rounded-xl border border-border/50 bg-card/40 p-4 flex items-center gap-3 transition-smooth hover:border-primary/50"
-            >
-              <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <s.icon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {s.label}
-                </p>
-                <p className="text-base font-semibold mt-0.5">{s.count}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {/* Listas com miniaturas */}
-        <div className="mt-6 space-y-6">
+        {/* Seções com header (ícone + count + ver tudo) */}
+        <div className="space-y-7">
           {favSections.map((s) => (
             <div key={`list-${s.key}`}>
               <div className="flex items-center gap-2 mb-3">
-                <s.icon className="h-4 w-4 text-primary/80" />
+                <div className="h-7 w-7 rounded-md bg-primary/10 text-primary flex items-center justify-center">
+                  <s.icon className="h-3.5 w-3.5" />
+                </div>
                 <h3 className="text-sm font-semibold">{s.label}</h3>
-                {s.count > 6 && (
-                  <span className="text-xs text-muted-foreground">
-                    (mostrando 6 de {s.count})
-                  </span>
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {s.count}
+                </span>
+                {s.count > 0 && (
+                  <button
+                    onClick={() => navigate(s.route)}
+                    className="ml-auto text-[11px] text-primary hover:underline"
+                  >
+                    Ver todos →
+                  </button>
                 )}
               </div>
               {s.items.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">{s.empty}</p>
+                <p className="text-xs text-muted-foreground italic pl-9">{s.empty}</p>
               ) : (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
                   {s.items.map((item) => (
                     <button
                       key={`${s.key}-${item.id}`}
                       onClick={() => navigate(s.route, { state: { openId: item.id } })}
-                      className="group relative aspect-[2/3] overflow-hidden rounded-md bg-secondary border border-border/50 transition-smooth hover:border-primary/50 hover:shadow-glow"
+                      className="group relative aspect-[2/3] overflow-hidden rounded-lg bg-secondary border border-border/40 transition-all duration-300 hover:border-primary/60 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-8px_hsl(var(--primary)/0.5)]"
                       title={item.title}
                     >
                       {item.cover ? (
@@ -339,7 +336,7 @@ const Account = () => {
                           src={proxyImageUrl(item.cover)}
                           alt={item.title}
                           loading="lazy"
-                          className="absolute inset-0 h-full w-full object-cover transition-smooth group-hover:scale-105"
+                          className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                           onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                         />
                       ) : (
@@ -347,8 +344,8 @@ const Account = () => {
                           {item.title}
                         </div>
                       )}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2">
-                        <p className="text-[11px] text-white font-medium line-clamp-2">
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent p-2 pt-6">
+                        <p className="text-[11px] text-white font-medium line-clamp-2 drop-shadow">
                           {item.title}
                         </p>
                       </div>

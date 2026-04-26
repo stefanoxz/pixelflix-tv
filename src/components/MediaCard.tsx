@@ -51,8 +51,10 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
         ref={ref}
         onClick={onClick}
         className={cn(
-          "group relative overflow-hidden rounded-lg bg-gradient-card transition-bounce text-left",
-          "hover:scale-105 hover:z-10 hover:shadow-hover focus:outline-none focus:ring-2 focus:ring-primary",
+          "group relative overflow-hidden rounded-lg bg-gradient-card text-left",
+          "transition-all duration-300 ease-out",
+          "hover:-translate-y-1 hover:shadow-[0_16px_40px_-12px_hsl(var(--primary)/0.55)] hover:z-10",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           aspect === "poster" ? "aspect-[2/3]" : "aspect-video"
         )}
       >
@@ -62,7 +64,7 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
             alt={title}
             loading="lazy"
             onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
-            className="absolute inset-0 h-full w-full object-cover transition-smooth group-hover:scale-110"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-110"
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground p-4 text-center">
@@ -70,11 +72,13 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
           </div>
         )}
 
-        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent opacity-80 group-hover:opacity-100 transition-smooth" />
+        {/* Vinheta + gradient inferior */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-90 group-hover:opacity-100 transition-opacity" />
 
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-smooth">
-          <div className="h-12 w-12 rounded-full bg-primary/90 flex items-center justify-center shadow-glow">
-            <Play className="h-5 w-5 text-primary-foreground fill-current ml-0.5" />
+        {/* Botão Play centralizado no hover */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 transition-all duration-300">
+          <div className="h-14 w-14 rounded-full bg-primary/95 flex items-center justify-center shadow-[0_0_24px_hsl(var(--primary)/0.6)] ring-2 ring-white/20">
+            <Play className="h-6 w-6 text-primary-foreground fill-current ml-0.5" />
           </div>
         </div>
 
@@ -92,8 +96,8 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
               }
             }}
             className={cn(
-              "absolute top-2 left-2 h-8 w-8 rounded-full bg-black/60 backdrop-blur flex items-center justify-center transition-smooth",
-              "md:opacity-0 md:group-hover:opacity-100",
+              "absolute top-2 left-2 h-8 w-8 rounded-full bg-black/60 backdrop-blur flex items-center justify-center transition-all duration-200",
+              "md:opacity-0 md:group-hover:opacity-100 hover:scale-110",
               isFavorite && "md:opacity-100",
               "hover:bg-black/80 cursor-pointer",
             )}
@@ -107,12 +111,24 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
           </span>
         )}
 
-        {ratingLabel && (
-          <div className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/70 backdrop-blur px-2 py-0.5 text-xs">
-            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-            <span className="text-white font-medium">{ratingLabel}</span>
-          </div>
-        )}
+        {ratingLabel && (() => {
+          const score = useTmdb ? tmdbAvg : (providerNum ?? 0) * 2;
+          const tone =
+            score >= 7.5
+              ? "bg-emerald-500/90 text-white"
+              : score >= 6
+                ? "bg-amber-500/90 text-white"
+                : "bg-black/70 text-white";
+          return (
+            <div className={cn(
+              "absolute top-2 right-2 flex items-center gap-1 rounded-md backdrop-blur px-2 py-0.5 text-xs font-bold tabular-nums shadow-md",
+              tone,
+            )}>
+              <Star className="h-3 w-3 fill-current" />
+              <span>{ratingLabel}</span>
+            </div>
+          );
+        })()}
 
         <div className="absolute bottom-0 left-0 right-0 p-3">
           <h3 className="text-sm font-semibold text-white line-clamp-2 drop-shadow">{title}</h3>

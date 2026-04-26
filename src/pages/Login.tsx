@@ -187,20 +187,43 @@ const Login = () => {
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
+    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden bg-background">
+      {/* Camadas de fundo */}
       <div className="absolute inset-0 bg-gradient-glow opacity-60" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,hsl(214_100%_56%/0.15),transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,hsl(214_100%_56%/0.18),transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,hsl(232_100%_65%/0.12),transparent_55%)]" />
 
-      <Card className="relative w-full max-w-md p-8 bg-gradient-card border-border/50 shadow-card animate-scale-in">
+      {/* Blur orbs animados */}
+      <div className="pointer-events-none absolute -top-32 -left-32 h-[28rem] w-[28rem] rounded-full bg-primary/25 blur-3xl animate-blob" />
+      <div
+        className="pointer-events-none absolute -bottom-32 -right-32 h-[26rem] w-[26rem] rounded-full bg-violet-500/20 blur-3xl animate-blob"
+        style={{ animationDelay: "5s" }}
+      />
+      <div
+        className="pointer-events-none absolute top-1/3 right-1/4 h-72 w-72 rounded-full bg-rose-500/15 blur-3xl animate-blob"
+        style={{ animationDelay: "10s" }}
+      />
+
+      {/* Grid sutil de fundo */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.04]"
+        style={{
+          backgroundImage:
+            "linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)",
+          backgroundSize: "48px 48px",
+        }}
+      />
+
+      <Card className="relative w-full max-w-md p-8 bg-card/70 backdrop-blur-xl border-border/40 shadow-[0_24px_80px_-12px_hsl(222_50%_2%/0.9)] ring-1 ring-white/5 animate-scale-in">
         <div className="text-center mb-6">
           <img
             src={logoSuperTech}
             alt="SuperTech"
-            width={96}
-            height={96}
+            width={80}
+            height={80}
             fetchPriority="high"
             decoding="async"
-            className="mx-auto h-24 w-24 object-contain mb-4 drop-shadow-[0_0_24px_hsl(var(--primary)/0.45)]"
+            className="mx-auto h-20 w-20 object-contain mb-3 drop-shadow-[0_0_28px_hsl(var(--primary)/0.55)] animate-float"
           />
           <h1 className="text-3xl font-bold tracking-tight">
             Super<span className="text-gradient">Tech</span>
