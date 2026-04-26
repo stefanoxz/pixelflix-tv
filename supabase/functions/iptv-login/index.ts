@@ -413,6 +413,9 @@ async function attemptLogin(
 
   let lastReason = "credenciais inválidas";
   let lastBody = "";
+  let lastStatus: number | undefined;
+  let lastContentType: string | undefined;
+  let lastVariant: string | undefined;
   let anyHttpResponded = false;
 
   const runVariants = async (vs: string[]) => {
@@ -428,6 +431,9 @@ async function attemptLogin(
 
       lastReason = r.reason;
       lastBody = r.body;
+      lastStatus = r.status;
+      lastContentType = r.contentType;
+      lastVariant = base;
 
       // Resposta legítima do servidor (401 = cred inválida) → encerra.
       if (r.status === 401) return r;
@@ -447,7 +453,14 @@ async function attemptLogin(
   if (r1 && !r1.ok) {
     // Resposta definitiva do servidor (401/4xx/5xx) — não vai pra fase 2.
     await markServerFailure(admin, serverRow);
-    return { ok: false as const, status: r1.status, reason: r1.reason, body: r1.body };
+    return {
+      ok: false as const,
+      status: r1.status,
+      reason: r1.reason,
+      body: r1.body,
+      contentType: (r1 as { contentType?: string }).contentType,
+      variant: lastVariant,
+    };
   }
 
   // FASE 2 — só rola se nenhum HTTP respondeu.
@@ -460,14 +473,87 @@ async function attemptLogin(
     }
     if (r2 && !r2.ok) {
       await markServerFailure(admin, serverRow);
-      return { ok: false as const, status: r2.status, reason: r2.reason, body: r2.body };
+      return {
+        ok: false as const,
+        status: r2.status,
+        reason: r2.reason,
+        body: r2.body,
+        contentType: (r2 as { contentType?: string }).contentType,
+        variant: lastVariant,
+      };
     }
   }
 
   // Falha total por transporte. Preserva a mensagem original (refused/reset/tls)
   // para o admin classificar corretamente no dashboard.
   await markServerFailure(admin, serverRow);
-  return { ok: false as const, status: 502, reason: lastReason, body: lastBody };
+  return {
+    ok: false as const,
+    status: lastStatus ?? 502,
+    reason: lastReason,
+    body: lastBody,
+    contentType: lastContentType,
+    variant: lastVariant,
+  };
+}
+
+/**
+ * Tenta logar em modo PLAYLIST: bate em `/get.php?...&type=m3u_plus` e considera
+ * sucesso se o body começa com `#EXTM3U`. É usado como FALLBACK quando o painel
+ * responde HTTP 200 em `/player_api.php` mas com conteúdo não-Xtream (HTML,
+ * playlist crua, JSON sem `user_info`). Caso típico: maxtv.uk e similares que
+ * só implementam M3U e não Xtream API.
+ *
+ * Quando funciona, devolvemos um `user_info` SINTÉTICO marcado com
+ * `message: "playlist-mode"` para o resto do app saber que não tem
+ * categorias/EPG via Xtream e cair em fluxos compatíveis.
+ */
+async function tryPlaylistFallback(
+  serverBase: string,
+  username: string,
+  password: string,
+): Promise<
+  | { ok: true; data: any; usedVariant: string }
+  | { ok: false; reason: string; bodyPreview?: string }
+> {
+  const variants = buildVariants(serverBase, "fast");
+  for (const base of variants) {
+    const url = `${base}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`;
+    const r = await fetchOnce(url, PRIMARY_UA);
+    if ("error" in r) continue;
+    const { res, body } = r;
+    if (!res.ok) continue;
+    const trimmed = (body ?? "").trimStart();
+    if (!trimmed.startsWith("#EXTM3U")) {
+      // Guardamos preview só do primeiro candidato para retorno em erro.
+      continue;
+    }
+    // Sucesso — montamos resposta no formato esperado pelo cliente.
+    return {
+      ok: true,
+      usedVariant: base,
+      data: {
+        user_info: {
+          username,
+          password,
+          auth: 1,
+          status: "Active",
+          message: "playlist-mode",
+          // Indica downstream que não há Xtream API completo.
+          is_trial: 0,
+          active_cons: 0,
+          max_connections: 0,
+          allowed_output_formats: ["m3u8", "ts"],
+        },
+        server_info: {
+          url: base.replace(/^https?:\/\//, ""),
+          server_protocol: base.startsWith("https") ? "https" : "http",
+          time_now: new Date().toISOString(),
+        },
+      },
+    };
+  }
+  return { ok: false, reason: "playlist-fallback-failed" };
 }
 
 /** Persiste a variante que funcionou + zera contador de falhas. Best-effort. */
