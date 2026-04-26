@@ -105,4 +105,34 @@
   .shadow-hover { box-shadow: var(--shadow-hover); }
   .transition-smooth { transition: var(--transition-smooth); }
   .transition-bounce { transition: var(--transition-bounce); }
+
+  /* Hierarquia tipográfica padronizada */
+  .page-title { @apply text-xl md:text-2xl font-bold tracking-tight; }
+  .section-title { @apply text-lg md:text-xl font-semibold tracking-tight; }
+  .hero-title { @apply text-4xl md:text-6xl font-bold tracking-tight leading-tight; }
+
+  /* Underline animado pra nav (estilo iOS/Apple TV) */
+  .nav-link {
+    @apply relative;
+  }
+  .nav-link::after {
+    content: "";
+    @apply absolute left-3 right-3 -bottom-px h-0.5 rounded-full bg-primary scale-x-0 origin-center transition-transform duration-300;
+  }
+  .nav-link[data-active="true"]::after,
+  .nav-link:hover::after {
+    @apply scale-x-100;
+  }
+
+  /* Skeleton com shimmer real */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--secondary) / 0.5) 0%,
+      hsl(var(--secondary) / 0.8) 50%,
+      hsl(var(--secondary) / 0.5) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
 }
