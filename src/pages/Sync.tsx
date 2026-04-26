@@ -111,7 +111,10 @@ const Sync = () => {
       setStatuses((prev) => ({ ...prev, [step.key]: "loading" }));
 
       let lastErr: unknown = null;
-      const attempts = [0, 4000, 8000]; // 3 tentativas com pausa crescente
+      // Backoff maior em MAX_CONNECTIONS: muitos painéis IPTV demoram
+      // 30–60s para liberar conexões fantasma. Tentativas rápidas seguidas
+      // mantêm a conta presa no limite.
+      const attempts = [0, 8000, 20000];
       for (const wait of attempts) {
         if (wait) await new Promise((r) => setTimeout(r, wait));
         try {
@@ -128,8 +131,11 @@ const Sync = () => {
 
       if (lastErr) {
         anyError = true;
-        const msg = lastErr instanceof Error ? lastErr.message : "Erro";
-        setErrors((prev) => ({ ...prev, [step.key]: msg }));
+        const raw = lastErr instanceof Error ? lastErr.message : "Erro";
+        const friendly = /MAX_CONNECTIONS|Limite de telas/i.test(raw)
+          ? "Limite de telas atingido nesta conta. Aguarde alguns minutos e tente novamente."
+          : raw;
+        setErrors((prev) => ({ ...prev, [step.key]: friendly }));
         setStatuses((prev) => ({ ...prev, [step.key]: "error" }));
       } else {
         setStatuses((prev) => ({ ...prev, [step.key]: "done" }));
