@@ -226,6 +226,7 @@ export function PosterGrid({
       ) : (
         <div
           ref={containerRef}
+          onScroll={onScroll}
           className="flex-1 overflow-y-auto pr-1 -mr-1"
           // contain layout pra evitar que mudanças internas reflowem o pai.
           style={{ contain: "strict" } as React.CSSProperties}
@@ -280,22 +281,6 @@ export function PosterGrid({
                   </div>
                 );
               })}
-
-              {/* Sentinela — quando entra em view, revela o próximo chunk. */}
-              {hasMore && (
-                <div
-                  ref={sentinelRef}
-                  aria-hidden
-                  style={{
-                    position: "absolute",
-                    top: sentinelTop,
-                    left: 0,
-                    width: "100%",
-                    height: 1,
-                    pointerEvents: "none",
-                  }}
-                />
-              )}
             </div>
           )}
 
