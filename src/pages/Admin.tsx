@@ -1799,6 +1799,84 @@ const Admin = () => {
         serverUrl={probeServer?.server_url ?? null}
         serverLabel={probeServer?.label ?? null}
       />
+
+      {/* Confirmações destrutivas */}
+      <AlertDialog
+        open={!!confirmRemoveServer}
+        onOpenChange={(o) => !o && setConfirmRemoveServer(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover esta DNS?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Os usuários conectados a <strong className="font-mono">{confirmRemoveServer}</strong> não conseguirão mais logar.
+              As sessões já abertas continuam até expirar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmRemoveServer && removeServer(confirmRemoveServer)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remover DNS
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!confirmEvictSession}
+        onOpenChange={(o) => !o && setConfirmEvictSession(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Encerrar sessão?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmEvictSession?.iptv_username ? (
+                <>O usuário <strong>{confirmEvictSession.iptv_username}</strong> será desconectado imediatamente. </>
+              ) : (
+                <>Esta sessão será desconectada imediatamente. </>
+              )}
+              Ele pode logar de novo em seguida.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmEvictSession && evictSession(confirmEvictSession.anon_user_id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Encerrar sessão
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!confirmUnblockUser}
+        onOpenChange={(o) => !o && setConfirmUnblockUser(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desbloquear usuário?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O bloqueio temporário será removido e o usuário poderá voltar a acessar a plataforma agora mesmo.
+              {confirmUnblockUser?.reason ? (
+                <span className="block mt-2 text-xs">Motivo do bloqueio: <em>{confirmUnblockUser.reason}</em></span>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Manter bloqueio</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmUnblockUser && unblockUser(confirmUnblockUser.anon_user_id)}
+            >
+              Desbloquear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
