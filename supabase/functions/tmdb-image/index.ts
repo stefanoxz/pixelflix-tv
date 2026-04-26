@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
   // 1. Cache check (split TTL: hits last 30d, misses 1d for retry)
   const { data: cached } = await supabase
     .from("tmdb_image_cache")
-    .select("poster_url,backdrop_url,overview,fetched_at")
+    .select("poster_url,backdrop_url,overview,tmdb_id,fetched_at")
     .eq("cache_key", cacheKey)
     .maybeSingle();
 
@@ -189,6 +189,7 @@ Deno.serve(async (req) => {
         poster: cached.poster_url,
         backdrop: cached.backdrop_url,
         overview: cached.overview ?? null,
+        tmdb_id: cached.tmdb_id ?? null,
         cached: true,
       });
     }
@@ -219,6 +220,7 @@ Deno.serve(async (req) => {
     ? `${IMG_BASE}/w1280${result.backdrop_path}`
     : null;
   const overview = result?.overview || null;
+  const tmdb_id = typeof result?.id === "number" ? result.id : null;
 
   // 3. Persist (even nulls — short TTL handles retries automatically)
   await supabase.from("tmdb_image_cache").upsert(
@@ -227,10 +229,11 @@ Deno.serve(async (req) => {
       poster_url: poster,
       backdrop_url: backdrop,
       overview,
+      tmdb_id,
       fetched_at: new Date().toISOString(),
     },
     { onConflict: "cache_key" },
   );
 
-  return jsonResponse(200, { poster, backdrop, overview, cached: false });
+  return jsonResponse(200, { poster, backdrop, overview, tmdb_id, cached: false });
 });
