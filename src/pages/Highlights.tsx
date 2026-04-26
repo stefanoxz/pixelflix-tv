@@ -223,28 +223,34 @@ const Highlights = () => {
             </h1>
 
             {/* Metadata real do TMDB */}
-            {featured?.tmdb && (
+            {(featured?.tmdb || featured?.title) && (
               <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                {featured.tmdb.vote_average ? (
+                {featured?.tmdb?.vote_average ? (
                   <span className="inline-flex items-center gap-1 text-warning font-semibold">
                     ★ {featured.tmdb.vote_average.toFixed(1)}
-                    <span className="text-[11px] text-muted-foreground font-normal">
-                      ({featured.tmdb.vote_count?.toLocaleString("pt-BR")} votos)
-                    </span>
+                    {featured.tmdb.vote_count ? (
+                      <span className="text-[11px] text-muted-foreground font-normal">
+                        ({featured.tmdb.vote_count.toLocaleString("pt-BR")} votos)
+                      </span>
+                    ) : null}
                   </span>
                 ) : null}
-                {featured.tmdb.year && (
+                {featured && extractYear(featured.title) && (
                   <>
                     <span className="opacity-50">·</span>
-                    <span>{featured.tmdb.year}</span>
+                    <span>{extractYear(featured.title)}</span>
                   </>
                 )}
+                <span className="opacity-50">·</span>
+                <span className="uppercase tracking-wider text-[11px]">
+                  {featured?.kind === "series" ? "Série" : "Filme"}
+                </span>
               </div>
             )}
 
-            <p className="text-base md:text-lg text-muted-foreground max-w-xl line-clamp-3">
-              {featured?.tmdb?.overview ||
-                "Descubra milhares de filmes, séries e canais ao vivo em alta qualidade. Streaming sem limites, em qualquer dispositivo."}
+            <p className="text-base md:text-lg text-muted-foreground max-w-xl">
+              Descubra milhares de filmes, séries e canais ao vivo em alta qualidade.
+              Streaming sem limites, em qualquer dispositivo.
             </p>
 
             <div className="flex flex-wrap gap-3 pt-2">
