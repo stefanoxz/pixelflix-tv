@@ -17,7 +17,7 @@ import { invokeAdminApi } from "@/lib/adminApi";
 
 interface PendingSignup {
   user_id: string;
-  email: string;
+  email: string | null;
   created_at: string;
 }
 
