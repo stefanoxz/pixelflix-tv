@@ -1,51 +1,185 @@
-# Pop-up de instalação do app no primeiro acesso
+# Análise visual do SuperTech — pontos a polir
 
-## O que o cliente vai ver
+Fiz uma varredura nas principais telas (Destaques, Filmes, Séries, Live, Conta, Login, Header). O sistema já está bonito e coeso, mas tem **inconsistências e detalhes** que, se ajustados, dão um salto de "bom" pra "premium estilo Netflix/Apple TV". Abaixo o diagnóstico e o que proponho.
 
-Cerca de **3 segundos depois de abrir** pixelflix-tv.lovable.app pela primeira vez, aparece um modal centralizado bonito com:
+---
 
-- Ícone de monitor + título "Instalar SuperTech como aplicativo"
-- Descrição curta dos benefícios (ícone na tela, janela própria, atualização automática)
-- Dois botões: **"Agora não"** (cinza) e **"Instalar app"** (azul, com ícone de download)
+## 1. Inconsistências entre páginas (alta prioridade)
 
-Ao clicar **Instalar app** → dispara o prompt nativo do navegador ("Instalar SuperTech?") → cliente confirma → app aparece no menu iniciar/área de trabalho instantaneamente.
+**Problema**: cada página tem um header/topbar diferente.
+- `Filmes` e `Séries` usam `LibraryTopBar` (relógio + data + voltar).
+- `Live` tem header próprio inline (sem relógio, sem botão voltar, layout diferente).
+- `Destaques` não tem topbar nenhum — só o `Header` global.
+- `Conta` tem só um título solto `<h1>`.
 
-Ao clicar **Agora não** → modal fecha e **nunca mais aparece** (sua escolha).
+**Proposta**: padronizar — `Live` e `Conta` adotam o mesmo padrão de `LibraryTopBar` (com ícone + título + relógio + data). `Destaques` mantém o hero, mas alinha tipografia.
 
-## Casos especiais tratados
+---
 
-- **iPhone/iPad (Safari):** o iOS não tem botão de instalação automática. Em vez de pedir clique, o modal mostra um passo a passo visual: "Toque em Compartilhar → Adicionar à Tela de Início → Adicionar". Botão "Entendi" fecha.
-- **App já instalado:** o modal nunca aparece (detecta `display-mode: standalone`).
-- **Navegador incompatível** (Firefox desktop, etc.): nada aparece — não tem como instalar, então não polui a tela.
-- **Cliente já recusou antes:** localStorage lembra; nunca mais aparece (mesmo limpando cache do site, só some se ele limpar dados completos do navegador).
-- **Cliente aceitou no prompt nativo:** evento `appinstalled` marca como instalado.
+## 2. Header global
 
-## Arquivos
+**Problemas**:
+- Largura `max-w-[1600px]` no header conflita com `max-w-[1800px]` das páginas (desalinha).
+- Logo + nome ocupa muito espaço; em telas médias o menu encosta no botão "Sair".
+- Hover dos itens de nav é sutil demais (`bg-secondary/50`) — pouco feedback.
+- Botão "Sair" no desktop está sempre visível; comum em apps modernos é ficar dentro de um avatar/dropdown.
 
-### 1. `src/hooks/usePwaInstall.ts` (novo)
-Hook que encapsula toda a lógica:
-- Captura o evento `beforeinstallprompt` (Chrome/Edge/Brave/Opera/Samsung Internet)
-- Detecta iOS via user agent
-- Detecta se já está rodando standalone
-- Persiste recusa em `localStorage` com chave `supertech-pwa-install-dismissed`
-- Expõe: `canPrompt`, `isIos`, `installed`, `dismissed`, `promptInstall()`, `dismissForever()`
+**Proposta**:
+- Unificar largura em `max-w-[1800px]`.
+- Aumentar contraste do estado active (barra inferior animada estilo iOS, em vez de fundo).
+- Mover "Sair" pra dentro de um menu de avatar (`DropdownMenu`) com inicial do usuário, status da assinatura e atalho pra Conta.
+- Adicionar animação suave de underline no hover dos itens.
 
-### 2. `src/components/InstallAppDialog.tsx` (novo)
-Modal usando o `Dialog` do shadcn (já no projeto). Auto-abre após 3s se as condições forem atendidas. Conteúdo varia entre desktop/Android (lista de benefícios + botão Instalar) e iOS (passo a passo visual).
+---
 
-### 3. `src/App.tsx` — adicionar uma linha
-Inserir `<InstallAppDialog />` dentro do `<TooltipProvider>` para ficar disponível em todas as rotas (público + privado), antes do `<BrowserRouter>`.
+## 3. Hero da página de Destaques
 
-## Detalhe técnico importante
+**Problemas**:
+- Altura fixa `60vh min-h-420px` — em monitor ultrawide fica esticado horizontalmente com pouca informação.
+- Imagem de fundo com `opacity-40` é forte demais e compete com o texto.
+- Os 12 indicadores (bolinhas) embaixo poluem em mobile.
+- Botão CTA "Assistir agora" usa `bg-gradient-primary` mas não tem hover state diferenciado (só `opacity-90`).
+- Falta sinopse real do filme (atualmente texto genérico "Descubra milhares de filmes...").
 
-O método `prompt()` do `BeforeInstallPromptEvent` **só pode ser chamado em resposta a um clique do usuário** (política do Chrome). Por isso o modal mostra o botão "Instalar app" — quando ele clica, aí chamamos `deferredPrompt.prompt()`. Não dá pra abrir o prompt nativo direto sem interação.
+**Proposta**:
+- Reduzir opacidade do background pra `opacity-25` + `blur-sm` em quem não está ativo.
+- Aumentar `h-[70vh]` em desktop pra dar mais respiro.
+- Indicadores: limitar a 5-7 visíveis com fade nas extremidades em mobile.
+- Adicionar metadata real do TMDB embaixo do título (nota, ano, gênero).
+- Botão "Assistir agora" ganha micro-interação (scale + glow no hover).
+- Adicionar gradient lateral mais forte à esquerda pra texto destacar de qualquer poster.
 
-## Onde testar
+---
 
-Igual ao PWA básico: **só funciona na URL publicada** (`pixelflix-tv.lovable.app`), não no preview do Lovable. Para testar você publica e abre num Chrome/Edge anônimo. Lembre-se: se você já instalou ou já recusou antes, vai precisar limpar `localStorage.removeItem("supertech-pwa-install-dismissed")` no console pra ver de novo.
+## 4. Quick Stats (Destaques)
 
-## Fora do escopo
+**Problema**: 3 cards simples com ícone + número. Funciona, mas é o ponto mais "amador" da home.
 
-- Botão de instalação fixo no header (fica só o auto-popup; se quiser adicionar depois, basta usar o mesmo hook em qualquer componente)
-- Notificações push
-- Re-aparecer após N dias (você pediu "esconder pra sempre")
+**Proposta**:
+- Adicionar mini-sparkline ou ícone animado.
+- Hover: card eleva (translateY -2px) + brilho na borda.
+- Adicionar um 4º card opcional ("Continuar assistindo") quando houver histórico.
+
+---
+
+## 5. Cards de mídia (PosterCard / MediaCard)
+
+**A confirmar lendo os componentes**, mas sintomas observados:
+- Cards possivelmente sem skeleton durante load (PosterGrid mostra `isLoading`, mas o estilo do skeleton pode estar genérico).
+- Badge de rating TMDB pode estar pesado visualmente.
+- Hover poderia ter "peek" estilo Netflix (info expande embaixo da capa).
+
+**Proposta**: revisar `PosterCard.tsx` e `MediaCard.tsx`, padronizar:
+- Ratio 2:3 com radius `rounded-lg`.
+- Badge TMDB no canto superior direito, semi-transparente, com ícone estrela menor.
+- Hover: leve scale (1.03) + sombra colorida + título aparece embaixo (não em overlay).
+
+---
+
+## 6. Tipografia e hierarquia
+
+**Problemas**:
+- Títulos `h1` variam: `text-2xl md:text-3xl` (Conta), `text-4xl md:text-6xl` (Hero), `text-lg md:text-2xl` (LibraryTopBar), `text-xl sm:text-2xl` (Live).
+- Pesos misturados (`font-bold`, `font-semibold`).
+- `tracking-tight` aplicado em alguns lugares e em outros não.
+
+**Proposta**: definir 3 tamanhos canônicos:
+- Page title (topbar): `text-xl md:text-2xl font-bold tracking-tight`
+- Section title: `text-lg md:text-xl font-semibold`
+- Hero title: `text-4xl md:text-6xl font-bold tracking-tight`
+
+---
+
+## 7. Página Live — pequenos ajustes
+
+**Problemas**:
+- Header inline diferente das outras páginas (vide #1).
+- Search box no desktop tem largura fixa `w-72` — fica isolada.
+- FAB mobile "Canais" duplica função do botão "Canais" no header (em viewport médio aparecem os dois).
+- Lista de canais: borda `border-border/50` em vez do `border-border/40` usado nas outras páginas.
+
+**Proposta**: aplicar `LibraryTopBar` + remover botão duplicado no mobile + padronizar bordas.
+
+---
+
+## 8. Página Conta — densidade
+
+**Problemas**:
+- Vários cards grandes empilhados (info, sessão, favoritos) fazem rolagem longa.
+- "Sessão atual" é uma seção inteira pra 1 linha de info.
+- Favoritos: contadores + listas separadas duplicam informação.
+
+**Proposta**:
+- Combinar info do usuário + sessão atual em **um card único** com 2 colunas.
+- Favoritos: remover contadores duplicados (já aparece no header da lista) e usar abas ou seções colapsáveis.
+- Adicionar avatar com inicial colorida em vez do ícone genérico de usuário.
+
+---
+
+## 9. Login
+
+**Problemas**:
+- Card centralizado mas sem profundidade real (sombra fraca).
+- Background com 2 gradientes radiais, mas faltam elementos sutis (partículas, blur orb animado).
+- Logo grande (96x96) + título "SuperTech" duplica a marca.
+
+**Proposta**:
+- Adicionar 2-3 "blur orbs" animados no fundo (estilo Linear/Vercel).
+- Aumentar shadow e backdrop-blur do card.
+- Reduzir logo pra 72px ou mover só o gradiente do nome.
+
+---
+
+## 10. Microinterações faltando
+
+Itens que dariam sensação de "vivo":
+- Toast loading no botão "Entrar" já existe, bom.
+- Faltam: skeleton com shimmer (já tem keyframe `shimmer` no Tailwind mas não aplicado nos posters).
+- Transições de página (`fade-in` existe, aplicar no `<main>`).
+- Hover dos cards de stats sem animação no ícone.
+- Scrollbar customizada já existe — bom.
+
+---
+
+## 11. Mobile — pontos de atenção
+
+- Hero em mobile fica cortado (texto em 1 coluna mas botões ocupam 2 linhas).
+- TopBar mobile mostra relógio + data + botão filtro + título — pode espremer demais em 360px.
+- Drawer de categorias: revisar se tem search dentro.
+
+---
+
+# Plano de execução (em ordem de impacto visual)
+
+Vou propor implementar em **fases**, cada uma é uma entrega testável:
+
+### Fase 1 — Fundação (consistência)
+1. Padronizar tipografia (utilitário `.page-title`, `.section-title` no `index.css`).
+2. Unificar `max-w-[1800px]` no header e em todas as páginas.
+3. Aplicar `LibraryTopBar` na Live e na Conta.
+4. Padronizar bordas `border-border/40` em todos os shells.
+
+### Fase 2 — Header premium
+5. Trocar "Sair" por avatar + dropdown menu.
+6. Trocar bg-active dos nav items por underline animado.
+
+### Fase 3 — Hero e Destaques
+7. Hero: opacity menor + blur nos inativos + gradient lateral mais forte.
+8. Adicionar metadata TMDB real abaixo do título.
+9. Cards de stats: hover mais rico + ícone animado.
+
+### Fase 4 — Cards e listas
+10. Revisar PosterCard/MediaCard: hover scale + badge TMDB elegante.
+11. Skeleton com shimmer real.
+
+### Fase 5 — Login + Conta
+12. Login: blur orbs animados + sombra mais profunda no card.
+13. Conta: combinar info+sessão em 1 card; favoritos em abas.
+
+---
+
+## Como prefere proceder?
+
+Posso fazer **todas as fases de uma vez** (entrega grande) ou **fase por fase** (você aprova cada etapa). Recomendo começar pelas **Fases 1+2+3** num ciclo só — é o que mais transforma a percepção do app e tem baixo risco. Depois fazemos 4 e 5.
+
+Me confirma se quer assim ou se prefere recortar alguma fase específica.
