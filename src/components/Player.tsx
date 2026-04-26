@@ -83,6 +83,18 @@ interface PlayerProps {
    * Usado em séries para acionar o autoplay do próximo episódio.
    */
   onEnded?: () => void;
+  /**
+   * Posição inicial em segundos. Quando > 0, o player faz seek
+   * automaticamente assim que `loadedmetadata` dispara — usado para
+   * "continuar assistindo" filmes/episódios.
+   */
+  initialTime?: number;
+  /**
+   * Reportado periodicamente (a cada ~5s) com `currentTime` e `duration`.
+   * Também é chamado no evento `ended` com `t = duration`. As páginas
+   * usam isso para persistir/limpar o progresso em localStorage.
+   */
+  onProgress?: (currentTime: number, duration: number) => void;
 }
 
 type PlayerError = {
@@ -316,9 +328,18 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   streamId,
   contentKind,
   onEnded,
+  initialTime,
+  onProgress,
 }, forwardedRef) {
   const onEndedRef = useRef<typeof onEnded>(onEnded);
   useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
+  const onProgressRef = useRef<typeof onProgress>(onProgress);
+  useEffect(() => { onProgressRef.current = onProgress; }, [onProgress]);
+  // Lemos `initialTime` apenas uma vez, no primeiro `loadedmetadata` desta
+  // sessão. Depois, qualquer mudança no prop é ignorada (não queremos saltar
+  // o vídeo enquanto o usuário assiste).
+  const initialTimeRef = useRef<number | undefined>(initialTime);
+  const initialSeekDoneRef = useRef(false);
 
   const { session } = useIptv();
   const videoRef = useRef<HTMLVideoElement>(null);
