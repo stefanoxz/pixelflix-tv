@@ -375,6 +375,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_client_diagnostics: { Args: never; Returns: number }
+      cleanup_login_events: { Args: never; Returns: number }
+      cleanup_stream_events: { Args: never; Returns: number }
+      cleanup_used_nonces: { Args: never; Returns: number }
       evict_idle_sessions: { Args: never; Returns: number }
       has_role: {
         Args: {
