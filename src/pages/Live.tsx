@@ -139,38 +139,25 @@ const Live = () => {
   }
 
   return (
-    <div className="mx-auto max-w-[1800px] px-3 sm:px-6 lg:px-8 py-4 lg:py-6">
-      {/* Header compacto: título + busca inline (mobile mostra botão de canais no FAB) */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Tv className="h-5 w-5 text-primary" />
-            Canais ao Vivo
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {channels.length} canais · {favorites.size} favoritos
-          </p>
-        </div>
-        <div className="hidden md:block relative w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            ref={searchRef}
-            placeholder="Buscar canal... (/)"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 bg-secondary/50 border-border/50"
-          />
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="lg:hidden"
-          onClick={() => setDrawerOpen(true)}
-        >
-          <Menu className="h-4 w-4 mr-1" />
-          Canais
-        </Button>
-      </div>
+    <div className="mx-auto max-w-[1800px] px-3 md:px-6 py-2 md:py-3">
+      <LibraryTopBar
+        title="Canais ao Vivo"
+        icon={<Tv className="h-4 w-4" />}
+        subtitle={`${channels.length} canais · ${favorites.size} favoritos`}
+        onOpenCategoryDrawer={() => setDrawerOpen(true)}
+        rightExtra={
+          <div className="hidden md:block relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              ref={searchRef}
+              placeholder="Buscar canal... (/)"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 h-9 bg-secondary/50 border-border/40"
+            />
+          </div>
+        }
+      />
 
       {/* Grid responsivo:
           - mobile: player + info, drawer pra canais
