@@ -259,6 +259,7 @@ export const PosterCard = memo(PosterCardImpl, (prev, next) => {
     prev.item.tmdbRating?.vote_average === next.item.tmdbRating?.vote_average &&
     prev.item.tmdbRating?.vote_count === next.item.tmdbRating?.vote_count &&
     prev.item.kind === next.item.kind &&
+    prev.item.progressPct === next.item.progressPct &&
     prev.active === next.active &&
     prev.isFavorite === next.isFavorite &&
     prev.incompatible === next.incompatible &&
