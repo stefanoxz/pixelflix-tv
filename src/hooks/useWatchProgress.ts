@@ -245,11 +245,15 @@ export function useWatchProgress(
 
   const pendingRef = useRef<Map<string, ProgressEntry>>(new Map());
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Coalesce concurrent token requests across multiple hook instances.
+  const inflightTokenRef = useRef<Promise<string | null> | null>(null);
 
   /**
    * Garante um token válido. Reusa cache do localStorage se disponível;
    * senão troca credenciais por um novo. Retorna null se faltar info ou
-   * o servidor recusar a credencial.
+   * o servidor recusar a credencial. Coalesce: se já existe uma chamada
+   * em andamento, aguarda a mesma promise (evita 3+ requests paralelas
+   * quando vários componentes montam juntos).
    */
   const ensureToken = useCallback(async (): Promise<string | null> => {
     const server = serverRef.current;
@@ -259,7 +263,12 @@ export function useWatchProgress(
     const cached = readToken(server, username);
     if (cached) return cached;
     if (!pass) return null;
-    return await fetchToken(server, username, pass);
+    if (inflightTokenRef.current) return inflightTokenRef.current;
+    const p = fetchToken(server, username, pass).finally(() => {
+      inflightTokenRef.current = null;
+    });
+    inflightTokenRef.current = p;
+    return p;
   }, []);
 
   const flushRemote = useCallback(async () => {
