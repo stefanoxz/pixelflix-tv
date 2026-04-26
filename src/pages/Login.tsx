@@ -301,7 +301,7 @@ const Login = () => {
           </TabsList>
 
           <TabsContent value="creds">
-            <form onSubmit={handleSubmitCreds} className="space-y-4">
+            <form onSubmit={handleSubmitCreds} className="space-y-4" noValidate>
               <div className="space-y-2">
                 <Label htmlFor="username" className="text-xs">Usuário</Label>
                 <div className="relative">
@@ -310,12 +310,26 @@ const Login = () => {
                     id="username"
                     placeholder="seu usuário"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="pl-10 bg-secondary/50 border-border/50 h-11"
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      if (errors.username) setErrors((p) => ({ ...p, username: undefined }));
+                    }}
+                    className={cn(
+                      "pl-10 bg-secondary/50 border-border/50 h-11",
+                      errors.username && "border-destructive focus-visible:ring-destructive",
+                    )}
                     autoComplete="username"
                     maxLength={120}
+                    aria-invalid={!!errors.username}
+                    aria-describedby={errors.username ? "username-error" : undefined}
                   />
                 </div>
+                {errors.username && (
+                  <p id="username-error" className="text-xs text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {errors.username}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -327,12 +341,26 @@ const Login = () => {
                     type="password"
                     placeholder="••••••••"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 bg-secondary/50 border-border/50 h-11"
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
+                    }}
+                    className={cn(
+                      "pl-10 bg-secondary/50 border-border/50 h-11",
+                      errors.password && "border-destructive focus-visible:ring-destructive",
+                    )}
                     autoComplete="current-password"
                     maxLength={200}
+                    aria-invalid={!!errors.password}
+                    aria-describedby={errors.password ? "password-error" : undefined}
                   />
                 </div>
+                {errors.password && (
+                  <p id="password-error" className="text-xs text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {errors.password}
+                  </p>
+                )}
               </div>
 
               <Button
@@ -353,7 +381,7 @@ const Login = () => {
           </TabsContent>
 
           <TabsContent value="m3u">
-            <form onSubmit={handleSubmitM3u} className="space-y-4">
+            <form onSubmit={handleSubmitM3u} className="space-y-4" noValidate>
               <div className="space-y-2">
                 <Label htmlFor="m3u" className="text-xs">URL M3U</Label>
                 <div className="relative">
@@ -362,16 +390,31 @@ const Login = () => {
                     id="m3u"
                     placeholder="http://servidor.com/get.php?username=...&password=..."
                     value={m3uUrl}
-                    onChange={(e) => setM3uUrl(e.target.value.slice(0, 2000))}
-                    className="pl-10 bg-secondary/50 border-border/50 min-h-[96px] resize-none text-sm"
+                    onChange={(e) => {
+                      setM3uUrl(e.target.value.slice(0, 2000));
+                      if (errors.m3u) setErrors((p) => ({ ...p, m3u: undefined }));
+                    }}
+                    className={cn(
+                      "pl-10 bg-secondary/50 border-border/50 min-h-[96px] resize-none text-sm",
+                      errors.m3u && "border-destructive focus-visible:ring-destructive",
+                    )}
                     autoComplete="off"
                     spellCheck={false}
                     maxLength={2000}
+                    aria-invalid={!!errors.m3u}
+                    aria-describedby={errors.m3u ? "m3u-error" : "m3u-hint"}
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Aceita links no formato <code className="text-foreground/80">get.php?username=…&amp;password=…</code> ou <code className="text-foreground/80">/playlist/usuario/senha</code>
-                </p>
+                {errors.m3u ? (
+                  <p id="m3u-error" className="text-xs text-destructive flex items-start gap-1 leading-relaxed">
+                    <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                    {errors.m3u}
+                  </p>
+                ) : (
+                  <p id="m3u-hint" className="text-[11px] text-muted-foreground leading-relaxed">
+                    Aceita links no formato <code className="text-foreground/80">get.php?username=…&amp;password=…</code> ou <code className="text-foreground/80">/playlist/usuario/senha</code>
+                  </p>
+                )}
               </div>
 
               <Button
