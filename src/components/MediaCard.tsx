@@ -54,6 +54,7 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
           "group relative overflow-hidden rounded-lg bg-gradient-card text-left",
           "transition-all duration-300 ease-out",
           "hover:-translate-y-1 hover:shadow-[0_16px_40px_-12px_hsl(var(--primary)/0.55)] hover:z-10",
+          "active:scale-[0.97]",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           aspect === "poster" ? "aspect-[2/3]" : "aspect-video"
         )}
