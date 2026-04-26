@@ -47,15 +47,16 @@ interface MovieDetailsDialogProps {
   onToggleFavorite?: () => void;
 }
 
-export function MovieDetailsDialog({
-  open,
-  onOpenChange,
-  movie,
-  creds,
-  onPlay,
-  isFavorite,
-  onToggleFavorite,
-}: MovieDetailsDialogProps) {
+export const MovieDetailsDialog = forwardRef<HTMLDivElement, MovieDetailsDialogProps>(
+  function MovieDetailsDialog({
+    open,
+    onOpenChange,
+    movie,
+    creds,
+    onPlay,
+    isFavorite,
+    onToggleFavorite,
+  }, _ref) {
   const { data, isLoading } = useQuery({
     queryKey: ["vod-info", movie?.stream_id],
     queryFn: () => getVodInfo(creds, movie!.stream_id),
