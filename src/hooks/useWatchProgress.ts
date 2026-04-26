@@ -245,11 +245,15 @@ export function useWatchProgress(
 
   const pendingRef = useRef<Map<string, ProgressEntry>>(new Map());
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Coalesce concurrent token requests across multiple hook instances.
+  const inflightTokenRef = useRef<Promise<string | null> | null>(null);
 
   /**
    * Garante um token válido. Reusa cache do localStorage se disponível;
    * senão troca credenciais por um novo. Retorna null se faltar info ou
-   * o servidor recusar a credencial.
+   * o servidor recusar a credencial. Coalesce: se já existe uma chamada
+   * em andamento, aguarda a mesma promise (evita 3+ requests paralelas
+   * quando vários componentes montam juntos).
    */
   const ensureToken = useCallback(async (): Promise<string | null> => {
     const server = serverRef.current;
@@ -259,7 +263,12 @@ export function useWatchProgress(
     const cached = readToken(server, username);
     if (cached) return cached;
     if (!pass) return null;
-    return await fetchToken(server, username, pass);
+    if (inflightTokenRef.current) return inflightTokenRef.current;
+    const p = fetchToken(server, username, pass).finally(() => {
+      inflightTokenRef.current = null;
+    });
+    inflightTokenRef.current = p;
+    return p;
   }, []);
 
   const flushRemote = useCallback(async () => {
@@ -381,10 +390,12 @@ export function useWatchProgress(
         changed = true;
       }
     }
-    // Locals mais novos que o remoto: enfileira pra subir.
+    // Locals mais novos que o remoto: enfileira pra subir UMA vez.
+    // (não re-enfileiramos se já há um item pendente — evita loop infinito
+    // de re-tentativas quando upload falha continuamente)
     for (const [k, v] of Object.entries(local)) {
       const r = remoteByKey.get(k);
-      if (!r || r.updatedAt < v.updatedAt) {
+      if ((!r || r.updatedAt < v.updatedAt) && !pendingRef.current.has(k)) {
         pendingRef.current.set(k, v);
       }
     }
@@ -402,21 +413,27 @@ export function useWatchProgress(
   }, [storageKey, scopeKey, pullRemote]);
 
   // Re-sync ao voltar ao foco (no lugar do realtime).
+  // IMPORTANTE: o handler de visibilitychange precisa ser removido no cleanup
+  // — antes ficava acumulando a cada re-render, vazando memória + chamadas.
   useEffect(() => {
     const onFocus = () => {
       if (Date.now() - lastSyncAtRef.current < REFOCUS_SYNC_THROTTLE_MS) return;
       void pullRemote();
     };
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", () => {
+    const onVisibility = () => {
       if (document.visibilityState === "visible") onFocus();
-    });
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [pullRemote]);
 
-  // Flush ao desmontar / fechar aba.
+  // Flush ao fechar a aba. NÃO disparamos no cleanup do effect — antes
+  // qualquer re-render que mudasse `flushRemote` (ex.: token novo) acionava
+  // um flush espúrio. Agora só o "pagehide/beforeunload" faz flush.
   useEffect(() => {
     const flush = () => {
       if (flushTimerRef.current != null) {
@@ -430,7 +447,6 @@ export function useWatchProgress(
     return () => {
       window.removeEventListener("pagehide", flush);
       window.removeEventListener("beforeunload", flush);
-      flush();
     };
   }, [flushRemote]);
 
