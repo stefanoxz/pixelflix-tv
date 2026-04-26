@@ -15,6 +15,13 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useFuzzyFilter } from "@/lib/fuzzySearch";
+import {
+  useWatchProgress,
+  makeProgressKey,
+  MIN_RESUME_SECONDS,
+  COMPLETED_RATIO,
+} from "@/hooks/useWatchProgress";
+import { ResumeDialog } from "@/components/ResumeDialog";
 import { useIptv } from "@/context/IptvContext";
 import {
   buildVodStreamUrl,
