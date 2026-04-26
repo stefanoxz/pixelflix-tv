@@ -30,6 +30,7 @@ import {
   getSeries,
   proxyImageUrl,
 } from "@/services/iptv";
+import { SafeImage } from "@/components/SafeImage";
 
 interface ActiveSessionRow {
   anon_user_id: string;
@@ -332,12 +333,11 @@ const Account = () => {
                       title={item.title}
                     >
                       {item.cover ? (
-                        <img
+                        <SafeImage
                           src={proxyImageUrl(item.cover)}
                           alt={item.title}
                           loading="lazy"
                           className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                          onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                         />
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground p-2 text-center">
