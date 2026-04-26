@@ -300,6 +300,7 @@ export function PosterGrid({
                           active={it.id === activeId}
                           isFavorite={isFavorite?.(it.id)}
                           incompatible={incompatible}
+                          priority={vRow.index === 0}
                           onClick={() => handleOpen(it)}
                           onHover={onHoverItem ? () => onHoverItem(it) : undefined}
                           onToggleFavorite={
