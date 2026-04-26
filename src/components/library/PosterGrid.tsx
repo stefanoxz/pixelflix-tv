@@ -2,9 +2,15 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Loader2, Search } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PosterCard, type PosterItem } from "./PosterCard";
 import { useIncompatibleKeys } from "@/hooks/useIncompatibleKeys";
+
+// Detecta uma vez por sessão: em mobile, reduzimos drasticamente a janela
+// inicial pra não enfileirar 120 covers de uma vez em redes lentas.
+const IS_MOBILE_VIEWPORT =
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(max-width: 767px)").matches;
 
 interface Props {
   items: PosterItem[];
