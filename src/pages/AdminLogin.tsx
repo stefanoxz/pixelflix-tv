@@ -111,7 +111,10 @@ const AdminLogin = () => {
     } catch (err) {
       const raw = err instanceof Error ? err.message : "Falha no login";
       const friendly = describeAuthError(raw);
-      setLastError(`${friendly} — raw: ${raw}`);
+      // Não vazamos o erro bruto na UI (pode conter detalhes internos do
+      // backend de auth). Mantemos no console para debug do operador.
+      console.warn("[admin-login] signin error:", raw);
+      setLastError(friendly);
       toast.error(friendly);
     } finally {
       setLoading(false);
@@ -146,7 +149,8 @@ const AdminLogin = () => {
     } catch (err) {
       const raw = err instanceof Error ? err.message : "Falha no cadastro";
       const friendly = describeAuthError(raw);
-      setLastError(`${friendly} — raw: ${raw}`);
+      console.warn("[admin-login] signup error:", raw);
+      setLastError(friendly);
       toast.error(friendly);
     } finally {
       setLoading(false);
@@ -173,7 +177,8 @@ const AdminLogin = () => {
       const raw = err instanceof Error ? err.message : "Falha ao enviar e-mail";
       const friendly = describeAuthError(raw);
       pushDebug("forgot", false, raw);
-      setLastError(`${friendly} — raw: ${raw}`);
+      console.warn("[admin-login] forgot error:", raw);
+      setLastError(friendly);
       toast.error(friendly);
     } finally {
       setLoading(false);

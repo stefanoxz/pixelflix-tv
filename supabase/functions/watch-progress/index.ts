@@ -203,6 +203,48 @@ function getAdmin() {
   return _admin;
 }
 
+// Cache do allowlist (60s) — evita hits no DB a cada auth.
+let _allowedCache: { at: number; list: string[] } | null = null;
+async function getAllowedServers(): Promise<string[]> {
+  if (_allowedCache && Date.now() - _allowedCache.at < 60_000) return _allowedCache.list;
+  try {
+    const { data } = await getAdmin().from("allowed_servers").select("server_url");
+    const list = ((data ?? []) as Array<{ server_url: string }>).map(
+      (r) => normalizeServerUrl(r.server_url),
+    );
+    _allowedCache = { at: Date.now(), list };
+    return list;
+  } catch {
+    return _allowedCache?.list ?? [];
+  }
+}
+
+/**
+ * Defesa em profundidade contra SSRF: rejeita hosts privados/loopback/metadata
+ * mesmo que entrem na allowlist por engano.
+ */
+function isPrivateHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (h === "localhost" || h.endsWith(".localhost")) return true;
+  if (h === "0.0.0.0" || h === "::" || h === "[::]") return true;
+  // IPv4 privados/reservados
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const a = +m[1], b = +m[2];
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 169 && b === 254) return true; // link-local + cloud metadata
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+    if (a === 0) return true;
+    if (a >= 224) return true; // multicast/reserved
+  }
+  // IPv6 loopback / link-local / unique-local
+  if (/^\[?(::1|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe80:)/i.test(h)) return true;
+  return false;
+}
+
 function jsonResp(status: number, body: unknown, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
@@ -250,6 +292,30 @@ Deno.serve(async (req: Request) => {
     if (!server || !username || !password) {
       return jsonResp(400, { error: "missing_credentials" }, cors);
     }
+    // SSRF guard: aceita apenas servidores na allowlist E rejeita IPs
+    // privados/loopback/metadata como defesa em profundidade.
+    let parsedHost: string;
+    try {
+      parsedHost = new URL(server).hostname;
+    } catch {
+      return jsonResp(400, { error: "invalid_server_url" }, cors);
+    }
+    if (isPrivateHost(parsedHost)) {
+      return jsonResp(403, { error: "server_not_allowed" }, cors);
+    }
+    const allowed = await getAllowedServers();
+    const allowedHosts = new Set(
+      allowed.map((a) => {
+        try { return new URL(a).hostname; } catch { return ""; }
+      }).filter(Boolean),
+    );
+    const inAllowlist =
+      allowed.includes(server) ||
+      allowed.some((a) => normalizeServerUrl(a) === server) ||
+      allowedHosts.has(parsedHost);
+    if (!inAllowlist) {
+      return jsonResp(403, { error: "server_not_allowed" }, cors);
+    }
     const ok = await validateIptvCredentials(server, username, password);
     if (!ok) {
       return jsonResp(401, { error: "invalid_credentials" }, cors);
@@ -258,6 +324,7 @@ Deno.serve(async (req: Request) => {
     const token = await signProgressToken({ s: server, u: username, e: exp });
     return jsonResp(200, { token, expires_at: exp }, cors);
   }
+
 
   // --- Demais ações exigem token ---
   const authHeader = req.headers.get("authorization") ?? "";
