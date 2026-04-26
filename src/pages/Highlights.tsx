@@ -6,11 +6,25 @@ import { Button } from "@/components/ui/button";
 import { MediaCard } from "@/components/MediaCard";
 import { useIptv } from "@/context/IptvContext";
 import { getLiveStreams, getVodStreams, getSeries, proxyImageUrl } from "@/services/iptv";
+import { useTmdbRatings, type TmdbRatingResult } from "@/hooks/useTmdbRating";
+import { seededShuffle, todaySeed } from "@/lib/dailyShuffle";
 import { cn } from "@/lib/utils";
 
 type FeaturedItem =
-  | { kind: "movie"; id: number; title: string; cover: string; rating: number }
-  | { kind: "series"; id: number; title: string; cover: string; rating: number };
+  | { kind: "movie"; id: number; title: string; cover: string; rating: number; tmdb: TmdbRatingResult | null }
+  | { kind: "series"; id: number; title: string; cover: string; rating: number; tmdb: TmdbRatingResult | null };
+
+// Quantos candidatos enriquecemos com TMDB. Mais = melhor seleção, mais
+// chamadas no primeiro acesso. Depois disso tudo vem do cache do React Query.
+const MOVIE_CANDIDATES = 60;
+const SERIES_CANDIDATES = 30;
+const MIN_TMDB_VOTES = 50; // limiar pra evitar ranquear nichos
+
+/** Extrai (YYYY) do nome do título (formato comum nos catálogos Xtream). */
+function extractYear(name: string): string | undefined {
+  const m = name.match(/\((\d{4})\)\s*$/);
+  return m ? m[1] : undefined;
+}
 
 const Highlights = () => {
   const { session } = useIptv();
@@ -30,32 +44,105 @@ const Highlights = () => {
     queryFn: () => getSeries(creds),
   });
 
-  const topMovies = useMemo(
-    () => [...movies].sort((a, b) => b.rating_5based - a.rating_5based).slice(0, 12),
-    [movies],
+  // ---------------------------------------------------------------------------
+  // Pré-filtro: candidatos elegíveis (priorizando lançamentos + nota > 0).
+  // O Xtream marca quase todo item com rating_5based = 5 por default, então
+  // o "rating provider" sozinho não distingue obscuro de clássico — usamos
+  // ele só pra eliminar o ruído (== 0 ou inválido) e priorizar conteúdo
+  // recente, depois deixamos o TMDB ranquear de fato.
+  // ---------------------------------------------------------------------------
+  const movieCandidates = useMemo(() => {
+    const filtered = movies.filter((m) => (m.rating_5based ?? 0) > 0);
+    // Ordena por added (mais recente primeiro) — `added` é unix timestamp em string
+    const sorted = filtered.sort((a, b) => Number(b.added || 0) - Number(a.added || 0));
+    return sorted.slice(0, MOVIE_CANDIDATES);
+  }, [movies]);
+
+  const seriesCandidates = useMemo(() => {
+    const filtered = series.filter((s) => (s.rating_5based ?? 0) > 0);
+    // Séries não têm `added` confiável — usamos last_modified como proxy
+    const sorted = filtered.sort(
+      (a, b) => Number(b.last_modified || 0) - Number(a.last_modified || 0),
+    );
+    return sorted.slice(0, SERIES_CANDIDATES);
+  }, [series]);
+
+  // ---------------------------------------------------------------------------
+  // Enriquecimento TMDB: dispara em paralelo, cada lookup cacheado por 24h.
+  // Re-renderizar com dados parciais é OK — o memo abaixo recalcula conforme
+  // ratings vão chegando.
+  // ---------------------------------------------------------------------------
+  const movieRatings = useTmdbRatings(
+    movieCandidates.map((m) => ({
+      type: "movie" as const,
+      key: m.stream_id,
+      name: m.name,
+      year: extractYear(m.name),
+    })),
   );
-  const topSeries = useMemo(
-    () => [...series].sort((a, b) => b.rating_5based - a.rating_5based).slice(0, 12),
-    [series],
+  const seriesRatings = useTmdbRatings(
+    seriesCandidates.map((s) => ({
+      type: "series" as const,
+      key: s.series_id,
+      name: s.name,
+      year: extractYear(s.name),
+    })),
   );
 
-  // Fila de destaques (top 8 filmes + top 4 séries) embaralhada de forma estável
+  // ---------------------------------------------------------------------------
+  // Re-rank por TMDB vote_average (com piso de votos) + rotação diária.
+  // ---------------------------------------------------------------------------
+  const seed = useMemo(() => todaySeed("highlights"), []);
+
+  const topMovies = useMemo(() => {
+    const enriched = movieCandidates
+      .map((m) => {
+        const tmdb = movieRatings.get(m.stream_id);
+        return { item: m, tmdb };
+      })
+      // Eleitos: têm TMDB com votos suficientes
+      .filter((x) => (x.tmdb?.vote_count ?? 0) >= MIN_TMDB_VOTES && (x.tmdb?.vote_average ?? 0) > 0)
+      .sort((a, b) => (b.tmdb!.vote_average ?? 0) - (a.tmdb!.vote_average ?? 0));
+
+    // Pegamos um top 24 e embaralhamos com seed do dia → 12 finais.
+    // Isso dá variedade entre dias mantendo qualidade.
+    const top = enriched.slice(0, 24);
+    const shuffled = seededShuffle(top, seed);
+    return shuffled.slice(0, 12);
+  }, [movieCandidates, movieRatings, seed]);
+
+  const topSeries = useMemo(() => {
+    const enriched = seriesCandidates
+      .map((s) => {
+        const tmdb = seriesRatings.get(s.series_id);
+        return { item: s, tmdb };
+      })
+      .filter((x) => (x.tmdb?.vote_count ?? 0) >= MIN_TMDB_VOTES && (x.tmdb?.vote_average ?? 0) > 0)
+      .sort((a, b) => (b.tmdb!.vote_average ?? 0) - (a.tmdb!.vote_average ?? 0));
+
+    const top = enriched.slice(0, 18);
+    const shuffled = seededShuffle(top, seed + 1);
+    return shuffled.slice(0, 12);
+  }, [seriesCandidates, seriesRatings, seed]);
+
+  // Fila de destaques (top 8 filmes + top 4 séries) intercalada
   const featuredQueue = useMemo<FeaturedItem[]>(() => {
     const m: FeaturedItem[] = topMovies.slice(0, 8).map((x) => ({
       kind: "movie",
-      id: x.stream_id,
-      title: x.name,
-      cover: x.stream_icon,
-      rating: x.rating_5based,
+      id: x.item.stream_id,
+      title: x.item.name,
+      cover: x.item.stream_icon,
+      rating: x.item.rating_5based,
+      tmdb: x.tmdb ?? null,
     }));
     const s: FeaturedItem[] = topSeries.slice(0, 4).map((x) => ({
       kind: "series",
-      id: x.series_id,
-      title: x.name,
-      cover: x.cover,
-      rating: x.rating_5based,
+      id: x.item.series_id,
+      title: x.item.name,
+      cover: x.item.cover,
+      rating: x.item.rating_5based,
+      tmdb: x.tmdb ?? null,
     }));
-    // intercala filmes e séries
     const out: FeaturedItem[] = [];
     const max = Math.max(m.length, s.length);
     for (let i = 0; i < max; i++) {
