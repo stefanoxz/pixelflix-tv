@@ -111,7 +111,10 @@ const AdminLogin = () => {
     } catch (err) {
       const raw = err instanceof Error ? err.message : "Falha no login";
       const friendly = describeAuthError(raw);
-      setLastError(`${friendly} — raw: ${raw}`);
+      // Não vazamos o erro bruto na UI (pode conter detalhes internos do
+      // backend de auth). Mantemos no console para debug do operador.
+      console.warn("[admin-login] signin error:", raw);
+      setLastError(friendly);
       toast.error(friendly);
     } finally {
       setLoading(false);
