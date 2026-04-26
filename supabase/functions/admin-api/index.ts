@@ -762,7 +762,56 @@ Deno.serve(async (req) => {
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) { console.error(error.message); return internalError(); }
-      return ok({ pending: data ?? [] });
+
+      const rows = (data ?? []) as Array<{ user_id: string; email: string | null; created_at: string }>;
+
+      // Para qualquer linha sem e-mail, busca direto na auth.users via service role.
+      // Também tenta backfillar a tabela para que apareça correto em consultas futuras.
+      const missing = rows.filter((r) => !r.email || r.email.trim() === "");
+      if (missing.length > 0) {
+        const resolved = await Promise.all(
+          missing.map(async (r) => {
+            try {
+              const { data: u } = await admin.auth.admin.getUserById(r.user_id);
+              const meta = (u?.user?.user_metadata ?? {}) as Record<string, unknown>;
+              const appMeta = (u?.user?.app_metadata ?? {}) as Record<string, unknown>;
+              const email = (
+                u?.user?.email ||
+                (typeof meta.email === "string" ? meta.email : "") ||
+                (typeof appMeta.email === "string" ? appMeta.email : "") ||
+                ""
+              ).trim();
+              return { user_id: r.user_id, email: email || null };
+            } catch (e) {
+              console.error("[admin-api] getUserById failed", r.user_id, (e as Error).message);
+              return { user_id: r.user_id, email: null };
+            }
+          }),
+        );
+
+        const resolvedMap = new Map(resolved.map((x) => [x.user_id, x.email] as const));
+
+        // Backfill best-effort (não bloqueia resposta se falhar)
+        const toBackfill = resolved.filter((x) => x.email);
+        if (toBackfill.length > 0) {
+          await Promise.all(
+            toBackfill.map((x) =>
+              admin
+                .from("pending_admin_signups")
+                .update({ email: x.email })
+                .eq("user_id", x.user_id),
+            ),
+          ).catch((e) => console.error("[admin-api] backfill failed", (e as Error).message));
+        }
+
+        for (const r of rows) {
+          if (!r.email || r.email.trim() === "") {
+            r.email = resolvedMap.get(r.user_id) ?? null;
+          }
+        }
+      }
+
+      return ok({ pending: rows });
     }
 
     if (action === "approve_signup") {
