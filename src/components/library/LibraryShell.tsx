@@ -29,8 +29,11 @@ export function LibraryShell({ rail, list, preview, header, showPreview = true, 
           showPreview
             ? "grid-cols-1 lg:grid-cols-[220px,minmax(0,1fr)] xl:grid-cols-[220px,minmax(0,1fr),420px]"
             : "grid-cols-1 lg:grid-cols-[220px,minmax(0,1fr)]",
+          // Em mobile (<lg): altura natural (coluna única, scroll natural).
+          // Em desktop (≥lg): altura fluida usando `dvh` (acompanha barra dinâmica
+          // do navegador móvel) com fallback `vh` em browsers antigos.
+          "lg:h-[calc(100vh-11rem)] lg:[height:calc(100dvh-11rem)] lg:min-h-[520px]",
         )}
-        style={{ height: "calc(100vh - 11rem)", minHeight: 520 }}
       >
         <aside
           role="region"
@@ -43,7 +46,7 @@ export function LibraryShell({ rail, list, preview, header, showPreview = true, 
         <section
           role="region"
           aria-label="Títulos"
-          className="flex flex-col rounded-xl border border-border/40 bg-card/30 backdrop-blur overflow-hidden min-h-0"
+          className="flex flex-col rounded-xl border border-border/40 bg-card/30 backdrop-blur overflow-hidden min-h-0 min-h-[60vh] lg:min-h-0"
         >
           {list}
         </section>
