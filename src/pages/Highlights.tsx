@@ -213,8 +213,8 @@ const Highlights = () => {
         {/* Glow sutil no canto superior */}
         <div className="absolute -top-20 -left-20 h-96 w-96 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
 
-        <div className="relative h-full flex items-end pb-8 md:pb-12 mx-auto max-w-[1800px] px-4 md:px-8">
-          <div key={featured?.id ?? "empty"} className="max-w-2xl space-y-4 animate-fade-in">
+        <div className="relative h-full flex items-end pb-8 md:pb-12 mx-auto max-w-[1800px] px-4 md:px-8 gap-6">
+          <div key={featured?.id ?? "empty"} className="max-w-2xl md:max-w-md lg:max-w-xl space-y-4 animate-fade-in flex-1 min-w-0">
             <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-xs font-medium text-primary backdrop-blur">
               ✨ Em destaque {featured?.kind === "series" ? "· Série" : featured?.kind === "movie" ? "· Filme" : ""}
             </span>

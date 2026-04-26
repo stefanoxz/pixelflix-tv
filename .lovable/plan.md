@@ -1,88 +1,59 @@
+## Objetivo
 
-# Validação no formulário de login IPTV
+Tornar o hero de destaques mais visual mostrando os **pôsteres reais** dos títulos em rotação, mantendo a leitura do texto e sem quebrar mobile.
 
-Adicionar validação client-side robusta nos dois fluxos de login (usuário/senha e URL M3U) **antes** de chamar a edge function, com mensagens de erro inline (em vez de só `toast`), uso de `zod` (já instalado no projeto) e indicadores visuais nos campos.
+## Conceito visual
 
----
+No layout atual, o título ocupa a esquerda e o fundo é apenas a capa esmaecida (30% opacidade) — fica "vazio" no lado direito. A proposta é:
 
-## Implementação
+**Desktop / tablet (≥ md):**
+- Coluna esquerda: bloco atual (badge, título, rating, sinopse, botões, indicadores) — sem mudança de copy.
+- Coluna direita: **pôster do destaque ativo em destaque grande** (aspect 2:3, ~280px de largura) com sombra/glow, levemente flutuando, ladeado por uma **fileira vertical de 3-4 mini-pôsteres** dos próximos títulos da fila (clicáveis para pular direto ao destaque).
+- O background mantém a capa esmaecida + gradientes (já existe), só ajustamos o gradient lateral pra não escurecer demais o lado da capa.
 
-### 1. Schemas zod (em `src/pages/Login.tsx`)
+**Mobile (< md):**
+- Mantém o layout vertical atual (texto sobre background esmaecido) — **não adiciona pôster grande à direita** porque competiria com o texto em telas estreitas.
+- Adiciona uma **tira horizontal compacta** abaixo dos botões com 4-5 mini-pôsteres (≈ 56×84px) representando os próximos da fila, com scroll horizontal suave. Substitui visualmente os "dots" indicadores por algo mais informativo, sem aumentar muito a altura do hero.
+- O dot indicator atual fica oculto no mobile (a tira de pôsteres já cumpre o papel) e permanece no desktop.
 
-```ts
-const credsSchema = z.object({
-  username: z.string()
-    .trim()
-    .min(1, "Informe o usuário")
-    .max(120, "Usuário muito longo (máx. 120)")
-    .regex(/^[^\s]+$/, "Usuário não pode conter espaços"),
-  password: z.string()
-    .min(1, "Informe a senha")
-    .max(200, "Senha muito longa (máx. 200)"),
-});
+## Comportamento
 
-const m3uSchema = z.string()
-  .trim()
-  .min(1, "Cole a URL M3U")
-  .max(2000, "URL muito longa (máx. 2000 caracteres)")
-  .refine(
-    (v) => /^https?:\/\//i.test(v) || /[a-z0-9.-]+\.[a-z]{2,}/i.test(v),
-    "URL precisa conter um endereço (ex.: http://servidor.com/...)"
-  );
-```
+- Clicar em qualquer mini-pôster → `setActiveIdx(i)` (mesma ação dos dots hoje).
+- Clicar no pôster grande → mesma ação do "Assistir agora" (`openFeatured`).
+- Hover/foco em mini-pôster pausa a rotação (reaproveita `pausedRef`).
+- Transição entre pôster grande ativo: cross-fade rápido (200ms) sincronizado com o cross-fade do background.
+- Mini-pôsteres usam `loading="lazy"` e `proxyImageUrl` (já existe).
+- Fallback: se `cover` falha (`onError`), esconde o `<img>` e mostra placeholder neutro — não quebra a coluna.
 
-### 2. Estado de erros por campo
+## Responsividade — pontos de cuidado
 
-Substituir os `toast.error("Preencha…")` ad-hoc por um state `errors: { username?, password?, m3u? }` e renderizar a mensagem **abaixo do campo** com ícone `AlertCircle` (acessível via `aria-invalid` e `aria-describedby`).
+| Breakpoint | Mostra pôster grande? | Mini-pôsteres |
+|---|---|---|
+| < 640px (mobile) | Não | Tira horizontal (4-5 itens, scroll-x) |
+| 640-767px (sm) | Não | Tira horizontal |
+| 768-1023px (md) | Sim (180px) | 3 mini verticais ao lado |
+| ≥ 1024px (lg+) | Sim (240-280px) | 4 mini verticais ao lado |
 
-### 3. Fluxo de validação
+- Hero atual: `h-[55vh] md:h-[68vh]` — **não muda**. Coluna direita é absolutamente posicionada dentro do mesmo container, sem aumentar altura.
+- Texto continua em `max-w-2xl` no desktop; com a coluna de pôsteres ocupando ~360px à direita, a área de leitura ainda fica confortável em telas ≥ 1024px. Em md (768-1023px) reduzimos `max-w-2xl` → `max-w-md` pra evitar sobreposição.
+- Em mobile a coluna de pôsteres não é renderizada (`hidden md:flex`), então zero risco de quebrar o layout atual.
 
-**Aba Usuário/senha** (`handleSubmitCreds`):
-- `e.preventDefault()`
-- Roda `credsSchema.safeParse({ username, password })`
-- Se falhar: popula `errors`, foca primeiro campo inválido, **não** chama `iptvLogin`
-- Se passar: limpa `errors` e segue o fluxo atual
+## Arquivos afetados
 
-**Aba M3U** (`handleSubmitM3u`):
-- `e.preventDefault()`
-- Roda `m3uSchema.safeParse(m3uUrl)` — valida formato/comprimento básico
-- Se passar mas `parseM3uUrl()` retornar `null`: erro inline mais específico ("Não foi possível extrair usuário/senha — verifique o formato `get.php` ou `/playlist/usuario/senha`")
-- Se tudo OK: limpa `errors` e segue o fluxo atual
+- **`src/pages/Highlights.tsx`** — único arquivo modificado. Adiciona:
+  - Subcomponente local `FeaturedPosterColumn` (desktop) com pôster grande + mini-pôsteres laterais.
+  - Subcomponente local `FeaturedPosterStrip` (mobile) com tira horizontal.
+  - Ajuste no `<div className="max-w-2xl ...">` pra `max-w-2xl lg:max-w-xl` quando a coluna de pôsteres está presente.
+  - Os dots indicadores ganham `hidden md:flex` (já que mobile usa a tira).
 
-### 4. UX dos campos
+Sem mudanças em CSS global, hooks, queries ou serviços. Sem novas dependências.
 
-- **Limpar erro ao digitar**: `onChange` reseta `errors[campo]` para esconder a mensagem assim que o usuário começa a corrigir.
-- **`aria-invalid={!!errors.x}`** + **`aria-describedby="x-error"`** nos `<Input>`/`<Textarea>`.
-- Borda vermelha quando inválido: classe condicional `errors.x && "border-destructive focus-visible:ring-destructive"`.
-- Mensagem de erro: `<p id="x-error" className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="h-3 w-3"/>{errors.x}</p>`
+## Riscos e mitigações
 
-### 5. Validação preventiva no submit do formulário HTML
+- **Imagens TMDB lentas no 3G:** mini-pôsteres ficam com `loading="lazy"` e `decoding="async"`; pôster grande tem `fetchpriority="high"` só pro ativo.
+- **Layout shift:** containers com aspect-ratio fixo (2:3) — sem CLS.
+- **Telas muito largas (>1600px):** o `mx-auto max-w-[1800px]` já existente evita estiramento; coluna de pôsteres alinha à direita do container.
+- **Quando `featuredQueue` tem só 1 item:** pôster grande aparece sozinho, mini-pôsteres laterais não renderizam (mesma lógica do dot indicator).
+- **Quando `featuredQueue` está vazio (loading):** coluna de pôsteres não renderiza — comportamento atual do hero "Bem-vindo ao SuperTech" preservado.
 
-- Adicionar `noValidate` no `<form>` (queremos só nossa validação, não a nativa do browser que conflita visualmente).
-- Manter `disabled={loading}` no botão para evitar duplo-submit.
-
-### 6. Não tocar no fluxo de sucesso
-
-A validação **só intercepta antes** do `performLogin`/`iptvLoginM3u`. O resto (anonymous sign-in, `setSession`, navegação para `/sync`, `maybeWarnConnectionLimit`) continua igual.
-
----
-
-## Arquivo afetado
-
-- `src/pages/Login.tsx` — único arquivo editado.
-
-## Não muda
-
-- `src/services/iptv.ts` (edge call) — a edge já tem suas próprias validações server-side.
-- `src/lib/parseM3uUrl.ts` — continua sendo a fonte da verdade pro parsing detalhado.
-- Schemas de banco / RLS.
-
----
-
-## Por que dessa forma
-
-- **Zod** garante regras declarativas e mensagens consistentes (já é o padrão do projeto via `react-hook-form`/`@hookform/resolvers`).
-- **Erros inline** dão feedback imediato no contexto do campo, em vez de toasts que somem rápido — padrão de apps modernos de login.
-- **Limites de tamanho** previnem payloads gigantes / abuso (defense-in-depth, mesmo com `maxLength` já no input).
-- **Trim no username** evita bugs comuns (espaço acidental colado do clipboard).
-- **Validação client-side não substitui a server-side** — a edge function `iptv-login` continua autoritativa.
+Erro de runtime "promise.then is not a function" detectado no preview — não relacionado a este escopo, deixarei pra investigar separadamente se persistir após esta mudança.
