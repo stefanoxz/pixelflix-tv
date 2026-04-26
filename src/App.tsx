@@ -8,6 +8,7 @@ import { IptvProvider } from "@/context/IptvContext";
 import { Header } from "@/components/Header";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
+import { InstallAppDialog } from "@/components/InstallAppDialog";
 import Login from "./pages/Login";
 // Sync é importada de forma direta (não-lazy) para evitar o flash
 // do spinner do Suspense entre o login e a tela de sincronização.
@@ -57,6 +58,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner position="top-right" theme="dark" />
+        <InstallAppDialog />
         <BrowserRouter>
           <Suspense fallback={<RouteFallback />}>
             <Routes>

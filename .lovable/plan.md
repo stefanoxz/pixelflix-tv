@@ -1,85 +1,51 @@
-# Tornar o SuperTech instalável como aplicativo
+# Pop-up de instalação do app no primeiro acesso
 
-## O que o usuário vai ter
+## O que o cliente vai ver
 
-Depois desta mudança, qualquer pessoa que acessar **pixelflix-tv.lovable.app** (ou seu domínio próprio) no Chrome, Edge, Brave ou Opera vai ver um **ícone de instalação na barra de endereço**. Ao clicar:
+Cerca de **3 segundos depois de abrir** pixelflix-tv.lovable.app pela primeira vez, aparece um modal centralizado bonito com:
 
-- No **Windows/Linux/Mac**: o app aparece no menu iniciar/launchpad com ícone próprio do SuperTech, abre em **janela dedicada sem barra do navegador**, parecendo um app nativo. Atualizações chegam automaticamente.
-- No **Android**: opção "Instalar app" no menu do navegador → vira ícone na tela inicial.
-- No **iPhone/iPad**: Compartilhar → "Adicionar à Tela de Início".
+- Ícone de monitor + título "Instalar SuperTech como aplicativo"
+- Descrição curta dos benefícios (ícone na tela, janela própria, atualização automática)
+- Dois botões: **"Agora não"** (cinza) e **"Instalar app"** (azul, com ícone de download)
 
-A janela abre limpa, com a logo do SuperTech como splash, sem URL nem abas — experiência idêntica a um app instalado.
+Ao clicar **Instalar app** → dispara o prompt nativo do navegador ("Instalar SuperTech?") → cliente confirma → app aparece no menu iniciar/área de trabalho instantaneamente.
 
-## Abordagem técnica: manifest puro (sem service worker)
+Ao clicar **Agora não** → modal fecha e **nunca mais aparece** (sua escolha).
 
-Como você não precisa de offline, **não vamos usar `vite-plugin-pwa` nem service workers**. Essa é a abordagem mais simples e segura, recomendada pela própria documentação do Lovable quando o objetivo é só instalabilidade. Evita:
+## Casos especiais tratados
 
-- Problemas de cache desatualizado no preview do Lovable
-- Conflitos com o Supabase Auth (`/~oauth` redirects)
-- Complexidade desnecessária
+- **iPhone/iPad (Safari):** o iOS não tem botão de instalação automática. Em vez de pedir clique, o modal mostra um passo a passo visual: "Toque em Compartilhar → Adicionar à Tela de Início → Adicionar". Botão "Entendi" fecha.
+- **App já instalado:** o modal nunca aparece (detecta `display-mode: standalone`).
+- **Navegador incompatível** (Firefox desktop, etc.): nada aparece — não tem como instalar, então não polui a tela.
+- **Cliente já recusou antes:** localStorage lembra; nunca mais aparece (mesmo limpando cache do site, só some se ele limpar dados completos do navegador).
+- **Cliente aceitou no prompt nativo:** evento `appinstalled` marca como instalado.
 
-A instalabilidade é garantida apenas por um arquivo `manifest.json` válido + meta tags + ícones nos tamanhos certos. Isso é o suficiente para o Chrome/Edge mostrarem o botão de "Instalar".
+## Arquivos
 
-## Arquivos a criar/editar
+### 1. `src/hooks/usePwaInstall.ts` (novo)
+Hook que encapsula toda a lógica:
+- Captura o evento `beforeinstallprompt` (Chrome/Edge/Brave/Opera/Samsung Internet)
+- Detecta iOS via user agent
+- Detecta se já está rodando standalone
+- Persiste recusa em `localStorage` com chave `supertech-pwa-install-dismissed`
+- Expõe: `canPrompt`, `isIos`, `installed`, `dismissed`, `promptInstall()`, `dismissForever()`
 
-### 1. `public/manifest.json` (novo)
-Define nome, cores, ícones e modo de exibição:
-```json
-{
-  "name": "SuperTech IPTV",
-  "short_name": "SuperTech",
-  "description": "Player IPTV web premium...",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "orientation": "any",
-  "background_color": "#0a0a0a",
-  "theme_color": "#0a0a0a",
-  "lang": "pt-BR",
-  "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
-  ]
-}
-```
+### 2. `src/components/InstallAppDialog.tsx` (novo)
+Modal usando o `Dialog` do shadcn (já no projeto). Auto-abre após 3s se as condições forem atendidas. Conteúdo varia entre desktop/Android (lista de benefícios + botão Instalar) e iOS (passo a passo visual).
 
-### 2. Ícones em `public/`
-Vou gerar a partir do `logo-supertech.webp` existente (usando a ferramenta de imagem do sandbox):
-- `icon-192.png` — 192x192 (Android home screen)
-- `icon-512.png` — 512x512 (splash screen e instalação)
-- `icon-maskable-512.png` — 512x512 com padding seguro (para ícones adaptativos do Android que cortam em círculo/squircle)
-- `apple-touch-icon.png` — 180x180 (iOS home screen)
+### 3. `src/App.tsx` — adicionar uma linha
+Inserir `<InstallAppDialog />` dentro do `<TooltipProvider>` para ficar disponível em todas as rotas (público + privado), antes do `<BrowserRouter>`.
 
-### 3. `index.html` — adicionar meta tags PWA
-No `<head>`, adicionar:
-```html
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#0a0a0a">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SuperTech">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
-```
+## Detalhe técnico importante
 
-## Como o usuário instala (instruções para passar aos clientes)
+O método `prompt()` do `BeforeInstallPromptEvent` **só pode ser chamado em resposta a um clique do usuário** (política do Chrome). Por isso o modal mostra o botão "Instalar app" — quando ele clica, aí chamamos `deferredPrompt.prompt()`. Não dá pra abrir o prompt nativo direto sem interação.
 
-**No PC (Chrome/Edge):**
-1. Acessar pixelflix-tv.lovable.app
-2. Clicar no ícone de monitor com seta (📥) que aparece na barra de endereço, à direita
-3. Confirmar "Instalar" → o app aparece no menu iniciar e na área de trabalho
+## Onde testar
 
-**No Android:** menu do Chrome → "Instalar app"
-**No iPhone:** Compartilhar (Safari) → "Adicionar à Tela de Início"
-
-## Importante: só funciona na URL publicada
-
-PWA **não funciona no preview do Lovable** (o iframe de preview bloqueia instalação por segurança). Para testar, você precisa **clicar em Publicar** e acessar a URL `pixelflix-tv.lovable.app` diretamente no navegador (fora do editor). O botão de instalação só aparece lá.
+Igual ao PWA básico: **só funciona na URL publicada** (`pixelflix-tv.lovable.app`), não no preview do Lovable. Para testar você publica e abre num Chrome/Edge anônimo. Lembre-se: se você já instalou ou já recusou antes, vai precisar limpar `localStorage.removeItem("supertech-pwa-install-dismissed")` no console pra ver de novo.
 
 ## Fora do escopo
 
-- Cache offline / service worker (você confirmou que não precisa)
+- Botão de instalação fixo no header (fica só o auto-popup; se quiser adicionar depois, basta usar o mesmo hook em qualquer componente)
 - Notificações push
-- App nativo .exe / .dmg (Electron) — pode ser feito depois se quiser, mas PWA já cobre 99% do caso de uso
-- Publicação em lojas (Google Play / Microsoft Store) — possível via Trusted Web Activity, mas é outro projeto
+- Re-aparecer após N dias (você pediu "esconder pra sempre")
