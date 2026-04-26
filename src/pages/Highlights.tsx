@@ -9,6 +9,7 @@ import { getLiveStreams, getVodStreams, getSeries, proxyImageUrl } from "@/servi
 import { useTmdbRatings, type TmdbRatingResult } from "@/hooks/useTmdbRating";
 import { seededShuffle, todaySeed } from "@/lib/dailyShuffle";
 import { cn } from "@/lib/utils";
+import { SafeImage } from "@/components/SafeImage";
 
 type FeaturedItem =
   | { kind: "movie"; id: number; title: string; cover: string; rating: number; tmdb: TmdbRatingResult | null }
@@ -193,7 +194,7 @@ const Highlights = () => {
       >
         {/* camadas de fundo cross-fade — opacity sutil + scale leve no ativo (Ken Burns) */}
         {featuredQueue.map((item, i) => (
-          <img
+          <SafeImage
             key={`${item.kind}-${item.id}`}
             src={proxyImageUrl(item.cover)}
             alt=""
@@ -204,7 +205,6 @@ const Highlights = () => {
                 ? "opacity-30 scale-105"
                 : "opacity-0 scale-100",
             )}
-            onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
           />
         ))}
         {/* Vinheta + gradient lateral — mais forte em mobile pra leitura sem competir com o pôster */}
@@ -293,14 +293,13 @@ const Highlights = () => {
                           : "border-border/40 opacity-60 hover:opacity-100",
                       )}
                     >
-                      <img
+                      <SafeImage
                         src={proxyImageUrl(item.cover)}
                         alt=""
                         aria-hidden
                         loading="lazy"
                         decoding="async"
                         className="absolute inset-0 h-full w-full object-cover"
-                        onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                       />
                     </button>
                   ))}
@@ -355,14 +354,13 @@ const Highlights = () => {
                           onMouseLeave={() => (pausedRef.current = false)}
                           className="relative w-16 aspect-[2/3] rounded-md overflow-hidden border border-border/40 opacity-70 hover:opacity-100 hover:scale-110 hover:border-primary/60 transition-all duration-200 tap-feedback"
                         >
-                          <img
+                          <SafeImage
                             src={proxyImageUrl(item.cover)}
                             alt=""
                             aria-hidden
                             loading="lazy"
                             decoding="async"
                             className="absolute inset-0 h-full w-full object-cover"
-                            onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                           />
                         </button>
                       );
@@ -378,14 +376,13 @@ const Highlights = () => {
                 aria-label={`Abrir ${featured.title}`}
                 className="group relative w-[180px] lg:w-[240px] xl:w-[280px] aspect-[2/3] rounded-xl overflow-hidden border border-border/40 shadow-[0_20px_60px_-15px_hsl(var(--primary)/0.4)] hover:shadow-[0_25px_70px_-10px_hsl(var(--primary)/0.6)] hover:scale-[1.02] transition-all duration-300 tap-feedback bg-secondary/40"
               >
-                <img
+                <SafeImage
                   key={`hero-${featured.kind}-${featured.id}`}
                   src={proxyImageUrl(featured.cover)}
                   alt={featured.title}
                   decoding="async"
                   {...({ fetchpriority: "high" } as Record<string, string>)}
                   className="absolute inset-0 h-full w-full object-cover animate-fade-in"
-                  onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                 />
                 {/* Overlay sutil + ícone de play no hover */}
                 <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
