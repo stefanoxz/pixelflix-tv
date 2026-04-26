@@ -98,6 +98,8 @@
   }
   .bg-gradient-primary { background: var(--gradient-primary); }
   .bg-gradient-hero { background: var(--gradient-hero); }
+  .scrollbar-hide { scrollbar-width: none; -ms-overflow-style: none; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
   .bg-gradient-card { background: var(--gradient-card); }
   .bg-gradient-glow { background: var(--gradient-glow); }
   .shadow-glow { box-shadow: var(--shadow-glow); }
