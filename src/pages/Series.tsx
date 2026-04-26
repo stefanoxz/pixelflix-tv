@@ -111,16 +111,67 @@ const SeriesPage = () => {
     gcTime: 24 * 60 * 60 * 1000,
   });
 
-  // Deep-link
+  // Deep-link (Highlights, Conta, Continue assistindo).
+  // - openId         → abre o details dialog da série (comportamento padrão).
+  // - autoplay+epId  → vem do rail "Continue assistindo": baixa o info da série,
+  //                    encontra o episódio e dispara o ResumeDialog/player direto.
   useEffect(() => {
-    const openId = (location.state as { openId?: number } | null)?.openId;
+    const state = location.state as
+      | { openId?: number; autoplay?: boolean; episodeId?: string | number | null }
+      | null;
+    const openId = state?.openId;
     if (openId && series.length) {
       setActiveId(openId);
       const s = series.find((x) => x.series_id === openId);
-      if (s) setOpenSeries(s);
+      if (!s) {
+        navigate(location.pathname, { replace: true, state: null });
+        return;
+      }
+      if (state?.autoplay && state.episodeId != null) {
+        // Busca info da série (cacheado), localiza o episódio, dispara o flow.
+        const epId = String(state.episodeId);
+        void (async () => {
+          try {
+            const info = await queryClient.fetchQuery({
+              queryKey: ["series-info", openId],
+              queryFn: () => getSeriesInfo(creds, openId),
+              staleTime: 1000 * 60 * 5,
+            });
+            const ep = Object.values(info?.episodes ?? {})
+              .flat()
+              .find((e) => String(e.id) === epId);
+            if (!ep) {
+              setOpenSeries(s);
+              return;
+            }
+            const saved = getProgress(makeProgressKey("episode", ep.id));
+            if (
+              saved &&
+              saved.t >= MIN_RESUME_SECONDS &&
+              saved.d > 0 &&
+              saved.t / saved.d < COMPLETED_RATIO
+            ) {
+              setPendingResume({
+                ep,
+                seriesId: s.series_id,
+                coverFallback: s.cover,
+                t: saved.t,
+                d: saved.d,
+              });
+            } else {
+              setResumeAt(0);
+              setPlayingEp({ ep, seriesId: s.series_id, coverFallback: s.cover });
+            }
+          } catch {
+            setOpenSeries(s);
+          }
+        })();
+      } else {
+        setOpenSeries(s);
+      }
       navigate(location.pathname, { replace: true, state: null });
     }
-  }, [location.state, location.pathname, series, navigate]);
+  }, [location.state, location.pathname, series, navigate, queryClient, creds, getProgress]);
 
   // Categoria/favoritos primeiro — depois passa pelo fuzzy filter.
   const byCategory = useMemo(() => {
@@ -158,9 +209,12 @@ const SeriesPage = () => {
             : s.releaseDate
               ? s.releaseDate.slice(0, 4)
               : undefined,
+          // Barra "continue assistindo" no card — usa o último episódio
+          // assistido daquela série.
+          progressPct: seriesProgressById.get(s.series_id),
         };
       }),
-    [sorted],
+    [sorted, seriesProgressById],
   );
 
   useEffect(() => {
