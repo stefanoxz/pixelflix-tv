@@ -120,14 +120,21 @@ Deno.serve(async (req) => {
     const user = { id: claimsData.claims.sub as string, email: (claimsData.claims.email as string | undefined) ?? null };
 
     // Verifica papéis do usuário (admin OU moderator).
-    const [{ data: isAdmin, error: adminErr }, { data: isModerator, error: modErr }] = await Promise.all([
-      admin.rpc("has_role", { _user_id: user.id, _role: "admin" }),
-      admin.rpc("has_role", { _user_id: user.id, _role: "moderator" }),
-    ]);
-    if (adminErr || modErr) {
-      console.error("[admin-api] role check error", adminErr?.message ?? modErr?.message);
+    // IMPORTANTE: consultamos `user_roles` direto com o service-role client.
+    // Não usamos `has_role()` aqui porque essa função SECURITY DEFINER bloqueia
+    // chamadas sem `auth.uid()` (caso típico de chamadas server-side com
+    // service key) — o que causa falsos negativos no gate do painel.
+    const { data: roleRows, error: rolesErr } = await admin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id);
+    if (rolesErr) {
+      console.error("[admin-api] role check error", rolesErr.message);
       return internalError();
     }
+    const roles = new Set((roleRows ?? []).map((r) => r.role as string));
+    const isAdmin = roles.has("admin");
+    const isModerator = roles.has("moderator");
     if (!isAdmin && !isModerator) {
       return unauthorized("Acesso restrito ao painel administrativo");
     }
@@ -137,10 +144,7 @@ Deno.serve(async (req) => {
 
     // Re-check role para ações restritas a admin (defence in depth).
     if (action && ADMIN_ONLY_ACTIONS.has(action)) {
-      const { data: stillAdmin } = await admin.rpc("has_role", {
-        _user_id: user.id, _role: "admin",
-      });
-      if (!stillAdmin) return unauthorized("Apenas administradores podem executar esta ação");
+      if (!isAdmin) return unauthorized("Apenas administradores podem executar esta ação");
     }
     void MODERATOR_WRITE_ACTIONS; // mantida para documentação
 
