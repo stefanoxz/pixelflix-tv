@@ -1,99 +1,88 @@
 
-# Análise do sistema — bugs reais que afetam o usuário
+# Validação no formulário de login IPTV
 
-Após varredura nos arquivos modificados nas últimas iterações (BottomNav, `WithChrome`, `LibraryTopBar`, `PosterGrid`/`PosterCard`, dvh, `useTmdbFallback`, drawers), encontrei **5 problemas concretos** que podem afetar o uso. Listados por severidade.
+Adicionar validação client-side robusta nos dois fluxos de login (usuário/senha e URL M3U) **antes** de chamar a edge function, com mensagens de erro inline (em vez de só `toast`), uso de `zod` (já instalado no projeto) e indicadores visuais nos campos.
 
 ---
 
-## 1. ALTA — `useTmdbFallback` pode disparar **toneladas** de requests para tmdb-image em telas com cover faltando
+## Implementação
 
-`PosterCard.tsx` chama `useTmdbFallback({ hasCover: !needsFallback })`. Quando o item **não tem cover** (`!item.cover`), `needsFallback = true` → `hasCover = false` → query habilitada para **todos os cards visíveis simultaneamente**.
+### 1. Schemas zod (em `src/pages/Login.tsx`)
 
-Em catálogos grandes onde vários itens vêm sem `stream_icon`, isso dispara dezenas de chamadas paralelas à edge function `tmdb-image` no scroll inicial. Antes da virtualização ajudava a esconder, mas com a janela mobile reduzida ainda assim cada linha visível dispara N requests por re-render.
-
-**Impacto**: lentidão grave em mobile / 3G, edge function rate-limit, bloqueio percebido da grade.
-**Fix**: throttle/debounce ao montar (ex.: pequeno `setTimeout` antes de habilitar) **ou** habilitar só após o card entrar em viewport via IntersectionObserver, **ou** limitar concurrency com uma fila no hook.
-
-## 2. ALTA — Categoria "Favoritos" do Live aparece com **count 0** depois das mudanças
-
-`Live.tsx` usa a string `"favorites"` como id da categoria de favoritos (linhas 83, 225). Mas `railCategories` é construído **só** a partir de `categories` da API (linha 71-76), que **não inclui** uma entrada com id `"favorites"`. O `ChannelCategoryRail` adiciona o botão "Favoritos" separadamente passando `favoritesCount`, então o desktop funciona — porém:
-
-- O **MobileChannelDrawer** (drawer aberto pelo FAB) renderiza **apenas** o que chega em `categories` + entradas hardcoded (`★ Favoritos` com `favorites.size`). Funciona.
-- Porém o `subtitle` no `LibraryTopBar` mostra `${favorites.size} favoritos` mesmo quando o usuário não tem favoritos — OK, é só uma informação.
-
-Não é bug crítico aqui, mas há **inconsistência de id**: Movies/Series usam `"__favorites__"`, Live usa `"favorites"`. Se algum drawer/componente compartilhado for criado vai quebrar. Recomendo padronizar.
-
-## 3. MÉDIA — `IS_MOBILE_VIEWPORT` e `HAS_REAL_HOVER` são avaliados **uma vez no carregamento do módulo**
-
-Em `PosterGrid.tsx` (linhas 10-13) e `PosterCard.tsx` (linhas 10-13), as constantes são calculadas no top-level. Isso causa dois problemas:
-
-1. **Tablets em rotação**: ao girar de portrait→landscape, ou janelas redimensionáveis no Chrome DevTools, o valor não atualiza. Um iPad em portrait carrega como mobile (≤767px) e fica preso com `pageSize=36` mesmo depois de girar.
-2. **DevTools mobile preview**: ao abrir o app no desktop e depois ativar device-toolbar, o app já carregou como desktop e jamais aplica os otimizadores mobile.
-
-**Fix**: usar um hook `useMediaQuery` reativo (já existe `useIsMobile`) ao invés de constante de módulo, **ou** reavaliar via `matchMedia.addEventListener('change', ...)`.
-
-## 4. MÉDIA — Loop de auto-fill pode disparar **muitas expansões** consecutivas e congelar o primeiro paint
-
-`PosterGrid.tsx` linhas 191-201: o `useEffect` depende de `totalSize` e `containerWidth`. Quando expande `visibleCount`, o `totalSize` muda → o effect roda de novo → expande de novo → … até `!hasMore`. Em telas grandes com `pageIncrement=60` revelando 60 itens por frame, **cada expansão também dispara 60 onload de imagens**, o que reflowa o virtualizer e pode travar 200-500ms no mobile.
-
-O `requestAnimationFrame` ajuda mas não rate-limita: ainda gera várias expansões em rápida sucessão.
-
-**Fix**: adicionar guard "esperar terminar de carregar a leva atual antes de expandir" — por exemplo, aguardar `setTimeout(..., 150)` entre expansões, ou só expandir quando todas as imagens da janela atual já tiverem `onLoad` disparado.
-
-## 5. BAIXA — Comportamento confuso ao trocar categoria com `activeId` "preso"
-
-Em `Movies.tsx`/`Series.tsx` linhas 125-130 e 131-136:
 ```ts
-useEffect(() => {
-  if (items.length === 0) setActiveId(undefined);
-  else if (activeId == null || !items.find((i) => i.id === activeId)) {
-    setActiveId(items[0].id);
-  }
-}, [items, activeId]);
+const credsSchema = z.object({
+  username: z.string()
+    .trim()
+    .min(1, "Informe o usuário")
+    .max(120, "Usuário muito longo (máx. 120)")
+    .regex(/^[^\s]+$/, "Usuário não pode conter espaços"),
+  password: z.string()
+    .min(1, "Informe a senha")
+    .max(200, "Senha muito longa (máx. 200)"),
+});
+
+const m3uSchema = z.string()
+  .trim()
+  .min(1, "Cole a URL M3U")
+  .max(2000, "URL muito longa (máx. 2000 caracteres)")
+  .refine(
+    (v) => /^https?:\/\//i.test(v) || /[a-z0-9.-]+\.[a-z]{2,}/i.test(v),
+    "URL precisa conter um endereço (ex.: http://servidor.com/...)"
+  );
 ```
 
-Quando o usuário troca de categoria, esse effect roda e seta `activeId` no primeiro item — o `PosterGrid.activeChange` então dispara `rowVirtualizer.scrollToIndex(0)`. **Mas** o `useEffect` do `PosterGrid` (linha 91-95) já reseta `scrollTop=0` ao mudar `items`. Combinado, isso pode causar um pequeno "flicker" ou rolagem dupla. Não quebra funcionalidade, mas vale uma única origem de verdade pro reset de scroll.
+### 2. Estado de erros por campo
+
+Substituir os `toast.error("Preencha…")` ad-hoc por um state `errors: { username?, password?, m3u? }` e renderizar a mensagem **abaixo do campo** com ícone `AlertCircle` (acessível via `aria-invalid` e `aria-describedby`).
+
+### 3. Fluxo de validação
+
+**Aba Usuário/senha** (`handleSubmitCreds`):
+- `e.preventDefault()`
+- Roda `credsSchema.safeParse({ username, password })`
+- Se falhar: popula `errors`, foca primeiro campo inválido, **não** chama `iptvLogin`
+- Se passar: limpa `errors` e segue o fluxo atual
+
+**Aba M3U** (`handleSubmitM3u`):
+- `e.preventDefault()`
+- Roda `m3uSchema.safeParse(m3uUrl)` — valida formato/comprimento básico
+- Se passar mas `parseM3uUrl()` retornar `null`: erro inline mais específico ("Não foi possível extrair usuário/senha — verifique o formato `get.php` ou `/playlist/usuario/senha`")
+- Se tudo OK: limpa `errors` e segue o fluxo atual
+
+### 4. UX dos campos
+
+- **Limpar erro ao digitar**: `onChange` reseta `errors[campo]` para esconder a mensagem assim que o usuário começa a corrigir.
+- **`aria-invalid={!!errors.x}`** + **`aria-describedby="x-error"`** nos `<Input>`/`<Textarea>`.
+- Borda vermelha quando inválido: classe condicional `errors.x && "border-destructive focus-visible:ring-destructive"`.
+- Mensagem de erro: `<p id="x-error" className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="h-3 w-3"/>{errors.x}</p>`
+
+### 5. Validação preventiva no submit do formulário HTML
+
+- Adicionar `noValidate` no `<form>` (queremos só nossa validação, não a nativa do browser que conflita visualmente).
+- Manter `disabled={loading}` no botão para evitar duplo-submit.
+
+### 6. Não tocar no fluxo de sucesso
+
+A validação **só intercepta antes** do `performLogin`/`iptvLoginM3u`. O resto (anonymous sign-in, `setSession`, navegação para `/sync`, `maybeWarnConnectionLimit`) continua igual.
 
 ---
 
-## Bugs **inexistentes** que checados e descartados
+## Arquivo afetado
 
-- **BottomNav cobre conteúdo**: `pb-bottom-nav` no `<main>` em `App.tsx` está correto, com safe-area inclusa. ✅
-- **Header sticky + LibraryTopBar sticky**: `top-16` está correto após o ajuste anterior. ✅
-- **`prefers-reduced-motion`**: aplica corretamente. ✅
-- **Hover stuck em touch**: `@media (hover: none)` cobre ambos os transforms. ✅
-- **dvh fallback**: `[height:calc(100dvh-Xrem)]` é aplicado depois do `h-[calc(100vh-Xrem)]` — browsers sem suporte ignoram o segundo. ✅
+- `src/pages/Login.tsx` — único arquivo editado.
 
----
+## Não muda
 
-## Plano de correções (em ordem de prioridade)
-
-### Etapa 1 — Conter requisições TMDB (bug #1)
-- Em `PosterCard.tsx`, montar o `useTmdbFallback` com **gate por viewport**: usar `IntersectionObserver` no botão para só habilitar a query quando o card entrar em view (pelo menos 1x). Isso elimina o burst inicial.
-- Alternativa mais simples: adicionar um `useState(seen)` que vira `true` no primeiro `onMouseEnter`/`onLoad`/após X ms — e passar `enabled: seen` no hook.
-
-### Etapa 2 — Tornar viewport detection reativa (bug #3)
-- Criar/usar hook `useMediaQuery(query: string)` reativo.
-- `PosterGrid` consome `useMediaQuery("(max-width: 767px)")` para decidir `pageSize`/`pageIncrement` dinamicamente.
-- `PosterCard` consome `useMediaQuery("(hover: hover) and (pointer: fine)")` para o hover guard.
-
-### Etapa 3 — Rate-limit do auto-fill (bug #4)
-- Adicionar um `useRef<number>(0)` com timestamp do último expand; só permitir nova expansão se passou ≥150ms.
-- Bonus: parar o auto-fill se o `totalSize` excede `clientHeight*3` (já tem buffer suficiente).
-
-### Etapa 4 — Padronizar id de "favoritos" (bug #2)
-- Trocar `"favorites"` por `"__favorites__"` em `Live.tsx` e `ChannelCategoryRail.tsx` (3 ocorrências) — alinhando com Movies/Series.
-- Não é urgente, mas evita armadilha futura.
-
-### Etapa 5 — Centralizar reset de scroll ao trocar lista (bug #5)
-- Remover o `containerRef.current.scrollTop = 0` do `PosterGrid` e deixar **só** o `scrollToIndex(0)` no caminho de `activeId` mudar.
-- Ou, ao contrário: remover o auto-set de `activeId` para o primeiro item nas páginas Movies/Series e deixar o grid lidar com isso internamente.
+- `src/services/iptv.ts` (edge call) — a edge já tem suas próprias validações server-side.
+- `src/lib/parseM3uUrl.ts` — continua sendo a fonte da verdade pro parsing detalhado.
+- Schemas de banco / RLS.
 
 ---
 
-## Estimativa
-- **Arquivos tocados**: `src/components/library/PosterCard.tsx`, `src/components/library/PosterGrid.tsx`, `src/hooks/useMediaQuery.ts` (novo), `src/pages/Live.tsx`, `src/components/live/ChannelCategoryRail.tsx`.
-- **Risco de regressão**: baixo — todas mudanças são refinamentos sobre código existente.
-- **Tempo**: 1 ciclo de implementação.
+## Por que dessa forma
 
-Quer que eu prossiga com **todas as 5 etapas** ou só com a #1 e #3 (as de maior impacto real para o usuário)?
+- **Zod** garante regras declarativas e mensagens consistentes (já é o padrão do projeto via `react-hook-form`/`@hookform/resolvers`).
+- **Erros inline** dão feedback imediato no contexto do campo, em vez de toasts que somem rápido — padrão de apps modernos de login.
+- **Limites de tamanho** previnem payloads gigantes / abuso (defense-in-depth, mesmo com `maxLength` já no input).
+- **Trim no username** evita bugs comuns (espaço acidental colado do clipboard).
+- **Validação client-side não substitui a server-side** — a edge function `iptv-login` continua autoritativa.

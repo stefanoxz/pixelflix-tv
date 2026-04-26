@@ -1,6 +1,7 @@
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, KeyRound, UserIcon, Link2 } from "lucide-react";
+import { Loader2, KeyRound, UserIcon, Link2, AlertCircle } from "lucide-react";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +13,42 @@ import { iptvLogin, iptvLoginM3u, resolveStreamBase, IptvLoginError } from "@/se
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { parseM3uUrl } from "@/lib/parseM3uUrl";
+import { cn } from "@/lib/utils";
 const logoSuperTech = "/logo-supertech.webp";
+
+// ---------------------------------------------------------------------------
+// Schemas de validação (zod). Aplicados client-side antes de chamar a edge.
+// Limites alinhados com os `maxLength` dos inputs. A edge `iptv-login` ainda
+// valida do lado servidor (defense-in-depth).
+// ---------------------------------------------------------------------------
+const credsSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(1, { message: "Informe o usuário" })
+    .max(120, { message: "Usuário muito longo (máx. 120)" })
+    .regex(/^\S+$/, { message: "Usuário não pode conter espaços" }),
+  password: z
+    .string()
+    .min(1, { message: "Informe a senha" })
+    .max(200, { message: "Senha muito longa (máx. 200)" }),
+});
+
+const m3uSchema = z
+  .string()
+  .trim()
+  .min(1, { message: "Cole a URL M3U" })
+  .max(2000, { message: "URL muito longa (máx. 2000 caracteres)" })
+  .refine(
+    (v) => /^https?:\/\//i.test(v) || /[a-z0-9.-]+\.[a-z]{2,}/i.test(v),
+    { message: "URL precisa conter um endereço (ex.: http://servidor.com/...)" },
+  );
+
+type FieldErrors = {
+  username?: string;
+  password?: string;
+  m3u?: string;
+};
 
 const Login = () => {
   const navigate = useNavigate();
@@ -21,6 +57,7 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [m3uUrl, setM3uUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   /** Núcleo do login: recebe creds já parseadas e roda o fluxo padrão. */
   const performLogin = async (
