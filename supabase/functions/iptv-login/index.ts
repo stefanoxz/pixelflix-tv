@@ -329,6 +329,10 @@ function buildVariants(serverBase: string, phase: Phase): string[] {
  * Tenta uma única variante (URL completa do player_api). Aplica fallback de UA
  * SOMENTE se o servidor responder com 403/444. Para qualquer outro caso
  * (sucesso, 401, 5xx, timeout, TLS) retorna direto — quem decide é o caller.
+ *
+ * O caminho de erro carrega `contentType` para o caller decidir se vale a pena
+ * tentar o fallback de PLAYLIST (`/get.php?type=m3u_plus`) — alguns painéis
+ * (ex.: maxtv.uk) só implementam playlist e não Xtream API JSON.
  */
 async function tryVariant(
   base: string,
@@ -336,7 +340,7 @@ async function tryVariant(
   password: string,
 ): Promise<
   | { ok: true; data: any; usedVariant: string; route: "direct" | "proxy" }
-  | { ok: false; status: number; body: string; reason: string }
+  | { ok: false; status: number; body: string; reason: string; contentType?: string }
   | { ok: false; transportError: string }
 > {
   const url = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
@@ -349,21 +353,22 @@ async function tryVariant(
     }
     const { res, body, route } = r;
     if (shouldRetryWithFallbackUa(res.status) && i < uas.length - 1) continue;
+    const contentType = res.headers.get("content-type") ?? undefined;
 
     if (res.status === 401) {
-      return { ok: false, status: 401, body, reason: "credenciais inválidas" };
+      return { ok: false, status: 401, body, reason: "credenciais inválidas", contentType };
     }
     if (!res.ok) {
-      return { ok: false, status: res.status, body, reason: `HTTP ${res.status}` };
+      return { ok: false, status: res.status, body, reason: `HTTP ${res.status}`, contentType };
     }
     let data: any;
     try {
       data = JSON.parse(body);
     } catch {
-      return { ok: false, status: 200, body, reason: "resposta não JSON" };
+      return { ok: false, status: 200, body, reason: "resposta não JSON", contentType };
     }
     if (!data?.user_info || data.user_info.auth === 0) {
-      return { ok: false, status: 401, body, reason: "credenciais inválidas" };
+      return { ok: false, status: 401, body, reason: "credenciais inválidas", contentType };
     }
     // Detecta limite de telas/conexões: painel autentica mas active_cons >= max_connections.
     const maxC = Number(data.user_info.max_connections);
