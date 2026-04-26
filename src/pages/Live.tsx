@@ -153,6 +153,12 @@ const Live = () => {
               placeholder="Buscar canal... (/)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              type="search"
+              inputMode="search"
+              enterKeyHint="search"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
               className="pl-10 h-9 bg-secondary/50 border-border/40"
             />
           </div>
@@ -200,6 +206,12 @@ const Live = () => {
               placeholder="Buscar canal..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              type="search"
+              inputMode="search"
+              enterKeyHint="search"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
               className="pl-10 bg-secondary/50 border-border/50"
             />
           </div>
@@ -233,11 +245,12 @@ const Live = () => {
         </aside>
       </div>
 
-      {/* Drawer mobile + FAB */}
+      {/* Drawer mobile + FAB — acima do BottomNav (h-16) + safe-area */}
       <Button
         onClick={() => setDrawerOpen(true)}
         size="lg"
-        className="lg:hidden fixed bottom-4 right-4 z-40 shadow-lg shadow-primary/30 rounded-full px-5"
+        className="lg:hidden fixed right-4 z-30 shadow-lg shadow-primary/30 rounded-full px-5 tap-feedback"
+        style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
       >
         <Tv className="h-4 w-4 mr-2" />
         Canais

@@ -23,7 +23,7 @@ export function MobileCategoryDrawer({
 }: Props) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
+      <SheetContent side="left" className="w-[280px] sm:w-[360px] p-0 flex flex-col pb-[env(safe-area-inset-bottom)]">
         <SheetHeader className="px-4 py-3 border-b border-border/40">
           <SheetTitle className="text-left">{title}</SheetTitle>
         </SheetHeader>

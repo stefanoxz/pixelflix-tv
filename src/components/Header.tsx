@@ -1,9 +1,7 @@
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Tv, Film, Clapperboard, User, LogOut, Sparkles, Menu, X, Settings } from "lucide-react";
+import { Tv, Film, Clapperboard, User, LogOut, Sparkles, Settings } from "lucide-react";
 const logoSuperTech = "/logo-supertech.webp";
-import { useState } from "react";
 import { useIptv } from "@/context/IptvContext";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,7 +23,6 @@ export function Header() {
   const { session, logout } = useIptv();
   const navigate = useNavigate();
   const location = useLocation();
-  const [open, setOpen] = useState(false);
 
   // hide on login & admin routes
   if (location.pathname.startsWith("/login") || location.pathname.startsWith("/admin")) {
@@ -137,62 +134,47 @@ export function Header() {
           </DropdownMenu>
         </div>
 
-        <button
-          className="md:hidden p-2 rounded-md hover:bg-secondary"
-          onClick={() => setOpen(!open)}
-          aria-label="Menu"
-        >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
-      </div>
-
-      {open && (
-        <nav className="md:hidden border-t border-border/40 bg-background animate-fade-in">
-          <div className="flex flex-col p-3 gap-1">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === "/"}
-                onClick={() => setOpen(false)}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium transition-smooth",
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                  )
-                }
+        {/* Mobile: avatar dropdown direto (nav vive no BottomNav) */}
+        <div className="md:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-2 rounded-full pl-1 pr-2 py-1 hover:bg-secondary/60 transition-colors group tap-feedback"
+                aria-label="Menu da conta"
               >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </NavLink>
-            ))}
-            <NavLink
-              to="/account"
-              onClick={() => setOpen(false)}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium transition-smooth",
-                  isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                )
-              }
-            >
-              <User className="h-4 w-4" />
-              Minha conta
-            </NavLink>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10"
-            >
-              <LogOut className="h-4 w-4" />
-              Sair
-            </button>
-          </div>
-        </nav>
-      )}
+                <span className="h-9 w-9 rounded-full bg-gradient-primary text-primary-foreground flex items-center justify-center text-sm font-semibold shadow-glow ring-2 ring-primary/30">
+                  {initial}
+                </span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 mr-2">
+              <DropdownMenuLabel className="flex flex-col gap-0.5">
+                <span className="text-sm font-semibold truncate">{username}</span>
+                <span className="text-[11px] font-normal text-muted-foreground">
+                  Conta SuperTech
+                </span>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate("/account")} className="gap-2 cursor-pointer">
+                <User className="h-4 w-4" />
+                Minha conta
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/sync")} className="gap-2 cursor-pointer">
+                <Settings className="h-4 w-4" />
+                Sincronizar catálogo
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleLogout}
+                className="gap-2 cursor-pointer text-destructive focus:text-destructive"
+              >
+                <LogOut className="h-4 w-4" />
+                Sair
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
     </header>
   );
 }

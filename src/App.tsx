@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { IptvProvider } from "@/context/IptvContext";
 import { Header } from "@/components/Header";
+import { BottomNav } from "@/components/BottomNav";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import { InstallAppDialog } from "@/components/InstallAppDialog";
@@ -49,7 +50,8 @@ const RouteFallback = () => (
 const WithChrome = ({ children }: { children: React.ReactNode }) => (
   <>
     <Header />
-    <main>{children}</main>
+    <main className="pb-bottom-nav">{children}</main>
+    <BottomNav />
   </>
 );
 

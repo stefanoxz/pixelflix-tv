@@ -61,7 +61,7 @@ export function MobileChannelDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[92vw] sm:w-[420px] p-0 flex flex-col">
+      <SheetContent side="right" className="w-[92vw] sm:w-[420px] md:w-[480px] p-0 flex flex-col pb-[env(safe-area-inset-bottom)]">
         <SheetHeader className="px-4 py-3 border-b border-border/50">
           <SheetTitle className="flex items-center gap-2 text-base">
             <Tv className="h-4 w-4 text-primary" />
@@ -76,6 +76,12 @@ export function MobileChannelDrawer({
               placeholder="Buscar canal..."
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
+              type="search"
+              inputMode="search"
+              enterKeyHint="search"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
               className="pl-10 bg-secondary/50 border-border/50"
             />
           </div>

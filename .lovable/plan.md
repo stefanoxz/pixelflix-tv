@@ -1,185 +1,121 @@
-# Análise visual do SuperTech — pontos a polir
+## Análise atual (mobile/tablet)
 
-Fiz uma varredura nas principais telas (Destaques, Filmes, Séries, Live, Conta, Login, Header). O sistema já está bonito e coeso, mas tem **inconsistências e detalhes** que, se ajustados, dão um salto de "bom" pra "premium estilo Netflix/Apple TV". Abaixo o diagnóstico e o que proponho.
-
----
-
-## 1. Inconsistências entre páginas (alta prioridade)
-
-**Problema**: cada página tem um header/topbar diferente.
-- `Filmes` e `Séries` usam `LibraryTopBar` (relógio + data + voltar).
-- `Live` tem header próprio inline (sem relógio, sem botão voltar, layout diferente).
-- `Destaques` não tem topbar nenhum — só o `Header` global.
-- `Conta` tem só um título solto `<h1>`.
-
-**Proposta**: padronizar — `Live` e `Conta` adotam o mesmo padrão de `LibraryTopBar` (com ícone + título + relógio + data). `Destaques` mantém o hero, mas alinha tipografia.
+Pontos verificados:
+- **Header**: menu hambúrguer ok, mas em mobile a navegação está escondida atrás de um clique extra. Avatar/conta só aparece no desktop.
+- **Hero (Highlights)**: `60vh` + texto largo — fica cortado/apertado em telefones pequenos. Botões "Assistir / Mais informações" empilham mas ocupam pouca largura.
+- **Live**: FAB "Canais" + drawer ok. Player + EPG funcionam, mas falta `safe-area` (iPhone notch) e o player não respeita a barra inferior em fullscreen do navegador.
+- **Account**: cards em `grid-cols-2` no mobile com info densa — `tabular-nums` truncadas. Botão "Sair da conta" perdido no fim sem destaque.
+- **Library (Movies/Series)**: `LibraryShell` usa `height: calc(100vh - 11rem)` fixo, o que em mobile com browser chrome dinâmico (Safari/Chrome iOS) **corta conteúdo embaixo**. Drawer de categorias funciona mas só tem 280px (estreito demais em tablets).
+- **PosterGrid**: 3 colunas no mobile com gap de 8px — pôsteres ficam minúsculos em telas <360px. Hover scale `1.06` é inútil em touch e atrapalha o tap (delay).
+- **Falta**: nenhum padding `env(safe-area-inset-*)`; sem bottom navigation (padrão de apps mobile); inputs de busca sem `autoCapitalize="off"` e `enterKeyHint="search"`; toques sem feedback `active:` claro.
 
 ---
 
-## 2. Header global
+## Plano de polimento mobile/tablet (3 fases)
 
-**Problemas**:
-- Largura `max-w-[1600px]` no header conflita com `max-w-[1800px]` das páginas (desalinha).
-- Logo + nome ocupa muito espaço; em telas médias o menu encosta no botão "Sair".
-- Hover dos itens de nav é sutil demais (`bg-secondary/50`) — pouco feedback.
-- Botão "Sair" no desktop está sempre visível; comum em apps modernos é ficar dentro de um avatar/dropdown.
+### Fase 1 — Fundamentos mobile (alto impacto)
 
-**Proposta**:
-- Unificar largura em `max-w-[1800px]`.
-- Aumentar contraste do estado active (barra inferior animada estilo iOS, em vez de fundo).
-- Mover "Sair" pra dentro de um menu de avatar (`DropdownMenu`) com inicial do usuário, status da assinatura e atalho pra Conta.
-- Adicionar animação suave de underline no hover dos itens.
+1. **Safe areas (iPhone/Android)**
+   - `index.css`: adicionar utilitário `.safe-bottom`, `.safe-top`, `.safe-x` usando `env(safe-area-inset-*)`.
+   - `index.html`: garantir `<meta name="viewport" content="..., viewport-fit=cover">` (verificar/atualizar).
+   - Aplicar `.safe-bottom` no FAB de Live, no Header móvel quando colapsado, e no fim das páginas com botões fixos.
 
----
+2. **Bottom Navigation (mobile-only)**
+   - Novo componente `BottomNav.tsx`: barra fixa inferior com 4 itens (Destaques / Ao Vivo / Filmes / Séries) + um quinto "Conta".
+   - Visível apenas em `<md` (`md:hidden`), substitui a necessidade de abrir o hambúrguer pra trocar de seção.
+   - Header mobile fica mais limpo: só logo + avatar (dropdown).
+   - Padding `safe-bottom` integrado.
 
-## 3. Hero da página de Destaques
+3. **Header mobile redesign**
+   - Avatar com dropdown também no mobile (mesma UX do desktop).
+   - Remover lista de nav do menu hambúrguer (agora vive no BottomNav) — sobra só "Minha conta", "Sincronizar", "Sair".
+   - Pode até trocar o hambúrguer por um avatar tappável direto.
 
-**Problemas**:
-- Altura fixa `60vh min-h-420px` — em monitor ultrawide fica esticado horizontalmente com pouca informação.
-- Imagem de fundo com `opacity-40` é forte demais e compete com o texto.
-- Os 12 indicadores (bolinhas) embaixo poluem em mobile.
-- Botão CTA "Assistir agora" usa `bg-gradient-primary` mas não tem hover state diferenciado (só `opacity-90`).
-- Falta sinopse real do filme (atualmente texto genérico "Descubra milhares de filmes...").
+4. **Altura fluida (LibraryShell)**
+   - Trocar `calc(100vh - 11rem)` por `100dvh` (`dynamic viewport height`) com fallback: `min-h-[calc(100svh-11rem)]` + `lg:h-[calc(100dvh-11rem)]`.
+   - No mobile, deixar a lista usar altura natural (não fixa), já que o layout vira coluna única.
 
-**Proposta**:
-- Reduzir opacidade do background pra `opacity-25` + `blur-sm` em quem não está ativo.
-- Aumentar `h-[70vh]` em desktop pra dar mais respiro.
-- Indicadores: limitar a 5-7 visíveis com fade nas extremidades em mobile.
-- Adicionar metadata real do TMDB embaixo do título (nota, ano, gênero).
-- Botão "Assistir agora" ganha micro-interação (scale + glow no hover).
-- Adicionar gradient lateral mais forte à esquerda pra texto destacar de qualquer poster.
+### Fase 2 — Componentes & Touch
 
----
+5. **Hero (Highlights) mobile**
+   - Diminuir `min-h` para `380px` em telefones; aumentar peso do gradient inferior pra leitura.
+   - Botões em `w-full sm:w-auto` no mobile pra ocupar largura total (CTA mais clicável).
+   - Reduzir tamanho do título em `<sm` (`text-3xl` em vez de `text-5xl`).
 
-## 4. Quick Stats (Destaques)
+6. **PosterCard / MediaCard touch-friendly**
+   - Substituir `hover:scale-1.06` por `hover:scale-1.04 active:scale-95` com `transition-transform`.
+   - Adicionar `@media (hover: hover)` no CSS pra desabilitar shadow/lift hover em touch (evita "stuck hover" em mobile).
+   - Aumentar área de toque do botão "favorito" para 40x40px mínimo.
 
-**Problema**: 3 cards simples com ícone + número. Funciona, mas é o ponto mais "amador" da home.
+7. **PosterGrid mobile**
+   - Em telas <360px usar 2 colunas (mais respiro). De 360-639px manter 3.
+   - Aumentar gap pra 10px no mobile (mais arejado).
 
-**Proposta**:
-- Adicionar mini-sparkline ou ícone animado.
-- Hover: card eleva (translateY -2px) + brilho na borda.
-- Adicionar um 4º card opcional ("Continuar assistindo") quando houver histórico.
+8. **Drawers mais largos em tablets**
+   - `MobileCategoryDrawer` e `MobileChannelDrawer`: `w-[280px] sm:w-[360px] md:w-[420px]`.
+   - Adicionar safe-area no fundo dos drawers.
 
----
+### Fase 3 — Detalhes finos
 
-## 5. Cards de mídia (PosterCard / MediaCard)
+9. **Inputs de busca**
+   - Em todos os `<Input>` de busca: `inputMode="search"`, `enterKeyHint="search"`, `autoCapitalize="off"`, `autoCorrect="off"`, `spellCheck={false}`.
+   - Botão "X" pra limpar busca quando há texto (mobile-friendly).
 
-**A confirmar lendo os componentes**, mas sintomas observados:
-- Cards possivelmente sem skeleton durante load (PosterGrid mostra `isLoading`, mas o estilo do skeleton pode estar genérico).
-- Badge de rating TMDB pode estar pesado visualmente.
-- Hover poderia ter "peek" estilo Netflix (info expande embaixo da capa).
+10. **Account mobile**
+    - Botão "Sair da conta" sticky no rodapé em mobile (com safe-area), variante destrutiva sutil.
+    - Cards de info (`Calendar/Clock/Wifi/Shield`) em `grid-cols-2` ok, mas usar `text-sm` em vez de `text-base` no mobile pra evitar truncamento.
+    - Avatar centralizado em telas pequenas (já é `flex-col`, só ajustar `items-center md:items-start`).
 
-**Proposta**: revisar `PosterCard.tsx` e `MediaCard.tsx`, padronizar:
-- Ratio 2:3 com radius `rounded-lg`.
-- Badge TMDB no canto superior direito, semi-transparente, com ícone estrela menor.
-- Hover: leve scale (1.03) + sombra colorida + título aparece embaixo (não em overlay).
+11. **Player em landscape mobile**
+    - Adicionar listener simples de orientação: quando `landscape` em mobile, esconder `LibraryTopBar` para player ocupar mais tela.
+    - Garantir que controles do player respeitam safe-area horizontal (notch lateral em iPhone landscape).
 
----
-
-## 6. Tipografia e hierarquia
-
-**Problemas**:
-- Títulos `h1` variam: `text-2xl md:text-3xl` (Conta), `text-4xl md:text-6xl` (Hero), `text-lg md:text-2xl` (LibraryTopBar), `text-xl sm:text-2xl` (Live).
-- Pesos misturados (`font-bold`, `font-semibold`).
-- `tracking-tight` aplicado em alguns lugares e em outros não.
-
-**Proposta**: definir 3 tamanhos canônicos:
-- Page title (topbar): `text-xl md:text-2xl font-bold tracking-tight`
-- Section title: `text-lg md:text-xl font-semibold`
-- Hero title: `text-4xl md:text-6xl font-bold tracking-tight`
+12. **Feedback tátil universal**
+    - Classe utilitária `.tap-feedback` em `index.css`: `active:scale-[0.97] transition-transform duration-100`.
+    - Aplicar em botões principais, cards clicáveis e itens de lista.
 
 ---
 
-## 7. Página Live — pequenos ajustes
+## Detalhes técnicos
 
-**Problemas**:
-- Header inline diferente das outras páginas (vide #1).
-- Search box no desktop tem largura fixa `w-72` — fica isolada.
-- FAB mobile "Canais" duplica função do botão "Canais" no header (em viewport médio aparecem os dois).
-- Lista de canais: borda `border-border/50` em vez do `border-border/40` usado nas outras páginas.
+**Arquivos novos:**
+- `src/components/BottomNav.tsx`
 
-**Proposta**: aplicar `LibraryTopBar` + remover botão duplicado no mobile + padronizar bordas.
+**Arquivos editados:**
+- `index.html` (viewport-fit)
+- `src/index.css` (utilitários safe-area + tap-feedback + media hover guard)
+- `src/App.tsx` (montar BottomNav globalmente, ocultar em login/admin)
+- `src/components/Header.tsx` (mobile redesign)
+- `src/components/library/LibraryShell.tsx` (altura dvh)
+- `src/components/library/MobileCategoryDrawer.tsx` (largura)
+- `src/components/live/MobileChannelDrawer.tsx` (largura, safe-area)
+- `src/components/library/PosterGrid.tsx` (cols 2 em <360, gap maior)
+- `src/components/library/PosterCard.tsx` + `src/components/MediaCard.tsx` (hover/active)
+- `src/pages/Highlights.tsx` (hero mobile)
+- `src/pages/Live.tsx` (FAB safe-area, landscape)
+- `src/pages/Account.tsx` (botão sticky, cards densidade)
 
----
+**Padrão de safe-area:**
+```css
+.safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+.safe-top    { padding-top:    max(0.5rem, env(safe-area-inset-top)); }
+.safe-x      { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+```
 
-## 8. Página Conta — densidade
-
-**Problemas**:
-- Vários cards grandes empilhados (info, sessão, favoritos) fazem rolagem longa.
-- "Sessão atual" é uma seção inteira pra 1 linha de info.
-- Favoritos: contadores + listas separadas duplicam informação.
-
-**Proposta**:
-- Combinar info do usuário + sessão atual em **um card único** com 2 colunas.
-- Favoritos: remover contadores duplicados (já aparece no header da lista) e usar abas ou seções colapsáveis.
-- Adicionar avatar com inicial colorida em vez do ícone genérico de usuário.
-
----
-
-## 9. Login
-
-**Problemas**:
-- Card centralizado mas sem profundidade real (sombra fraca).
-- Background com 2 gradientes radiais, mas faltam elementos sutis (partículas, blur orb animado).
-- Logo grande (96x96) + título "SuperTech" duplica a marca.
-
-**Proposta**:
-- Adicionar 2-3 "blur orbs" animados no fundo (estilo Linear/Vercel).
-- Aumentar shadow e backdrop-blur do card.
-- Reduzir logo pra 72px ou mover só o gradiente do nome.
+**Hover guard:**
+```css
+@media (hover: none) {
+  .hover-lift:hover { transform: none !important; box-shadow: none !important; }
+}
+```
 
 ---
 
-## 10. Microinterações faltando
+## Como entregar
 
-Itens que dariam sensação de "vivo":
-- Toast loading no botão "Entrar" já existe, bom.
-- Faltam: skeleton com shimmer (já tem keyframe `shimmer` no Tailwind mas não aplicado nos posters).
-- Transições de página (`fade-in` existe, aplicar no `<main>`).
-- Hover dos cards de stats sem animação no ícone.
-- Scrollbar customizada já existe — bom.
+Recomendo as três fases juntas em uma única entrega — são mudanças coesas e o impacto fica completo. Mas se preferir, dá pra fatiar:
+- **Só Fase 1** (bottom nav + safe-area + altura fluida) — ganho grande imediato.
+- **Fase 1 + 2** (cobre 80% das melhorias visíveis).
+- **Tudo** (recomendado).
 
----
-
-## 11. Mobile — pontos de atenção
-
-- Hero em mobile fica cortado (texto em 1 coluna mas botões ocupam 2 linhas).
-- TopBar mobile mostra relógio + data + botão filtro + título — pode espremer demais em 360px.
-- Drawer de categorias: revisar se tem search dentro.
-
----
-
-# Plano de execução (em ordem de impacto visual)
-
-Vou propor implementar em **fases**, cada uma é uma entrega testável:
-
-### Fase 1 — Fundação (consistência)
-1. Padronizar tipografia (utilitário `.page-title`, `.section-title` no `index.css`).
-2. Unificar `max-w-[1800px]` no header e em todas as páginas.
-3. Aplicar `LibraryTopBar` na Live e na Conta.
-4. Padronizar bordas `border-border/40` em todos os shells.
-
-### Fase 2 — Header premium
-5. Trocar "Sair" por avatar + dropdown menu.
-6. Trocar bg-active dos nav items por underline animado.
-
-### Fase 3 — Hero e Destaques
-7. Hero: opacity menor + blur nos inativos + gradient lateral mais forte.
-8. Adicionar metadata TMDB real abaixo do título.
-9. Cards de stats: hover mais rico + ícone animado.
-
-### Fase 4 — Cards e listas
-10. Revisar PosterCard/MediaCard: hover scale + badge TMDB elegante.
-11. Skeleton com shimmer real.
-
-### Fase 5 — Login + Conta
-12. Login: blur orbs animados + sombra mais profunda no card.
-13. Conta: combinar info+sessão em 1 card; favoritos em abas.
-
----
-
-## Como prefere proceder?
-
-Posso fazer **todas as fases de uma vez** (entrega grande) ou **fase por fase** (você aprova cada etapa). Recomendo começar pelas **Fases 1+2+3** num ciclo só — é o que mais transforma a percepção do app e tem baixo risco. Depois fazemos 4 e 5.
-
-Me confirma se quer assim ou se prefere recortar alguma fase específica.
+Qual prefere?

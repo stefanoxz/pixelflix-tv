@@ -187,7 +187,7 @@ const Highlights = () => {
     <div className="space-y-12 pb-12 animate-fade-in">
       {/* HERO ROTATIVO */}
       <section
-        className="relative h-[60vh] md:h-[68vh] min-h-[460px] w-full overflow-hidden"
+        className="relative h-[55vh] md:h-[68vh] min-h-[380px] md:min-h-[460px] w-full overflow-hidden"
         onMouseEnter={() => (pausedRef.current = true)}
         onMouseLeave={() => (pausedRef.current = false)}
       >
@@ -207,13 +207,13 @@ const Highlights = () => {
             onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
           />
         ))}
-        {/* Vinheta + gradient lateral mais forte pra texto sempre legível */}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/85 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/70 to-transparent" />
+        {/* Vinheta + gradient lateral — mais forte em mobile pra leitura sem competir com o pôster */}
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/95 md:via-background/85 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 md:via-background/70 to-transparent" />
         {/* Glow sutil no canto superior */}
         <div className="absolute -top-20 -left-20 h-96 w-96 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
 
-        <div className="relative h-full flex items-end pb-12 mx-auto max-w-[1800px] px-4 md:px-8">
+        <div className="relative h-full flex items-end pb-8 md:pb-12 mx-auto max-w-[1800px] px-4 md:px-8">
           <div key={featured?.id ?? "empty"} className="max-w-2xl space-y-4 animate-fade-in">
             <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-xs font-medium text-primary backdrop-blur">
               ✨ Em destaque {featured?.kind === "series" ? "· Série" : featured?.kind === "movie" ? "· Filme" : ""}
@@ -253,11 +253,11 @@ const Highlights = () => {
               Streaming sem limites, em qualquer dispositivo.
             </p>
 
-            <div className="flex flex-wrap gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3 pt-2">
               <Button
                 size="lg"
                 onClick={() => featured && openFeatured(featured)}
-                className="bg-gradient-primary hover:opacity-100 hover:scale-[1.03] hover:shadow-[0_0_32px_-4px_hsl(var(--primary)/0.6)] shadow-glow gap-2 transition-all duration-200 font-semibold"
+                className="w-full sm:w-auto bg-gradient-primary hover:opacity-100 hover:scale-[1.03] hover:shadow-[0_0_32px_-4px_hsl(var(--primary)/0.6)] shadow-glow gap-2 transition-all duration-200 font-semibold tap-feedback"
                 disabled={!featured}
               >
                 <Play className="h-4 w-4 fill-current" />
@@ -267,7 +267,7 @@ const Highlights = () => {
                 size="lg"
                 variant="secondary"
                 onClick={() => featured && openFeatured(featured)}
-                className="gap-2 backdrop-blur bg-secondary/70 hover:bg-secondary"
+                className="w-full sm:w-auto gap-2 backdrop-blur bg-secondary/70 hover:bg-secondary tap-feedback"
                 disabled={!featured}
               >
                 <Info className="h-4 w-4" />

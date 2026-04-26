@@ -35,7 +35,8 @@ function colsFor(width: number): number {
   if (width >= 1024) return 6; // lg
   if (width >= 768) return 5;  // md
   if (width >= 640) return 4;  // sm
-  return 3;
+  if (width >= 360) return 3;  // mobile padrão
+  return 2;                    // telas muito pequenas (<360px)
 }
 
 /**
@@ -93,7 +94,7 @@ export function PosterGrid({
   }, []);
 
   const cols = colsFor(containerWidth || 1200);
-  const gap = containerWidth >= 768 ? 12 : 8; // md:gap-3 vs gap-2
+  const gap = containerWidth >= 768 ? 12 : 10; // mais arejado no mobile (era 8)
   const colWidth = containerWidth
     ? Math.floor((containerWidth - gap * (cols - 1)) / cols)
     : 0;
@@ -195,6 +196,12 @@ export function PosterGrid({
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={searchPlaceholder}
+            type="search"
+            inputMode="search"
+            enterKeyHint="search"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
             className="pl-10 bg-secondary/40 border-border/40 h-9"
           />
         </div>
