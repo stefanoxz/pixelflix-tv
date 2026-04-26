@@ -284,7 +284,7 @@ export default function StatsPanel() {
           <div className="mb-4">
             <h3 className="font-semibold">Horário de pico</h3>
             <p className="text-xs text-muted-foreground mt-1">
-              Sessões por dia da semana × hora (UTC) — últimos {Math.min(range, 30)} dias
+              Sessões por dia da semana × hora (horário local) — últimos {Math.min(range, 30)} dias
             </p>
           </div>
           {loading && !heatmap ? (
