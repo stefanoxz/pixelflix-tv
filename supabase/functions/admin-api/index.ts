@@ -53,15 +53,48 @@ function maskIp(ip: string | null | undefined): string {
   return ip;
 }
 
-// Mutating actions require explicit admin re-check
-const MUTATING_ACTIONS = new Set([
+// Ações restritas a ADMIN (moderador NÃO pode executar).
+// Tudo que altera DNS/servidores, gerencia equipe, aprova cadastros, ou
+// libera bloqueios permanentes fica aqui.
+const ADMIN_ONLY_ACTIONS = new Set([
   "allow_server",
   "remove_server",
-  "unblock_user",
-  "evict_session",
   "approve_signup",
   "reject_signup",
+  "unblock_user",
+  "list_team",
+  "add_team_member",
+  "update_team_role",
+  "remove_team_member",
+  "list_audit_log",
 ]);
+
+// Ações que moderador também pode executar (escrita operacional).
+// Esta lista é informativa — qualquer ação não-restrita roda para
+// admin OU moderator.
+const MODERATOR_WRITE_ACTIONS = new Set([
+  "evict_session",
+]);
+
+async function logAudit(
+  actorId: string,
+  actorEmail: string | null,
+  action: string,
+  target?: { user_id?: string | null; email?: string | null; metadata?: Record<string, unknown> },
+) {
+  try {
+    await admin.from("admin_audit_log").insert({
+      actor_user_id: actorId,
+      actor_email: actorEmail,
+      action,
+      target_user_id: target?.user_id ?? null,
+      target_email: target?.email ?? null,
+      metadata: target?.metadata ?? null,
+    });
+  } catch (e) {
+    console.error("[admin-api] audit log failed", (e as Error).message);
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -86,26 +119,30 @@ Deno.serve(async (req) => {
     }
     const user = { id: claimsData.claims.sub as string, email: (claimsData.claims.email as string | undefined) ?? null };
 
-    const { data: isAdmin, error: roleErr } = await admin.rpc("has_role", {
-      _user_id: user.id,
-      _role: "admin",
-    });
-    if (roleErr) {
-      console.error("[admin-api] role check error", roleErr.message);
+    // Verifica papéis do usuário (admin OU moderator).
+    const [{ data: isAdmin, error: adminErr }, { data: isModerator, error: modErr }] = await Promise.all([
+      admin.rpc("has_role", { _user_id: user.id, _role: "admin" }),
+      admin.rpc("has_role", { _user_id: user.id, _role: "moderator" }),
+    ]);
+    if (adminErr || modErr) {
+      console.error("[admin-api] role check error", adminErr?.message ?? modErr?.message);
       return internalError();
     }
-    if (!isAdmin) return unauthorized("Acesso restrito a administradores");
+    if (!isAdmin && !isModerator) {
+      return unauthorized("Acesso restrito ao painel administrativo");
+    }
 
     const body = await req.json().catch(() => ({}));
     const { action, payload } = body as { action?: string; payload?: Record<string, unknown> };
 
-    // Re-check admin role for any mutating action (defence in depth)
-    if (action && MUTATING_ACTIONS.has(action)) {
+    // Re-check role para ações restritas a admin (defence in depth).
+    if (action && ADMIN_ONLY_ACTIONS.has(action)) {
       const { data: stillAdmin } = await admin.rpc("has_role", {
         _user_id: user.id, _role: "admin",
       });
-      if (!stillAdmin) return unauthorized("Acesso restrito a administradores");
+      if (!stillAdmin) return unauthorized("Apenas administradores podem executar esta ação");
     }
+    void MODERATOR_WRITE_ACTIONS; // mantida para documentação
 
     if (action === "dashboard_bundle") {
       const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -433,6 +470,7 @@ Deno.serve(async (req) => {
       const { error } = await admin.from("allowed_servers").upsert(
         { server_url: url, label, notes }, { onConflict: "server_url" });
       if (error) { console.error(error.message); return internalError(); }
+      await logAudit(user.id, user.email, "allow_server", { metadata: { server_url: url, label, notes } });
       return ok({ ok: true, server_url: url, warning });
     }
 
@@ -441,6 +479,7 @@ Deno.serve(async (req) => {
       if (!url) return bad("URL do servidor é obrigatória");
       const { error } = await admin.from("allowed_servers").delete().eq("server_url", url);
       if (error) { console.error(error.message); return internalError(); }
+      await logAudit(user.id, user.email, "remove_server", { metadata: { server_url: url } });
       return ok({ ok: true });
     }
 
@@ -743,6 +782,7 @@ Deno.serve(async (req) => {
       if (!id) return bad("anon_user_id obrigatório");
       const { error } = await admin.from("user_blocks").delete().eq("anon_user_id", id);
       if (error) { console.error(error.message); return internalError(); }
+      await logAudit(user.id, user.email, "unblock_user", { user_id: id });
       return ok({ ok: true });
     }
 
@@ -751,6 +791,7 @@ Deno.serve(async (req) => {
       if (!id) return bad("anon_user_id obrigatório");
       const { error } = await admin.from("active_sessions").delete().eq("anon_user_id", id);
       if (error) { console.error(error.message); return internalError(); }
+      await logAudit(user.id, user.email, "evict_session", { user_id: id });
       return ok({ ok: true });
     }
 
@@ -817,6 +858,12 @@ Deno.serve(async (req) => {
     if (action === "approve_signup") {
       const id = String(payload?.user_id ?? "");
       if (!id) return bad("user_id obrigatório");
+      // Resolve e-mail do alvo (para o log)
+      let targetEmail: string | null = null;
+      try {
+        const { data: u } = await admin.auth.admin.getUserById(id);
+        targetEmail = u?.user?.email ?? null;
+      } catch { /* ignore */ }
       const { error: roleErr } = await admin
         .from("user_roles")
         .insert({ user_id: id, role: "admin" });
@@ -826,12 +873,18 @@ Deno.serve(async (req) => {
       const { error: delErr } = await admin
         .from("pending_admin_signups").delete().eq("user_id", id);
       if (delErr) { console.error(delErr.message); return internalError(); }
+      await logAudit(user.id, user.email, "approve_signup", { user_id: id, email: targetEmail, metadata: { role: "admin" } });
       return ok({ ok: true });
     }
 
     if (action === "reject_signup") {
       const id = String(payload?.user_id ?? "");
       if (!id) return bad("user_id obrigatório");
+      let targetEmail: string | null = null;
+      try {
+        const { data: u } = await admin.auth.admin.getUserById(id);
+        targetEmail = u?.user?.email ?? null;
+      } catch { /* ignore */ }
       const { error: authErr } = await admin.auth.admin.deleteUser(id);
       if (authErr) {
         console.error("[admin-api] deleteUser failed", authErr.message);
@@ -839,6 +892,7 @@ Deno.serve(async (req) => {
       }
       // Trigger ON DELETE CASCADE não cobre pending (sem FK), limpa manualmente.
       await admin.from("pending_admin_signups").delete().eq("user_id", id);
+      await logAudit(user.id, user.email, "reject_signup", { user_id: id, email: targetEmail });
       return ok({ ok: true });
     }
 
@@ -1612,6 +1666,284 @@ Deno.serve(async (req) => {
           avg_duration_ms: durN ? Math.round(durSum / durN) : null,
         },
       });
+    }
+
+    // ---------- TEAM / ROLES ----------
+    if (action === "list_team") {
+      const { data: roles, error } = await admin
+        .from("user_roles")
+        .select("id, user_id, role, created_at")
+        .order("created_at", { ascending: true });
+      if (error) { console.error(error.message); return internalError(); }
+      const rows = (roles ?? []) as Array<{ id: string; user_id: string; role: string; created_at: string }>;
+
+      // Resolve e-mails via service role
+      const uniqueIds = Array.from(new Set(rows.map((r) => r.user_id)));
+      const emailMap = new Map<string, string | null>();
+      await Promise.all(uniqueIds.map(async (uid) => {
+        try {
+          const { data: u } = await admin.auth.admin.getUserById(uid);
+          emailMap.set(uid, u?.user?.email ?? null);
+        } catch { emailMap.set(uid, null); }
+      }));
+
+      const team = rows.map((r) => ({
+        id: r.id,
+        user_id: r.user_id,
+        role: r.role,
+        email: emailMap.get(r.user_id) ?? null,
+        created_at: r.created_at,
+        is_self: r.user_id === user.id,
+      }));
+
+      const adminCount = team.filter((m) => m.role === "admin").length;
+      return ok({ team, admin_count: adminCount });
+    }
+
+    if (action === "add_team_member") {
+      const email = String(payload?.email ?? "").trim().toLowerCase();
+      const role = String(payload?.role ?? "moderator");
+      if (!email || !email.includes("@")) return bad("E-mail inválido");
+      if (role !== "admin" && role !== "moderator") return bad("Papel inválido");
+
+      // Procura usuário existente por e-mail
+      let targetUserId: string | null = null;
+      try {
+        // listUsers paginado — filtramos manualmente para o e-mail
+        const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+        const found = data?.users?.find((u) => (u.email ?? "").toLowerCase() === email);
+        if (found) targetUserId = found.id;
+      } catch (e) {
+        console.error("[admin-api] listUsers failed", (e as Error).message);
+      }
+
+      if (!targetUserId) {
+        // Envia convite (cria usuário pendente)
+        try {
+          const { data, error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {
+            redirectTo: `${new URL(req.url).origin.replace(/\.functions\.supabase\.co$/, "")}/admin`,
+          });
+          if (invErr) {
+            console.error("[admin-api] invite failed", invErr.message);
+            return bad("Não foi possível enviar o convite. Verifique o e-mail.");
+          }
+          targetUserId = data?.user?.id ?? null;
+        } catch (e) {
+          console.error("[admin-api] invite exception", (e as Error).message);
+          return internalError();
+        }
+      }
+
+      if (!targetUserId) return bad("Não foi possível resolver o usuário");
+
+      const { error: roleErr } = await admin
+        .from("user_roles")
+        .insert({ user_id: targetUserId, role });
+      if (roleErr && !/duplicate|unique/i.test(roleErr.message)) {
+        console.error(roleErr.message); return internalError();
+      }
+
+      // Remove cadastro pendente se existir (já é membro de equipe)
+      await admin.from("pending_admin_signups").delete().eq("user_id", targetUserId);
+
+      await logAudit(user.id, user.email, "add_team_member", { user_id: targetUserId, email, metadata: { role } });
+      return ok({ ok: true, user_id: targetUserId, role });
+    }
+
+    if (action === "update_team_role") {
+      const targetId = String(payload?.user_id ?? "");
+      const newRole = String(payload?.role ?? "");
+      if (!targetId) return bad("user_id obrigatório");
+      if (newRole !== "admin" && newRole !== "moderator") return bad("Papel inválido");
+
+      // Verifica papel atual
+      const { data: currentRoles } = await admin
+        .from("user_roles").select("role").eq("user_id", targetId);
+      const isCurrentlyAdmin = (currentRoles ?? []).some((r) => r.role === "admin");
+
+      // Trava: não rebaixar o último admin
+      if (isCurrentlyAdmin && newRole !== "admin") {
+        const { count } = await admin
+          .from("user_roles").select("*", { count: "exact", head: true }).eq("role", "admin");
+        if ((count ?? 0) <= 1) {
+          return bad("Não é possível rebaixar o último administrador");
+        }
+      }
+
+      // Remove papéis atuais e insere o novo (substitui)
+      await admin.from("user_roles").delete().eq("user_id", targetId);
+      const { error: insErr } = await admin
+        .from("user_roles").insert({ user_id: targetId, role: newRole });
+      if (insErr) { console.error(insErr.message); return internalError(); }
+
+      let targetEmail: string | null = null;
+      try {
+        const { data: u } = await admin.auth.admin.getUserById(targetId);
+        targetEmail = u?.user?.email ?? null;
+      } catch { /* ignore */ }
+
+      await logAudit(user.id, user.email, "update_team_role", {
+        user_id: targetId, email: targetEmail, metadata: { new_role: newRole },
+      });
+      return ok({ ok: true });
+    }
+
+    if (action === "remove_team_member") {
+      const targetId = String(payload?.user_id ?? "");
+      if (!targetId) return bad("user_id obrigatório");
+      if (targetId === user.id) return bad("Você não pode remover a si mesmo. Peça a outro admin.");
+
+      const { data: currentRoles } = await admin
+        .from("user_roles").select("role").eq("user_id", targetId);
+      const isCurrentlyAdmin = (currentRoles ?? []).some((r) => r.role === "admin");
+
+      if (isCurrentlyAdmin) {
+        const { count } = await admin
+          .from("user_roles").select("*", { count: "exact", head: true }).eq("role", "admin");
+        if ((count ?? 0) <= 1) return bad("Não é possível remover o último administrador");
+      }
+
+      let targetEmail: string | null = null;
+      try {
+        const { data: u } = await admin.auth.admin.getUserById(targetId);
+        targetEmail = u?.user?.email ?? null;
+      } catch { /* ignore */ }
+
+      const { error } = await admin.from("user_roles").delete().eq("user_id", targetId);
+      if (error) { console.error(error.message); return internalError(); }
+
+      await logAudit(user.id, user.email, "remove_team_member", { user_id: targetId, email: targetEmail });
+      return ok({ ok: true });
+    }
+
+    if (action === "list_audit_log") {
+      const limit = Math.min(Math.max(Number(payload?.limit ?? 100), 1), 500);
+      const { data, error } = await admin
+        .from("admin_audit_log")
+        .select("id, actor_user_id, actor_email, action, target_user_id, target_email, metadata, created_at")
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) { console.error(error.message); return internalError(); }
+      return ok({ entries: data ?? [] });
+    }
+
+    // ---------- HISTORICAL STATS ----------
+    if (action === "stats_logins_daily") {
+      const days = Math.min(Math.max(Number(payload?.days ?? 30), 1), 90);
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await admin
+        .from("login_events")
+        .select("created_at, success")
+        .gte("created_at", since)
+        .order("created_at", { ascending: true })
+        .limit(50000);
+      if (error) { console.error(error.message); return internalError(); }
+      const buckets = new Map<string, { date: string; success: number; fail: number }>();
+      for (const r of data ?? []) {
+        const day = (r.created_at as string).slice(0, 10);
+        const cur = buckets.get(day) ?? { date: day, success: 0, fail: 0 };
+        if (r.success) cur.success++; else cur.fail++;
+        buckets.set(day, cur);
+      }
+      // Preenche dias faltantes
+      const series: Array<{ date: string; success: number; fail: number; total: number }> = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const b = buckets.get(d) ?? { date: d, success: 0, fail: 0 };
+        series.push({ ...b, total: b.success + b.fail });
+      }
+      return ok({ days, series });
+    }
+
+    if (action === "stats_dau_mau") {
+      const days = Math.min(Math.max(Number(payload?.days ?? 30), 1), 90);
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await admin
+        .from("active_sessions")
+        .select("anon_user_id, last_seen_at")
+        .gte("last_seen_at", since)
+        .limit(50000);
+      if (error) { console.error(error.message); return internalError(); }
+
+      const dailyUsers = new Map<string, Set<string>>();
+      for (const r of data ?? []) {
+        const day = (r.last_seen_at as string).slice(0, 10);
+        if (!dailyUsers.has(day)) dailyUsers.set(day, new Set());
+        dailyUsers.get(day)!.add(r.anon_user_id as string);
+      }
+
+      const series: Array<{ date: string; dau: number; mau_rolling: number }> = [];
+      // Calcula MAU rolling de 30 dias para cada ponto
+      const sortedDays: string[] = [];
+      for (let i = days - 1; i >= 0; i--) {
+        sortedDays.push(new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+      }
+      for (let i = 0; i < sortedDays.length; i++) {
+        const day = sortedDays[i];
+        const dau = dailyUsers.get(day)?.size ?? 0;
+        // MAU rolling: união dos últimos 30 dias até aqui
+        const mauSet = new Set<string>();
+        for (let j = Math.max(0, i - 29); j <= i; j++) {
+          const u = dailyUsers.get(sortedDays[j]);
+          if (u) for (const id of u) mauSet.add(id);
+        }
+        series.push({ date: day, dau, mau_rolling: mauSet.size });
+      }
+      return ok({ days, series });
+    }
+
+    if (action === "stats_peak_heatmap") {
+      const days = Math.min(Math.max(Number(payload?.days ?? 7), 1), 30);
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await admin
+        .from("active_sessions")
+        .select("last_seen_at")
+        .gte("last_seen_at", since)
+        .limit(50000);
+      if (error) { console.error(error.message); return internalError(); }
+
+      // grid 7 (dom..sáb) x 24 (0..23)
+      const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+      for (const r of data ?? []) {
+        const d = new Date(r.last_seen_at as string);
+        grid[d.getUTCDay()][d.getUTCHours()]++;
+      }
+      let max = 0;
+      for (const row of grid) for (const v of row) if (v > max) max = v;
+      return ok({ days, grid, max });
+    }
+
+    if (action === "stats_top_content") {
+      const days = Math.min(Math.max(Number(payload?.days ?? 7), 1), 30);
+      const limit = Math.min(Math.max(Number(payload?.limit ?? 10), 1), 50);
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await admin
+        .from("active_sessions")
+        .select("content_kind, content_title, content_id, started_at, last_seen_at")
+        .gte("last_seen_at", since)
+        .not("content_title", "is", null)
+        .neq("content_kind", "idle")
+        .limit(20000);
+      if (error) { console.error(error.message); return internalError(); }
+
+      const tally = new Map<string, { title: string; kind: string; total_s: number; views: number }>();
+      for (const r of data ?? []) {
+        const title = r.content_title as string;
+        if (!title) continue;
+        const kind = (r.content_kind as string) ?? "unknown";
+        const key = `${kind}:${title}`;
+        const start = new Date(r.started_at as string).getTime();
+        const end = new Date(r.last_seen_at as string).getTime();
+        const dur = Math.max(0, Math.round((end - start) / 1000));
+        const cur = tally.get(key) ?? { title, kind, total_s: 0, views: 0 };
+        cur.total_s += dur;
+        cur.views += 1;
+        tally.set(key, cur);
+      }
+      const items = Array.from(tally.values())
+        .sort((a, b) => b.total_s - a.total_s)
+        .slice(0, limit);
+      return ok({ days, items });
     }
 
     return bad("Ação inválida");

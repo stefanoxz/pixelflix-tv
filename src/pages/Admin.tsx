@@ -29,6 +29,8 @@ import { EndpointTestPanel } from "@/components/admin/EndpointTestPanel";
 import { UserReportsPanel } from "@/components/admin/UserReportsPanel";
 import ClientDiagnosticsPanel from "@/components/admin/ClientDiagnosticsPanel";
 import PendingSignupsPanel from "@/components/admin/PendingSignupsPanel";
+import TeamPanel from "@/components/admin/TeamPanel";
+import StatsPanel from "@/components/admin/StatsPanel";
 import {
   Users,
   UserCheck,
@@ -57,6 +59,7 @@ import {
   Stethoscope,
   UserPlus,
   HelpCircle,
+  BarChart3,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
@@ -708,6 +711,7 @@ const Admin = () => {
         <nav className="space-y-1">
           {[
             { id: "dashboard", label: "Dashboard", icon: TrendingUp },
+            { id: "stats", label: "Estatísticas", icon: BarChart3 },
             { id: "monitoring", label: "Monitoramento", icon: Monitor },
             { id: "reports", label: "Reportes", icon: Flag },
             { id: "dns-errors", label: "Erros por DNS", icon: AlertOctagon },
@@ -716,6 +720,7 @@ const Admin = () => {
             { id: "endpoint-test", label: "Testar endpoint", icon: FlaskConical },
             { id: "client-diagnostics", label: "Diagnóstico de clientes", icon: Stethoscope },
             { id: "pending-signups", label: "Novos cadastros", icon: UserPlus },
+            { id: "team", label: "Equipe e permissões", icon: ShieldCheck },
           ].map((item) => (
             <button
               key={item.id}
@@ -763,6 +768,7 @@ const Admin = () => {
           <div>
             <h1 className="text-3xl font-bold">
               {tab === "dashboard" ? "Dashboard"
+                : tab === "stats" ? "Estatísticas"
                 : tab === "monitoring" ? "Monitoramento"
                 : tab === "reports" ? "Reportes de usuários"
                 : tab === "dns-errors" ? "Erros por DNS"
@@ -770,10 +776,12 @@ const Admin = () => {
                 : tab === "endpoint-test" ? "Testar endpoint"
                 : tab === "client-diagnostics" ? "Diagnóstico de clientes"
                 : tab === "pending-signups" ? "Novos cadastros"
+                : tab === "team" ? "Equipe e permissões"
                 : "DNS / Servidores"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {tab === "dashboard" ? "Visão geral em tempo real"
+                : tab === "stats" ? "Histórico de logins, usuários ativos e conteúdos mais assistidos"
                 : tab === "monitoring" ? "Sessões ativas, consumo e bloqueios — atualiza a cada 10s"
                 : tab === "reports" ? "Problemas relatados pelos usuários direto do player"
                 : tab === "dns-errors" ? "Distribuição de falhas por servidor — atualiza a cada 10s"
@@ -781,6 +789,7 @@ const Admin = () => {
                 : tab === "endpoint-test" ? "Diagnóstico de uma DNS específica — exibe se a resposta veio direto ou via proxy"
                 : tab === "client-diagnostics" ? "Tentativas de login dos usuários com provedor, velocidade e localização — atualiza a cada 15s"
                 : tab === "pending-signups" ? "Cadastros aguardando sua aprovação para acessar o painel admin"
+                : tab === "team" ? "Gerencie quem tem acesso ao painel e veja o histórico de ações"
                 : "Cadastre as DNS autorizadas. Sem cadastro prévio, o cliente não consegue logar."}
             </p>
           </div>
@@ -807,6 +816,14 @@ const Admin = () => {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsContent value="reports" className="space-y-6 mt-0">
             <UserReportsPanel />
+          </TabsContent>
+
+          <TabsContent value="team" className="space-y-6 mt-0">
+            <TeamPanel />
+          </TabsContent>
+
+          <TabsContent value="stats" className="space-y-6 mt-0">
+            <StatsPanel />
           </TabsContent>
 
           <TabsContent value="endpoint-test" className="space-y-6 mt-0">
