@@ -2,9 +2,15 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Loader2, Search } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PosterCard, type PosterItem } from "./PosterCard";
 import { useIncompatibleKeys } from "@/hooks/useIncompatibleKeys";
+
+// Detecta uma vez por sessão: em mobile, reduzimos drasticamente a janela
+// inicial pra não enfileirar 120 covers de uma vez em redes lentas.
+const IS_MOBILE_VIEWPORT =
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(max-width: 767px)").matches;
 
 interface Props {
   items: PosterItem[];
@@ -62,10 +68,16 @@ export function PosterGrid({
   searchPlaceholder = "Buscar...",
   emptyMessage = "Nenhum item encontrado.",
   totalLabel,
-  pageSize = 120,
-  pageIncrement = 60,
+  pageSize: pageSizeProp,
+  pageIncrement: pageIncrementProp,
   isLoading = false,
 }: Props) {
+  // Defaults adaptativos: mobile recebe páginas bem menores pra reduzir a
+  // fila inicial de imagens em 3G/4G. Desktop mantém o comportamento antigo
+  // (120 / 60). Props explícitas sempre vencem.
+  const pageSize = pageSizeProp ?? (IS_MOBILE_VIEWPORT ? 36 : 120);
+  const pageIncrement = pageIncrementProp ?? (IS_MOBILE_VIEWPORT ? 24 : 60);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const incompatibleKeys = useIncompatibleKeys();
@@ -174,11 +186,13 @@ export function PosterGrid({
 
   // Auto-fill: se a grade ainda não preenche a viewport (ex.: 120 itens
   // cabem na tela e o usuário não precisa rolar), revela o próximo chunk
-  // automaticamente até preencher. Evita o "spinner eterno" antigo.
+  // automaticamente até preencher. Em mobile usamos um buffer menor pra
+  // evitar disparar 2-3 expansões consecutivas no primeiro paint em 3G/4G.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !hasMore || totalSize === 0) return;
-    if (totalSize <= el.clientHeight + 600) {
+    const buffer = IS_MOBILE_VIEWPORT ? 200 : 600;
+    if (totalSize <= el.clientHeight + buffer) {
       const id = requestAnimationFrame(() => {
         setVisibleCount((c) => Math.min(c + pageIncrement, items.length));
       });
@@ -205,6 +219,14 @@ export function PosterGrid({
             className="pl-10 bg-secondary/40 border-border/40 h-9"
           />
         </div>
+        {/* Indicador discreto de refetch (background) — útil quando há cache
+            mas a query está revalidando. Sem repintar a grade. */}
+        {isLoading && items.length > 0 && (
+          <Loader2
+            className="h-3.5 w-3.5 animate-spin text-muted-foreground"
+            aria-label="Atualizando"
+          />
+        )}
         {totalLabel && (
           <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
             {totalLabel}
@@ -278,6 +300,7 @@ export function PosterGrid({
                           active={it.id === activeId}
                           isFavorite={isFavorite?.(it.id)}
                           incompatible={incompatible}
+                          priority={vRow.index === 0}
                           onClick={() => handleOpen(it)}
                           onHover={onHoverItem ? () => onHoverItem(it) : undefined}
                           onToggleFavorite={

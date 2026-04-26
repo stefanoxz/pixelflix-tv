@@ -4,6 +4,14 @@ import { cn } from "@/lib/utils";
 import { proxyImageUrl } from "@/services/iptv";
 import { useTmdbFallback } from "@/hooks/useTmdbFallback";
 
+// Avalia uma única vez por sessão. Em telas touch puras (sem mouse), pular o
+// prefetch por hover evita queimar banda em 3G/4G — `onMouseEnter` ainda
+// dispara em alguns navegadores móveis durante taps/scroll.
+const HAS_REAL_HOVER =
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
 export interface PosterItem {
   id: number;
   title: string;
@@ -25,6 +33,8 @@ interface Props {
   isFavorite?: boolean;
   /** Marcado como incompatível (HEVC/4K que falhou antes). Vem do grid. */
   incompatible?: boolean;
+  /** Linha está acima da dobra → carrega com prioridade. */
+  priority?: boolean;
   onClick: () => void;
   onHover?: () => void;
   onToggleFavorite?: () => void;
@@ -36,10 +46,11 @@ interface Props {
  * mudam. A marca de incompatibilidade vem por prop (sem listener por card).
  */
 const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
-  { item, active, isFavorite, incompatible, onClick, onHover, onToggleFavorite },
+  { item, active, isFavorite, incompatible, priority, onClick, onHover, onToggleFavorite },
   ref,
 ) {
   const [imgFailed, setImgFailed] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
   // Capas em ~150px exibidas → pedimos 300px de largura (retina) em WebP.
   const cover = item.cover ? proxyImageUrl(item.cover, { w: 300, h: 450, q: 70 }) : null;
 
@@ -59,14 +70,18 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
   const finalCover = imgFailed ? fallbackCover : cover ?? fallbackCover;
   const showPlaceholder = !finalCover;
 
+  // Em touch devices, ignorar onMouseEnter/onFocus de prefetch — em mobile
+  // esses eventos disparam por scroll/tap e queimam banda em 3G/4G.
+  const hoverHandler = HAS_REAL_HOVER ? onHover : undefined;
+
   return (
     <div className="relative group">
       <button
         ref={ref}
         type="button"
         onClick={onClick}
-        onMouseEnter={onHover}
-        onFocus={onHover}
+        onMouseEnter={hoverHandler}
+        onFocus={hoverHandler}
         data-active={active}
         className={cn(
           "block w-full aspect-[2/3] rounded-lg overflow-hidden bg-secondary/60 relative",
@@ -78,17 +93,36 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
         )}
         aria-label={item.title}
       >
+        {/* Skeleton shimmer atrás da imagem — some quando carrega.
+            Em cache quente o onLoad dispara no mesmo frame, então é invisível
+            no desktop. Em 3G/4G evita o "branco" enquanto a cover chega. */}
+        {!showPlaceholder && !imgLoaded && (
+          <div
+            className="absolute inset-0 skeleton-shimmer"
+            aria-hidden
+          />
+        )}
+
         {!showPlaceholder ? (
           <img
             src={finalCover}
             alt={item.title}
-            loading="lazy"
+            loading={priority ? "eager" : "lazy"}
+            // @ts-expect-error - fetchpriority é atributo HTML válido, ainda não tipado
+            fetchpriority={priority ? "high" : "low"}
             decoding="async"
             width={200}
             height={300}
-            className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
+            className={cn(
+              "h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]",
+              !imgLoaded && "opacity-0",
+              imgLoaded && "opacity-100 transition-opacity duration-200",
+            )}
+            onLoad={() => setImgLoaded(true)}
             onError={() => {
               if (!imgFailed) setImgFailed(true);
+              // Mesmo no erro, removemos o skeleton — o fallback assume.
+              setImgLoaded(true);
             }}
           />
         ) : (
@@ -184,6 +218,7 @@ export const PosterCard = memo(PosterCardImpl, (prev, next) => {
     prev.active === next.active &&
     prev.isFavorite === next.isFavorite &&
     prev.incompatible === next.incompatible &&
+    prev.priority === next.priority &&
     prev.onClick === next.onClick &&
     prev.onHover === next.onHover &&
     prev.onToggleFavorite === next.onToggleFavorite
