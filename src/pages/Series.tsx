@@ -77,7 +77,26 @@ const SeriesPage = () => {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { isFavorite, toggle, favorites } = useFavorites(creds.username, "series");
-  const { getProgress, saveProgress, clearProgress } = useWatchProgress(creds.username);
+  const { getProgress, saveProgress, clearProgress, listInProgress } = useWatchProgress(
+    creds.username,
+    creds.server,
+  );
+
+  // Mapa series_id → pct (0-100) baseado no último episódio assistido daquela
+  // série. Custo O(n) sobre nº de itens em progresso (≤200). Memoizado pra
+  // não recalcular a cada render da grade.
+  const seriesProgressById = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const entry of listInProgress()) {
+      const isEp = entry.kind === "episode" || entry.key.startsWith("episode:");
+      if (!isEp || entry.seriesId == null || entry.d <= 0) continue;
+      const pct = Math.min(100, Math.round((entry.t / entry.d) * 100));
+      if (pct <= 0) continue;
+      // listInProgress já vem ordenado por updatedAt desc — primeiro vence.
+      if (!map.has(entry.seriesId)) map.set(entry.seriesId, pct);
+    }
+    return map;
+  }, [listInProgress]);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["series-cats", creds.username],
