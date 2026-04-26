@@ -189,11 +189,12 @@ const Account = () => {
   ];
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 md:px-8 py-8 space-y-6">
-      <div className="flex items-center gap-2">
-        <UserIcon className="h-5 w-5 text-primary" />
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Minha Conta</h1>
-      </div>
+    <div className="mx-auto max-w-[1200px] px-3 md:px-6 py-2 md:py-3 space-y-6 pb-10">
+      <LibraryTopBar
+        title="Minha Conta"
+        icon={<UserIcon className="h-4 w-4" />}
+        subtitle={isActive ? `Conta ativa · expira em ${fmt(expDate)}` : "Conta inativa"}
+      />
 
       {block && (
         <Card className="p-5 border-l-4 border-l-destructive bg-destructive/5">
