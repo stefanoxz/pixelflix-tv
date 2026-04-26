@@ -186,7 +186,10 @@ Deno.serve(async (req) => {
             error: "Limite de telas atingido. Feche outras conexões e tente novamente.",
             code: "MAX_CONNECTIONS",
           }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          // Não devolvemos HTTP 429 aqui: o erro vem do painel externo e o
+          // cliente já trata `code: MAX_CONNECTIONS`. Status 200 evita que o
+          // runtime do navegador/Lovable derrube a tela por erro de Edge Function.
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
       // 401/403/404/410 do painel: trate como "vazio" para a UI continuar viva.

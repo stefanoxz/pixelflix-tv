@@ -112,12 +112,12 @@ export const connectivityConfig = {
   // Reconnect storm control
   reconnectWindowMs: 1_500,
   reconnectSpacingMs: 200,
-  reconnectConcurrency: 2,
-  normalConcurrency: 4,
+  reconnectConcurrency: 1,
+  normalConcurrency: 1,
   // Per-operation timeouts (ms)
   timeoutLogin: 12_000,
   timeoutToken: 5_000,
-  timeoutData: 8_000,
+  timeoutData: 20_000,
   // Retry budget — login agora aceita mais tentativas pra absorver
   // cold starts (503 SUPABASE_EDGE_RUNTIME_ERROR no preflight).
   retriesLogin: 3,
@@ -172,13 +172,13 @@ function applyLevel(next: AdaptiveLevel, rate: number) {
   adaptive.stableSince = Date.now();
   if (next === "normal") {
     connectivityConfig.failureWindowMs = 10_000;
-    connectivityConfig.normalConcurrency = 4;
+    connectivityConfig.normalConcurrency = 1;
   } else if (next === "degraded") {
     connectivityConfig.failureWindowMs = 15_000;
-    connectivityConfig.normalConcurrency = 3;
+    connectivityConfig.normalConcurrency = 1;
   } else {
     connectivityConfig.failureWindowMs = 20_000;
-    connectivityConfig.normalConcurrency = 2;
+    connectivityConfig.normalConcurrency = 1;
   }
   recordTelemetry("adaptive_state_change", { from, to: next, failureRate: rate });
 }
@@ -391,7 +391,7 @@ function ensureMonitor() {
     const stats = getQueueStats();
     const now = Date.now();
     const baseline = connectivityConfig.normalConcurrency;
-    const cap = 6;
+    const cap = 1;
     // Bump up when depth is high but waits stay low (healthy demand spike)
     if (stats.currentDepth > 8 && stats.avgWaitMs < 400) {
       if (!highDepthSince) highDepthSince = now;
