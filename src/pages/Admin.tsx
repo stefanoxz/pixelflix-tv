@@ -42,6 +42,9 @@ import ClientDiagnosticsPanel from "@/components/admin/ClientDiagnosticsPanel";
 import PendingSignupsPanel from "@/components/admin/PendingSignupsPanel";
 import TeamPanel from "@/components/admin/TeamPanel";
 import StatsPanel from "@/components/admin/StatsPanel";
+import { visibleAdminNav, findNavItem } from "@/components/admin/adminNav";
+import AdminMobileTopBar from "@/components/admin/AdminMobileTopBar";
+import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import {
   Users,
   UserCheck,
