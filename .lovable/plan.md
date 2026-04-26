@@ -1,70 +1,112 @@
-## Resposta curta
 
-**Hoje não existe.** O player não salva onde você parou e não pergunta se quer continuar. A única automação parecida é o autoplay do próximo episódio em séries.
+## Resumo
 
-## O que vou implementar
+Quatro entregas combinadas:
+1. **Correção de bugs** do sistema de progresso atual (race do player, re-render da grid, teardown).
+2. **Prateleira "Continue assistindo"** no Highlights.
+3. **Barra de progresso nos cards de séries** (refletindo o último episódio assistido).
+4. **Sincronização entre dispositivos** usando o usuário IPTV como chave (modelo "perfil compartilhado por linha").
 
-1. **Salvar progresso automaticamente** enquanto você assiste a filmes e episódios (não faz sentido em canais ao vivo).
-2. **Perguntar "Continuar de X:XX?"** ao reabrir um filme/episódio que você não terminou, com opção de **Continuar** ou **Começar do início**.
-3. **Marcar como assistido** quando o vídeo chega ao fim (ou >95% do tempo) — assim some o prompt e o item não fica eternamente "em andamento".
-4. **Indicador visual** (barra de progresso fina embaixo do poster) nos cards de filmes/episódios já iniciados, igual à estética do app.
+---
 
-Tudo armazenado **localmente no navegador** (mesmo padrão dos favoritos, escopado por usuário IPTV). Nada vai pro servidor — é privado e não consome backend.
+## Aviso sobre a sincronização escolhida
 
-## Como vai funcionar (UX)
+Você escolheu sincronizar usando o **username IPTV** como chave (sem login adicional). Quero ser transparente sobre o que isso significa antes de executar:
 
-- Você abre um filme → clica em **Assistir** → começa do início. O player salva sua posição a cada ~5s.
-- Você fecha o player no meio → posição fica gravada.
-- Mais tarde, abre o mesmo filme → aparece um diálogo simples:
-  > **Continuar de 23:14?**  
-  > [Continuar]  [Começar do início]
-- Mesmo fluxo para episódios de série (cada episódio com seu próprio progresso).
-- Cards de filmes/episódios em andamento ganham uma barrinha vermelha embaixo do poster.
+- O progresso fica numa tabela pública chaveada por `(server_url, username)`.
+- **Qualquer pessoa que tenha o mesmo username/servidor IPTV vê e sobrescreve o seu progresso**, porque o app não tem como provar quem é quem.
+- Pessoas que compartilham a mesma linha IPTV (comum em revendas) verão o progresso uma da outra — funciona como um "perfil único compartilhado".
+- A tabela terá RLS aberta para leitura/escrita anônima (sem isso a sync não funciona).
 
-Regras:
-- Só salva se assistiu mais de **30s** (evita lixo de cliques acidentais).
-- Considera **terminado** acima de **95%** da duração → some da lista de "em andamento".
-- Limite de **200 itens** salvos (descarta o mais antigo) pra não estourar o localStorage.
+Se em algum momento você quiser isolar progresso por pessoa, será necessário adicionar autenticação real (email ou Google). Pode ser feito depois sem perder os dados.
 
-## Detalhes técnicos
+Vou seguir com essa abordagem se você aprovar este plano.
 
-**Novo hook `src/hooks/useWatchProgress.ts`**
-- API: `getProgress(key)`, `saveProgress(key, currentTime, duration)`, `clearProgress(key)`, `listInProgress()`.
-- Chave: `movie:<stream_id>` ou `episode:<id>`.
-- Storage: `pixelflix:progress:<user>` → `Record<key, { t: number; d: number; updatedAt: number }>`.
-- Mesmo padrão de `useFavorites` (escopo por `creds.username`).
+---
 
-**`src/components/Player.tsx`**
-- Novas props opcionais: `progressKey?: string`, `initialTime?: number`, `onProgress?: (t, d) => void`.
-- No `loadedmetadata`, se `initialTime > 0`, faz `video.currentTime = initialTime`.
-- Listener `timeupdate` com throttle de 5s chamando `onProgress`.
-- No evento `ended` (já existe `onEnded`), chama também `onProgress` com `t = duration` para marcar como concluído.
+## 1. Backend (Lovable Cloud)
 
-**Novo componente `src/components/ResumeDialog.tsx`**
-- Dialog simples (shadcn) com título "Continuar assistindo?", tempo formatado (`mm:ss` ou `hh:mm:ss`), e dois botões.
-- Usado dentro de `Movies.tsx` e `Series.tsx` antes de abrir o `PlayerOverlay`.
+Tabela nova `watch_progress`:
 
-**`src/pages/Movies.tsx` e `src/pages/Series.tsx`**
-- Antes de chamar `setPlaying(...)`/`setPlayingEp(...)`, consultar `getProgress`. Se houver progresso > 30s e < 95%, abrir `ResumeDialog`. Senão, tocar do início direto.
-- Passar `progressKey` e `initialTime` para `<Player>`, e `onProgress` ligado a `saveProgress`.
+```text
+server_url   text       (normalizado: lower + sem barra final)
+username     text       (do Xtream IPTV)
+item_key     text       ("movie:123" ou "episode:456")
+kind         text       ("movie" | "episode")
+content_id   text       (id do filme/episódio)
+series_id    bigint?    (só para episódios — usado pelo card da série)
+title        text?      (para o rail mostrar nome sem chamar o catálogo)
+poster_url   text?      (idem)
+position_seconds  int   (current time)
+duration_seconds  int   (total)
+updated_at   timestamptz
+PRIMARY KEY (server_url, username, item_key)
+```
 
-**Indicador no card (`src/components/MediaCard.tsx`)**
-- Nova prop opcional `progressPct?: number` (0-100). Quando definida, renderiza uma `<div>` de 3px embaixo do poster com largura `${progressPct}%` e cor primária.
-- Em `Movies.tsx`/`Series.tsx`, ler `listInProgress()` uma vez no mount e mapear pct por `stream_id`.
+- RLS habilitada com policies anônimas para SELECT/INSERT/UPDATE/DELETE filtrando por `(server_url, username)` — não há `auth.uid()` para usar.
+- Índice em `(server_url, username, updated_at DESC)` para o rail.
 
-**Sem mudanças de backend.** Sem migrações. Sem novas dependências.
+## 2. Hook `useWatchProgress` — refator
 
-## Arquivos afetados
+Vira **híbrido local + remoto** com merge "último write vence":
 
-- **novo**: `src/hooks/useWatchProgress.ts`
-- **novo**: `src/components/ResumeDialog.tsx`
-- **edit**: `src/components/Player.tsx` (props + listeners)
-- **edit**: `src/components/MediaCard.tsx` (barra de progresso)
-- **edit**: `src/pages/Movies.tsx` (integração)
-- **edit**: `src/pages/Series.tsx` (integração, por episódio)
+- Escrita: grava local imediatamente + faz `upsert` no Supabase (debounced 5s, e flush no `pause`/`unmount`).
+- Leitura inicial: faz um `SELECT` único ao montar; merge entrada a entrada comparando `updatedAt` — vence o mais recente, escreve local e remoto.
+- Realtime opcional via canal Supabase filtrado por `(server_url, username)` para refletir progresso de outro dispositivo enquanto a aba está aberta.
+- Mantém o cache local como fonte de verdade durante a sessão (offline-first); a rede só sincroniza.
+- Estende `ProgressEntry` com `seriesId?`, `title?`, `poster?` para alimentar o rail e o card de série sem pedir info do catálogo.
 
-## Fora de escopo (posso fazer depois se quiser)
+## 3. Correções de bugs
 
-- Sincronizar progresso entre dispositivos via Lovable Cloud (exigiria tabela + RLS + login real).
-- Página/seção dedicada "Continuar assistindo" na Home/Highlights.
-- Progresso para canais ao vivo (não faz sentido).
+**Player (`src/components/Player.tsx`)**
+- Disparar o seek inicial também quando `video.readyState >= 1` (metadata já em cache, evento não vai mais ser emitido).
+- `unmountedRef` nos listeners de `pause`/`timeupdate` para não gravar `currentTime=0` quando o overlay fecha.
+- Garantir cleanup do throttle ao trocar de `src`.
+
+**Grids (`Movies.tsx` / `Series.tsx`)**
+- "Congelar" o snapshot de progresso enquanto o player está ativo (`playingMovie`/`playingEp`), para o re-render a cada 5s não percorrer a grade inteira.
+- Mover a injeção de `progressPct` para um componente leve interno que assina só os IDs visíveis, evitando re-render do `PosterGrid` pai.
+
+**ResumeDialog**
+- Já existe; só mudar para também aceitar `subtitle` (ex.: "S02E05 — Título") quando vier de série.
+
+## 4. Barra de progresso em séries (último episódio)
+
+- Como progresso é por episódio, derivar uma vista por série: para cada série, pegar `max(updatedAt)` dentre as entradas `kind=episode` cujo `seriesId === series.series_id` e usar o `position/duration` daquela entrada como `progressPct` no card.
+- Computado uma vez via `useMemo` sobre `listInProgress()`, indexado por `seriesId`, custo O(n) sobre o nº de itens em progresso (≤200).
+- Card mostra a mesma barra fina já implementada no PosterCard — sem mudança visual nova.
+
+## 5. Rail "Continue assistindo" no Highlights
+
+Componente novo `src/components/highlights/ContinueWatchingRail.tsx`:
+
+- Fonte de dados: `listInProgress()` do hook (já vem ordenado por `updatedAt desc`).
+- Mostra até **12 itens**, mistura filmes e episódios.
+- Cada card: poster (do `poster` salvo na entrada), título, badge de tempo restante (`formatProgressTime(d - t) + " restantes"`), barra fina de progresso embaixo.
+- Para episódios, mostra "S0xE0y — Nome da série" como subtítulo quando os campos estiverem disponíveis.
+- Click:
+  - Filme → navega para `/movies` com `state: { openId, autoplay: true }`.
+  - Episódio → navega para `/series` com `state: { openId: seriesId, episodeId, autoplay: true }`.
+- `Movies.tsx`/`Series.tsx` ganham handler para `state.autoplay`: ao abrir via deep-link, **pular o details dialog** e disparar direto o `ResumeDialog` (ou tocar de imediato).
+- Botão "X" em cada card para remover a entrada (chama `clearProgress`).
+- Renderizado no topo do Highlights, **acima** das outras prateleiras, com fade-in suave; some quando a lista está vazia.
+
+## 6. Arquivos afetados
+
+**Novos**
+- `supabase/migrations/...watch_progress.sql`
+- `src/components/highlights/ContinueWatchingRail.tsx`
+
+**Modificados**
+- `src/hooks/useWatchProgress.ts` — sync remoto, novos campos, merge.
+- `src/components/Player.tsx` — fix de seek inicial e teardown.
+- `src/components/ResumeDialog.tsx` — subtítulo opcional.
+- `src/pages/Highlights.tsx` — incluir o rail.
+- `src/pages/Movies.tsx` — freeze durante playback, autoplay via state.
+- `src/pages/Series.tsx` — freeze durante playback, autoplay via state, derivação de progresso por série para os cards.
+
+## 7. O que continua igual
+
+- Login IPTV permanece como está (sem cadastro novo).
+- Favoritos seguem locais (sem sync remoto).
+- Limites: 30s para começar a salvar, 95% para considerar concluído, LRU 200 entradas.

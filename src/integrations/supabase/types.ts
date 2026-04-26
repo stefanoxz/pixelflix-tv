@@ -397,6 +397,48 @@ export type Database = {
         }
         Relationships: []
       }
+      watch_progress: {
+        Row: {
+          content_id: string
+          duration_seconds: number
+          item_key: string
+          kind: string
+          position_seconds: number
+          poster_url: string | null
+          series_id: number | null
+          server_url: string
+          title: string | null
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          content_id: string
+          duration_seconds?: number
+          item_key: string
+          kind: string
+          position_seconds?: number
+          poster_url?: string | null
+          series_id?: number | null
+          server_url: string
+          title?: string | null
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          content_id?: string
+          duration_seconds?: number
+          item_key?: string
+          kind?: string
+          position_seconds?: number
+          poster_url?: string | null
+          series_id?: number | null
+          server_url?: string
+          title?: string | null
+          updated_at?: string
+          username?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
