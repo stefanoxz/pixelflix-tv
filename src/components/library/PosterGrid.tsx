@@ -212,9 +212,10 @@ export function PosterGrid({
             aria-label="Carregando catálogo"
           >
             {Array.from({ length: 18 }).map((_, i) => (
-              <Skeleton
+              <div
                 key={i}
-                className="w-full aspect-[2/3] rounded-md"
+                className="w-full aspect-[2/3] rounded-lg skeleton-shimmer"
+                style={{ animationDelay: `${(i % 6) * 0.08}s` }}
               />
             ))}
           </div>
