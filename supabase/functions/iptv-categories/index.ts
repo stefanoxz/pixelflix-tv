@@ -156,6 +156,16 @@ Deno.serve(async (req) => {
   const corsHeaders = corsFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // Exige sessão Supabase válida (anônima ou autenticada). Sem isso, qualquer
+  // visitante poderia enumerar catálogo / fazer brute-force contra DNS allow-listadas.
+  const authed = await verifyJwt(req);
+  if (!authed) {
+    return new Response(
+      JSON.stringify({ error: "Sessão necessária. Faça login para continuar." }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   try {
     const body = await req.json();
     const { server, username, password, action, ...extra } = body ?? {};
