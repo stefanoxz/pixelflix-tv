@@ -35,7 +35,16 @@
 </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- LCP placeholder: pintado imediatamente pelo HTML para reduzir o "element render delay".
+           É substituído assim que o React monta. Mantém o mesmo título visual da tela inicial. -->
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0a;color:#fafafa;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:1rem;">
+        <div style="text-align:center;">
+          <img src="/logo-supertech.webp" alt="SuperTech" width="80" height="80" fetchpriority="high" decoding="async" style="margin:0 auto 0.75rem;height:5rem;width:5rem;object-fit:contain;" />
+          <h1 style="font-size:1.875rem;line-height:2.25rem;font-weight:700;letter-spacing:-0.025em;margin:0;">SuperTech</h1>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
