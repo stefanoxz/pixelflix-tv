@@ -275,9 +275,42 @@ const Highlights = () => {
               </Button>
             </div>
 
-            {/* Indicadores — limitados a 7 com fade nas extremidades */}
+            {/* MOBILE: tira horizontal de pôsteres (substitui os dots em telas pequenas) */}
             {featuredQueue.length > 1 && (
-              <div className="flex items-center gap-1.5 pt-3">
+              <div className="md:hidden -mx-4 px-4 pt-3 overflow-x-auto scrollbar-hide">
+                <div className="flex gap-2 pb-1">
+                  {featuredQueue.slice(0, 8).map((item, i) => (
+                    <button
+                      key={`m-${item.kind}-${item.id}`}
+                      aria-label={`Ver destaque ${i + 1}: ${item.title}`}
+                      onClick={() => setActiveIdx(i)}
+                      onTouchStart={() => (pausedRef.current = true)}
+                      onTouchEnd={() => (pausedRef.current = false)}
+                      className={cn(
+                        "relative flex-shrink-0 w-14 aspect-[2/3] rounded-md overflow-hidden border transition-all duration-200 tap-feedback",
+                        i === activeIdx
+                          ? "border-primary shadow-[0_0_12px_hsl(var(--primary)/0.5)] scale-105"
+                          : "border-border/40 opacity-60 hover:opacity-100",
+                      )}
+                    >
+                      <img
+                        src={proxyImageUrl(item.cover)}
+                        alt=""
+                        aria-hidden
+                        loading="lazy"
+                        decoding="async"
+                        className="absolute inset-0 h-full w-full object-cover"
+                        onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* DESKTOP: indicadores em dots — limitados a 7 com fade nas extremidades */}
+            {featuredQueue.length > 1 && (
+              <div className="hidden md:flex items-center gap-1.5 pt-3">
                 {featuredQueue.slice(0, 7).map((_, i) => (
                   <button
                     key={i}
@@ -299,6 +332,71 @@ const Highlights = () => {
               </div>
             )}
           </div>
+
+          {/* DESKTOP: coluna de pôsteres à direita (pôster grande + mini-pôsteres da fila) */}
+          {featured && (
+            <div className="hidden md:flex items-end gap-3 lg:gap-4 pb-2 animate-fade-in">
+              {/* Mini-pôsteres verticais (próximos da fila, exclui o ativo) */}
+              {featuredQueue.length > 1 && (
+                <div className="hidden lg:flex flex-col gap-3">
+                  {featuredQueue
+                    .filter((_, i) => i !== activeIdx)
+                    .slice(0, 4)
+                    .map((item) => {
+                      const realIdx = featuredQueue.findIndex(
+                        (x) => x.kind === item.kind && x.id === item.id,
+                      );
+                      return (
+                        <button
+                          key={`mini-${item.kind}-${item.id}`}
+                          aria-label={`Ver destaque: ${item.title}`}
+                          onClick={() => setActiveIdx(realIdx)}
+                          onMouseEnter={() => (pausedRef.current = true)}
+                          onMouseLeave={() => (pausedRef.current = false)}
+                          className="relative w-16 aspect-[2/3] rounded-md overflow-hidden border border-border/40 opacity-70 hover:opacity-100 hover:scale-110 hover:border-primary/60 transition-all duration-200 tap-feedback"
+                        >
+                          <img
+                            src={proxyImageUrl(item.cover)}
+                            alt=""
+                            aria-hidden
+                            loading="lazy"
+                            decoding="async"
+                            className="absolute inset-0 h-full w-full object-cover"
+                            onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                          />
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+
+              {/* Pôster grande do destaque ativo */}
+              <button
+                onClick={() => openFeatured(featured)}
+                onMouseEnter={() => (pausedRef.current = true)}
+                onMouseLeave={() => (pausedRef.current = false)}
+                aria-label={`Abrir ${featured.title}`}
+                className="group relative w-[180px] lg:w-[240px] xl:w-[280px] aspect-[2/3] rounded-xl overflow-hidden border border-border/40 shadow-[0_20px_60px_-15px_hsl(var(--primary)/0.4)] hover:shadow-[0_25px_70px_-10px_hsl(var(--primary)/0.6)] hover:scale-[1.02] transition-all duration-300 tap-feedback bg-secondary/40"
+              >
+                <img
+                  key={`hero-${featured.kind}-${featured.id}`}
+                  src={proxyImageUrl(featured.cover)}
+                  alt={featured.title}
+                  decoding="async"
+                  {...({ fetchpriority: "high" } as Record<string, string>)}
+                  className="absolute inset-0 h-full w-full object-cover animate-fade-in"
+                  onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                />
+                {/* Overlay sutil + ícone de play no hover */}
+                <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <div className="h-14 w-14 rounded-full bg-primary/90 backdrop-blur flex items-center justify-center shadow-glow">
+                    <Play className="h-6 w-6 fill-current text-primary-foreground" />
+                  </div>
+                </div>
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
