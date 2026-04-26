@@ -166,7 +166,18 @@ Deno.serve(async (req) => {
     }
     const url = `${match}/player_api.php?${params.toString()}`;
 
-    const result = await fetchWithRetries(url);
+    // Retry com backoff quando o painel devolve MAX_CONNECTIONS.
+    // Conexões "fantasma" do próprio painel costumam liberar em poucos segundos.
+    let result = await fetchWithRetries(url);
+    if (!result.ok && result.reason === "MAX_CONNECTIONS") {
+      const delays = [1500, 3000, 5000];
+      for (const delay of delays) {
+        await new Promise((r) => setTimeout(r, delay));
+        result = await fetchWithRetries(url);
+        if (result.ok || result.reason !== "MAX_CONNECTIONS") break;
+      }
+    }
+
     if (!result.ok) {
       // Limite de telas/conexões atingido — sinaliza explicitamente à UI.
       if (result.reason === "MAX_CONNECTIONS") {
