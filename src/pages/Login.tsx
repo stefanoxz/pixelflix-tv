@@ -278,7 +278,7 @@ const Login = () => {
             alt="SuperTech"
             width={80}
             height={80}
-            fetchPriority="high"
+            {...({ fetchpriority: "high" } as Record<string, string>)}
             decoding="async"
             className="mx-auto h-20 w-20 object-contain mb-3 drop-shadow-[0_0_28px_hsl(var(--primary)/0.55)] animate-float"
           />
