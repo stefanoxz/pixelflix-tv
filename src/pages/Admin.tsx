@@ -29,6 +29,8 @@ import { EndpointTestPanel } from "@/components/admin/EndpointTestPanel";
 import { UserReportsPanel } from "@/components/admin/UserReportsPanel";
 import ClientDiagnosticsPanel from "@/components/admin/ClientDiagnosticsPanel";
 import PendingSignupsPanel from "@/components/admin/PendingSignupsPanel";
+import TeamPanel from "@/components/admin/TeamPanel";
+import StatsPanel from "@/components/admin/StatsPanel";
 import {
   Users,
   UserCheck,
