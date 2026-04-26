@@ -90,7 +90,12 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal, 
             const ov = activeOverlay && Number.isFinite(epNum)
               ? activeOverlay.get(epNum)
               : null;
-            const displayTitle = ov?.name?.trim() || ep.title;
+            // TMDB sometimes returns generic placeholders like "Episódio N" with
+            // empty overview — treat those as misses and prefer the server data.
+            const ovName = ov?.name?.trim() || "";
+            const ovIsPlaceholder =
+              !!ovName && /^epis(ó|o)dio\s*\d+$/i.test(ovName);
+            const displayTitle = ovName && !ovIsPlaceholder ? ovName : ep.title;
             const displayPlot = ov?.overview?.trim() || ep.info?.plot;
             const displayStill = ep.info?.movie_image || ov?.still || null;
             return (
