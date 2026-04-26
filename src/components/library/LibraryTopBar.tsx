@@ -9,22 +9,28 @@ interface Props {
   title: string;
   /** Ícone à esquerda do título (default: Sparkles). */
   icon?: ReactNode;
+  /** Subtítulo opcional (ex: contadores). */
+  subtitle?: ReactNode;
   /** Mostra botão "filtro" para abrir o drawer de categorias no mobile. */
   onOpenCategoryDrawer?: () => void;
-  /** Conteúdo extra à direita (ex: contador). */
+  /** Conteúdo extra à direita (ex: contador, busca). */
   rightExtra?: ReactNode;
+  /** Esconde o botão de voltar (útil em páginas raiz). */
+  hideBack?: boolean;
   className?: string;
 }
 
 /**
- * Topbar estilo IBO Pro: voltar + ícone + título à esquerda; relógio + data à direita.
+ * Topbar padronizada: voltar + ícone + título à esquerda; relógio + data à direita.
  * Sticky, com backdrop-blur. Em mobile mostra botão "filtro" para abrir o drawer.
  */
 export function LibraryTopBar({
   title,
   icon,
+  subtitle,
   onOpenCategoryDrawer,
   rightExtra,
+  hideBack = false,
   className,
 }: Props) {
   const navigate = useNavigate();
@@ -38,23 +44,30 @@ export function LibraryTopBar({
         className,
       )}
     >
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-9 w-9 shrink-0"
-        onClick={() => navigate("/")}
-        aria-label="Voltar para o início"
-      >
-        <ArrowLeft className="h-5 w-5" />
-      </Button>
+      {!hideBack && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 shrink-0"
+          onClick={() => navigate("/")}
+          aria-label="Voltar para o início"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+      )}
 
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="h-7 w-7 rounded-md bg-primary/15 text-primary flex items-center justify-center shrink-0">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className="h-8 w-8 rounded-md bg-primary/15 text-primary flex items-center justify-center shrink-0 ring-1 ring-primary/20">
           {icon ?? <Sparkles className="h-4 w-4" />}
         </span>
-        <h1 className="text-lg md:text-2xl font-bold tracking-tight truncate">
-          {title}
-        </h1>
+        <div className="min-w-0">
+          <h1 className="page-title truncate">{title}</h1>
+          {subtitle && (
+            <div className="text-[11px] text-muted-foreground leading-tight truncate">
+              {subtitle}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="ml-auto flex items-center gap-2 md:gap-4">
@@ -70,7 +83,7 @@ export function LibraryTopBar({
             <span className="hidden xs:inline">Categorias</span>
           </Button>
         )}
-        <div className="text-right leading-tight tabular-nums">
+        <div className="hidden sm:block text-right leading-tight tabular-nums">
           <div className="text-base md:text-xl font-semibold">{time}</div>
           <div className="text-[10px] md:text-xs text-muted-foreground">{date}</div>
         </div>
