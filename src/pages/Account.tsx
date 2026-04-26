@@ -290,55 +290,45 @@ const Account = () => {
         )}
       </Card>
 
-      <Card className="p-6 md:p-8 bg-gradient-card border-border/50 shadow-card">
+      <Card className="p-6 md:p-8 bg-gradient-card border-border/40 shadow-card">
         <div className="flex items-center gap-2 mb-5">
           <Heart className="h-5 w-5 text-primary fill-primary/30" />
-          <h2 className="text-lg md:text-xl font-bold">Favoritos</h2>
+          <h2 className="section-title">Favoritos</h2>
+          <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+            {favLive.length + favVod.length + favSeries.length} no total
+          </span>
         </div>
 
-        {/* Contadores */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {favSections.map((s) => (
-            <button
-              key={s.key}
-              onClick={() => navigate(s.route)}
-              className="text-left rounded-xl border border-border/50 bg-card/40 p-4 flex items-center gap-3 transition-smooth hover:border-primary/50"
-            >
-              <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <s.icon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {s.label}
-                </p>
-                <p className="text-base font-semibold mt-0.5">{s.count}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {/* Listas com miniaturas */}
-        <div className="mt-6 space-y-6">
+        {/* Seções com header (ícone + count + ver tudo) */}
+        <div className="space-y-7">
           {favSections.map((s) => (
             <div key={`list-${s.key}`}>
               <div className="flex items-center gap-2 mb-3">
-                <s.icon className="h-4 w-4 text-primary/80" />
+                <div className="h-7 w-7 rounded-md bg-primary/10 text-primary flex items-center justify-center">
+                  <s.icon className="h-3.5 w-3.5" />
+                </div>
                 <h3 className="text-sm font-semibold">{s.label}</h3>
-                {s.count > 6 && (
-                  <span className="text-xs text-muted-foreground">
-                    (mostrando 6 de {s.count})
-                  </span>
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {s.count}
+                </span>
+                {s.count > 0 && (
+                  <button
+                    onClick={() => navigate(s.route)}
+                    className="ml-auto text-[11px] text-primary hover:underline"
+                  >
+                    Ver todos →
+                  </button>
                 )}
               </div>
               {s.items.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">{s.empty}</p>
+                <p className="text-xs text-muted-foreground italic pl-9">{s.empty}</p>
               ) : (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
                   {s.items.map((item) => (
                     <button
                       key={`${s.key}-${item.id}`}
                       onClick={() => navigate(s.route, { state: { openId: item.id } })}
-                      className="group relative aspect-[2/3] overflow-hidden rounded-md bg-secondary border border-border/50 transition-smooth hover:border-primary/50 hover:shadow-glow"
+                      className="group relative aspect-[2/3] overflow-hidden rounded-lg bg-secondary border border-border/40 transition-all duration-300 hover:border-primary/60 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-8px_hsl(var(--primary)/0.5)]"
                       title={item.title}
                     >
                       {item.cover ? (
@@ -346,7 +336,7 @@ const Account = () => {
                           src={proxyImageUrl(item.cover)}
                           alt={item.title}
                           loading="lazy"
-                          className="absolute inset-0 h-full w-full object-cover transition-smooth group-hover:scale-105"
+                          className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                           onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                         />
                       ) : (
@@ -354,8 +344,8 @@ const Account = () => {
                           {item.title}
                         </div>
                       )}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2">
-                        <p className="text-[11px] text-white font-medium line-clamp-2">
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent p-2 pt-6">
+                        <p className="text-[11px] text-white font-medium line-clamp-2 drop-shadow">
                           {item.title}
                         </p>
                       </div>
