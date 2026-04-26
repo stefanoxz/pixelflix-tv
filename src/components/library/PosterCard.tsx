@@ -18,6 +18,8 @@ export interface PosterItem {
   host?: string | null;
   /** Tipo de mídia para o fallback TMDB. */
   kind?: "movie" | "series";
+  /** Progresso de reprodução (0-100). Renderiza barra fina embaixo do poster. */
+  progressPct?: number;
 }
 
 interface Props {
