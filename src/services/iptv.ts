@@ -572,7 +572,7 @@ async function invokeFn<T>(
  */
 export type SafeResult<T> =
   | { ok: true; data: T }
-  | { ok: false; code: string; error: string; status?: number };
+  | { ok: false; code: string; error: string; status?: number; extra?: Record<string, unknown> };
 
 /** Detecta o erro transitório do runtime do Supabase Edge (cold start / 503). */
 function isEdgeRuntimeTransient(status: number | undefined, code: string, error: string): boolean {
