@@ -9,7 +9,10 @@ export interface PosterItem {
   title: string;
   cover?: string | null;
   year?: string | number;
+  /** Provider rating (0-5 scale). Often "5" by default. */
   rating?: number;
+  /** Real TMDB rating (0-10 scale). Preferred when present with enough votes. */
+  tmdbRating?: { vote_average: number | null; vote_count: number | null } | null;
   /** Host upstream do conteúdo — usado para checar a marca de incompatibilidade. */
   host?: string | null;
   /** Tipo de mídia para o fallback TMDB. */
@@ -104,12 +107,24 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
           </p>
         </div>
 
-        {item.rating != null && item.rating > 0 && (
-          <div className="absolute top-1.5 left-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-black/65 backdrop-blur-sm text-[10px] text-white font-medium">
-            <Star className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
-            {item.rating.toFixed(1)}
-          </div>
-        )}
+        {(() => {
+          // Prefer real TMDB rating (0-10) when we have a meaningful vote count.
+          const tv = item.tmdbRating?.vote_count ?? 0;
+          const ta = item.tmdbRating?.vote_average ?? 0;
+          const useTmdb = tv >= 20 && ta > 0;
+          // Fallback: provider rating in 0-5 scale, hiding the "5.0 default"
+          // and "0" — both are uninformative noise for the user.
+          const showProvider =
+            !useTmdb && item.rating != null && item.rating > 0 && item.rating < 5;
+          const label = useTmdb ? ta.toFixed(1) : showProvider ? item.rating!.toFixed(1) : null;
+          if (!label) return null;
+          return (
+            <div className="absolute top-1.5 left-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-black/65 backdrop-blur-sm text-[10px] text-white font-medium">
+              <Star className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
+              {label}
+            </div>
+          );
+        })()}
 
         {incompatible && (
           <div
@@ -153,6 +168,8 @@ export const PosterCard = memo(PosterCardImpl, (prev, next) => {
     prev.item.title === next.item.title &&
     prev.item.year === next.item.year &&
     prev.item.rating === next.item.rating &&
+    prev.item.tmdbRating?.vote_average === next.item.tmdbRating?.vote_average &&
+    prev.item.tmdbRating?.vote_count === next.item.tmdbRating?.vote_count &&
     prev.item.kind === next.item.kind &&
     prev.active === next.active &&
     prev.isFavorite === next.isFavorite &&
