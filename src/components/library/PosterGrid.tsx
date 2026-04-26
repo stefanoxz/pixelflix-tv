@@ -66,7 +66,6 @@ export function PosterGrid({
   isLoading = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const incompatibleKeys = useIncompatibleKeys();
 
@@ -121,24 +120,17 @@ export function PosterGrid({
     rowVirtualizer.measure();
   }, [rowHeight, rowVirtualizer]);
 
-  // IntersectionObserver no sentinela — revela mais ao se aproximar do fim.
-  useEffect(() => {
-    const root = containerRef.current;
-    const target = sentinelRef.current;
-    if (!root || !target || !hasMore) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            setVisibleCount((c) => Math.min(c + pageIncrement, items.length));
-          }
-        }
-      },
-      { root, rootMargin: "600px 0px" },
-    );
-    io.observe(target);
-    return () => io.disconnect();
-  }, [hasMore, items.length, pageIncrement]);
+  // Revelação incremental por scroll: quando faltarem <800px para o fim
+  // do conteúdo virtual, expande a janela. Mais previsível que IO num
+  // sentinela que pode estar visível desde o primeiro render.
+  const onScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const remaining = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (remaining < 800) {
+      setVisibleCount((c) => Math.min(c + pageIncrement, items.length));
+    }
+  }, [items.length, pageIncrement]);
 
   // Scroll automático para manter o card ativo visível (navegação por teclado).
   // Se o ativo está além da janela revelada, expande a janela primeiro.
@@ -178,9 +170,20 @@ export function PosterGrid({
   }, [items]);
 
   const totalSize = rowVirtualizer.getTotalSize();
-  // Sentinela posicionado logo acima do fim do conteúdo virtual,
-  // pra que `rootMargin: 600px` dispare antes de bater no fundo.
-  const sentinelTop = Math.max(0, totalSize - 1);
+
+  // Auto-fill: se a grade ainda não preenche a viewport (ex.: 120 itens
+  // cabem na tela e o usuário não precisa rolar), revela o próximo chunk
+  // automaticamente até preencher. Evita o "spinner eterno" antigo.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !hasMore || totalSize === 0) return;
+    if (totalSize <= el.clientHeight + 600) {
+      const id = requestAnimationFrame(() => {
+        setVisibleCount((c) => Math.min(c + pageIncrement, items.length));
+      });
+      return () => cancelAnimationFrame(id);
+    }
+  }, [totalSize, containerWidth, hasMore, items.length, pageIncrement]);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -223,6 +226,7 @@ export function PosterGrid({
       ) : (
         <div
           ref={containerRef}
+          onScroll={onScroll}
           className="flex-1 overflow-y-auto pr-1 -mr-1"
           // contain layout pra evitar que mudanças internas reflowem o pai.
           style={{ contain: "strict" } as React.CSSProperties}
@@ -277,36 +281,21 @@ export function PosterGrid({
                   </div>
                 );
               })}
-
-              {/* Sentinela — quando entra em view, revela o próximo chunk. */}
-              {hasMore && (
-                <div
-                  ref={sentinelRef}
-                  aria-hidden
-                  style={{
-                    position: "absolute",
-                    top: sentinelTop,
-                    left: 0,
-                    width: "100%",
-                    height: 1,
-                    pointerEvents: "none",
-                  }}
-                />
-              )}
             </div>
           )}
 
-          {/* Rodapé discreto: progresso da revelação. */}
+          {/* Rodapé discreto: progresso da revelação local.
+              Spinner só aparece se a query externa ainda está buscando dados. */}
           <div className="py-3 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
             {hasMore ? (
               <>
-                <Loader2 className="h-3 w-3 animate-spin" />
+                {isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
                 <span>
                   Mostrando {visibleItems.length} de {items.length}
                 </span>
               </>
             ) : items.length > pageSize ? (
-              <span>{items.length} itens carregados</span>
+              <span>{items.length} itens</span>
             ) : null}
           </div>
         </div>
