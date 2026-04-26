@@ -196,6 +196,12 @@ export function PosterGrid({
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={searchPlaceholder}
+            type="search"
+            inputMode="search"
+            enterKeyHint="search"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
             className="pl-10 bg-secondary/40 border-border/40 h-9"
           />
         </div>

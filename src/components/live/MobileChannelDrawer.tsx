@@ -76,6 +76,12 @@ export function MobileChannelDrawer({
               placeholder="Buscar canal..."
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
+              type="search"
+              inputMode="search"
+              enterKeyHint="search"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
               className="pl-10 bg-secondary/50 border-border/50"
             />
           </div>
