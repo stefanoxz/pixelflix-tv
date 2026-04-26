@@ -1,29 +1,37 @@
-## Diagnóstico
+## Objetivo
 
-O painel `maxtv.uk` **autenticou com sucesso** (`auth:1, status:Active`). O bloqueio é apenas **limite de telas atingido**: a conta tem `max_connections: 2` e já está com `active_cons: 2`. Não é bug do nosso webplayer — é limite real da conta. Provavelmente as 2 conexões em uso são "fantasmas" (sessões antigas do painel que demoram pra expirar) ou outro device do mesmo cliente.
+Remover qualquer caminho de código que ainda trata "Limite de telas atingido" / `MAX_CONNECTIONS` como erro de login. A regra final de sucesso passa a ser **única**: `user_info.auth === 1` → login aceito; o limite vira só um aviso (`at_connection_limit`), nunca um bloqueio.
 
-Hoje, ao detectar `active_cons >= max_connections`, nós bloqueamos o login inteiro com erro `MAX_CONNECTIONS`, o que impede o usuário até de **abrir o app, navegar pelo catálogo, e esperar as conexões expirarem**.
+## Estado atual (resumo da auditoria)
 
-## O que vamos mudar
+- A edge `iptv-login` já marca `at_connection_limit: true` e segue como sucesso quando `auth=1` + telas cheias (ok).
+- O frontend (`Login.tsx`) já mostra esse caso como toast warning não-bloqueante e navega para `/sync` (ok).
+- **Resíduos a remover** (ainda capazes de classificar limite como erro em casos de borda):
+  1. `classifyReason()` em `supabase/functions/iptv-login/index.ts` (linhas ~96-102) ainda mapeia `max_connections|limite de telas` → código `MAX_CONNECTIONS` com mensagem bloqueante.
+  2. `MaxConnectionsError` em `src/services/iptv.ts` (linha 460) + dois trechos no `invokeFn` (linhas ~523 e ~528) que lançam esse erro quando vêem `code: "MAX_CONNECTIONS"` no envelope.
 
-1. **`supabase/functions/iptv-login/index.ts` — `tryVariant`**
-   - Quando `auth=1` mas `active_cons >= max_connections`, **não retornar mais erro 429**.
-   - Em vez disso, retornar `ok: true` com a flag `data.at_connection_limit = true`.
-   - O usuário entra normalmente, sincroniza catálogo, navega — só quando tentar abrir um stream o erro de limite vai aparecer (e já temos mensagem amigável pra isso).
+## Mudanças
 
-2. **`src/services/iptv.ts` — `iptvLogin` / `iptvLoginM3u`**
-   - Propagar `at_connection_limit` no objeto retornado para o componente Login ler.
+### 1. `supabase/functions/iptv-login/index.ts`
+- Remover a primeira ramificação de `classifyReason` que retorna `code: "MAX_CONNECTIONS"`. Se em algum cenário marginal o painel mandar esse texto SEM `auth=1`, classifica como `INVALID_CREDENTIALS` normal (mensagem genérica), nunca como bloqueio específico de "limite".
+- Manter intacta toda a lógica de `tryVariant` que já marca `at_connection_limit: true` quando `auth === 1`.
 
-3. **`src/pages/Login.tsx`**
-   - Após login com sucesso, se `at_connection_limit === true`, mostrar um toast de aviso (não bloqueante): *"Você está logado, mas a conta está com todas as telas em uso (2/2). Aguarde alguns minutos ou feche outras conexões antes de abrir um canal."*
-   - Continuar o fluxo normal (`navigate("/sync")`).
+### 2. `src/services/iptv.ts`
+- Remover a classe `MaxConnectionsError` (export incluído).
+- Em `invokeFn`, remover os dois blocos `if (parsed?.code === "MAX_CONNECTIONS")` e `if ((data as ...)?.code === "MAX_CONNECTIONS")` — passam a cair no fluxo padrão, mas como a edge nunca mais emitirá esse código, ficam inertes e o código fica menor.
+- Remover o tratamento especial em `classifyError` que checa `instanceof MaxConnectionsError`.
+
+### 3. Verificação no frontend
+- Buscar em todo `src/` por imports/usos remanescentes de `MaxConnectionsError`. Se houver (ex.: `Player.tsx`, hooks de stream), substituir por tratamento de erro genérico de stream (esses pontos NÃO bloqueiam o login — só mostram que o conteúdo não abriu, que é o comportamento desejado).
 
 ## O que NÃO muda
 
-- Credenciais erradas (`auth=0`) continuam bloqueando como hoje.
-- Mensagem de `MAX_CONNECTIONS` ao tentar tocar um stream continua a mesma — só não bloqueia mais o login.
-- Outros painéis sem o problema continuam idênticos.
+- `at_connection_limit: true` continua sendo emitido pela edge e mostrado como toast warning no `Login.tsx`.
+- Fluxo de player, proxy, autenticação Supabase, banco, RLS, allowlist, fallback de playlist — tudo intocado.
+- Mensagem `"Limite de telas"` vinda do painel continua sendo lida; só deixa de gerar erro de login.
 
 ## Resultado esperado
 
-Você consegue logar com `maxtv.uk`, ver um aviso de "telas em uso", navegar pelo app, e tentar reproduzir depois que o painel limpar as conexões fantasmas.
+- Login com `auth=1` SEMPRE entra no app, com ou sem telas livres.
+- Se as telas estiverem cheias: catálogo carrega normalmente; toast amarelo avisa; erro só aparece quando o usuário tentar dar play num conteúdo (fluxo de player já existente).
+- Login só falha quando `auth !== 1` (credenciais realmente inválidas) ou quando o servidor não responde.
