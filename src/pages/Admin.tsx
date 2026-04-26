@@ -1644,7 +1644,7 @@ const Admin = () => {
                               variant="outline"
                               size="sm"
                               className="text-destructive hover:text-destructive"
-                              onClick={() => removeServer(s.server_url)}
+                              onClick={() => setConfirmRemoveServer(s.server_url)}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
                               Remover
