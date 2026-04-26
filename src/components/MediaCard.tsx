@@ -107,10 +107,10 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
           </span>
         )}
 
-        {showRating && (
+        {ratingLabel && (
           <div className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/70 backdrop-blur px-2 py-0.5 text-xs">
             <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-            <span className="text-white font-medium">{ratingNum?.toFixed(1)}</span>
+            <span className="text-white font-medium">{ratingLabel}</span>
           </div>
         )}
 
