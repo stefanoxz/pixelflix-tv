@@ -60,7 +60,7 @@ export default function PendingSignupsPanel() {
     setBusyId(s.user_id);
     try {
       await invokeAdminApi("approve_signup", { user_id: s.user_id });
-      toast.success(`${s.email} aprovado como administrador`);
+      toast.success(`${s.email ?? s.user_id.slice(0, 8)} aprovado como administrador`);
       setPending((prev) => prev.filter((p) => p.user_id !== s.user_id));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha ao aprovar");
@@ -73,7 +73,7 @@ export default function PendingSignupsPanel() {
     setBusyId(s.user_id);
     try {
       await invokeAdminApi("reject_signup", { user_id: s.user_id });
-      toast.success(`Cadastro de ${s.email} recusado e conta removida`);
+      toast.success(`Cadastro de ${s.email ?? s.user_id.slice(0, 8)} recusado e conta removida`);
       setPending((prev) => prev.filter((p) => p.user_id !== s.user_id));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha ao recusar");
