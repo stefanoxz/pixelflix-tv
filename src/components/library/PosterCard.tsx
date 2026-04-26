@@ -72,6 +72,7 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
           "block w-full aspect-[2/3] rounded-lg overflow-hidden bg-secondary/60 relative",
           "transition-all duration-300 ease-out",
           "hover:ring-2 hover:ring-primary/70 hover:-translate-y-1 hover:shadow-[0_12px_32px_-8px_hsl(var(--primary)/0.5)]",
+          "active:scale-[0.97]",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           active && "ring-2 ring-primary shadow-[0_0_24px_-4px_hsl(var(--primary)/0.6)]",
         )}
