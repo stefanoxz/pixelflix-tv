@@ -355,14 +355,14 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const [hidden, setHidden] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
-  const [playbackRate, setPlaybackRateState] = useState<number>(() => {
-    try {
-      const v = parseFloat(localStorage.getItem("player.rate") || "1");
-      return Number.isFinite(v) && v > 0 ? v : 1;
-    } catch {
-      return 1;
-    }
-  });
+  // Velocidade sempre começa em 1x (normal). Não persistimos entre
+  // sessões / trocas de conteúdo — usuário pediu reset a cada novo canal
+  // ou filme/episódio. Limpa também chave antiga deixada por versões
+  // anteriores que persistiam em localStorage.
+  const [playbackRate, setPlaybackRateState] = useState<number>(1);
+  useEffect(() => {
+    try { localStorage.removeItem("player.rate"); } catch { /* noop */ }
+  }, []);
 
   const [status, setStatus] = useState<DiagnosticStatus>("connecting");
   const [lastReason, setLastReason] = useState<string | null>(null);
@@ -1579,17 +1579,20 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   };
 
   // ===== Playback rate + skip controls =====
+  // Velocidade vale apenas durante a reprodução atual — não persiste.
   const setPlaybackRate = (rate: number) => {
     setPlaybackRateState(rate);
-    try {
-      localStorage.setItem("player.rate", String(rate));
-    } catch {
-      /* noop */
-    }
     if (videoRef.current) videoRef.current.playbackRate = rate;
   };
 
-  // Aplica rate sempre que o vídeo (re)cria.
+  // Reset automático ao trocar de conteúdo (novo canal, filme ou episódio):
+  // sempre que `src` muda, força a velocidade de volta para 1x.
+  useEffect(() => {
+    setPlaybackRateState(1);
+    if (videoRef.current) videoRef.current.playbackRate = 1;
+  }, [src]);
+
+  // Aplica rate sempre que o vídeo (re)cria ou o estado muda.
   useEffect(() => {
     if (videoRef.current) videoRef.current.playbackRate = playbackRate;
   }, [playbackRate, src, retryNonce]);
