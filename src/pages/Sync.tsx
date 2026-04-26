@@ -103,19 +103,41 @@ const Sync = () => {
 
     // Roda em SÉRIE (não paralelo) — muitos painéis Xtream contam cada
     // requisição HTTP como uma "conexão ativa". Disparar live+vod+series
-    // ao mesmo tempo (6 chamadas) estoura facilmente o limite de 2 telas
-    // e o painel devolve "Limite de telas atingido". Sequencial é mais lento
-    // mas evita falsos 429 MAX_CONNECTIONS em contas com poucas telas.
-    for (const step of steps) {
+    // ao mesmo tempo (6 chamadas) estoura facilmente o limite de 2 telas.
+    // Além disso, se um step falha com MAX_CONNECTIONS, esperamos alguns
+    // segundos para o painel liberar a conexão fantasma e tentamos de novo.
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
       setStatuses((prev) => ({ ...prev, [step.key]: "loading" }));
-      try {
-        await step.run();
-        setStatuses((prev) => ({ ...prev, [step.key]: "done" }));
-      } catch (e) {
+
+      let lastErr: unknown = null;
+      const attempts = [0, 4000, 8000]; // 3 tentativas com pausa crescente
+      for (const wait of attempts) {
+        if (wait) await new Promise((r) => setTimeout(r, wait));
+        try {
+          await step.run();
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          const msg = e instanceof Error ? e.message : String(e);
+          // Só retenta em MAX_CONNECTIONS / 429. Outros erros falham rápido.
+          if (!/MAX_CONNECTIONS|429|Limite de telas/i.test(msg)) break;
+        }
+      }
+
+      if (lastErr) {
         anyError = true;
-        const msg = e instanceof Error ? e.message : "Erro";
+        const msg = lastErr instanceof Error ? lastErr.message : "Erro";
         setErrors((prev) => ({ ...prev, [step.key]: msg }));
         setStatuses((prev) => ({ ...prev, [step.key]: "error" }));
+      } else {
+        setStatuses((prev) => ({ ...prev, [step.key]: "done" }));
+      }
+
+      // Pequena pausa entre steps para o painel "respirar".
+      if (i < steps.length - 1) {
+        await new Promise((r) => setTimeout(r, 1200));
       }
     }
 
