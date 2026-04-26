@@ -66,11 +66,16 @@ export function PosterGrid({
   pageIncrement: pageIncrementProp,
   isLoading = false,
 }: Props) {
+  // Detecta mobile reativamente — atualiza ao girar tablet ou ativar
+  // device-toolbar do DevTools. Antes era constante de módulo (top-level),
+  // que ficava presa no estado do primeiro carregamento.
+  const isMobileViewport = useMediaQuery("(max-width: 767px)");
+
   // Defaults adaptativos: mobile recebe páginas bem menores pra reduzir a
   // fila inicial de imagens em 3G/4G. Desktop mantém o comportamento antigo
   // (120 / 60). Props explícitas sempre vencem.
-  const pageSize = pageSizeProp ?? (IS_MOBILE_VIEWPORT ? 36 : 120);
-  const pageIncrement = pageIncrementProp ?? (IS_MOBILE_VIEWPORT ? 24 : 60);
+  const pageSize = pageSizeProp ?? (isMobileViewport ? 36 : 120);
+  const pageIncrement = pageIncrementProp ?? (isMobileViewport ? 24 : 60);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
