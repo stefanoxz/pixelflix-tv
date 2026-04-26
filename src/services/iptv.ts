@@ -39,6 +39,12 @@ export interface LoginResponse {
   server_info: ServerInfo;
   /** DNS atualmente autorizadas no painel (devolvidas pela edge no login). */
   allowed_servers?: string[];
+  /**
+   * True quando o painel autenticou (auth=1) mas a conta está com todas as
+   * telas em uso (active_cons >= max_connections). Login é permitido para o
+   * usuário poder navegar pelo catálogo, mas streams vão falhar até liberar.
+   */
+  at_connection_limit?: boolean;
 }
 
 export interface Category {
