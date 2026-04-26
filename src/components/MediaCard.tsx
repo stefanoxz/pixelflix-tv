@@ -65,6 +65,9 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
             src={proxyImageUrl(cover)}
             alt={title}
             loading="lazy"
+            decoding="async"
+            width={aspect === "poster" ? 200 : 320}
+            height={aspect === "poster" ? 300 : 180}
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-110"
           />
         ) : (
