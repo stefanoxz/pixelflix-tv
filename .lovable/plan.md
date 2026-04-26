@@ -1,37 +1,85 @@
-## Objetivo
+## Problema confirmado
 
-Remover qualquer caminho de código que ainda trata "Limite de telas atingido" / `MAX_CONNECTIONS` como erro de login. A regra final de sucesso passa a ser **única**: `user_info.auth === 1` → login aceito; o limite vira só um aviso (`at_connection_limit`), nunca um bloqueio.
+A tabela `pending_admin_signups` tem **22 linhas**, todas com `email` em branco (`''`). Por isso o painel "Cadastros pendentes" mostra a contagem mas nenhum e-mail aparece.
 
-## Estado atual (resumo da auditoria)
+**Causa raiz:** o trigger `handle_new_admin_signup()` roda em `AFTER INSERT ON auth.users` e tenta ler `NEW.email`. Em vários fluxos do Supabase (especialmente com confirmação de e-mail ligada, ou quando o usuário entra por outro caminho), `NEW.email` chega `NULL` no momento exato do INSERT — o e-mail é gravado em outra coluna/etapa. O `COALESCE(NEW.email, '')` cai para string vazia e o e-mail é perdido para sempre.
 
-- A edge `iptv-login` já marca `at_connection_limit: true` e segue como sucesso quando `auth=1` + telas cheias (ok).
-- O frontend (`Login.tsx`) já mostra esse caso como toast warning não-bloqueante e navega para `/sync` (ok).
-- **Resíduos a remover** (ainda capazes de classificar limite como erro em casos de borda):
-  1. `classifyReason()` em `supabase/functions/iptv-login/index.ts` (linhas ~96-102) ainda mapeia `max_connections|limite de telas` → código `MAX_CONNECTIONS` com mensagem bloqueante.
-  2. `MaxConnectionsError` em `src/services/iptv.ts` (linha 460) + dois trechos no `invokeFn` (linhas ~523 e ~528) que lançam esse erro quando vêem `code: "MAX_CONNECTIONS"` no envelope.
+## O que vai ser corrigido
 
-## Mudanças
+### 1. Trigger mais robusto (migração SQL)
 
-### 1. `supabase/functions/iptv-login/index.ts`
-- Remover a primeira ramificação de `classifyReason` que retorna `code: "MAX_CONNECTIONS"`. Se em algum cenário marginal o painel mandar esse texto SEM `auth=1`, classifica como `INVALID_CREDENTIALS` normal (mensagem genérica), nunca como bloqueio específico de "limite".
-- Manter intacta toda a lógica de `tryVariant` que já marca `at_connection_limit: true` quando `auth === 1`.
+Reescrever `handle_new_admin_signup()` para tentar múltiplas fontes do e-mail, em ordem:
 
-### 2. `src/services/iptv.ts`
-- Remover a classe `MaxConnectionsError` (export incluído).
-- Em `invokeFn`, remover os dois blocos `if (parsed?.code === "MAX_CONNECTIONS")` e `if ((data as ...)?.code === "MAX_CONNECTIONS")` — passam a cair no fluxo padrão, mas como a edge nunca mais emitirá esse código, ficam inertes e o código fica menor.
-- Remover o tratamento especial em `classifyError` que checa `instanceof MaxConnectionsError`.
+1. `NEW.email`
+2. `NEW.raw_user_meta_data->>'email'`
+3. `NEW.raw_app_meta_data->>'email'`
+4. Se mesmo assim vier vazio → ainda insere, mas com `email = NULL` (não `''`), para que possamos fazer backfill depois
 
-### 3. Verificação no frontend
-- Buscar em todo `src/` por imports/usos remanescentes de `MaxConnectionsError`. Se houver (ex.: `Player.tsx`, hooks de stream), substituir por tratamento de erro genérico de stream (esses pontos NÃO bloqueiam o login — só mostram que o conteúdo não abriu, que é o comportamento desejado).
+### 2. Backfill dos 22 registros existentes
 
-## O que NÃO muda
+Migração SQL que atualiza `pending_admin_signups.email` lendo de `auth.users.email` (e dos `raw_*_meta_data` como fallback) para todos os `user_id` que hoje estão com email vazio. O service role tem acesso à `auth.users`, então isso é seguro fazer numa migração.
 
-- `at_connection_limit: true` continua sendo emitido pela edge e mostrado como toast warning no `Login.tsx`.
-- Fluxo de player, proxy, autenticação Supabase, banco, RLS, allowlist, fallback de playlist — tudo intocado.
-- Mensagem `"Limite de telas"` vinda do painel continua sendo lida; só deixa de gerar erro de login.
+### 3. Edge function `list_pending_signups` com fallback
+
+Atualizar `supabase/functions/admin-api/index.ts` (handler `list_pending_signups`) para, quando uma linha vier com `email` vazio/NULL, buscar via `admin.auth.admin.getUserById(user_id)` e preencher o e-mail na resposta. Assim, mesmo que algum registro escape do trigger no futuro, o painel sempre exibe o e-mail real.
+
+### 4. UI defensiva (`PendingSignupsPanel.tsx`)
+
+- Quando `email` vier vazio ainda assim, mostrar `(e-mail indisponível — user_id: <8 primeiros chars>)` em itálico, em vez de uma célula em branco que parece um bug.
+- Mostrar `user_id` curto como tooltip em todas as linhas, pra debug futuro.
+
+### 5. (NÃO escopo)
+
+- Fluxo de aprovação/rejeição continua igual.
+- Login admin, RLS, roles — sem mudanças.
 
 ## Resultado esperado
 
-- Login com `auth=1` SEMPRE entra no app, com ou sem telas livres.
-- Se as telas estiverem cheias: catálogo carrega normalmente; toast amarelo avisa; erro só aparece quando o usuário tentar dar play num conteúdo (fluxo de player já existente).
-- Login só falha quando `auth !== 1` (credenciais realmente inválidas) ou quando o servidor não responde.
+- ✔ Os 22 cadastros pendentes existentes passam a exibir o e-mail real no painel
+- ✔ Novos cadastros sempre gravam o e-mail correto
+- ✔ Mesmo em caso raro de e-mail ainda faltar, o painel busca direto da `auth.users` antes de exibir
+- ✔ Admin consegue identificar quem é cada cadastro e aprovar/recusar com confiança
+
+## Detalhes técnicos
+
+**Migração SQL (resumo):**
+```sql
+-- 1) Trigger robusto
+CREATE OR REPLACE FUNCTION public.handle_new_admin_signup()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  resolved_email text;
+BEGIN
+  resolved_email := COALESCE(
+    NULLIF(NEW.email, ''),
+    NULLIF(NEW.raw_user_meta_data->>'email', ''),
+    NULLIF(NEW.raw_app_meta_data->>'email', '')
+  );
+
+  IF NOT EXISTS (SELECT 1 FROM public.user_roles WHERE role = 'admin') THEN
+    INSERT INTO public.user_roles(user_id, role) VALUES (NEW.id, 'admin')
+    ON CONFLICT DO NOTHING;
+  ELSE
+    INSERT INTO public.pending_admin_signups(user_id, email)
+    VALUES (NEW.id, resolved_email)
+    ON CONFLICT (user_id) DO UPDATE
+      SET email = COALESCE(NULLIF(EXCLUDED.email, ''), pending_admin_signups.email);
+  END IF;
+  RETURN NEW;
+END $$;
+
+-- 2) Backfill dos 22 órfãos
+UPDATE public.pending_admin_signups p
+SET email = COALESCE(
+  NULLIF(u.email, ''),
+  NULLIF(u.raw_user_meta_data->>'email', ''),
+  NULLIF(u.raw_app_meta_data->>'email', ''),
+  p.email
+)
+FROM auth.users u
+WHERE p.user_id = u.id AND (p.email IS NULL OR p.email = '');
+```
+
+**Edge function (handler `list_pending_signups`):** após o `select`, para cada linha sem email, chamar `admin.auth.admin.getUserById(row.user_id)` em paralelo (`Promise.all`) e usar o e-mail retornado.
+
+**Frontend (`PendingSignupsPanel.tsx`):** ajustar a célula de e-mail para exibir um placeholder identificável quando vier vazio, em vez de string vazia silenciosa.
