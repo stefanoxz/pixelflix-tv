@@ -270,6 +270,10 @@ const SeriesPage = () => {
       return;
     }
     setShowNextCard(false);
+    // Próximo episódio: começa do início, mesmo se houver progresso salvo
+    // antigo (o usuário acabou de assistir um episódio inteiro, não faz
+    // sentido perguntar nada).
+    setResumeAt(0);
     setPlayingEp({
       ep: nextEpisodeInfo.ep,
       seriesId: playingEp.seriesId,
