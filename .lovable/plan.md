@@ -1,47 +1,29 @@
-## Problema
+## Diagnóstico
 
-DNS `http://maxtv.uk` funciona em outro webplayer mas falha no nosso ao logar via URL M3U (`/get.php?username=…&password=…`). O log do edge function mostra que `maxtv.uk` responde HTTP 200 a `/player_api.php` — ou seja, transporte e DNS estão OK. A falha é no **conteúdo da resposta**: provavelmente `auth=0`, body não-JSON (HTML/playlist) ou `user_info` ausente.
+O painel `maxtv.uk` **autenticou com sucesso** (`auth:1, status:Active`). O bloqueio é apenas **limite de telas atingido**: a conta tem `max_connections: 2` e já está com `active_cons: 2`. Não é bug do nosso webplayer — é limite real da conta. Provavelmente as 2 conexões em uso são "fantasmas" (sessões antigas do painel que demoram pra expirar) ou outro device do mesmo cliente.
 
-Hoje, quando isso acontece, devolvemos `INVALID_CREDENTIALS` sem nenhuma pista, e nem registramos o que o servidor de fato mandou — então não dá para diagnosticar pelo console do usuário.
+Hoje, ao detectar `active_cons >= max_connections`, nós bloqueamos o login inteiro com erro `MAX_CONNECTIONS`, o que impede o usuário até de **abrir o app, navegar pelo catálogo, e esperar as conexões expirarem**.
 
-## O que vamos fazer
+## O que vamos mudar
 
-1. **Diagnóstico completo no `iptv-login` (mode `m3u_register`)**
-   - Quando `tryVariant` falhar com "resposta não JSON" ou "credenciais inválidas", anexar à resposta de erro um campo `debug` com:
-     - `usedVariant` testado
-     - `httpStatus` recebido
-     - `bodyPreview` (primeiros 300 chars, sanitizado)
-     - `contentType` do response
-     - `looksLikeM3u` (boolean: começa com `#EXTM3U`)
-     - `looksLikeHtml` (boolean)
-   - Esse `debug` só aparece em erro — em sucesso não muda nada.
-   - Logar no servidor `[iptv-login] m3u_register FAIL host=maxtv.uk reason=… preview=…` para inspecionarmos via edge logs.
+1. **`supabase/functions/iptv-login/index.ts` — `tryVariant`**
+   - Quando `auth=1` mas `active_cons >= max_connections`, **não retornar mais erro 429**.
+   - Em vez disso, retornar `ok: true` com a flag `data.at_connection_limit = true`.
+   - O usuário entra normalmente, sincroniza catálogo, navega — só quando tentar abrir um stream o erro de limite vai aparecer (e já temos mensagem amigável pra isso).
 
-2. **Fallback automático: se `/player_api.php` responde mas não é JSON Xtream válido, tentar `/get.php?...&type=m3u_plus`**
-   - Se body parece M3U (`#EXTM3U`), tratar como **playlist mode**: extrair o servidor base e creds da própria URL e considerar login bem-sucedido com um `user_info` sintético `{ auth: 1, status: "Active", message: "playlist-mode" }`.
-   - Isso resolve painéis que só servem playlist e não implementam Xtream API JSON — que é exatamente o sintoma que o `maxtv.uk` parece ter.
+2. **`src/services/iptv.ts` — `iptvLogin` / `iptvLoginM3u`**
+   - Propagar `at_connection_limit` no objeto retornado para o componente Login ler.
 
-3. **UA mais "TV-like" como fallback adicional**
-   - Adicionar `VLC/3.0.20 LibVLC/3.0.20` e `Lavf/58.76.100` à lista de `FALLBACK_UAS` (alguns painéis bloqueiam navegadores e só liberam para players).
+3. **`src/pages/Login.tsx`**
+   - Após login com sucesso, se `at_connection_limit === true`, mostrar um toast de aviso (não bloqueante): *"Você está logado, mas a conta está com todas as telas em uso (2/2). Aguarde alguns minutos ou feche outras conexões antes de abrir um canal."*
+   - Continuar o fluxo normal (`navigate("/sync")`).
 
-4. **Mensagem de erro acionável no Login**
-   - No `src/pages/Login.tsx`, quando o backend devolver `debug`, mostrar um toast detalhado (em modo desenvolvedor / botão "ver detalhes técnicos") com `httpStatus`, `contentType`, `bodyPreview` — assim você não precisa mais me mandar código de outro player, basta mandar o preview.
+## O que NÃO muda
 
-5. **Documentação inline**
-   - Comentar no `iptv-login/index.ts` o motivo do playlist-mode fallback, para não quebrar com um futuro refactor.
+- Credenciais erradas (`auth=0`) continuam bloqueando como hoje.
+- Mensagem de `MAX_CONNECTIONS` ao tentar tocar um stream continua a mesma — só não bloqueia mais o login.
+- Outros painéis sem o problema continuam idênticos.
 
-## Arquivos afetados
+## Resultado esperado
 
-- `supabase/functions/iptv-login/index.ts` — adicionar `debug` em erros, fallback playlist-mode no `m3u_register`, novos UAs.
-- `src/pages/Login.tsx` — exibir `debug.bodyPreview` e `debug.httpStatus` em caso de falha.
-- (opcional) `src/lib/parseM3uUrl.ts` — só se o preview real do `maxtv.uk` mostrar um formato de URL que ainda não cobrimos.
-
-## Riscos / o que NÃO muda
-
-- Não mexemos em nenhuma outra DNS que já funciona.
-- Não relaxamos validação de credenciais reais (`auth=0` continua falhando) — só passamos a aceitar **respostas M3U válidas** como prova de credencial OK.
-- Não tocamos no player de vídeo (hls.js) — esse problema é só de login.
-
-## Próximo passo após implementar
-
-Você tenta logar de novo com `maxtv.uk`. Se ainda falhar, o toast vai mostrar exatamente o que o servidor respondeu, e a partir daí eu ajusto o parser específico para esse painel.
+Você consegue logar com `maxtv.uk`, ver um aviso de "telas em uso", navegar pelo app, e tentar reproduzir depois que o painel limpar as conexões fantasmas.

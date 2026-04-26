@@ -370,15 +370,20 @@ async function tryVariant(
     if (!data?.user_info || data.user_info.auth === 0) {
       return { ok: false, status: 401, body, reason: "credenciais inválidas", contentType };
     }
-    // Detecta limite de telas/conexões: painel autentica mas active_cons >= max_connections.
+    // Detecta limite de telas/conexões: painel autenticou (auth=1) mas
+    // active_cons >= max_connections. ANTES bloqueávamos o login com 429,
+    // mas isso impedia o usuário até de navegar pelo catálogo. Agora deixamos
+    // entrar e marcamos `at_connection_limit: true` para o cliente avisar
+    // só quando o stream realmente falhar — e dar tempo das conexões fantasmas
+    // do próprio painel expirarem (alguns levam minutos).
     const maxC = Number(data.user_info.max_connections);
     const actC = Number(data.user_info.active_cons);
     const msg = String(data.user_info.message || "").toUpperCase();
-    if (
+    const atLimit =
       (Number.isFinite(maxC) && Number.isFinite(actC) && maxC > 0 && actC >= maxC) ||
-      /LIMITE DE TELAS|MAX[_ ]?CONNECTIONS|TOO MANY CONNECTIONS/.test(msg)
-    ) {
-      return { ok: false, status: 429, body, reason: "MAX_CONNECTIONS" };
+      /LIMITE DE TELAS|MAX[_ ]?CONNECTIONS|TOO MANY CONNECTIONS/.test(msg);
+    if (atLimit) {
+      data.at_connection_limit = true;
     }
     return { ok: true, data, usedVariant: base, route };
   }
