@@ -466,6 +466,11 @@ const Highlights = () => {
           </section>
         )}
       </div>
+      <WelcomeNameDialog
+        username={creds.username}
+        open={welcomeOpen}
+        onClose={() => setWelcomeOpen(false)}
+      />
     </div>
   );
 };
