@@ -59,7 +59,20 @@ const Movies = () => {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { isFavorite, toggle, favorites } = useFavorites(creds.username, "vod");
-  const { getProgress, saveProgress, clearProgress } = useWatchProgress(creds.username);
+  const { getProgress, saveProgress, clearProgress, listInProgress } = useWatchProgress(creds.username);
+
+  // Mapa stream_id → pct (0-100) para a barrinha "continue assistindo" nos cards.
+  const movieProgressById = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const entry of listInProgress()) {
+      if (!entry.key.startsWith("movie:")) continue;
+      const id = Number(entry.key.slice("movie:".length));
+      if (!Number.isFinite(id) || entry.d <= 0) continue;
+      const pct = Math.min(100, Math.round((entry.t / entry.d) * 100));
+      if (pct > 0) map.set(id, pct);
+    }
+    return map;
+  }, [listInProgress]);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["vod-cats", creds.username],
