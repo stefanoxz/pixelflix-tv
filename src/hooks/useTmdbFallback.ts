@@ -3,27 +3,41 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface TmdbFallbackInput {
   type: "movie" | "series";
-  /** Disable lookup when a usable cover is already available. */
-  hasCover: boolean;
+  /**
+   * When true, the lookup is skipped entirely. Pass `false` to always enrich
+   * with TMDB (e.g. to pull pt-BR overview even when the provider has plot in
+   * English). The previous "hasCover" semantics were too restrictive.
+   */
+  hasCover?: boolean;
   tmdb_id?: string | number | null;
   name?: string | null;
   year?: string | number | null;
+  /** Disable fetch entirely — useful when dialog is closed. */
+  enabled?: boolean;
 }
 
 export interface TmdbFallbackResult {
   poster: string | null;
   backdrop: string | null;
   overview: string | null;
+  tmdb_id: number | null;
 }
 
 /**
- * Lazily fetches TMDB poster/backdrop when the IPTV provider does not supply a
- * cover. Results are cached server-side in `tmdb_image_cache` for 30 days.
+ * Lazily fetches TMDB poster/backdrop/overview/tmdb_id. Even when the IPTV
+ * provider already supplies cover/plot we still query TMDB so that:
+ *   - the synopsis can be displayed in pt-BR;
+ *   - the resolved tmdb_id can be reused to fetch episodes/ratings.
+ * Server-side cache (`tmdb_image_cache`) keeps this cheap.
  */
 export function useTmdbFallback(input: TmdbFallbackInput) {
   const enabled =
-    !input.hasCover && (!!input.tmdb_id || !!(input.name && input.name.trim()));
+    (input.enabled ?? true) &&
+    !input.hasCover && // legacy path: only used by callers that still want the gate
+    (!!input.tmdb_id || !!(input.name && input.name.trim()));
 
+  // Ignore legacy hasCover when caller explicitly asks for always-on mode
+  // (hasCover === false makes `enabled` true even with cover present).
   return useQuery<TmdbFallbackResult | null>({
     queryKey: [
       "tmdb-fallback",
