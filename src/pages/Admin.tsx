@@ -738,21 +738,36 @@ const Admin = () => {
             <Shield className="h-4 w-4 text-primary-foreground" />
           </div>
           <span className="font-bold">Admin Panel</span>
+          {role && (
+            <span
+              className={
+                "ml-auto text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold " +
+                (isAdmin
+                  ? "bg-primary/15 text-primary"
+                  : "bg-warning/15 text-warning")
+              }
+              title={isAdmin ? "Acesso total" : "Acesso de moderador (sem editar DNS/equipe)"}
+            >
+              {isAdmin ? "Admin" : "Moderador"}
+            </span>
+          )}
         </div>
         <nav className="space-y-1">
           {[
-            { id: "dashboard", label: "Dashboard", icon: TrendingUp },
-            { id: "stats", label: "Estatísticas", icon: BarChart3 },
-            { id: "monitoring", label: "Monitoramento", icon: Monitor },
-            { id: "reports", label: "Reportes", icon: Flag },
-            { id: "dns-errors", label: "Erros por DNS", icon: AlertOctagon },
-            { id: "users", label: "Usuários", icon: Users },
-            { id: "servers", label: "DNS / Servidores", icon: Server },
-            { id: "endpoint-test", label: "Testar endpoint", icon: FlaskConical },
-            { id: "client-diagnostics", label: "Diagnóstico de clientes", icon: Stethoscope },
-            { id: "pending-signups", label: "Novos cadastros", icon: UserPlus },
-            { id: "team", label: "Equipe e permissões", icon: ShieldCheck },
-          ].map((item) => (
+            { id: "dashboard", label: "Dashboard", icon: TrendingUp, adminOnly: false },
+            { id: "stats", label: "Estatísticas", icon: BarChart3, adminOnly: false },
+            { id: "monitoring", label: "Monitoramento", icon: Monitor, adminOnly: false },
+            { id: "reports", label: "Reportes", icon: Flag, adminOnly: false },
+            { id: "dns-errors", label: "Erros por DNS", icon: AlertOctagon, adminOnly: false },
+            { id: "users", label: "Usuários", icon: Users, adminOnly: false },
+            { id: "servers", label: "DNS / Servidores", icon: Server, adminOnly: true },
+            { id: "endpoint-test", label: "Testar endpoint", icon: FlaskConical, adminOnly: false },
+            { id: "client-diagnostics", label: "Diagnóstico de clientes", icon: Stethoscope, adminOnly: false },
+            { id: "pending-signups", label: "Novos cadastros", icon: UserPlus, adminOnly: true },
+            { id: "team", label: "Equipe e permissões", icon: ShieldCheck, adminOnly: true },
+          ]
+            .filter((item) => !item.adminOnly || isAdmin)
+            .map((item) => (
             <button
               key={item.id}
               onClick={() => setTab(item.id)}
