@@ -63,6 +63,42 @@ const Account = () => {
   const [block, setBlock] = useState<UserBlockRow | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
 
+  // Edição inline do nome de exibição
+  const displayName = useDisplayName(creds.username);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  const startEditName = () => {
+    setNameDraft(displayName);
+    setNameError(null);
+    setEditingName(true);
+    setTimeout(() => nameInputRef.current?.focus(), 50);
+  };
+
+  const cancelEditName = () => {
+    setEditingName(false);
+    setNameError(null);
+  };
+
+  const saveName = () => {
+    const result = displayNameSchema.safeParse(nameDraft);
+    if (!result.success) {
+      setNameError(result.error.issues[0]?.message ?? "Nome inválido");
+      return;
+    }
+    setDisplayName(creds.username, result.data);
+    toast.success("Nome atualizado");
+    setEditingName(false);
+  };
+
+  const removeName = () => {
+    clearDisplayName(creds.username);
+    toast.success("Nome removido");
+    setEditingName(false);
+  };
+
   // Lê IDs favoritos do localStorage (sem reagir a outras abas — recarrega no mount)
   const favLive = useMemo(() => readFavoriteIds(creds.username, "live"), [creds.username]);
   const favVod = useMemo(() => readFavoriteIds(creds.username, "vod"), [creds.username]);
