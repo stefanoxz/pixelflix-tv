@@ -45,22 +45,24 @@ const AdminProtectedRoute = forwardRef<unknown, Props>(function AdminProtectedRo
     });
 
     async function verifyRole(s: Session) {
-      const { data: isAdmin, error } = await supabase.rpc("has_role", {
-        _user_id: s.user.id,
-        _role: "admin",
-      });
+      // Aceita admin OU moderator. Os dois papéis dão acesso ao painel;
+      // o que muda é o que cada um pode FAZER (controlado pelo backend e UI).
+      const [{ data: isAdmin, error: adminErr }, { data: isModerator, error: modErr }] = await Promise.all([
+        supabase.rpc("has_role", { _user_id: s.user.id, _role: "admin" }),
+        supabase.rpc("has_role", { _user_id: s.user.id, _role: "moderator" }),
+      ]);
       if (!active) return;
-      if (error) {
+      if (adminErr || modErr) {
         await supabase.auth.signOut();
         toast.error("Erro ao verificar permissões.");
         setState("denied");
         return;
       }
-      if (isAdmin) {
+      if (isAdmin || isModerator) {
         setState("allowed");
         return;
       }
-      // Sem role admin — verifica se está na fila de aprovação.
+      // Sem role — verifica se está na fila de aprovação.
       const { data: pending } = await supabase
         .from("pending_admin_signups")
         .select("email")
@@ -72,7 +74,7 @@ const AdminProtectedRoute = forwardRef<unknown, Props>(function AdminProtectedRo
         setState("pending");
       } else {
         await supabase.auth.signOut();
-        toast.error("Acesso negado: sua conta não é administrador.");
+        toast.error("Acesso negado: sua conta não tem papel administrativo.");
         setState("denied");
       }
     }
