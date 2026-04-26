@@ -217,7 +217,7 @@ const Account = () => {
         {/* Glow decorativo */}
         <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-primary/15 blur-3xl" />
 
-        <div className="relative flex flex-col md:flex-row md:items-center gap-5 mb-6">
+        <div className="relative flex flex-col md:flex-row md:items-center items-center text-center md:text-left gap-5 mb-6">
           <div className="relative shrink-0">
             <div className="absolute inset-0 rounded-full bg-gradient-primary blur-xl opacity-60" />
             <div className="relative h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-primary text-primary-foreground ring-2 ring-primary/40 flex items-center justify-center text-2xl md:text-3xl font-bold shadow-glow">
@@ -226,7 +226,7 @@ const Account = () => {
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="text-2xl md:text-3xl font-bold truncate">{u.username}</h2>
-            <div className="flex flex-wrap items-center gap-2 mt-2">
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-2">
               <Badge
                 variant="outline"
                 className={isActive
@@ -247,7 +247,7 @@ const Account = () => {
             </div>
           </div>
           {mySession && (
-            <Button variant="outline" size="sm" onClick={endSession} className="gap-2 self-start md:self-center">
+            <Button variant="outline" size="sm" onClick={endSession} className="gap-2 self-center md:self-center tap-feedback">
               <X className="h-4 w-4" /> Encerrar sessão
             </Button>
           )}
@@ -258,9 +258,9 @@ const Account = () => {
             <div key={c.label} className="rounded-xl border border-border/40 bg-card/50 p-3 md:p-4">
               <div className="flex items-center gap-2 text-muted-foreground mb-2">
                 <c.icon className="h-3.5 w-3.5" />
-                <p className="text-[10px] font-semibold uppercase tracking-wider">{c.label}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider truncate">{c.label}</p>
               </div>
-              <p className="text-base md:text-lg font-bold tabular-nums truncate">{c.value}</p>
+              <p className="text-sm md:text-lg font-bold tabular-nums truncate">{c.value}</p>
             </div>
           ))}
         </div>
