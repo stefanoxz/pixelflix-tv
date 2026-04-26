@@ -59,6 +59,7 @@ import {
   Stethoscope,
   UserPlus,
   HelpCircle,
+  BarChart3,
 } from "lucide-react";
 
 // Auth handled by AdminProtectedRoute + Supabase session
