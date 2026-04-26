@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
@@ -34,6 +35,7 @@ import { useIsIncompatible } from "@/hooks/useIsIncompatible";
 import { clearIncompatible } from "@/lib/incompatibleContent";
 import { useTmdbFallback } from "@/hooks/useTmdbFallback";
 import { useTmdbRating } from "@/hooks/useTmdbRating";
+import { SafeImage } from "@/components/SafeImage";
 
 interface MovieDetailsDialogProps {
   open: boolean;
@@ -45,15 +47,16 @@ interface MovieDetailsDialogProps {
   onToggleFavorite?: () => void;
 }
 
-export function MovieDetailsDialog({
-  open,
-  onOpenChange,
-  movie,
-  creds,
-  onPlay,
-  isFavorite,
-  onToggleFavorite,
-}: MovieDetailsDialogProps) {
+export const MovieDetailsDialog = forwardRef<HTMLDivElement, MovieDetailsDialogProps>(
+  function MovieDetailsDialog({
+    open,
+    onOpenChange,
+    movie,
+    creds,
+    onPlay,
+    isFavorite,
+    onToggleFavorite,
+  }, _ref) {
   const { data, isLoading } = useQuery({
     queryKey: ["vod-info", movie?.stream_id],
     queryFn: () => getVodInfo(creds, movie!.stream_id),
@@ -149,13 +152,12 @@ export function MovieDetailsDialog({
           {/* Mobile: backdrop horizontal no topo */}
           <div className="md:hidden relative h-44 w-full overflow-hidden">
             {backdrop && (
-              <img
+              <SafeImage
                 src={proxyImageUrl(backdrop, { w: 900, q: 75 })}
                 alt=""
                 loading="eager"
                 decoding="async"
                 className="absolute inset-0 h-full w-full object-cover"
-                onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
               />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-card via-card/70 to-transparent" />
@@ -166,13 +168,13 @@ export function MovieDetailsDialog({
             {/* Capa lateral spotlight — desktop only */}
             <div className="hidden md:block relative w-[42%] max-w-[420px] shrink-0 self-stretch overflow-hidden">
               {cover ? (
-                <img
+                <SafeImage
                   src={proxyImageUrl(cover, { w: 600, h: 900, q: 85 })}
                   alt={movie.name}
                   loading="eager"
                   decoding="async"
+                  onErrorMode="fade"
                   className="absolute inset-0 h-full w-full object-cover"
-                  onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")}
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground p-6 text-center bg-secondary">
@@ -342,4 +344,5 @@ export function MovieDetailsDialog({
       </DialogPortal>
     </Dialog>
   );
-}
+});
+MovieDetailsDialog.displayName = "MovieDetailsDialog";

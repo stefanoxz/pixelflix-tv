@@ -2,6 +2,7 @@ import { forwardRef } from "react";
 import { Tv } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { proxyImageUrl, type LiveStream } from "@/services/iptv";
+import { SafeImage } from "@/components/SafeImage";
 
 interface ChannelSidebarProps {
   channels: LiveStream[];
@@ -41,10 +42,9 @@ export const ChannelSidebar = forwardRef<HTMLElement, ChannelSidebarProps>(
               >
                 <div className="h-10 w-10 shrink-0 rounded bg-secondary overflow-hidden flex items-center justify-center">
                   {ch.stream_icon ? (
-                    <img
+                    <SafeImage
                       src={proxyImageUrl(ch.stream_icon)}
                       alt={ch.name}
-                      onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                       className="h-full w-full object-contain"
                     />
                   ) : (

@@ -1,6 +1,7 @@
 import { Heart, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { proxyImageUrl } from "@/services/iptv";
+import { SafeImage } from "@/components/SafeImage";
 
 export interface TitleListItemData {
   id: number;
@@ -46,12 +47,11 @@ export function TitleListItem({
     >
       <div className="relative shrink-0 h-[60px] w-10 rounded overflow-hidden bg-secondary">
         {item.cover ? (
-          <img
+          <SafeImage
             src={proxyImageUrl(item.cover)}
             alt=""
             loading="lazy"
             className="h-full w-full object-cover"
-            onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
           />
         ) : null}
       </div>

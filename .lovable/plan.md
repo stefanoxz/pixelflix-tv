@@ -1,59 +1,66 @@
-## Objetivo
+## Contexto
 
-Tornar o hero de destaques mais visual mostrando os **pôsteres reais** dos títulos em rotação, mantendo a leitura do texto e sem quebrar mobile.
+Após adicionar a coluna de pôsteres no hero de `Highlights`, surgiram dois avisos/erros:
 
-## Conceito visual
+1. **Runtime "Failed to execute 'removeChild' on 'Node'"** — causado por handlers `onError` em `<img>` que mutam o DOM diretamente (`e.target.style.display = "none"` ou `style.opacity = "0.2"`). Quando o React desmonta/remonta esses nós (rotação do hero a cada 8s, troca de `key`, cross-fade), o handler já mexeu no nó e o reconciler do React tenta remover um filho que ele não rastreia mais → crash.
+2. **Warning "Function components cannot be given refs"** apontando para `MovieDetailsDialog` — o componente é function plain mas o Radix `Dialog`/`DialogPortal` está em alguma situação tentando encaminhar ref. O caminho seguro é envolver com `forwardRef` (mesmo sem usar a ref).
 
-No layout atual, o título ocupa a esquerda e o fundo é apenas a capa esmaecida (30% opacidade) — fica "vazio" no lado direito. A proposta é:
+A varredura encontrou **17 ocorrências** do mesmo padrão de mutação direta em `onError` espalhadas pelo projeto — todas potenciais fontes do mesmo bug.
 
-**Desktop / tablet (≥ md):**
-- Coluna esquerda: bloco atual (badge, título, rating, sinopse, botões, indicadores) — sem mudança de copy.
-- Coluna direita: **pôster do destaque ativo em destaque grande** (aspect 2:3, ~280px de largura) com sombra/glow, levemente flutuando, ladeado por uma **fileira vertical de 3-4 mini-pôsteres** dos próximos títulos da fila (clicáveis para pular direto ao destaque).
-- O background mantém a capa esmaecida + gradientes (já existe), só ajustamos o gradient lateral pra não escurecer demais o lado da capa.
+## Mudanças
 
-**Mobile (< md):**
-- Mantém o layout vertical atual (texto sobre background esmaecido) — **não adiciona pôster grande à direita** porque competiria com o texto em telas estreitas.
-- Adiciona uma **tira horizontal compacta** abaixo dos botões com 4-5 mini-pôsteres (≈ 56×84px) representando os próximos da fila, com scroll horizontal suave. Substitui visualmente os "dots" indicadores por algo mais informativo, sem aumentar muito a altura do hero.
-- O dot indicator atual fica oculto no mobile (a tira de pôsteres já cumpre o papel) e permanece no desktop.
+### 1. Substituir mutação direta do DOM por estado React (raiz do bug)
 
-## Comportamento
+Trocar todos os `onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}` por um pequeno componente `<SafeImage>` reutilizável que usa `useState` para esconder a imagem que falhou. Assim o React sempre é a única autoridade sobre o DOM, evitando conflito durante reconciliação.
 
-- Clicar em qualquer mini-pôster → `setActiveIdx(i)` (mesma ação dos dots hoje).
-- Clicar no pôster grande → mesma ação do "Assistir agora" (`openFeatured`).
-- Hover/foco em mini-pôster pausa a rotação (reaproveita `pausedRef`).
-- Transição entre pôster grande ativo: cross-fade rápido (200ms) sincronizado com o cross-fade do background.
-- Mini-pôsteres usam `loading="lazy"` e `proxyImageUrl` (já existe).
-- Fallback: se `cover` falha (`onError`), esconde o `<img>` e mostra placeholder neutro — não quebra a coluna.
+Criar `src/components/SafeImage.tsx`:
+- Props: as mesmas de `<img>` + `onErrorMode?: "hide" | "fade"` (default `"hide"`).
+- Usa `useState<"ok"|"error">("ok")`.
+- No erro: muda estado, e renderiza `null` (modo hide) ou aplica `opacity-20` (modo fade).
+- Reseta o estado quando `src` muda (via `useEffect`).
 
-## Responsividade — pontos de cuidado
+Substituir as 17 ocorrências encontradas nestes arquivos:
+- `src/pages/Highlights.tsx` (4 imgs — hero bg, mobile strip, mini-pôsteres, pôster grande)
+- `src/components/MovieDetailsDialog.tsx` (2)
+- `src/components/SeriesDetailsDialog.tsx` (2)
+- `src/components/library/PreviewPanel.tsx` (2)
+- `src/components/MediaCard.tsx`, `src/components/ChannelSidebar.tsx`, `src/pages/Account.tsx`, `src/components/live/PlayerInfoBar.tsx`, `src/components/live/ChannelListItem.tsx`, `src/components/library/TitleListItem.tsx`, `src/components/library/SeriesEpisodesPanel.tsx` (1 cada)
 
-| Breakpoint | Mostra pôster grande? | Mini-pôsteres |
-|---|---|---|
-| < 640px (mobile) | Não | Tira horizontal (4-5 itens, scroll-x) |
-| 640-767px (sm) | Não | Tira horizontal |
-| 768-1023px (md) | Sim (180px) | 3 mini verticais ao lado |
-| ≥ 1024px (lg+) | Sim (240-280px) | 4 mini verticais ao lado |
+### 2. Corrigir warning de ref no MovieDetailsDialog e SeriesDetailsDialog
 
-- Hero atual: `h-[55vh] md:h-[68vh]` — **não muda**. Coluna direita é absolutamente posicionada dentro do mesmo container, sem aumentar altura.
-- Texto continua em `max-w-2xl` no desktop; com a coluna de pôsteres ocupando ~360px à direita, a área de leitura ainda fica confortável em telas ≥ 1024px. Em md (768-1023px) reduzimos `max-w-2xl` → `max-w-md` pra evitar sobreposição.
-- Em mobile a coluna de pôsteres não é renderizada (`hidden md:flex`), então zero risco de quebrar o layout atual.
+Envolver os componentes com `React.forwardRef` (a ref pode ser ignorada — só silencia o warning do Radix Dialog que tenta encaminhar ref ao filho).
 
-## Arquivos afetados
+### 3. Análise complementar (sem alterações neste plano)
 
-- **`src/pages/Highlights.tsx`** — único arquivo modificado. Adiciona:
-  - Subcomponente local `FeaturedPosterColumn` (desktop) com pôster grande + mini-pôsteres laterais.
-  - Subcomponente local `FeaturedPosterStrip` (mobile) com tira horizontal.
-  - Ajuste no `<div className="max-w-2xl ...">` pra `max-w-2xl lg:max-w-xl` quando a coluna de pôsteres está presente.
-  - Os dots indicadores ganham `hidden md:flex` (já que mobile usa a tira).
+Verifiquei rapidamente outros pontos suspeitos enquanto explorava:
+- `featuredQueue` no `Highlights.tsx` está OK (não é Promise, é array de itens).
+- A lógica de `onTouchStart/onTouchEnd` para pausar o carrossel está correta.
+- Não há outros `onError` problemáticos fora do padrão acima.
+- O Dialog de filmes/séries está usando `DialogPrimitive` direto — não há vazamento.
 
-Sem mudanças em CSS global, hooks, queries ou serviços. Sem novas dependências.
+Se algo mais aparecer após o fix (ex.: mais runtime errors), trato em uma próxima iteração.
 
-## Riscos e mitigações
+## Arquivos
 
-- **Imagens TMDB lentas no 3G:** mini-pôsteres ficam com `loading="lazy"` e `decoding="async"`; pôster grande tem `fetchpriority="high"` só pro ativo.
-- **Layout shift:** containers com aspect-ratio fixo (2:3) — sem CLS.
-- **Telas muito largas (>1600px):** o `mx-auto max-w-[1800px]` já existente evita estiramento; coluna de pôsteres alinha à direita do container.
-- **Quando `featuredQueue` tem só 1 item:** pôster grande aparece sozinho, mini-pôsteres laterais não renderizam (mesma lógica do dot indicator).
-- **Quando `featuredQueue` está vazio (loading):** coluna de pôsteres não renderiza — comportamento atual do hero "Bem-vindo ao SuperTech" preservado.
+**Novo**
+- `src/components/SafeImage.tsx`
 
-Erro de runtime "promise.then is not a function" detectado no preview — não relacionado a este escopo, deixarei pra investigar separadamente se persistir após esta mudança.
+**Modificados**
+- `src/pages/Highlights.tsx`
+- `src/components/MovieDetailsDialog.tsx`
+- `src/components/SeriesDetailsDialog.tsx`
+- `src/components/MediaCard.tsx`
+- `src/components/ChannelSidebar.tsx`
+- `src/components/live/PlayerInfoBar.tsx`
+- `src/components/live/ChannelListItem.tsx`
+- `src/components/library/PreviewPanel.tsx`
+- `src/components/library/TitleListItem.tsx`
+- `src/components/library/SeriesEpisodesPanel.tsx`
+- `src/pages/Account.tsx`
+
+## Resultado esperado
+
+- Erro `Failed to execute 'removeChild' on 'Node'` desaparece — confirmado pela troca da única causa conhecida (mutação fora do React).
+- Warning de ref no `MovieDetailsDialog` desaparece.
+- Comportamento visual idêntico (capas continuam escondendo quando falham; capas do dialog continuam com fade quando falham).
+- Sem regressão no carrossel do hero, no mobile strip, nem nas demais listas.

@@ -3,6 +3,7 @@ import { Heart, Play, Star, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { proxyImageUrl } from "@/services/iptv";
+import { SafeImage } from "@/components/SafeImage";
 
 interface Props {
   loading?: boolean;
@@ -61,11 +62,10 @@ export function PreviewPanel({
       {/* Backdrop */}
       <div className="relative h-44 w-full overflow-hidden shrink-0">
         {bgImage && (
-          <img
+          <SafeImage
             src={proxyImageUrl(bgImage)}
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
-            onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-card via-card/70 to-transparent" />
@@ -75,11 +75,11 @@ export function PreviewPanel({
         <div className="flex gap-4">
           <div className="h-36 w-24 shrink-0 rounded-lg overflow-hidden bg-secondary shadow-card">
             {cover ? (
-              <img
+              <SafeImage
                 src={proxyImageUrl(cover)}
                 alt={title}
+                onErrorMode="fade"
                 className="h-full w-full object-cover"
-                onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")}
               />
             ) : null}
           </div>

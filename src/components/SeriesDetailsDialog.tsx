@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
@@ -35,6 +36,7 @@ import {
   type IptvCredentials,
   type Series,
 } from "@/services/iptv";
+import { SafeImage } from "@/components/SafeImage";
 
 interface Props {
   open: boolean;
@@ -47,16 +49,17 @@ interface Props {
   onToggleFavorite?: () => void;
 }
 
-export function SeriesDetailsDialog({
-  open,
-  onOpenChange,
-  series,
-  creds,
-  onPlayEpisode,
-  onCopyExternal,
-  isFavorite,
-  onToggleFavorite,
-}: Props) {
+export const SeriesDetailsDialog = forwardRef<HTMLDivElement, Props>(
+  function SeriesDetailsDialog({
+    open,
+    onOpenChange,
+    series,
+    creds,
+    onPlayEpisode,
+    onCopyExternal,
+    isFavorite,
+    onToggleFavorite,
+  }, _ref) {
   const { data, isLoading } = useQuery({
     queryKey: ["series-info", series?.series_id],
     queryFn: () => getSeriesInfo(creds, series!.series_id),
@@ -149,13 +152,12 @@ export function SeriesDetailsDialog({
           {/* Mobile: backdrop horizontal no topo */}
           <div className="md:hidden relative h-40 w-full overflow-hidden">
             {backdrop && (
-              <img
+              <SafeImage
                 src={proxyImageUrl(backdrop, { w: 900, q: 75 })}
                 alt=""
                 loading="eager"
                 decoding="async"
                 className="absolute inset-0 h-full w-full object-cover"
-                onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
               />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-card via-card/70 to-transparent" />
@@ -166,13 +168,13 @@ export function SeriesDetailsDialog({
             {/* Capa lateral spotlight — desktop only */}
             <div className="hidden md:block relative w-[42%] max-w-[420px] shrink-0 self-stretch overflow-hidden">
               {cover ? (
-                <img
+                <SafeImage
                   src={proxyImageUrl(cover, { w: 600, h: 900, q: 85 })}
                   alt={series.name}
                   loading="eager"
                   decoding="async"
+                  onErrorMode="fade"
                   className="absolute inset-0 h-full w-full object-cover"
-                  onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")}
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground p-6 text-center bg-secondary">
@@ -345,4 +347,5 @@ export function SeriesDetailsDialog({
       </DialogPortal>
     </Dialog>
   );
-}
+});
+SeriesDetailsDialog.displayName = "SeriesDetailsDialog";

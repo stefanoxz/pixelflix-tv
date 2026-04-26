@@ -14,6 +14,7 @@ import {
   proxyImageUrl,
   type Episode,
 } from "@/services/iptv";
+import { SafeImage } from "@/components/SafeImage";
 
 const toneClasses: Record<"green" | "blue" | "yellow" | "gray", string> = {
   green: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
@@ -110,7 +111,7 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal, 
                 >
                   <div className="h-20 w-36 shrink-0 rounded-md bg-secondary overflow-hidden flex items-center justify-center">
                     {displayStill ? (
-                      <img
+                      <SafeImage
                         src={
                           ep.info?.movie_image
                             ? proxyImageUrl(displayStill, { w: 288, h: 160, q: 75 })
@@ -120,7 +121,6 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal, 
                         loading="lazy"
                         decoding="async"
                         className="h-full w-full object-cover"
-                        onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                       />
                     ) : (
                       <Play className="h-6 w-6 text-muted-foreground" />

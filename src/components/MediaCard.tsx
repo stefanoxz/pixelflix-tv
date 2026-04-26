@@ -2,6 +2,7 @@ import { forwardRef, type MouseEvent } from "react";
 import { Heart, Play, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { proxyImageUrl } from "@/services/iptv";
+import { SafeImage } from "@/components/SafeImage";
 
 interface MediaCardProps {
   title: string;
@@ -60,11 +61,10 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
         )}
       >
         {cover ? (
-          <img
+          <SafeImage
             src={proxyImageUrl(cover)}
             alt={title}
             loading="lazy"
-            onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-110"
           />
         ) : (
