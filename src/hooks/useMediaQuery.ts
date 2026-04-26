@@ -31,14 +31,14 @@ export function useMediaQuery(query: string): boolean {
     if (typeof mql.addEventListener === "function") {
       mql.addEventListener("change", onChange);
       return () => mql.removeEventListener("change", onChange);
-    } else {
-      // @ts-expect-error - legacy API
-      mql.addListener(onChange);
-      return () => {
-        // @ts-expect-error - legacy API
-        mql.removeListener(onChange);
-      };
     }
+    // Safari < 14 fallback
+    const legacy = mql as unknown as {
+      addListener: (cb: (e: MediaQueryListEvent) => void) => void;
+      removeListener: (cb: (e: MediaQueryListEvent) => void) => void;
+    };
+    legacy.addListener(onChange);
+    return () => legacy.removeListener(onChange);
   }, [query]);
 
   return matches;
