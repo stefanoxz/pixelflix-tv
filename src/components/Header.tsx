@@ -23,7 +23,6 @@ export function Header() {
   const { session, logout } = useIptv();
   const navigate = useNavigate();
   const location = useLocation();
-  const [open, setOpen] = useState(false);
 
   // hide on login & admin routes
   if (location.pathname.startsWith("/login") || location.pathname.startsWith("/admin")) {
