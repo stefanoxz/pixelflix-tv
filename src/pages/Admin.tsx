@@ -444,6 +444,7 @@ function reasonInfo(reason: HealthReason | undefined): { label: string; tooltip:
 const Admin = () => {
   const navigate = useNavigate();
   const refreshInFlight = useRef(false);
+  const { isAdmin, isModerator, role, loading: roleLoading } = useAdminRole();
 
   const [tab, setTab] = useState("dashboard");
   const [stats, setStats] = useState<Stats | null>(null);
@@ -466,8 +467,22 @@ const Admin = () => {
   const [editingServer, setEditingServer] = useState<AllowedServer | null>(null);
   const [probeServer, setProbeServer] = useState<AllowedServer | null>(null);
 
+  // AlertDialog state — substitui confirm() nativo em ações destrutivas.
+  const [confirmRemoveServer, setConfirmRemoveServer] = useState<string | null>(null);
+  const [confirmEvictSession, setConfirmEvictSession] = useState<MonitoringSession | null>(null);
+  const [confirmUnblockUser, setConfirmUnblockUser] = useState<MonitoringBlock | null>(null);
+
   const [health, setHealth] = useState<Record<string, HealthStatus>>({});
   const [healthLoading, setHealthLoading] = useState(false);
+
+  // Se o moderador cair em uma aba admin-only, manda pro dashboard.
+  useEffect(() => {
+    if (roleLoading) return;
+    const adminOnlyTabs = new Set(["servers", "pending-signups", "team"]);
+    if (isModerator && !isAdmin && adminOnlyTabs.has(tab)) {
+      setTab("dashboard");
+    }
+  }, [tab, isAdmin, isModerator, roleLoading]);
 
   const checkAllServers = async (manual = false) => {
     if (!allowed.length) return;
