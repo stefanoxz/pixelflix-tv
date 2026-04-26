@@ -40,6 +40,9 @@
       <!-- LCP placeholder: pintado imediatamente pelo HTML para reduzir o "element render delay".
            É substituído assim que o React monta. Tudo inline (zero requests, zero JS, animações 100% GPU). -->
       <style>
+        /* Reset mínimo só pro placeholder — elimina margem padrão do <body>
+           e a scrollbar branca que apareciam antes do Tailwind montar. */
+        html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#05060c}
         @keyframes st-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.05);opacity:.92}}
         @keyframes st-fade{0%{opacity:0;transform:translateY(4px)}100%{opacity:1;transform:translateY(0)}}
         @keyframes st-text-fade{0%{opacity:0;transform:translateY(6px)}100%{opacity:.85;transform:translateY(0)}}
