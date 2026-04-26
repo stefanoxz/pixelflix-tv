@@ -732,10 +732,29 @@ const Admin = () => {
     },
   ];
 
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    await supabase.auth.signOut();
+    navigate("/admin/login");
+  };
+  const handleBackToApp = () => navigate("/");
+  const navItems = visibleAdminNav(isAdmin);
+  const currentNav = findNavItem(tab);
+
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
-      {/* Sidebar */}
-      <aside className="lg:w-64 lg:shrink-0 bg-card border-b lg:border-b-0 lg:border-r border-border/50 p-4 lg:p-6">
+      {/* Mobile top bar (drawer + título) */}
+      <AdminMobileTopBar
+        tab={tab}
+        onTabChange={setTab}
+        isAdmin={isAdmin}
+        isModerator={isModerator}
+        onSignOut={handleSignOut}
+        onBackToApp={handleBackToApp}
+      />
+
+      {/* Sidebar desktop (oculta no mobile) */}
+      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 bg-card border-r border-border/50 p-6">
         <div className="flex items-center gap-2 mb-6">
           <div className="h-8 w-8 rounded-md bg-gradient-primary flex items-center justify-center shadow-glow">
             <Shield className="h-4 w-4 text-primary-foreground" />
@@ -756,21 +775,7 @@ const Admin = () => {
           )}
         </div>
         <nav className="space-y-1">
-          {[
-            { id: "dashboard", label: "Dashboard", icon: TrendingUp, adminOnly: false },
-            { id: "stats", label: "Estatísticas", icon: BarChart3, adminOnly: false },
-            { id: "monitoring", label: "Monitoramento", icon: Monitor, adminOnly: false },
-            { id: "reports", label: "Reportes", icon: Flag, adminOnly: false },
-            { id: "dns-errors", label: "Erros por DNS", icon: AlertOctagon, adminOnly: false },
-            { id: "users", label: "Usuários", icon: Users, adminOnly: false },
-            { id: "servers", label: "DNS / Servidores", icon: Server, adminOnly: true },
-            { id: "endpoint-test", label: "Testar endpoint", icon: FlaskConical, adminOnly: false },
-            { id: "client-diagnostics", label: "Diagnóstico de clientes", icon: Stethoscope, adminOnly: false },
-            { id: "pending-signups", label: "Novos cadastros", icon: UserPlus, adminOnly: true },
-            { id: "team", label: "Equipe e permissões", icon: ShieldCheck, adminOnly: true },
-          ]
-            .filter((item) => !item.adminOnly || isAdmin)
-            .map((item) => (
+          {navItems.map((item) => (
             <button
               key={item.id}
               onClick={() => setTab(item.id)}
@@ -791,7 +796,7 @@ const Admin = () => {
             variant="ghost"
             size="sm"
             className="w-full justify-start gap-2"
-            onClick={() => navigate("/")}
+            onClick={handleBackToApp}
           >
             ← Voltar ao app
           </Button>
@@ -799,11 +804,7 @@ const Admin = () => {
             variant="ghost"
             size="sm"
             className="w-full justify-start gap-2 text-destructive hover:text-destructive"
-            onClick={async () => {
-              setSigningOut(true);
-              await supabase.auth.signOut();
-              navigate("/admin/login");
-            }}
+            onClick={handleSignOut}
           >
             <LogOut className="h-4 w-4" />
             Sair
@@ -812,7 +813,8 @@ const Admin = () => {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 p-4 md:p-8 space-y-6">
+      <main className="flex-1 p-4 md:p-8 pb-24 lg:pb-8 space-y-4 lg:space-y-6">
+        {void currentNav}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-3xl font-bold">
