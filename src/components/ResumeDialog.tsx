@@ -21,6 +21,8 @@ interface ResumeDialogProps {
   duration?: number;
   /** Título do conteúdo (filme ou episódio) */
   title?: string;
+  /** Linha extra opcional (ex.: "S02E05 — Nome da série") */
+  subtitle?: string;
   /** Tocar a partir de `resumeAt` */
   onResume: () => void;
   /** Tocar do início (e limpar o progresso salvo) */
@@ -37,6 +39,7 @@ export function ResumeDialog({
   resumeAt,
   duration,
   title,
+  subtitle,
   onResume,
   onRestart,
 }: ResumeDialogProps) {
@@ -61,6 +64,9 @@ export function ResumeDialog({
                 <span className="font-semibold text-foreground tabular-nums">{time}</span>
                 {pct != null ? ` (${pct}%)` : ""}.
               </>
+            )}
+            {subtitle && (
+              <span className="block mt-1 text-xs text-muted-foreground">{subtitle}</span>
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>

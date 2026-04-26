@@ -1626,6 +1626,13 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     video.addEventListener("error", onError);
     video.addEventListener("ended", onEndedNative);
 
+    // Race fix: se metadata JÁ está disponível (cache, src trocado in-place),
+    // o evento `loadedmetadata` não vai mais disparar e o seek inicial seria
+    // perdido. Disparamos manualmente uma vez nesse caso.
+    if (!initialSeekDoneRef.current && video.readyState >= 1 /* HAVE_METADATA */) {
+      onLoadedMetadataResume();
+    }
+
     return () => {
       video.removeEventListener("waiting", onWaiting);
       video.removeEventListener("playing", onPlaying);
@@ -1638,10 +1645,13 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       video.removeEventListener("error", onError);
       video.removeEventListener("ended", onEndedNative);
       // Salva uma última vez ao desmontar (usuário fechou o player).
+      // Guarda contra o caso de o vídeo já ter sido limpo (src=""):
+      // currentTime cai para 0 e gravaríamos lixo por cima do progresso real.
       try {
         const ct = video.currentTime;
         const dur = video.duration;
-        if (Number.isFinite(ct) && Number.isFinite(dur) && dur > 0) {
+        const hasReal = Number.isFinite(ct) && Number.isFinite(dur) && dur > 0 && ct > 0;
+        if (hasReal) {
           onProgressRef.current?.(ct, dur);
         }
       } catch {

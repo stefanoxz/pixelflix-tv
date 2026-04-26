@@ -10,6 +10,7 @@ import { useTmdbRatings, type TmdbRatingResult } from "@/hooks/useTmdbRating";
 import { seededShuffle, todaySeed } from "@/lib/dailyShuffle";
 import { cn } from "@/lib/utils";
 import { SafeImage } from "@/components/SafeImage";
+import { ContinueWatchingRail } from "@/components/highlights/ContinueWatchingRail";
 
 type FeaturedItem =
   | { kind: "movie"; id: number; title: string; cover: string; rating: number; tmdb: TmdbRatingResult | null }
@@ -396,6 +397,9 @@ const Highlights = () => {
           )}
         </div>
       </section>
+
+      {/* CONTINUE ASSISTINDO — esconde sozinho quando vazio */}
+      <ContinueWatchingRail />
 
       <div className="mx-auto max-w-[1800px] px-4 md:px-8 space-y-12">
         {/* QUICK STATS */}

@@ -59,7 +59,10 @@ const Movies = () => {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { isFavorite, toggle, favorites } = useFavorites(creds.username, "vod");
-  const { getProgress, saveProgress, clearProgress, listInProgress } = useWatchProgress(creds.username);
+  const { getProgress, saveProgress, clearProgress, listInProgress } = useWatchProgress(
+    creds.username,
+    creds.server,
+  );
 
   // Mapa stream_id → pct (0-100) para a barrinha "continue assistindo" nos cards.
   const movieProgressById = useMemo(() => {
@@ -87,13 +90,22 @@ const Movies = () => {
     gcTime: 24 * 60 * 60 * 1000,
   });
 
-  // Deep-link de Destaques / Conta
+  // Deep-link de Destaques / Conta / "Continue assistindo"
   useEffect(() => {
-    const openId = (location.state as { openId?: number } | null)?.openId;
+    const state = location.state as { openId?: number; autoplay?: boolean } | null;
+    const openId = state?.openId;
     if (openId && movies.length) {
       setActiveId(openId);
       const m = movies.find((x) => x.stream_id === openId);
-      if (m) setOpenMovie(m);
+      if (m) {
+        if (state?.autoplay) {
+          // Vem do rail "Continue assistindo": pula o details dialog
+          // e dispara o ResumeDialog se houver progresso, ou toca direto.
+          playMovieRef.current?.(m);
+        } else {
+          setOpenMovie(m);
+        }
+      }
       navigate(location.pathname, { replace: true, state: null });
     }
   }, [location.state, location.pathname, movies, navigate]);
@@ -173,23 +185,33 @@ const Movies = () => {
     ];
   }, [categories, movies.length, favorites.size]);
 
-  const playMovie = (m: VodStream) => {
-    setOpenMovie(null);
-    // Consulta progresso salvo: se houver posição válida (>= MIN_RESUME e < 95%),
-    // abre o ResumeDialog; senão toca do início.
-    const saved = getProgress(makeProgressKey("movie", m.stream_id));
-    if (
-      saved &&
-      saved.t >= MIN_RESUME_SECONDS &&
-      saved.d > 0 &&
-      saved.t / saved.d < COMPLETED_RATIO
-    ) {
-      setPendingResume({ movie: m, t: saved.t, d: saved.d });
-      return;
-    }
-    setResumeAt(0);
-    setPlaying(m);
-  };
+  const playMovie = useCallback(
+    (m: VodStream) => {
+      setOpenMovie(null);
+      // Consulta progresso salvo: se houver posição válida (>= MIN_RESUME e < 95%),
+      // abre o ResumeDialog; senão toca do início.
+      const saved = getProgress(makeProgressKey("movie", m.stream_id));
+      if (
+        saved &&
+        saved.t >= MIN_RESUME_SECONDS &&
+        saved.d > 0 &&
+        saved.t / saved.d < COMPLETED_RATIO
+      ) {
+        setPendingResume({ movie: m, t: saved.t, d: saved.d });
+        return;
+      }
+      setResumeAt(0);
+      setPlaying(m);
+    },
+    [getProgress],
+  );
+
+  // Ref para o playMovie poder ser chamado pelo deep-link useEffect sem
+  // recriar dependências circulares.
+  const playMovieRef = useRef<typeof playMovie>(playMovie);
+  useEffect(() => {
+    playMovieRef.current = playMovie;
+  }, [playMovie]);
 
   const playingRawUrl = playing
     ? buildVodStreamUrl(
@@ -323,7 +345,11 @@ const Movies = () => {
             contentKind="movie"
             initialTime={resumeAt}
             onProgress={(t, d) =>
-              saveProgress(makeProgressKey("movie", playing.stream_id), t, d)
+              saveProgress(makeProgressKey("movie", playing.stream_id), t, d, {
+                kind: "movie",
+                title: playing.name,
+                poster: playing.stream_icon ?? undefined,
+              })
             }
             onClose={() => setPlaying(null)}
           />
