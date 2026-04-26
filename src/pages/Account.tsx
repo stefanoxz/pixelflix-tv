@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useIptv } from "@/context/IptvContext";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Calendar,
   Clock,
@@ -17,6 +18,9 @@ import {
   AlertTriangle,
   Monitor,
   X,
+  Pencil,
+  Check,
+  Trash2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,6 +35,12 @@ import {
   proxyImageUrl,
 } from "@/services/iptv";
 import { SafeImage } from "@/components/SafeImage";
+import {
+  clearDisplayName,
+  displayNameSchema,
+  setDisplayName,
+  useDisplayName,
+} from "@/lib/displayName";
 
 interface ActiveSessionRow {
   anon_user_id: string;
