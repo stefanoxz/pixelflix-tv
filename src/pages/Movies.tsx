@@ -161,6 +161,19 @@ const Movies = () => {
 
   const playMovie = (m: VodStream) => {
     setOpenMovie(null);
+    // Consulta progresso salvo: se houver posição válida (>= MIN_RESUME e < 95%),
+    // abre o ResumeDialog; senão toca do início.
+    const saved = getProgress(makeProgressKey("movie", m.stream_id));
+    if (
+      saved &&
+      saved.t >= MIN_RESUME_SECONDS &&
+      saved.d > 0 &&
+      saved.t / saved.d < COMPLETED_RATIO
+    ) {
+      setPendingResume({ movie: m, t: saved.t, d: saved.d });
+      return;
+    }
+    setResumeAt(0);
     setPlaying(m);
   };
 
