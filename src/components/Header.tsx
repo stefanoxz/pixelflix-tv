@@ -66,7 +66,7 @@ export function Header() {
                 end={item.to === "/"}
                 className={({ isActive }) =>
                   cn(
-                    "nav-link flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                    "relative flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors group",
                     isActive
                       ? "text-primary"
                       : "text-muted-foreground hover:text-foreground"
@@ -74,14 +74,19 @@ export function Header() {
                 }
               >
                 {({ isActive }) => (
-                  <span
-                    data-active={isActive}
-                    className="flex items-center gap-2 nav-link"
-                    style={{ position: "relative" }}
-                  >
+                  <>
                     <item.icon className="h-4 w-4" />
                     {item.label}
-                  </span>
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "pointer-events-none absolute left-3 right-3 -bottom-px h-0.5 rounded-full bg-primary origin-center transition-transform duration-300",
+                        isActive
+                          ? "scale-x-100"
+                          : "scale-x-0 group-hover:scale-x-100",
+                      )}
+                    />
+                  </>
                 )}
               </NavLink>
             ))}
