@@ -219,6 +219,14 @@ export function PosterGrid({
             className="pl-10 bg-secondary/40 border-border/40 h-9"
           />
         </div>
+        {/* Indicador discreto de refetch (background) — útil quando há cache
+            mas a query está revalidando. Sem repintar a grade. */}
+        {isLoading && items.length > 0 && (
+          <Loader2
+            className="h-3.5 w-3.5 animate-spin text-muted-foreground"
+            aria-label="Atualizando"
+          />
+        )}
         {totalLabel && (
           <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
             {totalLabel}
