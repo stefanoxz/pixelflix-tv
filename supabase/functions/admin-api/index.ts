@@ -1919,12 +1919,16 @@ Deno.serve(async (req) => {
       const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
       const { data, error } = await admin
         .from("active_sessions")
-        .select("content_kind, content_title, content_id, started_at, last_seen_at")
+        .select("content_kind, content_title, content_id, started_at, last_seen_at, content_started_at")
         .gte("last_seen_at", since)
         .not("content_title", "is", null)
         .neq("content_kind", "idle")
         .limit(20000);
       if (error) { console.error(error.message); return internalError(); }
+
+      // Cap em 12h por sessão — evita inflar métrica com sessões zumbis
+      // (heartbeat travado, processo morto sem cleanup, etc).
+      const MAX_DURATION_S = 12 * 60 * 60;
 
       const tally = new Map<string, { title: string; kind: string; total_s: number; views: number }>();
       for (const r of data ?? []) {
@@ -1932,9 +1936,14 @@ Deno.serve(async (req) => {
         if (!title) continue;
         const kind = (r.content_kind as string) ?? "unknown";
         const key = `${kind}:${title}`;
-        const start = new Date(r.started_at as string).getTime();
+        // content_started_at é setado pelo player quando o usuário troca de conteúdo.
+        // Fallback para started_at quando o painel ainda não recebeu o heartbeat
+        // de troca (sessões antigas ou primeira reprodução).
+        const startIso = (r.content_started_at as string | null) ?? (r.started_at as string);
+        const start = new Date(startIso).getTime();
         const end = new Date(r.last_seen_at as string).getTime();
         const dur = Math.max(0, Math.round((end - start) / 1000));
+        if (dur === 0 || dur > MAX_DURATION_S) continue;
         const cur = tally.get(key) ?? { title, kind, total_s: 0, views: 0 };
         cur.total_s += dur;
         cur.views += 1;
