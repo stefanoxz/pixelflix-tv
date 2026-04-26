@@ -1872,6 +1872,9 @@ const Admin = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bottom nav fixa no mobile */}
+      <AdminBottomNav tab={tab} onTabChange={setTab} isAdmin={isAdmin} />
     </div>
   );
 };
