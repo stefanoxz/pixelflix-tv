@@ -339,7 +339,7 @@ const Highlights = () => {
         {topMovies.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold">Filmes populares</h2>
+              <h2 className="section-title text-2xl">Filmes populares</h2>
               <Button variant="ghost" size="sm" onClick={() => navigate("/movies")}>
                 Ver todos →
               </Button>
@@ -363,7 +363,7 @@ const Highlights = () => {
         {topSeries.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold">Séries em alta</h2>
+              <h2 className="section-title text-2xl">Séries em alta</h2>
               <Button variant="ghost" size="sm" onClick={() => navigate("/series")}>
                 Ver todas →
               </Button>
