@@ -58,19 +58,20 @@ const AdminLogin = () => {
     );
   };
 
-  // If already logged in AND admin, jump straight to /admin
+  // If already logged in AND has admin/moderator role, jump straight to /admin
   useEffect(() => {
     let active = true;
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user || !active) return;
       pushDebug("session", true, `sessão ativa: ${maskEmail(session.user.email ?? "")}`);
-      const { data: isAdmin } = await supabase.rpc("has_role", {
-        _user_id: session.user.id,
-        _role: "admin",
-      });
-      pushDebug("has_role", !!isAdmin, isAdmin ? "admin confirmado" : "não é admin");
-      if (isAdmin && active) navigate("/admin", { replace: true });
+      const [{ data: isAdmin }, { data: isModerator }] = await Promise.all([
+        supabase.rpc("has_role", { _user_id: session.user.id, _role: "admin" }),
+        supabase.rpc("has_role", { _user_id: session.user.id, _role: "moderator" }),
+      ]);
+      const role = isAdmin ? "admin" : isModerator ? "moderator" : null;
+      pushDebug("has_role", !!role, role ? `${role} confirmado` : "sem papel admin/moderator");
+      if (role && active) navigate("/admin", { replace: true });
     })();
     return () => { active = false; };
   }, [navigate]);
