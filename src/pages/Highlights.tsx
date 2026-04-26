@@ -227,7 +227,7 @@ const Highlights = () => {
         <div className="relative h-full flex items-end pb-8 md:pb-12 mx-auto max-w-[1800px] px-4 md:px-8 gap-6">
           <div key={featured?.id ?? "empty"} className="max-w-2xl md:max-w-md lg:max-w-xl space-y-4 animate-fade-in flex-1 min-w-0">
             <p
-              className="text-sm md:text-base text-muted-foreground/90 font-medium tracking-tight"
+              className="text-[10px] md:text-sm text-muted-foreground/70 md:text-muted-foreground/90 font-semibold tracking-[0.12em] md:tracking-tight uppercase md:normal-case md:font-medium"
               aria-live="polite"
             >
               {greeting}{displayName ? `, ${displayName}` : ""}

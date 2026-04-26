@@ -26,6 +26,8 @@ interface Props {
  * Modal de boas-vindas no 1º acesso. Pede um nome amigável (opcional) pra
  * personalizar a saudação. Marca como "visto" tanto no Salvar quanto no Pular,
  * pra nunca mais aparecer automaticamente nesse dispositivo.
+ *
+ * Design responsivo: compacto em mobile (390px), respiro maior em desktop.
  */
 export function WelcomeNameDialog({ username, open, onClose }: Props) {
   const [value, setValue] = useState("");
@@ -68,22 +70,22 @@ export function WelcomeNameDialog({ username, open, onClose }: Props) {
         if (!next) handleSkip();
       }}
     >
-      <DialogContent className="sm:max-w-[420px]">
-        <DialogHeader>
-          <div className="flex items-center justify-center mb-2">
-            <div className="h-12 w-12 rounded-full bg-gradient-primary flex items-center justify-center shadow-glow ring-2 ring-primary/30">
-              <Sparkles className="h-5 w-5 text-primary-foreground" />
+      <DialogContent className="sm:max-w-[420px] p-4 sm:p-6 gap-3 sm:gap-4">
+        <DialogHeader className="space-y-2 sm:space-y-3">
+          <div className="flex items-center justify-center mb-1">
+            <div className="h-9 w-9 sm:h-12 sm:w-12 rounded-full bg-gradient-primary flex items-center justify-center shadow-glow ring-2 ring-primary/30">
+              <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-primary-foreground" />
             </div>
           </div>
-          <DialogTitle className="text-center text-xl">
+          <DialogTitle className="text-center text-base sm:text-xl">
             Como podemos te chamar?
           </DialogTitle>
-          <DialogDescription className="text-center">
+          <DialogDescription className="text-center text-xs sm:text-sm leading-snug">
             Esse nome aparecerá apenas no seu app, em saudações e na sua conta.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSave} className="space-y-3 pt-2">
+        <form onSubmit={handleSave} className="space-y-3">
           <Input
             ref={inputRef}
             value={value}
@@ -96,28 +98,29 @@ export function WelcomeNameDialog({ username, open, onClose }: Props) {
             autoComplete="given-name"
             aria-invalid={!!error}
             aria-describedby={error ? "name-error" : undefined}
+            className="h-10"
           />
           {error && (
             <p id="name-error" className="text-xs text-destructive">
               {error}
             </p>
           )}
-          <p className="text-[11px] text-muted-foreground text-center">
+          <p className="hidden sm:block text-[11px] text-muted-foreground text-center">
             Máx. 20 caracteres · pode editar depois em Minha Conta
           </p>
 
-          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between gap-2 pt-2">
+          <DialogFooter className="flex-row gap-2 pt-1 sm:pt-2">
             <Button
               type="button"
               variant="ghost"
               onClick={handleSkip}
-              className="w-full sm:w-auto"
+              className="flex-1 sm:flex-initial h-9"
             >
               Pular
             </Button>
             <Button
               type="submit"
-              className="w-full sm:w-auto bg-gradient-primary shadow-glow"
+              className="flex-1 sm:flex-initial h-9 bg-gradient-primary shadow-glow"
             >
               Salvar
             </Button>
