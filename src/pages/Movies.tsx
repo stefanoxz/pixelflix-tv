@@ -307,10 +307,35 @@ const Movies = () => {
             poster={proxyImageUrl(playing.stream_icon)}
             streamId={playing.stream_id}
             contentKind="movie"
+            initialTime={resumeAt}
+            onProgress={(t, d) =>
+              saveProgress(makeProgressKey("movie", playing.stream_id), t, d)
+            }
             onClose={() => setPlaying(null)}
           />
         )}
       </PlayerOverlay>
+
+      <ResumeDialog
+        open={!!pendingResume}
+        onOpenChange={(o) => !o && setPendingResume(null)}
+        resumeAt={pendingResume?.t ?? 0}
+        duration={pendingResume?.d}
+        title={pendingResume?.movie.name}
+        onResume={() => {
+          if (!pendingResume) return;
+          setResumeAt(pendingResume.t);
+          setPlaying(pendingResume.movie);
+          setPendingResume(null);
+        }}
+        onRestart={() => {
+          if (!pendingResume) return;
+          clearProgress(makeProgressKey("movie", pendingResume.movie.stream_id));
+          setResumeAt(0);
+          setPlaying(pendingResume.movie);
+          setPendingResume(null);
+        }}
+      />
     </div>
   );
 };
