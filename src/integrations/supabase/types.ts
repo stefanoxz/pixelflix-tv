@@ -59,6 +59,39 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_audit_log: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_user_id: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          target_email: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_user_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          target_email?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_user_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          target_email?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
       allowed_servers: {
         Row: {
           consecutive_failures: number
@@ -444,6 +477,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_admin_audit_log: { Args: never; Returns: number }
       cleanup_client_diagnostics: { Args: never; Returns: number }
       cleanup_login_events: { Args: never; Returns: number }
       cleanup_stream_events: { Args: never; Returns: number }
