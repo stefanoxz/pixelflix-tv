@@ -1,132 +1,62 @@
 ## Objetivo
 
-Permitir que cada cliente personalize o **nome de exibição** que aparece no app, com:
-
-1. **Saudação dinâmica** no hero da Home: *"Bom dia/Boa tarde/Boa noite, [nome]"* — sem emoji.
-2. **Modal de boas-vindas** no 1º acesso pedindo o nome (com botão "Pular").
-3. **Edição posterior** em "Minha Conta".
-
-Sem backend novo, sem afetar performance, funciona em qualquer dispositivo.
+Polir a personalização do nome no mobile — vários elementos ficaram grandes/desproporcionais em telas estreitas (390px). Sem mudar lógica, só ajustar tamanhos, espaçamentos e layout responsivo.
 
 ---
 
-## Como vai funcionar
+## Problemas identificados no mobile
 
-### 1. Saudação no hero (Highlights)
+1. **Saudação no hero** está com `text-sm` (14px) + peso médio = muito pesada visualmente acima do título já grande.
+2. **Modal de boas-vindas** tem ícone gigante (h-12), padding generoso e dois botões empilhados que ocupam quase metade da tela.
+3. **Edição de nome em /account**: input + botão "Salvar" + botão "Cancelar" lado a lado em 390px ficam espremidos. Texto "Remover nome personalizado" também é longo.
+4. **Avatar do perfil em /account**: círculo `h-16 w-16` + ícone `h-7 w-7` está OK, mas pode ficar mais sutil em mobile.
 
-Texto pequeno e cinza claro acima do badge "Em destaque", no formato:
+---
 
-```
-Boa noite, João
-✨ Em destaque · Filme
-Prova de Coragem
-```
+## Ajustes propostos
 
-**Faixas de horário** (baseadas no relógio do próprio dispositivo):
-- 05:00 às 11:59 → **Bom dia**
-- 12:00 às 17:59 → **Boa tarde**
-- 18:00 às 04:59 → **Boa noite**
+### Hero (Highlights)
+- Saudação: `text-[11px]` em mobile (era `text-sm`), uppercase com tracking sutil, opacity reduzida (`text-muted-foreground/70`). Em desktop continua `text-sm` normal.
+- Resultado: vira uma linha discreta tipo "BOA NOITE, JOÃO" — quase um eyebrow, sem competir com o título do filme.
 
-Comportamento:
-- Se o cliente cadastrou nome → "Boa noite, João"
-- Se pulou o modal e não cadastrou → "Boa noite" (só a saudação, sem vírgula)
-- A saudação é calculada no momento da renderização (custo zero, sem requisição)
-- Não atualiza no meio da sessão se virar a hora — só ao navegar/recarregar (evita "salto" estranho)
+### Modal de boas-vindas
+- Ícone do círculo: `h-10 w-10` em mobile (era `h-12`).
+- Título: `text-base` em mobile (era `text-xl`).
+- Padding interno reduzido (`p-4` em mobile vs `p-6` desktop).
+- Hint "Máx. 20 caracteres..." só aparece em desktop (esconde em mobile pra economizar espaço).
+- Botões "Pular" + "Salvar" empilhados em mobile mas com altura menor (`h-9`).
 
-### 2. Modal de boas-vindas (1º acesso)
+### Edição de nome em /account
+- Em mobile: layout empilhado (input em cima, botões embaixo lado a lado em 50/50). Em desktop: tudo em linha.
+- Input: `text-base` em mobile (era `text-lg`).
+- Botões "Salvar" e "Cancelar": ícones apenas em mobile, com label só em desktop. Mais discretos, mais compactos.
+- "Remover nome personalizado" → encurtar pra "Remover nome".
+- Botão de editar (lápis): manter como está, já é discreto.
 
-Aparece **uma única vez**, logo após o login bem-sucedido (na Home), com:
-
-- Título: *"Como podemos te chamar?"*
-- Subtítulo: *"Esse nome aparecerá apenas no seu app, em saudações e na sua conta."*
-- Input com placeholder *"Seu primeiro nome"* (foco automático)
-- Botão primário: **Salvar**
-- Botão secundário: **Pular**
-- Limite: 20 caracteres, validação com zod (trim, sem HTML), feedback de erro inline
-
-Comportamento:
-- Salvar → guarda nome + marca "modal já visto" → fecha
-- Pular → marca "modal já visto" → fecha (sem salvar nome). Cliente pode definir depois em Minha Conta.
-- Fecha clicando fora ou ESC = mesmo que "Pular"
-- Nunca mais aparece automaticamente nesse dispositivo (a menos que limpe dados)
-
-### 3. Edição em Minha Conta
-
-Na seção do avatar/cabeçalho da página `/account`:
-
-- Mostra o nome de exibição abaixo (ou ao lado) do username técnico
-- Botão discreto **"Editar nome"** (ícone de lápis)
-- Ao clicar, abre o mesmo input inline (ou pequeno dialog)
-- Permite definir, alterar ou **remover** o nome (botão "Limpar")
-- Toast de sucesso ao salvar
-
-### 4. Onde mais o nome aparece
-
-- **Tooltip do avatar no header**: ao passar o mouse mostra "Olá, João" (ou só o username se não tiver nome).
-- **Dropdown do avatar**: o nome de exibição vira o título principal, e o username vai pra subtítulo em cinza pequeno.
-- **Tela de Conta**: nome em destaque no card do perfil, username embaixo discretamente.
+### Avatar grande em /account
+- Mobile: `h-14 w-14` com ícone `h-6 w-6` (era `h-16 w-16` com `h-7 w-7`). Desktop continua `h-20 w-20`.
+- Reduz o "peso" visual do card de perfil em mobile.
 
 ---
 
 ## Detalhes técnicos
 
-### Armazenamento
+**Arquivos alterados:**
+- `src/pages/Highlights.tsx` — só a classe da saudação (1 linha).
+- `src/components/WelcomeNameDialog.tsx` — tamanhos do ícone, título, padding, botões.
+- `src/pages/Account.tsx` — bloco de edição (input + botões), avatar grande, label do botão remover.
 
-`localStorage` por dispositivo, chave isolada por username IPTV:
-```
-display_name:<username>     → "João"
-display_name_seen:<username> → "1"   (flag do modal)
-```
+**Não muda:**
+- Lógica do localStorage, validação zod, hook useDisplayName.
+- Comportamento de salvar/pular/cancelar.
+- Header (já estava bem em mobile).
+- Saudação dinâmica por horário.
 
-**Por quê localStorage e não banco:**
-- Zero latência (sem requisição), sem custo de backend
-- Cada dispositivo tem seu próprio apelido — desejável: no celular do filho pode ser "Pedro", no da esposa "Ana", mesmo login IPTV
-- Sem migração, sem RLS, sem edge function
-- Privado por dispositivo (ninguém vê o nome de ninguém)
-
-### Arquivos a criar
-
-- **`src/lib/displayName.ts`** — utilitário com `getDisplayName(username)`, `setDisplayName(username, name)`, `clearDisplayName(username)`, `hasSeenWelcomeModal(username)`, `markWelcomeModalSeen(username)`, `getGreeting()` (retorna "Bom dia"/"Boa tarde"/"Boa noite"), `useDisplayName(username)` (hook React).
-- **`src/components/WelcomeNameDialog.tsx`** — modal usando `Dialog` do shadcn já existente, com input + zod validation + 2 botões.
-
-### Arquivos a alterar
-
-- **`src/pages/Highlights.tsx`** — adicionar `<p>` com saudação acima do bloco do badge "Em destaque" + montar `WelcomeNameDialog` com `open` controlado por `!hasSeenWelcomeModal(username)`.
-- **`src/pages/Account.tsx`** — substituir o bloco do `<h2>{u.username}</h2>` por: nome de exibição (h2, grande) + username embaixo (texto pequeno cinza) + botão "Editar nome".
-- **`src/components/Header.tsx`** — adicionar `title` no botão do avatar (tooltip nativo "Olá, João") + atualizar o `DropdownMenuLabel` pra mostrar nome de exibição como principal.
-
-### Validação (zod)
-
-```ts
-const nameSchema = z.string()
-  .trim()
-  .min(1, "Digite um nome")
-  .max(20, "Máximo 20 caracteres")
-  .regex(/^[\p{L}\p{N}\s'.-]+$/u, "Use apenas letras, números e espaços");
-```
-
-Bloqueia HTML, scripts e caracteres especiais perigosos.
-
-### Performance
-
-- Saudação: 1 chamada `Date.getHours()` no render — nanossegundos
-- localStorage: lido 1x no mount, armazenado em estado React
-- Modal: lazy-rendered (só monta se `!hasSeen`)
-- Zero requisição de rede, zero impacto em LCP/FCP
-
-### Acessibilidade
-
-- Modal com foco automático no input
-- Botão "Pular" navegável por Tab
-- ESC fecha (Radix Dialog cuida disso)
-- Saudação tem aria-live="polite" pro leitor de tela anunciar uma vez
+**Erro `removeChild` do React/Radix nos logs:**
+Provavelmente causado pelo `key={featured?.id}` do hero re-montando enquanto o Dialog faz portal. Vou estabilizar movendo o `WelcomeNameDialog` pra fora do bloco rotativo (já está no nível raiz do componente, mas vou confirmar a renderização condicional pra evitar mount/unmount no meio da transição).
 
 ---
 
-## O que NÃO muda
+## Performance
 
-- Login, autenticação, fluxo IPTV
-- Dados no Supabase (nada vai pro banco)
-- Layout geral, cores, tipografia
-- Avatar continua com o ícone de pessoa que acabamos de implementar
-- Nada some — só adiciona personalização opcional
+Zero impacto. São só ajustes de classes Tailwind responsivas (`text-xs md:text-sm`, `h-10 md:h-12`, etc.). Nenhuma lógica nova, nenhum re-render extra.

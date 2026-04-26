@@ -267,47 +267,53 @@ const Account = () => {
         <div className="relative flex flex-col md:flex-row md:items-center items-center text-center md:text-left gap-5 mb-6">
           <div className="relative shrink-0">
             <div className="absolute inset-0 rounded-full bg-gradient-primary blur-xl opacity-60" />
-            <div className="relative h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-primary text-primary-foreground ring-2 ring-primary/40 flex items-center justify-center shadow-glow">
-              <UserIcon className="h-7 w-7 md:h-9 md:w-9" strokeWidth={2.25} />
+            <div className="relative h-14 w-14 md:h-20 md:w-20 rounded-full bg-gradient-primary text-primary-foreground ring-2 ring-primary/40 flex items-center justify-center shadow-glow">
+              <UserIcon className="h-6 w-6 md:h-9 md:w-9" strokeWidth={2.25} />
             </div>
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 w-full">
             {editingName ? (
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Input
-                    ref={nameInputRef}
-                    value={nameDraft}
-                    onChange={(e) => {
-                      setNameDraft(e.target.value);
-                      if (nameError) setNameError(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") saveName();
-                      if (e.key === "Escape") cancelEditName();
-                    }}
-                    placeholder="Seu primeiro nome"
-                    maxLength={20}
-                    className="h-10 text-lg font-semibold"
-                    aria-invalid={!!nameError}
-                  />
-                  <Button size="sm" onClick={saveName} className="gap-1 shrink-0">
-                    <Check className="h-4 w-4" /> Salvar
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={cancelEditName} className="shrink-0">
-                    Cancelar
-                  </Button>
-                </div>
+                <Input
+                  ref={nameInputRef}
+                  value={nameDraft}
+                  onChange={(e) => {
+                    setNameDraft(e.target.value);
+                    if (nameError) setNameError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveName();
+                    if (e.key === "Escape") cancelEditName();
+                  }}
+                  placeholder="Seu primeiro nome"
+                  maxLength={20}
+                  className="h-10 text-base md:text-lg font-semibold"
+                  aria-invalid={!!nameError}
+                />
                 {nameError && (
                   <p className="text-xs text-destructive">{nameError}</p>
                 )}
+                <div className="flex items-center gap-2">
+                  <Button size="sm" onClick={saveName} className="flex-1 md:flex-initial gap-1 h-9">
+                    <Check className="h-4 w-4" />
+                    <span>Salvar</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={cancelEditName}
+                    className="flex-1 md:flex-initial h-9"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
                 {displayName && (
                   <button
                     type="button"
                     onClick={removeName}
                     className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
                   >
-                    <Trash2 className="h-3 w-3" /> Remover nome personalizado
+                    <Trash2 className="h-3 w-3" /> Remover nome
                   </button>
                 )}
               </div>
