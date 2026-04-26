@@ -13,6 +13,7 @@ import { PlayerInfoBar } from "@/components/live/PlayerInfoBar";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useLiveKeyboardNav } from "@/hooks/useLiveKeyboardNav";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useFuzzyFilter } from "@/lib/fuzzySearch";
 import { useIptv } from "@/context/IptvContext";
 import {
   getLiveCategories,
@@ -75,17 +76,16 @@ const Live = () => {
     }));
   }, [categories, channels]);
 
-  // Filtragem: categoria + favoritos + busca.
-  const filtered = useMemo(() => {
-    const q = debouncedSearch.trim().toLowerCase();
+  // Categoria/favoritos primeiro — depois aplica fuzzy search.
+  const byCategory = useMemo(() => {
     return channels.filter((c) => {
-      let matchCat = true;
-      if (activeCategory === "__favorites__") matchCat = favorites.has(c.stream_id);
-      else if (activeCategory !== "all") matchCat = c.category_id === activeCategory;
-      const matchSearch = !q || c.name.toLowerCase().includes(q);
-      return matchCat && matchSearch;
+      if (activeCategory === "__favorites__") return favorites.has(c.stream_id);
+      if (activeCategory !== "all") return c.category_id === activeCategory;
+      return true;
     });
-  }, [channels, activeCategory, debouncedSearch, favorites]);
+  }, [channels, activeCategory, favorites]);
+
+  const filtered = useFuzzyFilter(byCategory, debouncedSearch, (c) => c.name);
 
   // Abre canal específico vindo de outra página (ex: Conta) com state.openId
   useEffect(() => {
