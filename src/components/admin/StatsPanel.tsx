@@ -104,7 +104,16 @@ export default function StatsPanel() {
       ]);
       setLogins(a.series ?? []);
       setDauMau(b.series ?? []);
-      setHeatmap({ grid: c.grid ?? [], max: c.max ?? 0 });
+      // Backend devolve grid em UTC. Converte para horário local rotacionando
+      // as colunas pelo offset do navegador (em horas inteiras — boa o suficiente
+      // para os fusos do Brasil; meio-fusos como NL/IN ficam com erro de 30min
+      // no rótulo, mas o pico continua claro).
+      const utcGrid = c.grid ?? [];
+      const offsetHours = -new Date().getTimezoneOffset() / 60; // BR = -3 → offset = -3
+      const localGrid = utcGrid.length === 7
+        ? rotateHeatmapToLocal(utcGrid, offsetHours)
+        : utcGrid;
+      setHeatmap({ grid: localGrid, max: c.max ?? 0 });
       setTopContent(d.items ?? []);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha ao carregar estatísticas");
