@@ -14,6 +14,7 @@ import type { PosterItem } from "@/components/library/PosterCard";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useFuzzyFilter } from "@/lib/fuzzySearch";
 import { useIptv } from "@/context/IptvContext";
 import {
   buildVodStreamUrl,
@@ -71,20 +72,20 @@ const Movies = () => {
     }
   }, [location.state, location.pathname, movies, navigate]);
 
-  const filteredMovies = useMemo(() => {
-    const q = debouncedSearch.trim().toLowerCase();
+  // Primeiro filtra por categoria/favoritos (sem busca) — reduz o conjunto
+  // antes de aplicar o fuzzy match.
+  const byCategory = useMemo(() => {
     return movies.filter((m) => {
-      if (activeCategory === SPECIAL_FAVS) {
-        if (!favorites.has(m.stream_id)) return false;
-      } else if (activeCategory === SPECIAL_RECENT) {
-        // sem filtro adicional
-      } else if (activeCategory !== SPECIAL_ALL && m.category_id !== activeCategory) {
-        return false;
-      }
-      if (q && !m.name.toLowerCase().includes(q)) return false;
+      if (activeCategory === SPECIAL_FAVS) return favorites.has(m.stream_id);
+      if (activeCategory === SPECIAL_RECENT) return true;
+      if (activeCategory !== SPECIAL_ALL && m.category_id !== activeCategory) return false;
       return true;
     });
-  }, [movies, activeCategory, debouncedSearch, favorites]);
+  }, [movies, activeCategory, favorites]);
+
+  // Busca tolerante a erros de digitação, acentos e ordem de palavras.
+  // Quando a query é vazia, devolve `byCategory` inalterado.
+  const filteredMovies = useFuzzyFilter(byCategory, debouncedSearch, (m) => m.name);
 
   const sortedMovies = useMemo(() => {
     if (activeCategory === SPECIAL_RECENT) {

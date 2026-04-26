@@ -16,6 +16,7 @@ import { SeriesDetailsDialog } from "@/components/SeriesDetailsDialog";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useFuzzyFilter } from "@/lib/fuzzySearch";
 import { useAutoplayPreference } from "@/hooks/useAutoplayPreference";
 import { useIptv } from "@/context/IptvContext";
 import {
@@ -84,20 +85,17 @@ const SeriesPage = () => {
     }
   }, [location.state, location.pathname, series, navigate]);
 
-  const filtered = useMemo(() => {
-    const q = debouncedSearch.trim().toLowerCase();
+  // Categoria/favoritos primeiro — depois passa pelo fuzzy filter.
+  const byCategory = useMemo(() => {
     return series.filter((s) => {
-      if (activeCategory === SPECIAL_FAVS) {
-        if (!favorites.has(s.series_id)) return false;
-      } else if (activeCategory === SPECIAL_RECENT) {
-        // sem filtro adicional
-      } else if (activeCategory !== SPECIAL_ALL && s.category_id !== activeCategory) {
-        return false;
-      }
-      if (q && !s.name.toLowerCase().includes(q)) return false;
+      if (activeCategory === SPECIAL_FAVS) return favorites.has(s.series_id);
+      if (activeCategory === SPECIAL_RECENT) return true;
+      if (activeCategory !== SPECIAL_ALL && s.category_id !== activeCategory) return false;
       return true;
     });
-  }, [series, activeCategory, debouncedSearch, favorites]);
+  }, [series, activeCategory, favorites]);
+
+  const filtered = useFuzzyFilter(byCategory, debouncedSearch, (s) => s.name);
 
   const sorted = useMemo(() => {
     if (activeCategory === SPECIAL_RECENT) {
