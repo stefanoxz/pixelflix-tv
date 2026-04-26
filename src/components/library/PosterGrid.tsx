@@ -170,9 +170,20 @@ export function PosterGrid({
   }, [items]);
 
   const totalSize = rowVirtualizer.getTotalSize();
-  // Sentinela posicionado logo acima do fim do conteúdo virtual,
-  // pra que `rootMargin: 600px` dispare antes de bater no fundo.
-  const sentinelTop = Math.max(0, totalSize - 1);
+
+  // Auto-fill: se a grade ainda não preenche a viewport (ex.: 120 itens
+  // cabem na tela e o usuário não precisa rolar), revela o próximo chunk
+  // automaticamente até preencher. Evita o "spinner eterno" antigo.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !hasMore || totalSize === 0) return;
+    if (totalSize <= el.clientHeight + 600) {
+      const id = requestAnimationFrame(() => {
+        setVisibleCount((c) => Math.min(c + pageIncrement, items.length));
+      });
+      return () => cancelAnimationFrame(id);
+    }
+  }, [totalSize, containerWidth, hasMore, items.length, pageIncrement]);
 
   return (
     <div className="flex flex-col h-full min-h-0">
