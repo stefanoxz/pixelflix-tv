@@ -630,13 +630,14 @@ const Admin = () => {
   };
 
   const removeServer = async (server_url: string) => {
-    if (!confirm(`Remover acesso ao servidor "${server_url}"?\nUsuários não conseguirão mais logar nele.`)) return;
     try {
       await callAdmin("remove_server", { server_url });
       toast.success("DNS removida");
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao remover");
+    } finally {
+      setConfirmRemoveServer(null);
     }
   };
 
@@ -647,6 +648,8 @@ const Admin = () => {
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao desbloquear");
+    } finally {
+      setConfirmUnblockUser(null);
     }
   };
 
@@ -657,6 +660,8 @@ const Admin = () => {
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao encerrar");
+    } finally {
+      setConfirmEvictSession(null);
     }
   };
 
