@@ -4,13 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Input } from "@/components/ui/input";
 import { PosterCard, type PosterItem } from "./PosterCard";
 import { useIncompatibleKeys } from "@/hooks/useIncompatibleKeys";
-
-// Detecta uma vez por sessão: em mobile, reduzimos drasticamente a janela
-// inicial pra não enfileirar 120 covers de uma vez em redes lentas.
-const IS_MOBILE_VIEWPORT =
-  typeof window !== "undefined" &&
-  typeof window.matchMedia === "function" &&
-  window.matchMedia("(max-width: 767px)").matches;
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 interface Props {
   items: PosterItem[];
