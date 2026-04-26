@@ -218,6 +218,7 @@ export const PosterCard = memo(PosterCardImpl, (prev, next) => {
     prev.active === next.active &&
     prev.isFavorite === next.isFavorite &&
     prev.incompatible === next.incompatible &&
+    prev.priority === next.priority &&
     prev.onClick === next.onClick &&
     prev.onHover === next.onHover &&
     prev.onToggleFavorite === next.onToggleFavorite
