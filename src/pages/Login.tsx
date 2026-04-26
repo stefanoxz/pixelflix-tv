@@ -167,6 +167,25 @@ const Login = () => {
     toast.error(msg);
   }
 
+  /**
+   * Após login bem-sucedido, avisa (sem bloquear) quando a conta está com
+   * todas as telas em uso. O painel deixa autenticar mesmo nesse estado, mas
+   * tentar abrir streams vai falhar até liberar uma conexão.
+   */
+  function maybeWarnConnectionLimit(data: {
+    at_connection_limit?: boolean;
+    user_info?: { active_cons?: string | number; max_connections?: string | number };
+  }) {
+    if (!data?.at_connection_limit) return;
+    const act = data.user_info?.active_cons ?? "?";
+    const max = data.user_info?.max_connections ?? "?";
+    toast.warning(`Conta com todas as telas em uso (${act}/${max}).`, {
+      description:
+        "Você pode navegar pelo catálogo, mas streams só vão abrir quando uma conexão liberar. Aguarde alguns minutos ou feche outras telas.",
+      duration: 10_000,
+    });
+  }
+
   return (
     <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
       <div className="absolute inset-0 bg-gradient-glow opacity-60" />
