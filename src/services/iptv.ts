@@ -457,13 +457,10 @@ class TimeoutError extends Error {
   constructor() { super("timeout"); this.name = "TimeoutError"; }
 }
 
-export class MaxConnectionsError extends Error {
-  code = "MAX_CONNECTIONS" as const;
-  constructor(message = "Limite de telas atingido") {
-    super(message);
-    this.name = "MaxConnectionsError";
-  }
-}
+// MaxConnectionsError removido: limite de telas não é mais erro de login.
+// O painel responde auth=1 + at_connection_limit:true e o app navega normal,
+// mostrando só um toast de aviso. Falhas de stream individuais são tratadas
+// no Player como qualquer outro erro de mídia.
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
