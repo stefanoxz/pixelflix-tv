@@ -572,7 +572,7 @@ async function invokeFn<T>(
  */
 export type SafeResult<T> =
   | { ok: true; data: T }
-  | { ok: false; code: string; error: string; status?: number };
+  | { ok: false; code: string; error: string; status?: number; extra?: Record<string, unknown> };
 
 /** Detecta o erro transitório do runtime do Supabase Edge (cold start / 503). */
 function isEdgeRuntimeTransient(status: number | undefined, code: string, error: string): boolean {
@@ -613,10 +613,12 @@ export async function invokeSafe<T = unknown>(
         }
 
         if (dataAny && typeof dataAny === "object" && (dataAny.code || dataAny.error)) {
+          const { code, error, success, ...rest } = dataAny;
           return {
             ok: false as const,
-            code: String(dataAny.code ?? "UNKNOWN_ERROR"),
-            error: String(dataAny.error ?? "Erro desconhecido"),
+            code: String(code ?? "UNKNOWN_ERROR"),
+            error: String(error ?? "Erro desconhecido"),
+            extra: rest && Object.keys(rest).length ? rest : undefined,
           };
         }
 
@@ -997,7 +999,27 @@ export async function iptvLoginM3u(
     duration_ms: durationMs,
     speed_kbps,
   });
-  throw new Error(messageForLoginCode(result.code, result.error));
+  throw new IptvLoginError(
+    messageForLoginCode(result.code, result.error),
+    result.code,
+    (result.extra?.debug as Record<string, unknown> | undefined) ?? null,
+  );
+}
+
+/**
+ * Erro lançado pelos fluxos de login. Carrega `code` e o objeto `debug`
+ * estruturado vindo da edge function (httpStatus, contentType, bodyPreview…)
+ * para que a UI possa exibir detalhes técnicos quando o usuário pedir.
+ */
+export class IptvLoginError extends Error {
+  code: string;
+  debug: Record<string, unknown> | null;
+  constructor(message: string, code: string, debug: Record<string, unknown> | null) {
+    super(message);
+    this.name = "IptvLoginError";
+    this.code = code;
+    this.debug = debug;
+  }
 }
 
 /** Mensagem amigável para cada `code` retornado pela edge `iptv-login`. */
@@ -1069,7 +1091,11 @@ async function iptvLoginViaEdge(
     duration_ms: durationMs,
     speed_kbps,
   });
-  throw new Error(messageForLoginCode(result.code, result.error));
+  throw new IptvLoginError(
+    messageForLoginCode(result.code, result.error),
+    result.code,
+    (result.extra?.debug as Record<string, unknown> | undefined) ?? null,
+  );
 }
 
 export interface Episode {

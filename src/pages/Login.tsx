@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIptv } from "@/context/IptvContext";
-import { iptvLogin, iptvLoginM3u, resolveStreamBase } from "@/services/iptv";
+import { iptvLogin, iptvLoginM3u, resolveStreamBase, IptvLoginError } from "@/services/iptv";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { parseM3uUrl } from "@/lib/parseM3uUrl";
@@ -61,8 +61,7 @@ const Login = () => {
       toast.success(`Bem-vindo, ${data.user_info.username}!`);
       navigate("/sync");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      toast.error(msg);
+      handleLoginError(err);
     } finally {
       setLoading(false);
     }
@@ -123,12 +122,48 @@ const Login = () => {
       }
       navigate("/sync");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      toast.error(msg);
+      handleLoginError(err);
     } finally {
       setLoading(false);
     }
   };
+
+  /**
+   * Mostra erro do login. Se for `IptvLoginError` com `debug` (vindo da edge),
+   * inclui um botão "Detalhes técnicos" no toast que copia/loga o body recebido
+   * do painel IPTV — facilita diagnosticar DNS que respondem mas em formato
+   * inesperado (HTML, M3U cru, JSON sem user_info).
+   */
+  function handleLoginError(err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erro desconhecido";
+    if (err instanceof IptvLoginError && err.debug) {
+      const dbg = err.debug as {
+        httpStatus?: number;
+        contentType?: string | null;
+        variant?: string;
+        bodyPreview?: string;
+        looksLikeHtml?: boolean;
+        looksLikeM3u?: boolean;
+      };
+      console.warn("[Login] erro com debug do painel IPTV:", dbg);
+      toast.error(msg, {
+        description: `HTTP ${dbg.httpStatus ?? "?"} · ${dbg.contentType ?? "sem content-type"}${
+          dbg.looksLikeHtml ? " · HTML" : ""
+        }${dbg.looksLikeM3u ? " · M3U" : ""}`,
+        duration: 12_000,
+        action: {
+          label: "Copiar detalhes",
+          onClick: () => {
+            const txt = JSON.stringify(dbg, null, 2);
+            navigator.clipboard?.writeText(txt).catch(() => {});
+            toast.success("Detalhes copiados para a área de transferência");
+          },
+        },
+      });
+      return;
+    }
+    toast.error(msg);
+  }
 
   return (
     <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
