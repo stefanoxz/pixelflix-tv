@@ -1,61 +1,85 @@
-## Diagnóstico
+# Tornar o SuperTech instalável como aplicativo
 
-### "Filmes populares" e "Séries em alta" (Highlights)
+## O que o usuário vai ter
 
-Em `src/pages/Highlights.tsx` (linhas 33-40):
+Depois desta mudança, qualquer pessoa que acessar **pixelflix-tv.lovable.app** (ou seu domínio próprio) no Chrome, Edge, Brave ou Opera vai ver um **ícone de instalação na barra de endereço**. Ao clicar:
 
-```ts
-const topMovies = [...movies].sort((a, b) => b.rating_5based - a.rating_5based).slice(0, 12);
-const topSeries = [...series].sort((a, b) => b.rating_5based - a.rating_5based).slice(0, 12);
+- No **Windows/Linux/Mac**: o app aparece no menu iniciar/launchpad com ícone próprio do SuperTech, abre em **janela dedicada sem barra do navegador**, parecendo um app nativo. Atualizações chegam automaticamente.
+- No **Android**: opção "Instalar app" no menu do navegador → vira ícone na tela inicial.
+- No **iPhone/iPad**: Compartilhar → "Adicionar à Tela de Início".
+
+A janela abre limpa, com a logo do SuperTech como splash, sem URL nem abas — experiência idêntica a um app instalado.
+
+## Abordagem técnica: manifest puro (sem service worker)
+
+Como você não precisa de offline, **não vamos usar `vite-plugin-pwa` nem service workers**. Essa é a abordagem mais simples e segura, recomendada pela própria documentação do Lovable quando o objetivo é só instalabilidade. Evita:
+
+- Problemas de cache desatualizado no preview do Lovable
+- Conflitos com o Supabase Auth (`/~oauth` redirects)
+- Complexidade desnecessária
+
+A instalabilidade é garantida apenas por um arquivo `manifest.json` válido + meta tags + ícones nos tamanhos certos. Isso é o suficiente para o Chrome/Edge mostrarem o botão de "Instalar".
+
+## Arquivos a criar/editar
+
+### 1. `public/manifest.json` (novo)
+Define nome, cores, ícones e modo de exibição:
+```json
+{
+  "name": "SuperTech IPTV",
+  "short_name": "SuperTech",
+  "description": "Player IPTV web premium...",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
 ```
 
-- **Não é aleatório** — é ordenação por `rating_5based` desc.
-- **Mas o efeito é equivalente a aleatório**: o catálogo Xtream tem dezenas de milhares de itens com `rating_5based = 5` (default do provedor / herança ruim do TMDB). O desempate é a ordem de inserção da API → sempre os mesmos itens obscuros sobem ao topo, e clássicos óbvios não aparecem.
+### 2. Ícones em `public/`
+Vou gerar a partir do `logo-supertech.webp` existente (usando a ferramenta de imagem do sandbox):
+- `icon-192.png` — 192x192 (Android home screen)
+- `icon-512.png` — 512x512 (splash screen e instalação)
+- `icon-maskable-512.png` — 512x512 com padding seguro (para ícones adaptativos do Android que cortam em círculo/squircle)
+- `apple-touch-icon.png` — 180x180 (iOS home screen)
 
-### Notas "5,0" nos cards
+### 3. `index.html` — adicionar meta tags PWA
+No `<head>`, adicionar:
+```html
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SuperTech">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+```
 
-`MediaCard` e `PosterCard` mostram `rating_5based.toFixed(1)` direto do Xtream. O valor é real (vem do provedor), mas como a maioria é `5` ou `0`, o badge informa pouco.
+## Como o usuário instala (instruções para passar aos clientes)
 
-## Solução
+**No PC (Chrome/Edge):**
+1. Acessar pixelflix-tv.lovable.app
+2. Clicar no ícone de monitor com seta (📥) que aparece na barra de endereço, à direita
+3. Confirmar "Instalar" → o app aparece no menu iniciar e na área de trabalho
 
-### 1. Nova edge function `tmdb-rate`
+**No Android:** menu do Chrome → "Instalar app"
+**No iPhone:** Compartilhar (Safari) → "Adicionar à Tela de Início"
 
-Recebe `{type, name, year, tmdb_id?}` → consulta TMDB → devolve `{vote_average, vote_count, tmdb_id}`. Sem persistência em DB (cache fica no React Query, 24h). Reaproveita a lógica de busca cascata já presente em `tmdb-image`.
+## Importante: só funciona na URL publicada
 
-### 2. Hook `useTmdbRating`
+PWA **não funciona no preview do Lovable** (o iframe de preview bloqueia instalação por segurança). Para testar, você precisa **clicar em Publicar** e acessar a URL `pixelflix-tv.lovable.app` diretamente no navegador (fora do editor). O botão de instalação só aparece lá.
 
-Wrapper de `useQuery` chamando `tmdb-rate`. Habilitável por flag (só dispara para os candidatos do top), com `staleTime: 24h`.
+## Fora do escopo
 
-### 3. Refatorar `Highlights.tsx`
-
-- **Pré-filtro local**: candidatos = top 60 filmes + top 30 séries com `rating_5based > 0`, priorizando `added` recente (lançamentos dos últimos 24 meses sobem na seleção inicial).
-- **Enriquecimento TMDB em paralelo**: dispara `useTmdbRating` para cada candidato (60+30 = 90 chamadas, mas todas cacheadas após primeira visita).
-- **Re-rank** por `vote_average` (TMDB), exigindo `vote_count >= 50` para evitar nichos. Quem não tiver TMDB válido cai pra fim da lista.
-- **Rotação diária**: shuffle determinístico com seed = data (`YYYY-MM-DD`). Pega top 24, embaralha com seed do dia, mostra 12. Cada dia uma seleção diferente, mesmo dia → mesma ordem.
-- **Hero**: a fila de destaques (8 filmes + 4 séries) usa o mesmo top já refinado.
-
-### 4. Polir badge de notas (`PosterCard`/`MediaCard`)
-
-- Aceitar nova prop opcional `tmdbRating?: { vote_average: number; vote_count: number }`.
-- Quando `tmdbRating` presente e `vote_count >= 20`: exibir `vote_average.toFixed(1)` em escala 0-10 (ex.: `8.4`) com badge dourada.
-- Quando ausente: usar `rating_5based`, mas **ocultar quando for exatamente 5.0** (default suspeito do provedor) ou `0`.
-- Em Highlights, o `MediaCard` recebe `tmdbRating` dos candidatos enriquecidos. Em Movies/Series listagem geral, fica como está (não vamos enriquecer 48k itens — só o que aparece nos destaques).
-
-## Arquivos alterados
-
-- **Novo** `supabase/functions/tmdb-rate/index.ts` — edge function de rating TMDB
-- **Novo** `src/hooks/useTmdbRating.ts` — hook do React Query
-- **Novo** `src/lib/dailyShuffle.ts` — shuffle determinístico com seed do dia
-- **Editado** `src/pages/Highlights.tsx` — pipeline de seleção + ranking + rotação + propagação do `tmdbRating`
-- **Editado** `src/components/MediaCard.tsx` — aceitar `tmdbRating`, ocultar 5.0 default
-- **Editado** `src/components/library/PosterCard.tsx` — aceitar `tmdbRating`, ocultar 5.0 default
-
-## Resultado esperado
-
-- Hero rotativo e sessões "Filmes populares" / "Séries em alta" passam a destacar **conteúdo realmente popular segundo TMDB** (votos reais), priorizando lançamentos recentes.
-- A cada dia o usuário vê uma seleção diferente dentro do top (rotação diária determinística).
-- O badge "5,0" eternamente visível some quando for default do provedor; cards do topo exibem nota real do TMDB em escala 0-10.
-
-## Sem migration de DB
-
-Diferente da abordagem inicial considerada, **não vamos adicionar colunas** em `tmdb_image_cache`. Cache do TMDB rating fica no React Query (cliente, 24h) — TMDB tolera bem ~90 lookups por sessão e o impacto na primeira visita é desprezível (chamadas em paralelo, ~300ms total).
+- Cache offline / service worker (você confirmou que não precisa)
+- Notificações push
+- App nativo .exe / .dmg (Electron) — pode ser feito depois se quiser, mas PWA já cobre 99% do caso de uso
+- Publicação em lojas (Google Play / Microsoft Store) — possível via Trusted Web Activity, mas é outro projeto
