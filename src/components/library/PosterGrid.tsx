@@ -186,11 +186,13 @@ export function PosterGrid({
 
   // Auto-fill: se a grade ainda não preenche a viewport (ex.: 120 itens
   // cabem na tela e o usuário não precisa rolar), revela o próximo chunk
-  // automaticamente até preencher. Evita o "spinner eterno" antigo.
+  // automaticamente até preencher. Em mobile usamos um buffer menor pra
+  // evitar disparar 2-3 expansões consecutivas no primeiro paint em 3G/4G.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !hasMore || totalSize === 0) return;
-    if (totalSize <= el.clientHeight + 600) {
+    const buffer = IS_MOBILE_VIEWPORT ? 200 : 600;
+    if (totalSize <= el.clientHeight + buffer) {
       const id = requestAnimationFrame(() => {
         setVisibleCount((c) => Math.min(c + pageIncrement, items.length));
       });
