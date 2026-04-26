@@ -999,7 +999,27 @@ export async function iptvLoginM3u(
     duration_ms: durationMs,
     speed_kbps,
   });
-  throw new Error(messageForLoginCode(result.code, result.error));
+  throw new IptvLoginError(
+    messageForLoginCode(result.code, result.error),
+    result.code,
+    (result.extra?.debug as Record<string, unknown> | undefined) ?? null,
+  );
+}
+
+/**
+ * Erro lançado pelos fluxos de login. Carrega `code` e o objeto `debug`
+ * estruturado vindo da edge function (httpStatus, contentType, bodyPreview…)
+ * para que a UI possa exibir detalhes técnicos quando o usuário pedir.
+ */
+export class IptvLoginError extends Error {
+  code: string;
+  debug: Record<string, unknown> | null;
+  constructor(message: string, code: string, debug: Record<string, unknown> | null) {
+    super(message);
+    this.name = "IptvLoginError";
+    this.code = code;
+    this.debug = debug;
+  }
 }
 
 /** Mensagem amigável para cada `code` retornado pela edge `iptv-login`. */
