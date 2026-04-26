@@ -151,7 +151,8 @@ export default function PendingSignupsPanel() {
                 </Button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
