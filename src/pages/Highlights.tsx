@@ -184,14 +184,14 @@ const Highlights = () => {
   // já se escondem sozinhas enquanto não houver dados (renderização progressiva).
 
   return (
-    <div className="space-y-12 pb-12">
+    <div className="space-y-12 pb-12 animate-fade-in">
       {/* HERO ROTATIVO */}
       <section
-        className="relative h-[60vh] min-h-[420px] w-full overflow-hidden"
+        className="relative h-[60vh] md:h-[68vh] min-h-[460px] w-full overflow-hidden"
         onMouseEnter={() => (pausedRef.current = true)}
         onMouseLeave={() => (pausedRef.current = false)}
       >
-        {/* camadas de fundo cross-fade */}
+        {/* camadas de fundo cross-fade — opacity sutil + scale leve no ativo (Ken Burns) */}
         {featuredQueue.map((item, i) => (
           <img
             key={`${item.kind}-${item.id}`}
@@ -199,32 +199,59 @@ const Highlights = () => {
             alt=""
             aria-hidden
             className={cn(
-              "absolute inset-0 h-full w-full object-cover transition-opacity duration-700",
-              i === activeIdx ? "opacity-40" : "opacity-0",
+              "absolute inset-0 h-full w-full object-cover transition-all duration-1000",
+              i === activeIdx
+                ? "opacity-30 scale-105"
+                : "opacity-0 scale-100",
             )}
             onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
           />
         ))}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/50 to-transparent" />
+        {/* Vinheta + gradient lateral mais forte pra texto sempre legível */}
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/85 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/70 to-transparent" />
+        {/* Glow sutil no canto superior */}
+        <div className="absolute -top-20 -left-20 h-96 w-96 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
 
-        <div className="relative h-full flex items-end pb-12 mx-auto max-w-[1600px] px-4 md:px-8">
+        <div className="relative h-full flex items-end pb-12 mx-auto max-w-[1800px] px-4 md:px-8">
           <div key={featured?.id ?? "empty"} className="max-w-2xl space-y-4 animate-fade-in">
-            <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-xs font-medium text-primary">
+            <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-xs font-medium text-primary backdrop-blur">
               ✨ Em destaque {featured?.kind === "series" ? "· Série" : featured?.kind === "movie" ? "· Filme" : ""}
             </span>
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-tight">
+            <h1 className="hero-title">
               {featured?.title || "Bem-vindo ao SuperTech"}
             </h1>
-            <p className="text-base md:text-lg text-muted-foreground max-w-xl">
-              Descubra milhares de filmes, séries e canais ao vivo em alta qualidade.
-              Streaming sem limites, em qualquer dispositivo.
+
+            {/* Metadata real do TMDB */}
+            {featured?.tmdb && (
+              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                {featured.tmdb.vote_average ? (
+                  <span className="inline-flex items-center gap-1 text-warning font-semibold">
+                    ★ {featured.tmdb.vote_average.toFixed(1)}
+                    <span className="text-[11px] text-muted-foreground font-normal">
+                      ({featured.tmdb.vote_count?.toLocaleString("pt-BR")} votos)
+                    </span>
+                  </span>
+                ) : null}
+                {featured.tmdb.year && (
+                  <>
+                    <span className="opacity-50">·</span>
+                    <span>{featured.tmdb.year}</span>
+                  </>
+                )}
+              </div>
+            )}
+
+            <p className="text-base md:text-lg text-muted-foreground max-w-xl line-clamp-3">
+              {featured?.tmdb?.overview ||
+                "Descubra milhares de filmes, séries e canais ao vivo em alta qualidade. Streaming sem limites, em qualquer dispositivo."}
             </p>
+
             <div className="flex flex-wrap gap-3 pt-2">
               <Button
                 size="lg"
                 onClick={() => featured && openFeatured(featured)}
-                className="bg-gradient-primary hover:opacity-90 shadow-glow gap-2"
+                className="bg-gradient-primary hover:opacity-100 hover:scale-[1.03] hover:shadow-[0_0_32px_-4px_hsl(var(--primary)/0.6)] shadow-glow gap-2 transition-all duration-200 font-semibold"
                 disabled={!featured}
               >
                 <Play className="h-4 w-4 fill-current" />
@@ -234,7 +261,7 @@ const Highlights = () => {
                 size="lg"
                 variant="secondary"
                 onClick={() => featured && openFeatured(featured)}
-                className="gap-2"
+                className="gap-2 backdrop-blur bg-secondary/70 hover:bg-secondary"
                 disabled={!featured}
               >
                 <Info className="h-4 w-4" />
@@ -242,20 +269,27 @@ const Highlights = () => {
               </Button>
             </div>
 
-            {/* Indicadores */}
+            {/* Indicadores — limitados a 7 com fade nas extremidades */}
             {featuredQueue.length > 1 && (
-              <div className="flex gap-1.5 pt-3">
-                {featuredQueue.map((_, i) => (
+              <div className="flex items-center gap-1.5 pt-3">
+                {featuredQueue.slice(0, 7).map((_, i) => (
                   <button
                     key={i}
                     aria-label={`Ir para destaque ${i + 1}`}
                     onClick={() => setActiveIdx(i)}
                     className={cn(
-                      "h-1.5 rounded-full transition-all",
-                      i === activeIdx ? "w-8 bg-primary" : "w-3 bg-foreground/30 hover:bg-foreground/50",
+                      "h-1.5 rounded-full transition-all duration-300",
+                      i === activeIdx
+                        ? "w-8 bg-primary shadow-[0_0_12px_hsl(var(--primary)/0.6)]"
+                        : "w-3 bg-foreground/25 hover:bg-foreground/50",
                     )}
                   />
                 ))}
+                {featuredQueue.length > 7 && (
+                  <span className="text-[10px] text-muted-foreground ml-1 tabular-nums">
+                    +{featuredQueue.length - 7}
+                  </span>
+                )}
               </div>
             )}
           </div>
