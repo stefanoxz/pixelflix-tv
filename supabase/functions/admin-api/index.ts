@@ -53,15 +53,48 @@ function maskIp(ip: string | null | undefined): string {
   return ip;
 }
 
-// Mutating actions require explicit admin re-check
-const MUTATING_ACTIONS = new Set([
+// Ações restritas a ADMIN (moderador NÃO pode executar).
+// Tudo que altera DNS/servidores, gerencia equipe, aprova cadastros, ou
+// libera bloqueios permanentes fica aqui.
+const ADMIN_ONLY_ACTIONS = new Set([
   "allow_server",
   "remove_server",
-  "unblock_user",
-  "evict_session",
   "approve_signup",
   "reject_signup",
+  "unblock_user",
+  "list_team",
+  "add_team_member",
+  "update_team_role",
+  "remove_team_member",
+  "list_audit_log",
 ]);
+
+// Ações que moderador também pode executar (escrita operacional).
+// Esta lista é informativa — qualquer ação não-restrita roda para
+// admin OU moderator.
+const MODERATOR_WRITE_ACTIONS = new Set([
+  "evict_session",
+]);
+
+async function logAudit(
+  actorId: string,
+  actorEmail: string | null,
+  action: string,
+  target?: { user_id?: string | null; email?: string | null; metadata?: Record<string, unknown> },
+) {
+  try {
+    await admin.from("admin_audit_log").insert({
+      actor_user_id: actorId,
+      actor_email: actorEmail,
+      action,
+      target_user_id: target?.user_id ?? null,
+      target_email: target?.email ?? null,
+      metadata: target?.metadata ?? null,
+    });
+  } catch (e) {
+    console.error("[admin-api] audit log failed", (e as Error).message);
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
