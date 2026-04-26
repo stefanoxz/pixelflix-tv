@@ -24,8 +24,12 @@ export function Header() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // hide on login & admin routes
-  if (location.pathname.startsWith("/login") || location.pathname.startsWith("/admin")) {
+  // hide on login, admin and sync routes
+  if (
+    location.pathname.startsWith("/login") ||
+    location.pathname.startsWith("/admin") ||
+    location.pathname.startsWith("/sync")
+  ) {
     return null;
   }
 
