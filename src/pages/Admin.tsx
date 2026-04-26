@@ -1045,7 +1045,7 @@ const Admin = () => {
                             {b.reason || "—"} • até {new Date(b.blocked_until).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                           </p>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => unblockUser(b.anon_user_id)}>
+                        <Button size="sm" variant="outline" onClick={() => setConfirmUnblockUser(b)}>
                           Desbloquear
                         </Button>
                       </div>
