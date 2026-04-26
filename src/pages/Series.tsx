@@ -62,11 +62,22 @@ const SeriesPage = () => {
     coverFallback?: string;
   } | null>(null);
   const [showNextCard, setShowNextCard] = useState(false);
+  // Posição inicial em segundos para o próximo episódio a carregar.
+  const [resumeAt, setResumeAt] = useState<number>(0);
+  // Quando definido, mostra o ResumeDialog antes de tocar o episódio.
+  const [pendingResume, setPendingResume] = useState<{
+    ep: Episode;
+    seriesId: number;
+    coverFallback?: string;
+    t: number;
+    d: number;
+  } | null>(null);
   const autoplayPref = useAutoplayPreference();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { isFavorite, toggle, favorites } = useFavorites(creds.username, "series");
+  const { getProgress, saveProgress, clearProgress } = useWatchProgress(creds.username);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["series-cats", creds.username],
