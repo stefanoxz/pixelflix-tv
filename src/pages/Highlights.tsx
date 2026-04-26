@@ -292,12 +292,13 @@ const Highlights = () => {
               </Button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {topMovies.map((m) => (
+              {topMovies.map(({ item: m, tmdb }) => (
                 <MediaCard
                   key={m.stream_id}
                   title={m.name}
                   cover={m.stream_icon}
                   rating={m.rating_5based}
+                  tmdbRating={tmdb}
                   onClick={() => navigate("/movies", { state: { openId: m.stream_id } })}
                 />
               ))}
@@ -315,12 +316,13 @@ const Highlights = () => {
               </Button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {topSeries.map((s) => (
+              {topSeries.map(({ item: s, tmdb }) => (
                 <MediaCard
                   key={s.series_id}
                   title={s.name}
                   cover={s.cover}
                   rating={s.rating_5based}
+                  tmdbRating={tmdb}
                   onClick={() => navigate("/series", { state: { openId: s.series_id } })}
                 />
               ))}
