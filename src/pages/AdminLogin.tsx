@@ -177,7 +177,8 @@ const AdminLogin = () => {
       const raw = err instanceof Error ? err.message : "Falha ao enviar e-mail";
       const friendly = describeAuthError(raw);
       pushDebug("forgot", false, raw);
-      setLastError(`${friendly} — raw: ${raw}`);
+      console.warn("[admin-login] forgot error:", raw);
+      setLastError(friendly);
       toast.error(friendly);
     } finally {
       setLoading(false);
