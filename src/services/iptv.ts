@@ -117,7 +117,7 @@ export const connectivityConfig = {
   // Per-operation timeouts (ms)
   timeoutLogin: 12_000,
   timeoutToken: 5_000,
-  timeoutData: 8_000,
+  timeoutData: 20_000,
   // Retry budget — login agora aceita mais tentativas pra absorver
   // cold starts (503 SUPABASE_EDGE_RUNTIME_ERROR no preflight).
   retriesLogin: 3,
