@@ -39,7 +39,6 @@ export function Header() {
   };
 
   const username = session?.userInfo?.username ?? "";
-  const initial = username.charAt(0).toUpperCase() || "U";
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
@@ -102,8 +101,8 @@ export function Header() {
                 className="flex items-center gap-2 rounded-full pl-2 pr-3 py-1 hover:bg-secondary/60 transition-colors group"
                 aria-label="Menu da conta"
               >
-                <span className="h-8 w-8 rounded-full bg-gradient-primary text-primary-foreground flex items-center justify-center text-sm font-semibold shadow-glow ring-2 ring-primary/30 group-hover:ring-primary/60 transition-all">
-                  {initial}
+                <span className="h-8 w-8 rounded-full bg-gradient-primary text-primary-foreground flex items-center justify-center shadow-glow ring-2 ring-primary/30 group-hover:ring-primary/60 transition-all">
+                  <User className="h-4 w-4" strokeWidth={2.25} />
                 </span>
                 <span className="text-xs text-muted-foreground max-w-[120px] truncate">
                   {username}
@@ -146,8 +145,8 @@ export function Header() {
                 className="flex items-center gap-2 rounded-full pl-1 pr-2 py-1 hover:bg-secondary/60 transition-colors group tap-feedback"
                 aria-label="Menu da conta"
               >
-                <span className="h-9 w-9 rounded-full bg-gradient-primary text-primary-foreground flex items-center justify-center text-sm font-semibold shadow-glow ring-2 ring-primary/30">
-                  {initial}
+                <span className="h-9 w-9 rounded-full bg-gradient-primary text-primary-foreground flex items-center justify-center shadow-glow ring-2 ring-primary/30">
+                  <User className="h-[18px] w-[18px]" strokeWidth={2.25} />
                 </span>
               </button>
             </DropdownMenuTrigger>

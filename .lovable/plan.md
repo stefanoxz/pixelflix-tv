@@ -1,60 +1,49 @@
-# Loader mais "vivo": partículas flutuando + frase de apoio
+## Objetivo
 
-Melhorar o placeholder inicial (que aparece antes do React montar) adicionando **partículas azuis flutuando ao fundo** + uma **frase fixa** abaixo do título, mantendo a regra de ouro: **zero requests, zero JS, animações 100% GPU**.
+Limpar dois pontos visuais incômodos na tela inicial, sem afetar performance, sem quebrar desktop e sem alterar nenhuma lógica de dados:
+
+1. **Remover a tira horizontal de capinhas** que aparece embaixo dos botões "Assistir agora / Mais informações" no mobile.
+2. **Trocar a "letra/número" do avatar** (o "6" que aparece, que na verdade é o primeiro caractere do username) por um **ícone de pessoa** elegante.
+
+---
 
 ## O que muda visualmente
 
-Antes: logo + título "SuperTech" + glow + pulse.
+### Hero (mobile)
+**Antes:** abaixo dos botões aparece uma tira de até 8 capas pequenas que serve como seletor manual dos destaques rotativos.
 
-Depois: tudo isso **+**:
-- **~12 partículas azuis** subindo lentamente do rodapé até o topo, em loop infinito, com opacidade variando (efeito ambiente cinematográfico, combina com app de streaming)
-- **Frase fixa** abaixo do título: *"Preparando seu entretenimento…"* em cinza claro, com fade-in suave
+**Depois:** a tira some completamente. O carrossel continua rodando automaticamente a cada 8s (sem alteração). O usuário ainda pode trocar de destaque no mobile via swipe? Não — para manter zero risco, removemos o controle manual no mobile, deixando apenas o auto-rotate. Visual mais limpo, foco no título/sinopse/botões.
 
-Resultado: a tela "respira" durante o carregamento, dando sensação de movimento sem chamar atenção demais.
+**Desktop (≥ md):** **nada muda**. Os dots indicadores e a coluna de pôsteres à direita continuam exatamente como estão.
 
-## Garantias de performance (inalteradas)
+### Avatar (Header — mobile e desktop)
+**Antes:** círculo azul com a primeira letra do username (que vira "6" quando o login começa com número, ficando estranho).
 
-| Aspecto | Custo |
-|---|---|
-| Novos requests HTTP | **0** (tudo inline) |
-| Bytes adicionais no HTML | **~1.2 KB** (≈ 500 B com gzip) |
-| JS executado | **0** |
-| Animações | apenas `transform` + `opacity` → compositor GPU, sem reflow/repaint |
-| Main thread | **0 ms** (não toca TBT) |
-| FCP/LCP | **inalterado** (mesma estrutura de pintura imediata) |
-| Lighthouse | scores mantidos (87/100/100/100) |
+**Depois:** mesmo círculo azul gradient, mesmo glow, mesmo tamanho — mas no centro um **ícone de pessoa** (`User` da lucide-react, já importado) em branco. Funciona igual para qualquer username (números, letras, símbolos).
 
-As partículas são `<span>` posicionados absolutamente com `@keyframes` individuais (delays diferentes pra ficarem dessincronizadas). Como são só 12 elementos animando `transform: translateY` + `opacity`, o custo é desprezível mesmo em mobile fraco.
+---
 
 ## Detalhes técnicos
 
-Edição única em `index.html`, dentro do `<div id="root">`:
+**Arquivo 1 — `src/pages/Highlights.tsx`**
+- Deletar o bloco `{/* MOBILE: tira horizontal de pôsteres */}` (linhas ~280-309), incluindo o container `md:hidden` com o `overflow-x-auto`.
+- Não mexer em nada mais: rotação automática, dots desktop, mini-pôsteres laterais e pôster grande permanecem intactos.
+- Zero impacto em performance: estamos removendo elementos DOM e imagens (na verdade, melhora levemente o LCP/CLS no mobile porque deixamos de carregar até 8 thumbnails).
 
-1. **Adicionar 2 keyframes novos** ao `<style>` existente:
-   - `st-float` — partícula sobe de `translateY(100vh)` até `translateY(-10vh)` com opacidade 0 → 0.6 → 0
-   - `st-text-fade` — frase aparece com leve delay (0.8s) pra não competir com o título
+**Arquivo 2 — `src/components/Header.tsx`**
+- O ícone `User` da lucide-react **já está importado** (linha 2) — sem novo import.
+- Substituir o conteúdo `{initial}` em duas ocorrências (linhas ~106 e ~150) por `<User className="h-4 w-4" />` (desktop) e `<User className="h-[18px] w-[18px]" />` (mobile, levemente maior pra acompanhar o `h-9 w-9`).
+- Remover as variáveis `username.charAt(0)` / `initial` (linha 42) já que não são mais usadas. Manter `username` (ainda usado no label e dropdown).
+- Zero impacto em performance: SVG inline, mesmo bundle, mesmas classes.
 
-2. **Adicionar container de partículas** (12 spans) atrás do conteúdo, com `pointer-events:none` e cada partícula tendo:
-   - `left` aleatório (distribuído via valores fixos: 5%, 15%, 25%…)
-   - `animation-duration` entre 8s e 14s
-   - `animation-delay` negativo entre -1s e -12s (pra começarem em posições diferentes do ciclo)
-   - tamanho 2-4px, `background:#3b82f6`, `border-radius:50%`, `box-shadow:0 0 8px rgba(59,130,246,.6)` (glow)
+**Acessibilidade:** os botões já têm `aria-label="Menu da conta"`, então a troca da inicial pelo ícone (decorativo) está coberta.
 
-3. **Adicionar `<p>` abaixo do `<h1>`**:
-   ```html
-   <p style="margin:.75rem 0 0;font-size:.875rem;color:#8aa0c4;letter-spacing:.01em;animation:st-text-fade 1.2s ease-out .8s both;">Preparando seu entretenimento…</p>
-   ```
+---
 
-4. **Manter tudo o resto idêntico** — logo, glow, pulse, gradiente de fundo, estrutura do React mount.
+## O que NÃO muda
 
-## Riscos
-
-- **Funcional**: nenhum — React continua substituindo `<div id="root">` no mount.
-- **Visual no app real**: nenhum — só afeta a fração de segundo (ou poucos segundos em rede ruim) antes do React montar.
-- **Performance**: 12 partículas animando `transform`/`opacity` é trivial pro compositor; testado em padrões similares (Apple, Netflix splash screens) sem impacto mensurável.
-- **Acessibilidade**: respeitar `prefers-reduced-motion` — adiciono media query que desliga partículas e pulse pra usuários com essa preferência.
-- **Compatibilidade**: CSS amplamente suportado (keyframes, transform, opacity, box-shadow). Funciona em todos navegadores modernos.
-
-## Arquivos alterados
-
-- `index.html` — apenas o bloco do placeholder dentro de `<div id="root">` (mesma região editada antes)
+- Lógica do carrossel, intervalo de 8s, fila de destaques.
+- Layout desktop em todos os aspectos.
+- Dropdown do avatar, navegação, rotas, autenticação.
+- Cores, gradientes, sombras, tipografia.
+- Qualquer comportamento de rede, cache, TMDB, IPTV.

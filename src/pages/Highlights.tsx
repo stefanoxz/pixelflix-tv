@@ -276,38 +276,6 @@ const Highlights = () => {
               </Button>
             </div>
 
-            {/* MOBILE: tira horizontal de pôsteres (substitui os dots em telas pequenas) */}
-            {featuredQueue.length > 1 && (
-              <div className="md:hidden -mx-4 px-4 pt-3 overflow-x-auto scrollbar-hide">
-                <div className="flex gap-2 pb-1">
-                  {featuredQueue.slice(0, 8).map((item, i) => (
-                    <button
-                      key={`m-${item.kind}-${item.id}`}
-                      aria-label={`Ver destaque ${i + 1}: ${item.title}`}
-                      onClick={() => setActiveIdx(i)}
-                      onTouchStart={() => (pausedRef.current = true)}
-                      onTouchEnd={() => (pausedRef.current = false)}
-                      className={cn(
-                        "relative flex-shrink-0 w-14 aspect-[2/3] rounded-md overflow-hidden border transition-all duration-200 tap-feedback",
-                        i === activeIdx
-                          ? "border-primary shadow-[0_0_12px_hsl(var(--primary)/0.5)] scale-105"
-                          : "border-border/40 opacity-60 hover:opacity-100",
-                      )}
-                    >
-                      <SafeImage
-                        src={proxyImageUrl(item.cover)}
-                        alt=""
-                        aria-hidden
-                        loading="lazy"
-                        decoding="async"
-                        className="absolute inset-0 h-full w-full object-cover"
-                      />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* DESKTOP: indicadores em dots — limitados a 7 com fade nas extremidades */}
             {featuredQueue.length > 1 && (
               <div className="hidden md:flex items-center gap-1.5 pt-3">
