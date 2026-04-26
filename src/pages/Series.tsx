@@ -18,6 +18,13 @@ import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useFuzzyFilter } from "@/lib/fuzzySearch";
 import { useAutoplayPreference } from "@/hooks/useAutoplayPreference";
+import {
+  useWatchProgress,
+  makeProgressKey,
+  MIN_RESUME_SECONDS,
+  COMPLETED_RATIO,
+} from "@/hooks/useWatchProgress";
+import { ResumeDialog } from "@/components/ResumeDialog";
 import { useIptv } from "@/context/IptvContext";
 import {
   buildSeriesEpisodeUrl,
