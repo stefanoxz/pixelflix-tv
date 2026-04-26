@@ -15,6 +15,13 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useFuzzyFilter } from "@/lib/fuzzySearch";
+import {
+  useWatchProgress,
+  makeProgressKey,
+  MIN_RESUME_SECONDS,
+  COMPLETED_RATIO,
+} from "@/hooks/useWatchProgress";
+import { ResumeDialog } from "@/components/ResumeDialog";
 import { useIptv } from "@/context/IptvContext";
 import {
   buildVodStreamUrl,
@@ -43,10 +50,29 @@ const Movies = () => {
   const [activeId, setActiveId] = useState<number | undefined>();
   const [openMovie, setOpenMovie] = useState<VodStream | null>(null);
   const [playing, setPlaying] = useState<VodStream | null>(null);
+  // Quando > 0, o player começa nesse segundo.
+  const [resumeAt, setResumeAt] = useState<number>(0);
+  // Quando definido, mostra o ResumeDialog antes de tocar.
+  const [pendingResume, setPendingResume] =
+    useState<{ movie: VodStream; t: number; d: number } | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { isFavorite, toggle, favorites } = useFavorites(creds.username, "vod");
+  const { getProgress, saveProgress, clearProgress, listInProgress } = useWatchProgress(creds.username);
+
+  // Mapa stream_id → pct (0-100) para a barrinha "continue assistindo" nos cards.
+  const movieProgressById = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const entry of listInProgress()) {
+      if (!entry.key.startsWith("movie:")) continue;
+      const id = Number(entry.key.slice("movie:".length));
+      if (!Number.isFinite(id) || entry.d <= 0) continue;
+      const pct = Math.min(100, Math.round((entry.t / entry.d) * 100));
+      if (pct > 0) map.set(id, pct);
+    }
+    return map;
+  }, [listInProgress]);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["vod-cats", creds.username],
@@ -117,9 +143,10 @@ const Movies = () => {
           year: yearMatch ? yearMatch[1] : undefined,
           host: upstreamHost,
           kind: "movie" as const,
+          progressPct: movieProgressById.get(m.stream_id),
         };
       }),
-    [sortedMovies, upstreamHost],
+    [sortedMovies, upstreamHost, movieProgressById],
   );
 
   // Quando filtros mudam, reseta o ativo
@@ -148,6 +175,19 @@ const Movies = () => {
 
   const playMovie = (m: VodStream) => {
     setOpenMovie(null);
+    // Consulta progresso salvo: se houver posição válida (>= MIN_RESUME e < 95%),
+    // abre o ResumeDialog; senão toca do início.
+    const saved = getProgress(makeProgressKey("movie", m.stream_id));
+    if (
+      saved &&
+      saved.t >= MIN_RESUME_SECONDS &&
+      saved.d > 0 &&
+      saved.t / saved.d < COMPLETED_RATIO
+    ) {
+      setPendingResume({ movie: m, t: saved.t, d: saved.d });
+      return;
+    }
+    setResumeAt(0);
     setPlaying(m);
   };
 
@@ -281,10 +321,35 @@ const Movies = () => {
             poster={proxyImageUrl(playing.stream_icon)}
             streamId={playing.stream_id}
             contentKind="movie"
+            initialTime={resumeAt}
+            onProgress={(t, d) =>
+              saveProgress(makeProgressKey("movie", playing.stream_id), t, d)
+            }
             onClose={() => setPlaying(null)}
           />
         )}
       </PlayerOverlay>
+
+      <ResumeDialog
+        open={!!pendingResume}
+        onOpenChange={(o) => !o && setPendingResume(null)}
+        resumeAt={pendingResume?.t ?? 0}
+        duration={pendingResume?.d}
+        title={pendingResume?.movie.name}
+        onResume={() => {
+          if (!pendingResume) return;
+          setResumeAt(pendingResume.t);
+          setPlaying(pendingResume.movie);
+          setPendingResume(null);
+        }}
+        onRestart={() => {
+          if (!pendingResume) return;
+          clearProgress(makeProgressKey("movie", pendingResume.movie.stream_id));
+          setResumeAt(0);
+          setPlaying(pendingResume.movie);
+          setPendingResume(null);
+        }}
+      />
     </div>
   );
 };

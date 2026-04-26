@@ -18,6 +18,13 @@ import { useGridKeyboardNav } from "@/hooks/useGridKeyboardNav";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useFuzzyFilter } from "@/lib/fuzzySearch";
 import { useAutoplayPreference } from "@/hooks/useAutoplayPreference";
+import {
+  useWatchProgress,
+  makeProgressKey,
+  MIN_RESUME_SECONDS,
+  COMPLETED_RATIO,
+} from "@/hooks/useWatchProgress";
+import { ResumeDialog } from "@/components/ResumeDialog";
 import { useIptv } from "@/context/IptvContext";
 import {
   buildSeriesEpisodeUrl,
@@ -55,11 +62,22 @@ const SeriesPage = () => {
     coverFallback?: string;
   } | null>(null);
   const [showNextCard, setShowNextCard] = useState(false);
+  // Posição inicial em segundos para o próximo episódio a carregar.
+  const [resumeAt, setResumeAt] = useState<number>(0);
+  // Quando definido, mostra o ResumeDialog antes de tocar o episódio.
+  const [pendingResume, setPendingResume] = useState<{
+    ep: Episode;
+    seriesId: number;
+    coverFallback?: string;
+    t: number;
+    d: number;
+  } | null>(null);
   const autoplayPref = useAutoplayPreference();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { isFavorite, toggle, favorites } = useFavorites(creds.username, "series");
+  const { getProgress, saveProgress, clearProgress } = useWatchProgress(creds.username);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["series-cats", creds.username],
@@ -252,6 +270,10 @@ const SeriesPage = () => {
       return;
     }
     setShowNextCard(false);
+    // Próximo episódio: começa do início, mesmo se houver progresso salvo
+    // antigo (o usuário acabou de assistir um episódio inteiro, não faz
+    // sentido perguntar nada).
+    setResumeAt(0);
     setPlayingEp({
       ep: nextEpisodeInfo.ep,
       seriesId: playingEp.seriesId,
@@ -372,6 +394,24 @@ const SeriesPage = () => {
           // o diálogo da série reaparece automaticamente (condição `&& !playingEp`).
           if (!openSeries) return;
           setShowNextCard(false);
+          // Consulta progresso salvo deste episódio.
+          const saved = getProgress(makeProgressKey("episode", ep.id));
+          if (
+            saved &&
+            saved.t >= MIN_RESUME_SECONDS &&
+            saved.d > 0 &&
+            saved.t / saved.d < COMPLETED_RATIO
+          ) {
+            setPendingResume({
+              ep,
+              seriesId: openSeries.series_id,
+              coverFallback: openSeries.cover,
+              t: saved.t,
+              d: saved.d,
+            });
+            return;
+          }
+          setResumeAt(0);
           setPlayingEp({
             ep,
             seriesId: openSeries.series_id,
@@ -408,6 +448,10 @@ const SeriesPage = () => {
               }}
               streamId={playingEp.ep.id}
               contentKind="episode"
+              initialTime={resumeAt}
+              onProgress={(t, d) =>
+                saveProgress(makeProgressKey("episode", playingEp.ep.id), t, d)
+              }
               onEnded={handleEpisodeEnded}
             />
             <NextEpisodeCard
@@ -427,6 +471,35 @@ const SeriesPage = () => {
           </>
         )}
       </PlayerOverlay>
+
+      <ResumeDialog
+        open={!!pendingResume}
+        onOpenChange={(o) => !o && setPendingResume(null)}
+        resumeAt={pendingResume?.t ?? 0}
+        duration={pendingResume?.d}
+        title={pendingResume?.ep.title}
+        onResume={() => {
+          if (!pendingResume) return;
+          setResumeAt(pendingResume.t);
+          setPlayingEp({
+            ep: pendingResume.ep,
+            seriesId: pendingResume.seriesId,
+            coverFallback: pendingResume.coverFallback,
+          });
+          setPendingResume(null);
+        }}
+        onRestart={() => {
+          if (!pendingResume) return;
+          clearProgress(makeProgressKey("episode", pendingResume.ep.id));
+          setResumeAt(0);
+          setPlayingEp({
+            ep: pendingResume.ep,
+            seriesId: pendingResume.seriesId,
+            coverFallback: pendingResume.coverFallback,
+          });
+          setPendingResume(null);
+        }}
+      />
     </div>
   );
 };

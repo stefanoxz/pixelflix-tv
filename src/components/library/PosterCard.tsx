@@ -18,6 +18,8 @@ export interface PosterItem {
   host?: string | null;
   /** Tipo de mídia para o fallback TMDB. */
   kind?: "movie" | "series";
+  /** Progresso de reprodução (0-100). Renderiza barra fina embaixo do poster. */
+  progressPct?: number;
 }
 
 interface Props {
@@ -206,6 +208,21 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
             </div>
           </div>
         )}
+
+        {/* Barra de progresso ("continue assistindo"). Só aparece quando
+            há progresso salvo (>0%). Renderizada por cima do gradient para
+            garantir contraste no canto inferior do poster. */}
+        {item.progressPct != null && item.progressPct > 0 && (
+          <div
+            className="absolute inset-x-0 bottom-0 h-1 bg-black/60"
+            aria-hidden
+          >
+            <div
+              className="h-full bg-primary"
+              style={{ width: `${Math.min(100, Math.max(0, item.progressPct))}%` }}
+            />
+          </div>
+        )}
       </button>
 
       {onToggleFavorite && (
@@ -242,6 +259,7 @@ export const PosterCard = memo(PosterCardImpl, (prev, next) => {
     prev.item.tmdbRating?.vote_average === next.item.tmdbRating?.vote_average &&
     prev.item.tmdbRating?.vote_count === next.item.tmdbRating?.vote_count &&
     prev.item.kind === next.item.kind &&
+    prev.item.progressPct === next.item.progressPct &&
     prev.active === next.active &&
     prev.isFavorite === next.isFavorite &&
     prev.incompatible === next.incompatible &&

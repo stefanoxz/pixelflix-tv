@@ -83,6 +83,18 @@ interface PlayerProps {
    * Usado em séries para acionar o autoplay do próximo episódio.
    */
   onEnded?: () => void;
+  /**
+   * Posição inicial em segundos. Quando > 0, o player faz seek
+   * automaticamente assim que `loadedmetadata` dispara — usado para
+   * "continuar assistindo" filmes/episódios.
+   */
+  initialTime?: number;
+  /**
+   * Reportado periodicamente (a cada ~5s) com `currentTime` e `duration`.
+   * Também é chamado no evento `ended` com `t = duration`. As páginas
+   * usam isso para persistir/limpar o progresso em localStorage.
+   */
+  onProgress?: (currentTime: number, duration: number) => void;
 }
 
 type PlayerError = {
@@ -316,9 +328,18 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   streamId,
   contentKind,
   onEnded,
+  initialTime,
+  onProgress,
 }, forwardedRef) {
   const onEndedRef = useRef<typeof onEnded>(onEnded);
   useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
+  const onProgressRef = useRef<typeof onProgress>(onProgress);
+  useEffect(() => { onProgressRef.current = onProgress; }, [onProgress]);
+  // Lemos `initialTime` apenas uma vez, no primeiro `loadedmetadata` desta
+  // sessão. Depois, qualquer mudança no prop é ignorada (não queremos saltar
+  // o vídeo enquanto o usuário assiste).
+  const initialTimeRef = useRef<number | undefined>(initialTime);
+  const initialSeekDoneRef = useRef(false);
 
   const { session } = useIptv();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -1532,13 +1553,75 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
 
     const onEndedNative = () => {
       pushLog({ source: "video", level: "info", label: "ended" });
+      // Reporta progresso final (= duration) para o consumidor marcar como
+      // concluído (e remover da lista "continuar assistindo").
+      try {
+        const dur = video.duration;
+        if (Number.isFinite(dur) && dur > 0) {
+          onProgressRef.current?.(dur, dur);
+        }
+      } catch {
+        /* noop */
+      }
       onEndedRef.current?.();
+    };
+
+    // Seek inicial: aplica `initialTime` na primeira vez que metadados ficam
+    // disponíveis nesta sessão. Depois disso desliga (ignora resseeks).
+    const onLoadedMetadataResume = () => {
+      if (initialSeekDoneRef.current) return;
+      const target = initialTimeRef.current;
+      if (target == null || target <= 0) {
+        initialSeekDoneRef.current = true;
+        return;
+      }
+      const dur = video.duration;
+      if (!Number.isFinite(dur) || dur <= 0) return;
+      // Evita pular para o final ou além — segura uma margem de 5s.
+      const safe = Math.max(0, Math.min(target, dur - 5));
+      try {
+        video.currentTime = safe;
+        pushLog({
+          source: "video",
+          level: "info",
+          label: "resume_seek",
+          details: `t=${Math.round(safe)}s/${Math.round(dur)}s`,
+        });
+      } catch {
+        /* noop */
+      }
+      initialSeekDoneRef.current = true;
+    };
+
+    // Throttle de progresso: reporta no máximo 1x a cada 5s para não
+    // martelar localStorage. timeupdate dispara ~4x/s no Chrome.
+    let lastProgressAt = 0;
+    const onTimeUpdateProgress = () => {
+      const now = performance.now();
+      if (now - lastProgressAt < 5000) return;
+      const ct = video.currentTime;
+      const dur = video.duration;
+      if (!Number.isFinite(ct) || !Number.isFinite(dur) || dur <= 0) return;
+      lastProgressAt = now;
+      onProgressRef.current?.(ct, dur);
+    };
+
+    // Pausa também salva (caso o usuário pause e feche logo depois — o
+    // throttle de 5s pode perder a posição final).
+    const onPauseProgress = () => {
+      const ct = video.currentTime;
+      const dur = video.duration;
+      if (!Number.isFinite(ct) || !Number.isFinite(dur) || dur <= 0) return;
+      onProgressRef.current?.(ct, dur);
     };
 
     video.addEventListener("waiting", onWaiting);
     video.addEventListener("playing", onPlaying);
     video.addEventListener("canplay", onCanPlay);
     video.addEventListener("loadeddata", onLoadedData);
+    video.addEventListener("loadedmetadata", onLoadedMetadataResume);
+    video.addEventListener("timeupdate", onTimeUpdateProgress);
+    video.addEventListener("pause", onPauseProgress);
     video.addEventListener("stalled", onStalled);
     video.addEventListener("error", onError);
     video.addEventListener("ended", onEndedNative);
@@ -1548,9 +1631,22 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       video.removeEventListener("playing", onPlaying);
       video.removeEventListener("canplay", onCanPlay);
       video.removeEventListener("loadeddata", onLoadedData);
+      video.removeEventListener("loadedmetadata", onLoadedMetadataResume);
+      video.removeEventListener("timeupdate", onTimeUpdateProgress);
+      video.removeEventListener("pause", onPauseProgress);
       video.removeEventListener("stalled", onStalled);
       video.removeEventListener("error", onError);
       video.removeEventListener("ended", onEndedNative);
+      // Salva uma última vez ao desmontar (usuário fechou o player).
+      try {
+        const ct = video.currentTime;
+        const dur = video.duration;
+        if (Number.isFinite(ct) && Number.isFinite(dur) && dur > 0) {
+          onProgressRef.current?.(ct, dur);
+        }
+      } catch {
+        /* noop */
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [copyTarget, src]);
