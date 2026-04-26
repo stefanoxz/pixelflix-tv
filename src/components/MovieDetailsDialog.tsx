@@ -33,6 +33,7 @@ import {
 import { useIsIncompatible } from "@/hooks/useIsIncompatible";
 import { clearIncompatible } from "@/lib/incompatibleContent";
 import { useTmdbFallback } from "@/hooks/useTmdbFallback";
+import { useTmdbRating } from "@/hooks/useTmdbRating";
 
 interface MovieDetailsDialogProps {
   open: boolean;
@@ -79,20 +80,46 @@ export function MovieDetailsDialog({
   const releaseDate = info?.releasedate || info?.release_date;
   const year = releaseDate ? releaseDate.slice(0, 4) : null;
 
+  // Always enrich with TMDB so the synopsis can be shown in pt-BR and we
+  // get a tmdb_id to keep the rating consistent with the catalog cards.
   const { data: tmdb } = useTmdbFallback({
     type: "movie",
-    hasCover: (!!sourceCover && !!sourcePlot) || !movie,
+    hasCover: false,
     tmdb_id: info?.tmdb_id ?? undefined,
     name: movie?.name,
     year: year ?? undefined,
+    enabled: !!movie && open,
+  });
+
+  const { data: tmdbRating } = useTmdbRating({
+    type: "movie",
+    tmdb_id: info?.tmdb_id ?? tmdb?.tmdb_id ?? undefined,
+    name: movie?.name,
+    year: year ?? undefined,
+    enabled: !!movie && open,
   });
 
   if (!movie) return null;
 
-  const ratingNum = movie.rating_5based || (info?.rating_5based ?? 0);
+  const providerRating =
+    movie.rating_5based || (info?.rating_5based ?? 0);
+  const tmdbVotes = tmdbRating?.vote_count ?? 0;
+  const tmdbAvg = tmdbRating?.vote_average ?? 0;
+  const useTmdb = tmdbVotes >= 20 && tmdbAvg > 0;
+  const displayRating = useTmdb
+    ? tmdbAvg
+    : providerRating > 0 && providerRating < 5
+      ? providerRating * 2
+      : 0;
+  const ratingSource: "tmdb" | "provider" | null = useTmdb
+    ? "tmdb"
+    : displayRating > 0
+      ? "provider"
+      : null;
   const cover = sourceCover || tmdb?.poster || null;
   const backdrop = sourceBackdrop || tmdb?.backdrop || cover;
-  const plot = sourcePlot || tmdb?.overview || null;
+  // Prefer TMDB pt-BR overview when available.
+  const plot = tmdb?.overview || sourcePlot || null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
