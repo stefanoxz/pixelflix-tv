@@ -33,6 +33,8 @@ interface Props {
   isFavorite?: boolean;
   /** Marcado como incompatível (HEVC/4K que falhou antes). Vem do grid. */
   incompatible?: boolean;
+  /** Linha está acima da dobra → carrega com prioridade. */
+  priority?: boolean;
   onClick: () => void;
   onHover?: () => void;
   onToggleFavorite?: () => void;
