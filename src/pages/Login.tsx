@@ -59,6 +59,7 @@ const Login = () => {
         serverInfo: data.server_info,
       });
       toast.success(`Bem-vindo, ${data.user_info.username}!`);
+      maybeWarnConnectionLimit(data);
       navigate("/sync");
     } catch (err) {
       handleLoginError(err);
@@ -120,6 +121,7 @@ const Login = () => {
       } else {
         toast.success(`Bem-vindo, ${data.user_info.username}!`);
       }
+      maybeWarnConnectionLimit(data);
       navigate("/sync");
     } catch (err) {
       handleLoginError(err);
