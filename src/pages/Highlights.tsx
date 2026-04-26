@@ -253,11 +253,11 @@ const Highlights = () => {
               Streaming sem limites, em qualquer dispositivo.
             </p>
 
-            <div className="flex flex-wrap gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3 pt-2">
               <Button
                 size="lg"
                 onClick={() => featured && openFeatured(featured)}
-                className="bg-gradient-primary hover:opacity-100 hover:scale-[1.03] hover:shadow-[0_0_32px_-4px_hsl(var(--primary)/0.6)] shadow-glow gap-2 transition-all duration-200 font-semibold"
+                className="w-full sm:w-auto bg-gradient-primary hover:opacity-100 hover:scale-[1.03] hover:shadow-[0_0_32px_-4px_hsl(var(--primary)/0.6)] shadow-glow gap-2 transition-all duration-200 font-semibold tap-feedback"
                 disabled={!featured}
               >
                 <Play className="h-4 w-4 fill-current" />
@@ -267,7 +267,7 @@ const Highlights = () => {
                 size="lg"
                 variant="secondary"
                 onClick={() => featured && openFeatured(featured)}
-                className="gap-2 backdrop-blur bg-secondary/70 hover:bg-secondary"
+                className="w-full sm:w-auto gap-2 backdrop-blur bg-secondary/70 hover:bg-secondary tap-feedback"
                 disabled={!featured}
               >
                 <Info className="h-4 w-4" />
