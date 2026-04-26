@@ -23,6 +23,17 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeAdminApi } from "@/lib/adminApi";
+import { useAdminRole } from "@/hooks/useAdminRole";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { DnsErrorTrendChart } from "@/components/admin/DnsErrorTrendChart";
 import { ServerProbeDialog } from "@/components/admin/ServerProbeDialog";
 import { EndpointTestPanel } from "@/components/admin/EndpointTestPanel";
@@ -433,6 +444,7 @@ function reasonInfo(reason: HealthReason | undefined): { label: string; tooltip:
 const Admin = () => {
   const navigate = useNavigate();
   const refreshInFlight = useRef(false);
+  const { isAdmin, isModerator, role, loading: roleLoading } = useAdminRole();
 
   const [tab, setTab] = useState("dashboard");
   const [stats, setStats] = useState<Stats | null>(null);
@@ -455,8 +467,22 @@ const Admin = () => {
   const [editingServer, setEditingServer] = useState<AllowedServer | null>(null);
   const [probeServer, setProbeServer] = useState<AllowedServer | null>(null);
 
+  // AlertDialog state — substitui confirm() nativo em ações destrutivas.
+  const [confirmRemoveServer, setConfirmRemoveServer] = useState<string | null>(null);
+  const [confirmEvictSession, setConfirmEvictSession] = useState<MonitoringSession | null>(null);
+  const [confirmUnblockUser, setConfirmUnblockUser] = useState<MonitoringBlock | null>(null);
+
   const [health, setHealth] = useState<Record<string, HealthStatus>>({});
   const [healthLoading, setHealthLoading] = useState(false);
+
+  // Se o moderador cair em uma aba admin-only, manda pro dashboard.
+  useEffect(() => {
+    if (roleLoading) return;
+    const adminOnlyTabs = new Set(["servers", "pending-signups", "team"]);
+    if (isModerator && !isAdmin && adminOnlyTabs.has(tab)) {
+      setTab("dashboard");
+    }
+  }, [tab, isAdmin, isModerator, roleLoading]);
 
   const checkAllServers = async (manual = false) => {
     if (!allowed.length) return;
@@ -604,13 +630,14 @@ const Admin = () => {
   };
 
   const removeServer = async (server_url: string) => {
-    if (!confirm(`Remover acesso ao servidor "${server_url}"?\nUsuários não conseguirão mais logar nele.`)) return;
     try {
       await callAdmin("remove_server", { server_url });
       toast.success("DNS removida");
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao remover");
+    } finally {
+      setConfirmRemoveServer(null);
     }
   };
 
@@ -621,6 +648,8 @@ const Admin = () => {
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao desbloquear");
+    } finally {
+      setConfirmUnblockUser(null);
     }
   };
 
@@ -631,6 +660,8 @@ const Admin = () => {
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao encerrar");
+    } finally {
+      setConfirmEvictSession(null);
     }
   };
 
@@ -707,21 +738,36 @@ const Admin = () => {
             <Shield className="h-4 w-4 text-primary-foreground" />
           </div>
           <span className="font-bold">Admin Panel</span>
+          {role && (
+            <span
+              className={
+                "ml-auto text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold " +
+                (isAdmin
+                  ? "bg-primary/15 text-primary"
+                  : "bg-warning/15 text-warning")
+              }
+              title={isAdmin ? "Acesso total" : "Acesso de moderador (sem editar DNS/equipe)"}
+            >
+              {isAdmin ? "Admin" : "Moderador"}
+            </span>
+          )}
         </div>
         <nav className="space-y-1">
           {[
-            { id: "dashboard", label: "Dashboard", icon: TrendingUp },
-            { id: "stats", label: "Estatísticas", icon: BarChart3 },
-            { id: "monitoring", label: "Monitoramento", icon: Monitor },
-            { id: "reports", label: "Reportes", icon: Flag },
-            { id: "dns-errors", label: "Erros por DNS", icon: AlertOctagon },
-            { id: "users", label: "Usuários", icon: Users },
-            { id: "servers", label: "DNS / Servidores", icon: Server },
-            { id: "endpoint-test", label: "Testar endpoint", icon: FlaskConical },
-            { id: "client-diagnostics", label: "Diagnóstico de clientes", icon: Stethoscope },
-            { id: "pending-signups", label: "Novos cadastros", icon: UserPlus },
-            { id: "team", label: "Equipe e permissões", icon: ShieldCheck },
-          ].map((item) => (
+            { id: "dashboard", label: "Dashboard", icon: TrendingUp, adminOnly: false },
+            { id: "stats", label: "Estatísticas", icon: BarChart3, adminOnly: false },
+            { id: "monitoring", label: "Monitoramento", icon: Monitor, adminOnly: false },
+            { id: "reports", label: "Reportes", icon: Flag, adminOnly: false },
+            { id: "dns-errors", label: "Erros por DNS", icon: AlertOctagon, adminOnly: false },
+            { id: "users", label: "Usuários", icon: Users, adminOnly: false },
+            { id: "servers", label: "DNS / Servidores", icon: Server, adminOnly: true },
+            { id: "endpoint-test", label: "Testar endpoint", icon: FlaskConical, adminOnly: false },
+            { id: "client-diagnostics", label: "Diagnóstico de clientes", icon: Stethoscope, adminOnly: false },
+            { id: "pending-signups", label: "Novos cadastros", icon: UserPlus, adminOnly: true },
+            { id: "team", label: "Equipe e permissões", icon: ShieldCheck, adminOnly: true },
+          ]
+            .filter((item) => !item.adminOnly || isAdmin)
+            .map((item) => (
             <button
               key={item.id}
               onClick={() => setTab(item.id)}
@@ -954,7 +1000,7 @@ const Admin = () => {
                             {Math.floor(s.duration_s / 60)}min
                           </div>
                           <div className="col-span-2 text-right">
-                            <Button size="sm" variant="outline" onClick={() => evictSession(s.anon_user_id)}>
+                            <Button size="sm" variant="outline" onClick={() => setConfirmEvictSession(s)}>
                               <X className="h-3 w-3 mr-1" />Encerrar
                             </Button>
                           </div>
@@ -999,7 +1045,7 @@ const Admin = () => {
                             {b.reason || "—"} • até {new Date(b.blocked_until).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                           </p>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => unblockUser(b.anon_user_id)}>
+                        <Button size="sm" variant="outline" onClick={() => setConfirmUnblockUser(b)}>
                           Desbloquear
                         </Button>
                       </div>
@@ -1598,7 +1644,7 @@ const Admin = () => {
                               variant="outline"
                               size="sm"
                               className="text-destructive hover:text-destructive"
-                              onClick={() => removeServer(s.server_url)}
+                              onClick={() => setConfirmRemoveServer(s.server_url)}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
                               Remover
@@ -1753,6 +1799,84 @@ const Admin = () => {
         serverUrl={probeServer?.server_url ?? null}
         serverLabel={probeServer?.label ?? null}
       />
+
+      {/* Confirmações destrutivas */}
+      <AlertDialog
+        open={!!confirmRemoveServer}
+        onOpenChange={(o) => !o && setConfirmRemoveServer(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover esta DNS?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Os usuários conectados a <strong className="font-mono">{confirmRemoveServer}</strong> não conseguirão mais logar.
+              As sessões já abertas continuam até expirar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmRemoveServer && removeServer(confirmRemoveServer)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remover DNS
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!confirmEvictSession}
+        onOpenChange={(o) => !o && setConfirmEvictSession(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Encerrar sessão?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmEvictSession?.iptv_username ? (
+                <>O usuário <strong>{confirmEvictSession.iptv_username}</strong> será desconectado imediatamente. </>
+              ) : (
+                <>Esta sessão será desconectada imediatamente. </>
+              )}
+              Ele pode logar de novo em seguida.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmEvictSession && evictSession(confirmEvictSession.anon_user_id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Encerrar sessão
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!confirmUnblockUser}
+        onOpenChange={(o) => !o && setConfirmUnblockUser(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desbloquear usuário?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O bloqueio temporário será removido e o usuário poderá voltar a acessar a plataforma agora mesmo.
+              {confirmUnblockUser?.reason ? (
+                <span className="block mt-2 text-xs">Motivo do bloqueio: <em>{confirmUnblockUser.reason}</em></span>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Manter bloqueio</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmUnblockUser && unblockUser(confirmUnblockUser.anon_user_id)}
+            >
+              Desbloquear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

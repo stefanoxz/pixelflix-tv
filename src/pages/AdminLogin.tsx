@@ -58,19 +58,20 @@ const AdminLogin = () => {
     );
   };
 
-  // If already logged in AND admin, jump straight to /admin
+  // If already logged in AND has admin/moderator role, jump straight to /admin
   useEffect(() => {
     let active = true;
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user || !active) return;
       pushDebug("session", true, `sessão ativa: ${maskEmail(session.user.email ?? "")}`);
-      const { data: isAdmin } = await supabase.rpc("has_role", {
-        _user_id: session.user.id,
-        _role: "admin",
-      });
-      pushDebug("has_role", !!isAdmin, isAdmin ? "admin confirmado" : "não é admin");
-      if (isAdmin && active) navigate("/admin", { replace: true });
+      const [{ data: isAdmin }, { data: isModerator }] = await Promise.all([
+        supabase.rpc("has_role", { _user_id: session.user.id, _role: "admin" }),
+        supabase.rpc("has_role", { _user_id: session.user.id, _role: "moderator" }),
+      ]);
+      const role = isAdmin ? "admin" : isModerator ? "moderator" : null;
+      pushDebug("has_role", !!role, role ? `${role} confirmado` : "sem papel admin/moderator");
+      if (role && active) navigate("/admin", { replace: true });
     })();
     return () => { active = false; };
   }, [navigate]);
@@ -90,23 +91,24 @@ const AdminLogin = () => {
       if (!userId) throw new Error("Falha ao obter sessão");
       pushDebug("signin:auth", true, `user_id=${userId.slice(0, 8)}…`);
 
-      const { data: isAdmin, error: roleErr } = await supabase.rpc("has_role", {
-        _user_id: userId,
-        _role: "admin",
-      });
-      if (roleErr) {
-        pushDebug("has_role", false, roleErr.message);
-        throw roleErr;
+      const [{ data: isAdmin, error: roleErr }, { data: isModerator, error: modErr }] = await Promise.all([
+        supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
+        supabase.rpc("has_role", { _user_id: userId, _role: "moderator" }),
+      ]);
+      if (roleErr || modErr) {
+        pushDebug("has_role", false, (roleErr ?? modErr)!.message);
+        throw (roleErr ?? modErr)!;
       }
-      pushDebug("has_role", !!isAdmin, isAdmin ? "admin OK" : "sem papel admin");
-      if (!isAdmin) {
+      const role = isAdmin ? "admin" : isModerator ? "moderator" : null;
+      pushDebug("has_role", !!role, role ? `${role} OK` : "sem papel admin/moderator");
+      if (!role) {
         await supabase.auth.signOut();
-        const msg = "Conta autenticou, mas não tem papel admin. Peça liberação.";
+        const msg = "Conta autenticou, mas não tem papel admin nem moderador. Peça liberação.";
         setLastError(msg);
         toast.error(msg);
         return;
       }
-      toast.success("Bem-vindo ao painel admin");
+      toast.success(role === "admin" ? "Bem-vindo ao painel admin" : "Bem-vindo, moderador");
       navigate("/admin", { replace: true });
     } catch (err) {
       const raw = err instanceof Error ? err.message : "Falha no login";

@@ -69,6 +69,28 @@ const KIND_LABEL: Record<string, string> = {
 
 const HEATMAP_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
+/**
+ * Converte um grid 7x24 de UTC para horário local rotacionando as colunas
+ * pelo offset (em horas) do navegador. Quando a hora local "vira" o dia,
+ * realoca para o dia anterior/posterior.
+ */
+function rotateHeatmapToLocal(utcGrid: number[][], offsetHours: number): number[][] {
+  const off = Math.round(offsetHours); // 1h de granularidade — suficiente para BR
+  const out: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+  for (let day = 0; day < 7; day++) {
+    for (let hour = 0; hour < 24; hour++) {
+      const v = utcGrid[day]?.[hour] ?? 0;
+      if (v === 0) continue;
+      let localHour = hour + off;
+      let localDay = day;
+      while (localHour < 0) { localHour += 24; localDay = (localDay + 6) % 7; }
+      while (localHour >= 24) { localHour -= 24; localDay = (localDay + 1) % 7; }
+      out[localDay][localHour] += v;
+    }
+  }
+  return out;
+}
+
 function HeatmapCell({ value, max }: { value: number; max: number }) {
   const intensity = max === 0 ? 0 : value / max;
   return (
@@ -104,7 +126,16 @@ export default function StatsPanel() {
       ]);
       setLogins(a.series ?? []);
       setDauMau(b.series ?? []);
-      setHeatmap({ grid: c.grid ?? [], max: c.max ?? 0 });
+      // Backend devolve grid em UTC. Converte para horário local rotacionando
+      // as colunas pelo offset do navegador (em horas inteiras — boa o suficiente
+      // para os fusos do Brasil; meio-fusos como NL/IN ficam com erro de 30min
+      // no rótulo, mas o pico continua claro).
+      const utcGrid = c.grid ?? [];
+      const offsetHours = -new Date().getTimezoneOffset() / 60; // BR = -3 → offset = -3
+      const localGrid = utcGrid.length === 7
+        ? rotateHeatmapToLocal(utcGrid, offsetHours)
+        : utcGrid;
+      setHeatmap({ grid: localGrid, max: c.max ?? 0 });
       setTopContent(d.items ?? []);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Falha ao carregar estatísticas");
@@ -253,7 +284,7 @@ export default function StatsPanel() {
           <div className="mb-4">
             <h3 className="font-semibold">Horário de pico</h3>
             <p className="text-xs text-muted-foreground mt-1">
-              Sessões por dia da semana × hora (UTC) — últimos {Math.min(range, 30)} dias
+              Sessões por dia da semana × hora (horário local) — últimos {Math.min(range, 30)} dias
             </p>
           </div>
           {loading && !heatmap ? (
