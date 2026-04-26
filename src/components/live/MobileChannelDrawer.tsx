@@ -112,8 +112,8 @@ export function MobileChannelDrawer({
                 <CatBtn
                   label="★ Favoritos"
                   count={favorites.size}
-                  active={activeCategory === "favorites"}
-                  onClick={() => handleCategory("favorites")}
+                  active={activeCategory === "__favorites__"}
+                  onClick={() => handleCategory("__favorites__")}
                 />
                 <CatBtn
                   label="Todos os canais"
