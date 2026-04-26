@@ -1706,13 +1706,16 @@ Deno.serve(async (req) => {
       if (!email || !email.includes("@")) return bad("E-mail inválido");
       if (role !== "admin" && role !== "moderator") return bad("Papel inválido");
 
-      // Procura usuário existente por e-mail
+      // Procura usuário existente por e-mail — pagina até 5 páginas (1000 contas).
       let targetUserId: string | null = null;
       try {
-        // listUsers paginado — filtramos manualmente para o e-mail
-        const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
-        const found = data?.users?.find((u) => (u.email ?? "").toLowerCase() === email);
-        if (found) targetUserId = found.id;
+        for (let page = 1; page <= 5 && !targetUserId; page++) {
+          const { data } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+          const users = data?.users ?? [];
+          const found = users.find((u) => (u.email ?? "").toLowerCase() === email);
+          if (found) { targetUserId = found.id; break; }
+          if (users.length < 200) break; // última página
+        }
       } catch (e) {
         console.error("[admin-api] listUsers failed", (e as Error).message);
       }
