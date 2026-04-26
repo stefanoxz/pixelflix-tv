@@ -22,16 +22,29 @@ const toneClasses: Record<"green" | "blue" | "yellow" | "gray", string> = {
   gray: "bg-muted text-muted-foreground border-border",
 };
 
+interface EpisodeOverlay {
+  name: string | null;
+  overview: string | null;
+  still: string | null;
+}
+
 interface Props {
   episodesBySeason: Record<string, Episode[]>;
   onPlay: (ep: Episode) => void;
   onCopyExternal: (ep: Episode) => void;
+  /**
+   * Optional pt-BR overlay from TMDB. Keyed by season → episode_number.
+   * Used purely for display: title, synopsis, fallback still image.
+   * Playback always uses the original Episode object from the IPTV provider.
+   */
+  overlay?: Map<string, Map<number, EpisodeOverlay>>;
 }
 
-export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal }: Props) {
+export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal, overlay }: Props) {
   const seasons = useMemo(() => Object.keys(episodesBySeason || {}), [episodesBySeason]);
   const [active, setActive] = useState<string>(seasons[0] || "");
   const current = active && episodesBySeason[active] ? episodesBySeason[active] : episodesBySeason[seasons[0]] || [];
+  const activeOverlay = overlay?.get(active || seasons[0]) ?? null;
 
   if (seasons.length === 0) {
     return <p className="text-sm text-muted-foreground italic pt-2">Nenhum episódio disponível.</p>;
