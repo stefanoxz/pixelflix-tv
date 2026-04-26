@@ -613,10 +613,12 @@ export async function invokeSafe<T = unknown>(
         }
 
         if (dataAny && typeof dataAny === "object" && (dataAny.code || dataAny.error)) {
+          const { code, error, success, ...rest } = dataAny;
           return {
             ok: false as const,
-            code: String(dataAny.code ?? "UNKNOWN_ERROR"),
-            error: String(dataAny.error ?? "Erro desconhecido"),
+            code: String(code ?? "UNKNOWN_ERROR"),
+            error: String(error ?? "Erro desconhecido"),
+            extra: rest && Object.keys(rest).length ? rest : undefined,
           };
         }
 
