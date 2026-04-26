@@ -66,7 +66,6 @@ export function PosterGrid({
   isLoading = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const incompatibleKeys = useIncompatibleKeys();
 
@@ -121,24 +120,17 @@ export function PosterGrid({
     rowVirtualizer.measure();
   }, [rowHeight, rowVirtualizer]);
 
-  // IntersectionObserver no sentinela — revela mais ao se aproximar do fim.
-  useEffect(() => {
-    const root = containerRef.current;
-    const target = sentinelRef.current;
-    if (!root || !target || !hasMore) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            setVisibleCount((c) => Math.min(c + pageIncrement, items.length));
-          }
-        }
-      },
-      { root, rootMargin: "600px 0px" },
-    );
-    io.observe(target);
-    return () => io.disconnect();
-  }, [hasMore, items.length, pageIncrement]);
+  // Revelação incremental por scroll: quando faltarem <800px para o fim
+  // do conteúdo virtual, expande a janela. Mais previsível que IO num
+  // sentinela que pode estar visível desde o primeiro render.
+  const onScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const remaining = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (remaining < 800) {
+      setVisibleCount((c) => Math.min(c + pageIncrement, items.length));
+    }
+  }, [items.length, pageIncrement]);
 
   // Scroll automático para manter o card ativo visível (navegação por teclado).
   // Se o ativo está além da janela revelada, expande a janela primeiro.

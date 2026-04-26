@@ -1,51 +1,66 @@
-## Problema diagnosticado
+## Problema
 
-O log enviado mostra a sequência exata de falha de um canal específico (id 837241):
+Na tela **Filmes** (e por consequência **Séries**, que usa o mesmo `PosterGrid`), aparece eternamente:
 
+> ⟳ Mostrando 120 de 48159
+
+Não é falha de sincronização do login. Os 48.159 filmes já foram baixados pela query `vod-streams` logo após o login. O que está travado é a **paginação incremental no client** dentro de `src/components/library/PosterGrid.tsx`:
+
+- O grid revela 120 itens iniciais e usa um `IntersectionObserver` num "sentinela" no fim da lista virtual para revelar mais 60 a cada vez.
+- O sentinela é posicionado em `totalSize - 1` (fim do conteúdo virtual já renderizado, ~5 linhas com 120 itens), então **fica visível desde o primeiro render**, sem precisar rolar.
+- Como o IO foi criado com o sentinela já intersectando, em vários ciclos ele não dispara um evento novo — o spinner fica girando indefinidamente e a UX vira "carregamento infinito".
+- Além disso, o rodapé com o spinner aparece **mesmo quando o usuário não está perto do fim**, sugerindo que ainda está baixando dados (não está — é só revelação local).
+
+## Solução
+
+Trocar a estratégia de revelação para algo determinístico, sem depender do sentinela "entrar em view":
+
+1. **Revelar mais conforme o scroll real do container**, usando o evento `scroll` do `containerRef`. Quando faltarem menos de ~800px para o fim do `totalSize`, incrementar `visibleCount` em `pageIncrement`.
+2. **Auto-revelar enquanto a grade não preenche a viewport**: após cada render, se `totalSize <= clientHeight + 600` e `hasMore`, revelar o próximo chunk imediatamente em um `requestAnimationFrame`. Isso resolve o caso atual (120 itens cabem na tela → expande sozinho até preencher).
+3. **Remover o sentinela** e o `IntersectionObserver` — substituídos pelos dois mecanismos acima, que são mais previsíveis.
+4. **Trocar o rótulo do rodapé** para refletir o estado correto:
+   - Enquanto está revelando: `Mostrando X de Y` sem spinner (a revelação é instantânea, não é I/O).
+   - Mostrar spinner **apenas** se `moviesLoading` (a query do backend) ainda estiver em andamento.
+   - Quando `visibleCount === items.length`: `Y itens` (sem spinner, sem "carregados").
+
+## Arquivos alterados
+
+- **`src/components/library/PosterGrid.tsx`**
+  - Remover `sentinelRef`, o `useEffect` do `IntersectionObserver` e o `<div ref={sentinelRef}>`.
+  - Adicionar handler de `onScroll` no container que, ao chegar a ~800px do fim, chama `setVisibleCount(c => Math.min(c + pageIncrement, items.length))`.
+  - Adicionar `useEffect` (deps: `totalSize`, `containerWidth`, `hasMore`, `items.length`) que, se `hasMore && totalSize <= clientHeight + 600`, agenda `requestAnimationFrame` para revelar mais um chunk — repete até preencher a viewport.
+  - Aceitar uma nova prop opcional `isLoading` para diferenciar "buscando no backend" de "revelando localmente". Já existe — só ajustar o rodapé.
+  - Rodapé: spinner apenas quando `isLoading` da query externa for true; caso contrário mostra apenas o contador `Mostrando X de Y` (sem spinner) ou `Y itens` quando completo.
+
+## Detalhes técnicos
+
+```ts
+// dentro do PosterGrid
+const onScroll = () => {
+  const el = containerRef.current;
+  if (!el || !hasMore) return;
+  const remaining = el.scrollHeight - el.scrollTop - el.clientHeight;
+  if (remaining < 800) {
+    setVisibleCount(c => Math.min(c + pageIncrement, items.length));
+  }
+};
+
+// auto-fill enquanto a grade não preenche a viewport
+useEffect(() => {
+  const el = containerRef.current;
+  if (!el || !hasMore) return;
+  if (totalSize <= el.clientHeight + 600) {
+    const id = requestAnimationFrame(() => {
+      setVisibleCount(c => Math.min(c + pageIncrement, items.length));
+    });
+    return () => cancelAnimationFrame(id);
+  }
+}, [totalSize, containerWidth, hasMore, items.length, pageIncrement]);
 ```
-setup_start         t=0
-token_ok            t=333ms   (mode=stream, proxy de bytes ativo)
-media_attached      t=336ms
-manifestLoadError   t=8.3s    fatal=true http=502
-hls_network_recover t=8.3s    1/10 in 1200ms
-bootstrap_timeout   t=12.0s   "Canal não respondeu"
-```
-
-O que aconteceu: o `stream-proxy` chamou o servidor IPTV pra buscar o `.m3u8` desse canal e levou 502 — ou o upstream caiu, ou devolveu HTML de erro em vez de m3u8 válido (o proxy responde 502 nesses dois casos). hls.js tentou um único `startLoad()` em 1200 ms, falhou de novo, e o watchdog de 12 s então mostra erro genérico "Canal não respondeu" sugerindo VLC.
-
-Outros canais na mesma sessão (Telecine, ESPN, GOAT, Disney+) abriram normalmente — então não é problema de credencial nem de rede do usuário; é especificamente esse canal indisponível ou bloqueando o IP do edge no `.m3u8`.
-
-## Por que o sistema atual não recupera
-
-O auto-switch HLS → mpegts já existe no `Player.tsx` (`tryActivateProxyAndRestart`), mas só dispara quando:
-
-- a rota de `fragLoadError` acumula N erros, **ou**
-- o watchdog de 6 s de "loadeddata" não viu frames
-
-Quando o erro é `manifestLoadError` http=502 logo no primeiro request da playlist, **nenhuma das duas condições é satisfeita** porque o manifest nunca chegou (`manifestReadyRef = false`). O código cai direto na rotina de network recovery do hls.js (1 retry), depois espera os 12 s do bootstrap, e desiste.
-
-Mpegts pode salvar esse caso porque carrega o `.ts` direto (sem buscar manifest), e em alguns servidores Xtream o endpoint `.ts` continua respondendo mesmo quando o `.m3u8` quebra.
-
-## Mudanças
-
-### `src/components/Player.tsx`
-
-1. **Roteamento novo no handler de erro do hls.js**: dentro do listener `Hls.Events.ERROR`, ao receber `MANIFEST_LOAD_ERROR` ou `MANIFEST_LOAD_TIMEOUT` com `fatal=true`, chamar `tryActivateProxyAndRestart("manifestLoadError http=<status>")` antes da rotina de retry de network. Como na primeira chamada `engineAutoSwitchedRef.current` é falso e o canal é ao vivo (Xtream `/live/...`), isso vai trocar o engine pra mpegts e reiniciar o player imediatamente, sem esperar os 12 s.
-
-2. **Faixa de canais fora de Xtream live**: se a URL não bater `isLiveXtreamUrl`, mpegts não funciona (não dá pra trocar `.m3u8` → `.ts`). Nesse caso o switch automático não acontece e mantemos o comportamento atual (network recovery + bootstrap timeout). O `tryActivateProxyAndRestart` já checa `isLive && engine === "hls"`, então naturalmente vira no-op pra séries/filmes/HLS não-Xtream.
-
-3. **Mensagem final mais útil quando mpegts também falha**: quando o caminho mpegts atinge seu próprio `MPEGTS_BOOTSTRAP_TIMEOUT_MS` (8 s) sem frames depois do switch, alterar o título do erro de "Canal não respondeu" para "Canal indisponível no momento" e a descrição para "Esse canal não está transmitindo agora. Tente outro canal." (mantendo o botão de copiar URL e abrir externo).
-
-4. **Logging**: garantir que o evento `engine_auto_switch` registrado já existente capture `reason="manifestLoadError http=502"` no payload de telemetria, pra ficar visível no painel de admin que esse caminho foi acionado.
 
 ## Resultado esperado
 
-- Canal com 502 no manifest: em ~8 s o player tenta mpegts. Se o `.ts` direto funcionar, vídeo abre normalmente. Se também falhar, em mais 8 s aparece mensagem clara "Canal indisponível, tente outro" — total ~16 s no pior caso, em vez de 12 s pra mensagem confusa de VLC.
-- Canais que já funcionavam: nenhuma mudança de comportamento (o caminho de switch só dispara em erro fatal de manifest).
-- Outros tipos de erro (codec, fragLoadError, no_loadeddata): continuam usando a lógica atual sem regressão.
-
-## Não muda
-
-- `stream-proxy` / `stream-token` / autenticação IPTV / banco — nada do backend é tocado.
-- Player de filmes e séries — só canais ao vivo Xtream pegam o auto-switch.
-- Persistência de preferência de engine por host: mantida (`setPreferredEngine` continua sendo chamado via `tryActivateProxyAndRestart`).
+- Ao abrir Filmes, a grade revela rapidamente o suficiente para preencher a viewport (sem spinner perpétuo).
+- Ao rolar, mais itens aparecem antes de bater no fim, sem travas.
+- O spinner do rodapé só aparece se a query `vod-streams` realmente estiver buscando dados do backend.
+- Mesma correção beneficia automaticamente a tela **Séries** (que reusa `PosterGrid`).
