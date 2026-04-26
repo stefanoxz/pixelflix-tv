@@ -143,9 +143,10 @@ const Movies = () => {
           year: yearMatch ? yearMatch[1] : undefined,
           host: upstreamHost,
           kind: "movie" as const,
+          progressPct: movieProgressById.get(m.stream_id),
         };
       }),
-    [sortedMovies, upstreamHost],
+    [sortedMovies, upstreamHost, movieProgressById],
   );
 
   // Quando filtros mudam, reseta o ativo
