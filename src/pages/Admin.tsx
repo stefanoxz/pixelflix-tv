@@ -711,6 +711,7 @@ const Admin = () => {
         <nav className="space-y-1">
           {[
             { id: "dashboard", label: "Dashboard", icon: TrendingUp },
+            { id: "stats", label: "Estatísticas", icon: BarChart3 },
             { id: "monitoring", label: "Monitoramento", icon: Monitor },
             { id: "reports", label: "Reportes", icon: Flag },
             { id: "dns-errors", label: "Erros por DNS", icon: AlertOctagon },
@@ -719,6 +720,7 @@ const Admin = () => {
             { id: "endpoint-test", label: "Testar endpoint", icon: FlaskConical },
             { id: "client-diagnostics", label: "Diagnóstico de clientes", icon: Stethoscope },
             { id: "pending-signups", label: "Novos cadastros", icon: UserPlus },
+            { id: "team", label: "Equipe e permissões", icon: ShieldCheck },
           ].map((item) => (
             <button
               key={item.id}
