@@ -103,20 +103,21 @@ export function Header() {
               <button
                 className="flex items-center gap-2 rounded-full pl-2 pr-3 py-1 hover:bg-secondary/60 transition-colors group"
                 aria-label="Menu da conta"
+                title={displayName ? `Olá, ${displayName}` : `Olá, ${username}`}
               >
                 <span className="h-8 w-8 rounded-full bg-gradient-primary text-primary-foreground flex items-center justify-center shadow-glow ring-2 ring-primary/30 group-hover:ring-primary/60 transition-all">
                   <User className="h-4 w-4" strokeWidth={2.25} />
                 </span>
                 <span className="text-xs text-muted-foreground max-w-[120px] truncate">
-                  {username}
+                  {primaryName}
                 </span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel className="flex flex-col gap-0.5">
-                <span className="text-sm font-semibold truncate">{username}</span>
-                <span className="text-[11px] font-normal text-muted-foreground">
-                  Conta SuperTech
+                <span className="text-sm font-semibold truncate">{primaryName}</span>
+                <span className="text-[11px] font-normal text-muted-foreground truncate">
+                  {displayName ? username : "Conta SuperTech"}
                 </span>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
@@ -147,6 +148,7 @@ export function Header() {
               <button
                 className="flex items-center gap-2 rounded-full pl-1 pr-2 py-1 hover:bg-secondary/60 transition-colors group tap-feedback"
                 aria-label="Menu da conta"
+                title={displayName ? `Olá, ${displayName}` : `Olá, ${username}`}
               >
                 <span className="h-9 w-9 rounded-full bg-gradient-primary text-primary-foreground flex items-center justify-center shadow-glow ring-2 ring-primary/30">
                   <User className="h-[18px] w-[18px]" strokeWidth={2.25} />
@@ -155,9 +157,9 @@ export function Header() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 mr-2">
               <DropdownMenuLabel className="flex flex-col gap-0.5">
-                <span className="text-sm font-semibold truncate">{username}</span>
-                <span className="text-[11px] font-normal text-muted-foreground">
-                  Conta SuperTech
+                <span className="text-sm font-semibold truncate">{primaryName}</span>
+                <span className="text-[11px] font-normal text-muted-foreground truncate">
+                  {displayName ? username : "Conta SuperTech"}
                 </span>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
