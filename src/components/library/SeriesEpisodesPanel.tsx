@@ -85,6 +85,14 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal, 
             const ext = ep.container_extension;
             const external = isExternalOnly(ext, ep.direct_source);
             const badge = getFormatBadge(ext, ep.direct_source);
+            // Pure display overlay — never replaces the playable Episode object.
+            const epNum = Number(ep.episode_num);
+            const ov = activeOverlay && Number.isFinite(epNum)
+              ? activeOverlay.get(epNum)
+              : null;
+            const displayTitle = ov?.name?.trim() || ep.title;
+            const displayPlot = ov?.overview?.trim() || ep.info?.plot;
+            const displayStill = ep.info?.movie_image || ov?.still || null;
             return (
               <div
                 key={ep.id}
@@ -96,9 +104,13 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal, 
                   className="flex gap-4 items-center flex-1 min-w-0 text-left"
                 >
                   <div className="h-20 w-36 shrink-0 rounded-md bg-secondary overflow-hidden flex items-center justify-center">
-                    {ep.info?.movie_image ? (
+                    {displayStill ? (
                       <img
-                        src={proxyImageUrl(ep.info.movie_image, { w: 288, h: 160, q: 75 })}
+                        src={
+                          ep.info?.movie_image
+                            ? proxyImageUrl(displayStill, { w: 288, h: 160, q: 75 })
+                            : displayStill
+                        }
                         alt=""
                         loading="lazy"
                         decoding="async"
@@ -112,7 +124,7 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal, 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-base md:text-lg font-semibold text-foreground truncate">
-                        {ep.episode_num}. {ep.title}
+                        {ep.episode_num}. {displayTitle}
                       </p>
                       <span
                         title={badge.tooltip}
@@ -124,9 +136,9 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal, 
                         {badge.label}
                       </span>
                     </div>
-                    {ep.info?.plot && (
+                    {displayPlot && (
                       <p className="text-sm md:text-base text-muted-foreground line-clamp-2 mt-1 leading-snug">
-                        {ep.info.plot}
+                        {displayPlot}
                       </p>
                     )}
                   </div>
