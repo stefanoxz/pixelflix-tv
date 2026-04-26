@@ -149,7 +149,8 @@ const AdminLogin = () => {
     } catch (err) {
       const raw = err instanceof Error ? err.message : "Falha no cadastro";
       const friendly = describeAuthError(raw);
-      setLastError(`${friendly} — raw: ${raw}`);
+      console.warn("[admin-login] signup error:", raw);
+      setLastError(friendly);
       toast.error(friendly);
     } finally {
       setLoading(false);
