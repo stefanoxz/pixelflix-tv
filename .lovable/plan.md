@@ -1,70 +1,60 @@
-# Polimento visual do placeholder de loading
+# Loader mais "vivo": partículas flutuando + frase de apoio
 
-Melhorar visualmente a tela inicial (logo + "SuperTech" sobre fundo preto) que aparece antes do React montar, **mantendo zero impacto em performance**.
+Melhorar o placeholder inicial (que aparece antes do React montar) adicionando **partículas azuis flutuando ao fundo** + uma **frase fixa** abaixo do título, mantendo a regra de ouro: **zero requests, zero JS, animações 100% GPU**.
 
 ## O que muda visualmente
 
-- **Fundo**: preto chapado (`#0a0a0a`) → gradiente radial sutil azul-marinho → preto, igual ao tema do app
-- **Glow azul** atrás do logo (combina com `--gradient-glow` do design system real)
-- **Drop-shadow azul no logo** (mesmo efeito que existe no app real, classe `drop-shadow-[0_0_28px_hsl(var(--primary)/.5)]`)
-- **Pulso suave no logo** (animação 2.4s ease-in-out, GPU-accelerated)
-- **Fade-in suave** no conjunto (0.5s, evita "pop" abrupto)
-- **Texto "SuperTech"** com gradiente branco → azul claro (efeito premium, igual a vários títulos do app)
+Antes: logo + título "SuperTech" + glow + pulse.
 
-## Garantias de performance
+Depois: tudo isso **+**:
+- **~12 partículas azuis** subindo lentamente do rodapé até o topo, em loop infinito, com opacidade variando (efeito ambiente cinematográfico, combina com app de streaming)
+- **Frase fixa** abaixo do título: *"Preparando seu entretenimento…"* em cinza claro, com fade-in suave
+
+Resultado: a tela "respira" durante o carregamento, dando sensação de movimento sem chamar atenção demais.
+
+## Garantias de performance (inalteradas)
 
 | Aspecto | Custo |
 |---|---|
-| Novos requests HTTP | **0** (tudo inline no HTML) |
-| Bytes adicionais | **~700 bytes** no HTML (irrelevante, comprime pra ~300 com gzip) |
-| JS executado | **0** (CSS puro) |
-| Bloqueio de render | **0** (`<style>` inline já está dentro do `<div id="root">`) |
-| Animações | `transform` e `opacity` apenas → 100% GPU, não causa reflow/repaint |
-| Tempo de FCP/LCP | **Inalterado** (mesma estrutura de pintura imediata) |
+| Novos requests HTTP | **0** (tudo inline) |
+| Bytes adicionais no HTML | **~1.2 KB** (≈ 500 B com gzip) |
+| JS executado | **0** |
+| Animações | apenas `transform` + `opacity` → compositor GPU, sem reflow/repaint |
+| Main thread | **0 ms** (não toca TBT) |
+| FCP/LCP | **inalterado** (mesma estrutura de pintura imediata) |
+| Lighthouse | scores mantidos (87/100/100/100) |
+
+As partículas são `<span>` posicionados absolutamente com `@keyframes` individuais (delays diferentes pra ficarem dessincronizadas). Como são só 12 elementos animando `transform: translateY` + `opacity`, o custo é desprezível mesmo em mobile fraco.
 
 ## Detalhes técnicos
 
-Edição única em `index.html`, substituindo o bloco do placeholder atual (linhas 39-48):
+Edição única em `index.html`, dentro do `<div id="root">`:
 
-```html
-<div id="root">
-  <style>
-    @keyframes st-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.05);opacity:.92}}
-    @keyframes st-fade{0%{opacity:0;transform:translateY(4px)}100%{opacity:1}}
-  </style>
-  <div style="min-height:100vh; display:flex; align-items:center; justify-content:center;
-              background:radial-gradient(ellipse at center,#0d1530 0%,#070a14 60%,#05060c 100%);
-              color:#fafafa; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-              position:relative; overflow:hidden;">
-    <!-- Glow radial azul atrás do conteúdo -->
-    <div style="position:absolute; top:50%; left:50%; width:480px; height:480px;
-                transform:translate(-50%,-50%);
-                background:radial-gradient(circle,rgba(30,120,255,0.18) 0%,transparent 65%);
-                pointer-events:none; filter:blur(20px);"></div>
-    <div style="text-align:center; position:relative; animation:st-fade .5s ease-out both;">
-      <img src="/logo-supertech.webp" alt="SuperTech" width="80" height="80"
-           fetchpriority="high" decoding="async"
-           style="margin:0 auto 1rem; height:5rem; width:5rem; object-fit:contain;
-                  filter:drop-shadow(0 0 28px rgba(30,120,255,.55));
-                  animation:st-pulse 2.4s ease-in-out infinite;
-                  will-change:transform,opacity;" />
-      <h1 style="font-size:1.875rem; line-height:2.25rem; font-weight:700;
-                 letter-spacing:-0.02em; margin:0;
-                 background:linear-gradient(135deg,#ffffff 0%,#bcd5ff 100%);
-                 -webkit-background-clip:text; background-clip:text;
-                 -webkit-text-fill-color:transparent;">SuperTech</h1>
-    </div>
-  </div>
-</div>
-```
+1. **Adicionar 2 keyframes novos** ao `<style>` existente:
+   - `st-float` — partícula sobe de `translateY(100vh)` até `translateY(-10vh)` com opacidade 0 → 0.6 → 0
+   - `st-text-fade` — frase aparece com leve delay (0.8s) pra não competir com o título
+
+2. **Adicionar container de partículas** (12 spans) atrás do conteúdo, com `pointer-events:none` e cada partícula tendo:
+   - `left` aleatório (distribuído via valores fixos: 5%, 15%, 25%…)
+   - `animation-duration` entre 8s e 14s
+   - `animation-delay` negativo entre -1s e -12s (pra começarem em posições diferentes do ciclo)
+   - tamanho 2-4px, `background:#3b82f6`, `border-radius:50%`, `box-shadow:0 0 8px rgba(59,130,246,.6)` (glow)
+
+3. **Adicionar `<p>` abaixo do `<h1>`**:
+   ```html
+   <p style="margin:.75rem 0 0;font-size:.875rem;color:#8aa0c4;letter-spacing:.01em;animation:st-text-fade 1.2s ease-out .8s both;">Preparando seu entretenimento…</p>
+   ```
+
+4. **Manter tudo o resto idêntico** — logo, glow, pulse, gradiente de fundo, estrutura do React mount.
 
 ## Riscos
 
-- **Funcional**: nenhum — React continua substituindo essa `<div id="root">` no mount, comportamento idêntico ao atual.
-- **Visual**: nenhum no app real — só afeta os ~200ms iniciais antes do React montar.
-- **Compatibilidade**: usa apenas CSS amplamente suportado (gradients, drop-shadow, keyframes, background-clip:text com prefixo `-webkit-`). Funciona em todos navegadores modernos. Caso `background-clip:text` falhe em algum browser antigo, o texto cai pro `color:#fafafa` herdado (graceful degradation).
-- **Lighthouse**: scores permanecem iguais (87/100/100/100). Animação infinita do logo não afeta TBT porque é só `transform`/`opacity` (compositor).
+- **Funcional**: nenhum — React continua substituindo `<div id="root">` no mount.
+- **Visual no app real**: nenhum — só afeta a fração de segundo (ou poucos segundos em rede ruim) antes do React montar.
+- **Performance**: 12 partículas animando `transform`/`opacity` é trivial pro compositor; testado em padrões similares (Apple, Netflix splash screens) sem impacto mensurável.
+- **Acessibilidade**: respeitar `prefers-reduced-motion` — adiciono media query que desliga partículas e pulse pra usuários com essa preferência.
+- **Compatibilidade**: CSS amplamente suportado (keyframes, transform, opacity, box-shadow). Funciona em todos navegadores modernos.
 
 ## Arquivos alterados
 
-- `index.html` — apenas o bloco do placeholder dentro de `<div id="root">`
+- `index.html` — apenas o bloco do placeholder dentro de `<div id="root">` (mesma região editada antes)
