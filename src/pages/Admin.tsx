@@ -814,22 +814,10 @@ const Admin = () => {
 
       {/* Main */}
       <main className="flex-1 p-4 md:p-8 pb-24 lg:pb-8 space-y-4 lg:space-y-6">
-        {void currentNav}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-3xl font-bold">
-              {tab === "dashboard" ? "Dashboard"
-                : tab === "stats" ? "Estatísticas"
-                : tab === "monitoring" ? "Monitoramento"
-                : tab === "reports" ? "Reportes de usuários"
-                : tab === "dns-errors" ? "Erros por DNS"
-                : tab === "users" ? "Usuários"
-                : tab === "endpoint-test" ? "Testar endpoint"
-                : tab === "client-diagnostics" ? "Diagnóstico de clientes"
-                : tab === "pending-signups" ? "Novos cadastros"
-                : tab === "team" ? "Equipe e permissões"
-                : "DNS / Servidores"}
-            </h1>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          {/* Header textual: oculto no mobile (topbar já mostra título) */}
+          <div className="hidden lg:block">
+            <h1 className="text-3xl font-bold">{currentNav?.label ?? "Admin"}</h1>
             <p className="text-sm text-muted-foreground mt-1">
               {tab === "dashboard" ? "Visão geral em tempo real"
                 : tab === "stats" ? "Histórico de logins, usuários ativos e conteúdos mais assistidos"
@@ -844,14 +832,16 @@ const Admin = () => {
                 : "Cadastre as DNS autorizadas. Sem cadastro prévio, o cliente não consegue logar."}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto">
             <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
               <RefreshCw className={"h-4 w-4 mr-2 " + (loading ? "animate-spin" : "")} />
               Atualizar
             </Button>
+            {/* "Sair do Admin" só no desktop — no mobile o drawer já tem Sair */}
             <Button
               variant="outline"
               size="sm"
+              className="hidden lg:inline-flex"
               onClick={async () => {
                 setSigningOut(true);
                 await supabase.auth.signOut();
