@@ -4,13 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Input } from "@/components/ui/input";
 import { PosterCard, type PosterItem } from "./PosterCard";
 import { useIncompatibleKeys } from "@/hooks/useIncompatibleKeys";
-
-// Detecta uma vez por sessão: em mobile, reduzimos drasticamente a janela
-// inicial pra não enfileirar 120 covers de uma vez em redes lentas.
-const IS_MOBILE_VIEWPORT =
-  typeof window !== "undefined" &&
-  typeof window.matchMedia === "function" &&
-  window.matchMedia("(max-width: 767px)").matches;
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 interface Props {
   items: PosterItem[];
@@ -72,11 +66,16 @@ export function PosterGrid({
   pageIncrement: pageIncrementProp,
   isLoading = false,
 }: Props) {
+  // Detecta mobile reativamente — atualiza ao girar tablet ou ativar
+  // device-toolbar do DevTools. Antes era constante de módulo (top-level),
+  // que ficava presa no estado do primeiro carregamento.
+  const isMobileViewport = useMediaQuery("(max-width: 767px)");
+
   // Defaults adaptativos: mobile recebe páginas bem menores pra reduzir a
   // fila inicial de imagens em 3G/4G. Desktop mantém o comportamento antigo
   // (120 / 60). Props explícitas sempre vencem.
-  const pageSize = pageSizeProp ?? (IS_MOBILE_VIEWPORT ? 36 : 120);
-  const pageIncrement = pageIncrementProp ?? (IS_MOBILE_VIEWPORT ? 24 : 60);
+  const pageSize = pageSizeProp ?? (isMobileViewport ? 36 : 120);
+  const pageIncrement = pageIncrementProp ?? (isMobileViewport ? 24 : 60);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -184,21 +183,27 @@ export function PosterGrid({
 
   const totalSize = rowVirtualizer.getTotalSize();
 
-  // Auto-fill: se a grade ainda não preenche a viewport (ex.: 120 itens
-  // cabem na tela e o usuário não precisa rolar), revela o próximo chunk
-  // automaticamente até preencher. Em mobile usamos um buffer menor pra
-  // evitar disparar 2-3 expansões consecutivas no primeiro paint em 3G/4G.
+  // Auto-fill rate-limited: se a grade ainda não preenche a viewport, revela
+  // o próximo chunk com um intervalo mínimo entre expansões. Sem o throttle,
+  // o effect roda em cascata (cada expansão muda totalSize → re-roda) e pode
+  // disparar 3-5 expansões em rápida sucessão, congelando o primeiro paint.
+  const lastExpandRef = useRef<number>(0);
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !hasMore || totalSize === 0) return;
-    const buffer = IS_MOBILE_VIEWPORT ? 200 : 600;
-    if (totalSize <= el.clientHeight + buffer) {
-      const id = requestAnimationFrame(() => {
-        setVisibleCount((c) => Math.min(c + pageIncrement, items.length));
-      });
-      return () => cancelAnimationFrame(id);
-    }
-  }, [totalSize, containerWidth, hasMore, items.length, pageIncrement]);
+    const buffer = isMobileViewport ? 200 : 600;
+    if (totalSize > el.clientHeight + buffer) return;
+
+    const minInterval = isMobileViewport ? 250 : 120;
+    const sinceLast = Date.now() - lastExpandRef.current;
+    const wait = Math.max(0, minInterval - sinceLast);
+
+    const handle = window.setTimeout(() => {
+      lastExpandRef.current = Date.now();
+      setVisibleCount((c) => Math.min(c + pageIncrement, items.length));
+    }, wait);
+    return () => window.clearTimeout(handle);
+  }, [totalSize, containerWidth, hasMore, items.length, pageIncrement, isMobileViewport]);
 
   return (
     <div className="flex flex-col h-full min-h-0">

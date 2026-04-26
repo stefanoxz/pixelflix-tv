@@ -80,7 +80,7 @@ const Live = () => {
     const q = debouncedSearch.trim().toLowerCase();
     return channels.filter((c) => {
       let matchCat = true;
-      if (activeCategory === "favorites") matchCat = favorites.has(c.stream_id);
+      if (activeCategory === "__favorites__") matchCat = favorites.has(c.stream_id);
       else if (activeCategory !== "all") matchCat = c.category_id === activeCategory;
       const matchSearch = !q || c.name.toLowerCase().includes(q);
       return matchCat && matchSearch;
@@ -222,7 +222,7 @@ const Live = () => {
           <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
             <h2 className="text-sm font-semibold flex items-center gap-2">
               <Tv className="h-4 w-4 text-primary" />
-              {activeCategory === "favorites"
+              {activeCategory === "__favorites__"
                 ? "Favoritos"
                 : activeCategory === "all"
                 ? "Todos os canais"

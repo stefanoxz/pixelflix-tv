@@ -51,8 +51,8 @@ export const ChannelCategoryRail = memo(function ChannelCategoryRail({
             icon={<Star className="h-4 w-4" />}
             label="Favoritos"
             count={favoritesCount}
-            active={active === "favorites"}
-            onClick={() => onChange("favorites")}
+            active={active === "__favorites__"}
+            onClick={() => onChange("__favorites__")}
             highlight
           />
           <RailItem

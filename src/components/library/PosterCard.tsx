@@ -1,16 +1,9 @@
-import { forwardRef, memo, useState } from "react";
+import { forwardRef, memo, useEffect, useRef, useState } from "react";
 import { Heart, Star, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { proxyImageUrl } from "@/services/iptv";
 import { useTmdbFallback } from "@/hooks/useTmdbFallback";
-
-// Avalia uma única vez por sessão. Em telas touch puras (sem mouse), pular o
-// prefetch por hover evita queimar banda em 3G/4G — `onMouseEnter` ainda
-// dispara em alguns navegadores móveis durante taps/scroll.
-const HAS_REAL_HOVER =
-  typeof window !== "undefined" &&
-  typeof window.matchMedia === "function" &&
-  window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 export interface PosterItem {
   id: number;
@@ -49,19 +42,53 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
   { item, active, isFavorite, incompatible, priority, onClick, onHover, onToggleFavorite },
   ref,
 ) {
+  // Hover guard reativo — atualiza se o usuário plugar mouse / mudar device-toolbar.
+  const hasRealHover = useMediaQuery("(hover: hover) and (pointer: fine)");
+
   const [imgFailed, setImgFailed] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   // Capas em ~150px exibidas → pedimos 300px de largura (retina) em WebP.
   const cover = item.cover ? proxyImageUrl(item.cover, { w: 300, h: 450, q: 70 }) : null;
 
-  // Fallback TMDB: só dispara quando não há cover OU quando a imagem original
-  // falhou. Isso evita inundar a edge function com requests para grids gigantes.
+  // Gate de visibilidade: o fallback TMDB só dispara quando o card
+  // realmente entra no viewport. Isso evita que centenas de cards
+  // sem cover disparem `tmdb-image` simultaneamente no primeiro paint
+  // — gargalo principal em catálogos com muitos itens sem stream_icon.
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [hasBeenSeen, setHasBeenSeen] = useState(priority ?? false);
+  useEffect(() => {
+    if (hasBeenSeen) return;
+    const el = wrapperRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setHasBeenSeen(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setHasBeenSeen(true);
+            io.disconnect();
+            break;
+          }
+        }
+      },
+      // rootMargin generoso para prefetch antes do card aparecer de fato
+      { rootMargin: "200px 0px", threshold: 0.01 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasBeenSeen]);
+
+  // Fallback TMDB: só dispara quando (a) card já foi visto E
+  // (b) não há cover OU a imagem original falhou.
   const needsFallback = !item.cover || imgFailed;
   const { data: tmdb } = useTmdbFallback({
     type: item.kind ?? "movie",
     hasCover: !needsFallback,
     name: item.title,
     year: item.year,
+    enabled: hasBeenSeen && needsFallback,
   });
   const fallbackCover = tmdb?.poster
     ? proxyImageUrl(tmdb.poster, { w: 300, h: 450, q: 70 })
@@ -72,10 +99,10 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
 
   // Em touch devices, ignorar onMouseEnter/onFocus de prefetch — em mobile
   // esses eventos disparam por scroll/tap e queimam banda em 3G/4G.
-  const hoverHandler = HAS_REAL_HOVER ? onHover : undefined;
+  const hoverHandler = hasRealHover ? onHover : undefined;
 
   return (
-    <div className="relative group">
+    <div ref={wrapperRef} className="relative group">
       <button
         ref={ref}
         type="button"

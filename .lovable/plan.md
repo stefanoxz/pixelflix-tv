@@ -1,85 +1,99 @@
-## Objetivo
 
-Melhorar a percepção de velocidade e reduzir travamentos em 3G/4G nas grades de **Filmes** e **Séries**, sem alterar o comportamento já bom no desktop. As mudanças são todas aditivas (skeletons mais ricos e cargas progressivas mais agressivas no mobile) e não tocam na lógica de negócio nem nas queries existentes.
+# Análise do sistema — bugs reais que afetam o usuário
 
-## Diagnóstico atual
+Após varredura nos arquivos modificados nas últimas iterações (BottomNav, `WithChrome`, `LibraryTopBar`, `PosterGrid`/`PosterCard`, dvh, `useTmdbFallback`, drawers), encontrei **5 problemas concretos** que podem afetar o uso. Listados por severidade.
 
-O que já existe e está bom (vamos preservar):
-- `PosterGrid` já é virtualizado (`@tanstack/react-virtual`) — só renderiza linhas visíveis.
-- `PosterCard` já usa `loading="lazy"` + `decoding="async"` nas imagens.
-- Já existe paginação incremental client-side (`pageSize=120`, `pageIncrement=60`).
-- Já existem skeletons no estado vazio quando `isLoading=true`.
-- `useTmdbFallback` só dispara quando não há cover ou a imagem original falha.
+---
 
-O que está machucando o mobile:
-1. **`pageSize=120` é alto demais para celular** — em 3G/4G, são 120 requests TMDB/imagens disparando ao mesmo tempo no primeiro paint, mesmo virtualizado (virtualizer renderiza ~10 linhas, mas as 120 covers já entram em fila no browser).
-2. **Sem skeleton enquanto rola e revela mais itens** — a próxima página aparece "em branco" até a imagem chegar.
-3. **Skeleton inicial só aparece quando `items.length === 0`** — durante refetch silencioso (volta da página, troca de categoria com cache frio) não há feedback visual.
-4. **`onHoverItem` faz prefetch da sinopse** — em mobile não há hover real, então o `onMouseEnter` dispara em scroll/touch e queima banda. Não é problema no desktop.
-5. **Re-render do grid inteiro em cada troca de categoria** — sem skeleton de transição, dá sensação de travada.
+## 1. ALTA — `useTmdbFallback` pode disparar **toneladas** de requests para tmdb-image em telas com cover faltando
 
-## Mudanças propostas
+`PosterCard.tsx` chama `useTmdbFallback({ hasCover: !needsFallback })`. Quando o item **não tem cover** (`!item.cover`), `needsFallback = true` → `hasCover = false` → query habilitada para **todos os cards visíveis simultaneamente**.
 
-Todas escopadas a `PosterGrid.tsx` + `PosterCard.tsx`, com gates por viewport pra não afetar o desktop.
+Em catálogos grandes onde vários itens vêm sem `stream_icon`, isso dispara dezenas de chamadas paralelas à edge function `tmdb-image` no scroll inicial. Antes da virtualização ajudava a esconder, mas com a janela mobile reduzida ainda assim cada linha visível dispara N requests por re-render.
 
-### 1. Page size adaptativo por viewport
-- `PosterGrid` já recebe `pageSize` como prop. Manter o default `120` (desktop), mas detectar mobile internamente via `window.matchMedia("(max-width: 767px)")` e usar:
-  - Mobile: `pageSize=36`, `pageIncrement=24`
-  - Desktop: `pageSize=120`, `pageIncrement=60` (inalterado)
-- Reduz drasticamente a fila inicial de imagens em 3G/4G sem mudar o comportamento PC.
+**Impacto**: lentidão grave em mobile / 3G, edge function rate-limit, bloqueio percebido da grade.
+**Fix**: throttle/debounce ao montar (ex.: pequeno `setTimeout` antes de habilitar) **ou** habilitar só após o card entrar em viewport via IntersectionObserver, **ou** limitar concurrency com uma fila no hook.
 
-### 2. Skeleton por célula durante revelação progressiva
-No `PosterCard`, adicionar um skeleton shimmer atrás da `<img>` que some quando ela carrega (`onLoad`). Isso preenche o "branco" enquanto a imagem chega — útil em qualquer rede, mas crítico em 3G.
-- Sem custo extra: só uma `div` absoluta com `skeleton-shimmer` (classe já existe em `index.css`) + estado `loaded`.
-- No desktop com cache quente, a imagem já vem cached e o skeleton some em <16ms (invisível).
+## 2. ALTA — Categoria "Favoritos" do Live aparece com **count 0** depois das mudanças
 
-### 3. Skeleton overlay durante refetch / troca de categoria
-- Hoje skeletons só aparecem quando `items.length === 0`. Adicionar uma faixa de skeleton sobreposta na primeira linha quando `isLoading && items.length > 0` (refetch silencioso). Mantém os pôsteres atuais visíveis mas sinaliza atualização.
-- Opcional/leve: 1 div com `opacity-60` + spinner pequeno no header, sem repintar a grade.
+`Live.tsx` usa a string `"favorites"` como id da categoria de favoritos (linhas 83, 225). Mas `railCategories` é construído **só** a partir de `categories` da API (linha 71-76), que **não inclui** uma entrada com id `"favorites"`. O `ChannelCategoryRail` adiciona o botão "Favoritos" separadamente passando `favoritesCount`, então o desktop funciona — porém:
 
-### 4. Hover prefetch só com mouse real
-- Trocar `onMouseEnter`/`onFocus` no `PosterCard` por: só dispara `onHover` se `window.matchMedia("(hover: hover) and (pointer: fine)").matches`.
-- Em mobile, o prefetch ainda acontece via `onClick` (já é o comportamento atual no Drawer).
-- Desktop fica idêntico.
+- O **MobileChannelDrawer** (drawer aberto pelo FAB) renderiza **apenas** o que chega em `categories` + entradas hardcoded (`★ Favoritos` com `favorites.size`). Funciona.
+- Porém o `subtitle` no `LibraryTopBar` mostra `${favorites.size} favoritos` mesmo quando o usuário não tem favoritos — OK, é só uma informação.
 
-### 5. Lazy decode mais agressivo + `fetchpriority`
-- Trocar `loading="lazy"` por `loading="lazy" fetchpriority="low"` nas covers fora da primeira linha; primeira linha (`vRow.index === 0`) ganha `fetchpriority="high"`.
-- Hint pro browser priorizar o que aparece no fold sem prejudicar o resto.
+Não é bug crítico aqui, mas há **inconsistência de id**: Movies/Series usam `"__favorites__"`, Live usa `"favorites"`. Se algum drawer/componente compartilhado for criado vai quebrar. Recomendo padronizar.
 
-### 6. Auto-fill mais conservador no mobile
-- Hoje o `useEffect` de auto-fill expande a janela quando `totalSize <= clientHeight + 600`. Em mobile reduzir esse buffer para `+200` pra não disparar 2-3 expansões consecutivas no primeiro paint.
+## 3. MÉDIA — `IS_MOBILE_VIEWPORT` e `HAS_REAL_HOVER` são avaliados **uma vez no carregamento do módulo**
 
-## Garantias de não-regressão (PC/Web)
+Em `PosterGrid.tsx` (linhas 10-13) e `PosterCard.tsx` (linhas 10-13), as constantes são calculadas no top-level. Isso causa dois problemas:
 
-- `pageSize` desktop: **inalterado** (120/60).
-- Virtualização: **inalterada**.
-- Hover prefetch desktop: **inalterado** (cobre o caso `hover: hover`).
-- Skeleton por célula: invisível quando imagem vem do cache (caso comum em PC).
-- Layout, grid template, breakpoints, navegação por teclado: **inalterados**.
-- Nenhuma mudança em `Movies.tsx`, `Series.tsx`, queries, contexto ou serviços.
+1. **Tablets em rotação**: ao girar de portrait→landscape, ou janelas redimensionáveis no Chrome DevTools, o valor não atualiza. Um iPad em portrait carrega como mobile (≤767px) e fica preso com `pageSize=36` mesmo depois de girar.
+2. **DevTools mobile preview**: ao abrir o app no desktop e depois ativar device-toolbar, o app já carregou como desktop e jamais aplica os otimizadores mobile.
 
-## Detalhes técnicos
+**Fix**: usar um hook `useMediaQuery` reativo (já existe `useIsMobile`) ao invés de constante de módulo, **ou** reavaliar via `matchMedia.addEventListener('change', ...)`.
 
-Arquivos tocados (apenas 2):
+## 4. MÉDIA — Loop de auto-fill pode disparar **muitas expansões** consecutivas e congelar o primeiro paint
 
-**`src/components/library/PosterGrid.tsx`**
-- Adicionar `useIsMobile`-like inline (via `matchMedia` num `useState` lazy, sem hook novo) para derivar `effectivePageSize` / `effectivePageIncrement` quando o caller não sobrescreve via prop.
-- Reduzir buffer de auto-fill em mobile (`+200` vs `+600`).
-- Passar `rowIndex` para o `PosterCard` (apenas pra primeira linha receber `priority`).
+`PosterGrid.tsx` linhas 191-201: o `useEffect` depende de `totalSize` e `containerWidth`. Quando expande `visibleCount`, o `totalSize` muda → o effect roda de novo → expande de novo → … até `!hasMore`. Em telas grandes com `pageIncrement=60` revelando 60 itens por frame, **cada expansão também dispara 60 onload de imagens**, o que reflowa o virtualizer e pode travar 200-500ms no mobile.
 
-**`src/components/library/PosterCard.tsx`**
-- Novo state `loaded` + skeleton absoluto (`<div className="absolute inset-0 skeleton-shimmer" />`) que some no `onLoad`.
-- Nova prop opcional `priority?: boolean` → mapeia para `fetchpriority="high" | "low"`.
-- Guard de `onHover`: só executa se `matchMedia("(hover: hover)")` for verdade. Pode ser uma const módulo-level pra evitar custo por render:
-  ```ts
-  const HAS_HOVER = typeof window !== "undefined"
-    && window.matchMedia?.("(hover: hover) and (pointer: fine)").matches;
-  ```
+O `requestAnimationFrame` ajuda mas não rate-limita: ainda gera várias expansões em rápida sucessão.
 
-Sem mudança em CSS (a classe `skeleton-shimmer` já existe). Sem nova dependência. Sem mudança de tipos públicos do `PosterItem`.
+**Fix**: adicionar guard "esperar terminar de carregar a leva atual antes de expandir" — por exemplo, aguardar `setTimeout(..., 150)` entre expansões, ou só expandir quando todas as imagens da janela atual já tiverem `onLoad` disparado.
 
-## Validação
+## 5. BAIXA — Comportamento confuso ao trocar categoria com `activeId` "preso"
 
-1. Desktop (1280+): grid carrega igual ao atual; primeira linha com `fetchpriority=high` aparece levemente mais rápido; nenhum skeleton visível em cache quente.
-2. Mobile (≤768px): primeiro paint dispara apenas ~36 imagens; skeleton shimmer cobre células enquanto carregam; rolagem revela próximos 24 + skeleton; sem prefetch TMDB acidental por scroll.
-3. Troca de categoria: feedback visual imediato (overlay leve) sem repintar a grade inteira.
+Em `Movies.tsx`/`Series.tsx` linhas 125-130 e 131-136:
+```ts
+useEffect(() => {
+  if (items.length === 0) setActiveId(undefined);
+  else if (activeId == null || !items.find((i) => i.id === activeId)) {
+    setActiveId(items[0].id);
+  }
+}, [items, activeId]);
+```
+
+Quando o usuário troca de categoria, esse effect roda e seta `activeId` no primeiro item — o `PosterGrid.activeChange` então dispara `rowVirtualizer.scrollToIndex(0)`. **Mas** o `useEffect` do `PosterGrid` (linha 91-95) já reseta `scrollTop=0` ao mudar `items`. Combinado, isso pode causar um pequeno "flicker" ou rolagem dupla. Não quebra funcionalidade, mas vale uma única origem de verdade pro reset de scroll.
+
+---
+
+## Bugs **inexistentes** que checados e descartados
+
+- **BottomNav cobre conteúdo**: `pb-bottom-nav` no `<main>` em `App.tsx` está correto, com safe-area inclusa. ✅
+- **Header sticky + LibraryTopBar sticky**: `top-16` está correto após o ajuste anterior. ✅
+- **`prefers-reduced-motion`**: aplica corretamente. ✅
+- **Hover stuck em touch**: `@media (hover: none)` cobre ambos os transforms. ✅
+- **dvh fallback**: `[height:calc(100dvh-Xrem)]` é aplicado depois do `h-[calc(100vh-Xrem)]` — browsers sem suporte ignoram o segundo. ✅
+
+---
+
+## Plano de correções (em ordem de prioridade)
+
+### Etapa 1 — Conter requisições TMDB (bug #1)
+- Em `PosterCard.tsx`, montar o `useTmdbFallback` com **gate por viewport**: usar `IntersectionObserver` no botão para só habilitar a query quando o card entrar em view (pelo menos 1x). Isso elimina o burst inicial.
+- Alternativa mais simples: adicionar um `useState(seen)` que vira `true` no primeiro `onMouseEnter`/`onLoad`/após X ms — e passar `enabled: seen` no hook.
+
+### Etapa 2 — Tornar viewport detection reativa (bug #3)
+- Criar/usar hook `useMediaQuery(query: string)` reativo.
+- `PosterGrid` consome `useMediaQuery("(max-width: 767px)")` para decidir `pageSize`/`pageIncrement` dinamicamente.
+- `PosterCard` consome `useMediaQuery("(hover: hover) and (pointer: fine)")` para o hover guard.
+
+### Etapa 3 — Rate-limit do auto-fill (bug #4)
+- Adicionar um `useRef<number>(0)` com timestamp do último expand; só permitir nova expansão se passou ≥150ms.
+- Bonus: parar o auto-fill se o `totalSize` excede `clientHeight*3` (já tem buffer suficiente).
+
+### Etapa 4 — Padronizar id de "favoritos" (bug #2)
+- Trocar `"favorites"` por `"__favorites__"` em `Live.tsx` e `ChannelCategoryRail.tsx` (3 ocorrências) — alinhando com Movies/Series.
+- Não é urgente, mas evita armadilha futura.
+
+### Etapa 5 — Centralizar reset de scroll ao trocar lista (bug #5)
+- Remover o `containerRef.current.scrollTop = 0` do `PosterGrid` e deixar **só** o `scrollToIndex(0)` no caminho de `activeId` mudar.
+- Ou, ao contrário: remover o auto-set de `activeId` para o primeiro item nas páginas Movies/Series e deixar o grid lidar com isso internamente.
+
+---
+
+## Estimativa
+- **Arquivos tocados**: `src/components/library/PosterCard.tsx`, `src/components/library/PosterGrid.tsx`, `src/hooks/useMediaQuery.ts` (novo), `src/pages/Live.tsx`, `src/components/live/ChannelCategoryRail.tsx`.
+- **Risco de regressão**: baixo — todas mudanças são refinamentos sobre código existente.
+- **Tempo**: 1 ciclo de implementação.
+
+Quer que eu prossiga com **todas as 5 etapas** ou só com a #1 e #3 (as de maior impacto real para o usuário)?
