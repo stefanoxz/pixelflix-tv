@@ -102,7 +102,7 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
   const hoverHandler = hasRealHover ? onHover : undefined;
 
   return (
-    <div className="relative group">
+    <div ref={wrapperRef} className="relative group">
       <button
         ref={ref}
         type="button"
