@@ -302,22 +302,35 @@ const Highlights = () => {
         </div>
       </section>
 
-      <div className="mx-auto max-w-[1600px] px-4 md:px-8 space-y-12">
+      <div className="mx-auto max-w-[1800px] px-4 md:px-8 space-y-12">
         {/* QUICK STATS */}
-        <section className="grid grid-cols-3 gap-4">
+        <section className="grid grid-cols-3 gap-3 md:gap-4">
           {[
-            { icon: Tv, label: "Canais ao vivo", value: live.length, to: "/live" },
-            { icon: Film, label: "Filmes", value: movies.length, to: "/movies" },
-            { icon: Clapperboard, label: "Séries", value: series.length, to: "/series" },
+            { icon: Tv, label: "Canais ao vivo", value: live.length, to: "/live", color: "from-rose-500/20 to-rose-500/5" },
+            { icon: Film, label: "Filmes", value: movies.length, to: "/movies", color: "from-primary/20 to-primary/5" },
+            { icon: Clapperboard, label: "Séries", value: series.length, to: "/series", color: "from-violet-500/20 to-violet-500/5" },
           ].map((s) => (
             <button
               key={s.label}
               onClick={() => navigate(s.to)}
-              className="rounded-lg bg-gradient-card border border-border/50 p-4 md:p-6 text-left transition-smooth hover:border-primary/50 hover:shadow-glow group"
+              className="relative overflow-hidden rounded-xl bg-gradient-card border border-border/50 p-4 md:p-6 text-left transition-all duration-300 hover:border-primary/60 hover:shadow-hover hover:-translate-y-1 group"
             >
-              <s.icon className="h-5 w-5 text-primary mb-2 group-hover:scale-110 transition-bounce" />
-              <p className="text-2xl md:text-3xl font-bold">{s.value.toLocaleString("pt-BR")}</p>
-              <p className="text-xs md:text-sm text-muted-foreground mt-1">{s.label}</p>
+              <div className={cn(
+                "absolute -top-12 -right-12 h-32 w-32 rounded-full bg-gradient-to-br blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500",
+                s.color,
+              )} />
+              <div className="relative">
+                <div className="h-9 w-9 md:h-10 md:w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-300">
+                  <s.icon className="h-4 w-4 md:h-5 md:w-5" />
+                </div>
+                <p className="text-2xl md:text-3xl font-bold tabular-nums">
+                  {s.value.toLocaleString("pt-BR")}
+                </p>
+                <p className="text-xs md:text-sm text-muted-foreground mt-1">{s.label}</p>
+              </div>
+              <span className="absolute top-4 right-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-1 transition-all duration-300">
+                →
+              </span>
             </button>
           ))}
         </section>
