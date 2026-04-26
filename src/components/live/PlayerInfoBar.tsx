@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { proxyImageUrl, type LiveStream, type IptvCredentials } from "@/services/iptv";
 import { Button } from "@/components/ui/button";
 import { useChannelEpg } from "@/hooks/useEpgNow";
+import { SafeImage } from "@/components/SafeImage";
 import { EpgNowNext } from "./EpgNowNext";
 import { EpgTimeline } from "./EpgTimeline";
 
@@ -41,12 +42,11 @@ export const PlayerInfoBar = memo(function PlayerInfoBar({
       <div className="flex items-start gap-3">
         <div className="h-12 w-12 shrink-0 rounded bg-secondary overflow-hidden flex items-center justify-center">
           {channel.stream_icon ? (
-            <img
+            <SafeImage
               src={proxyImageUrl(channel.stream_icon)}
               alt=""
               loading="lazy"
               className="h-full w-full object-contain"
-              onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
             />
           ) : (
             <Tv className="h-5 w-5 text-muted-foreground" />

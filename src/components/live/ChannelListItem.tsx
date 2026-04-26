@@ -5,6 +5,7 @@ import { proxyImageUrl, type LiveStream } from "@/services/iptv";
 import { EpgNowNext } from "./EpgNowNext";
 import { useChannelEpg } from "@/hooks/useEpgNow";
 import type { IptvCredentials } from "@/services/iptv";
+import { SafeImage } from "@/components/SafeImage";
 
 interface Props {
   channel: LiveStream;
@@ -45,14 +46,13 @@ export const ChannelListItem = memo(function ChannelListItem({
     >
       <div className="h-10 w-10 shrink-0 rounded bg-secondary overflow-hidden flex items-center justify-center">
         {channel.stream_icon ? (
-          <img
+          <SafeImage
             src={proxyImageUrl(channel.stream_icon)}
             alt=""
             loading="lazy"
             decoding="async"
             width={40}
             height={40}
-            onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
             className="h-full w-full object-contain"
           />
         ) : (
