@@ -390,6 +390,24 @@ const SeriesPage = () => {
           // o diálogo da série reaparece automaticamente (condição `&& !playingEp`).
           if (!openSeries) return;
           setShowNextCard(false);
+          // Consulta progresso salvo deste episódio.
+          const saved = getProgress(makeProgressKey("episode", ep.id));
+          if (
+            saved &&
+            saved.t >= MIN_RESUME_SECONDS &&
+            saved.d > 0 &&
+            saved.t / saved.d < COMPLETED_RATIO
+          ) {
+            setPendingResume({
+              ep,
+              seriesId: openSeries.series_id,
+              coverFallback: openSeries.cover,
+              t: saved.t,
+              d: saved.d,
+            });
+            return;
+          }
+          setResumeAt(0);
           setPlayingEp({
             ep,
             seriesId: openSeries.series_id,
