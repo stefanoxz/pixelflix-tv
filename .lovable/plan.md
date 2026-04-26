@@ -1,143 +1,102 @@
-## Objetivo
+# Correções no painel admin
 
-Implementar três blocos no Painel Admin:
-
-1. **Gestão de papéis (admins/moderadores)**
-2. **Estatísticas históricas** (gráficos de uso ao longo do tempo)
-3. **Polimento geral** da UX
+Após a análise, agrupei as correções por prioridade. Tudo é em código existente — sem novas tabelas nem novas dependências.
 
 ---
 
-## 1. Gestão de papéis
+## 1. Crítico — moderador não consegue entrar no painel
 
-Nova aba **"Equipe / Permissões"** na sidebar (ícone `ShieldCheck`).
+Hoje o backend aceita `admin` ou `moderator`, mas o front ainda só deixa entrar `admin`. Resultado: o papel "moderador" criado na rodada anterior está inativo.
 
-**O que mostra:**
-- Lista de todos os usuários com papel (`admin` ou `moderator`), com e-mail, data de criação do papel e indicador "você" ao lado da própria conta.
-- Botão **"Adicionar membro"** → abre dialog para colar e-mail + escolher papel. Se o e-mail ainda não tem conta, sistema envia magic link/convite e cria papel pendente quando ele se cadastrar.
-- Por linha: trocar papel (admin ↔ moderador) e **revogar acesso** (com confirm dialog).
+**Arquivos:**
+- `src/components/AdminProtectedRoute.tsx` — verificar `admin` **OU** `moderator` (chamar `has_role` para os dois e liberar se qualquer um for verdadeiro). Manter o fluxo "pendente" só quando nenhum dos dois retornar true.
+- `src/pages/AdminLogin.tsx` — após login, redirecionar para `/admin` quando o usuário tiver qualquer um dos dois papéis. Mensagem de erro continua a mesma quando não tiver nenhum.
 
-**Diferença entre os papéis:**
-- `admin`: acesso total (igual hoje).
-- `moderator`: leitura de todas as abas + ações de moderação (banir/kickar usuário, aprovar cadastro), mas **não** pode mexer em DNS/servidores nem gerenciar outros admins.
-
-**Travas de segurança:**
-- Não permitir que o último admin se rebaixe ou se remova (validação no backend).
-- Admin não pode rebaixar a si mesmo se for o único.
-- Toda ação grava em **audit log** (ver abaixo).
-
-### Mudanças técnicas
-
-- Adicionar `'moderator'` ao enum `app_role` (migration).
-- Nova tabela `admin_audit_log`: `id, actor_user_id, actor_email, action, target_user_id, target_email, metadata jsonb, created_at`. RLS: só admins leem; inserts via edge function com service role.
-- Novas ações na edge function `admin-api`:
-  - `list_team` — junta `user_roles` com e-mail (via `auth.admin.getUserById`).
-  - `add_team_member` — `{ email, role }` cria papel (e convite se não existir conta).
-  - `update_team_role` — `{ user_id, role }`.
-  - `remove_team_member` — `{ user_id }`.
-  - `list_audit_log` — paginação por cursor.
-- RLS de tabelas existentes: ajustar para aceitar `moderator` onde fizer sentido (ex.: `active_sessions` SELECT, `user_blocks` ALL exceto delete permanente).
-
-### Arquivos a criar/editar
-- Migration: enum `moderator` + tabela `admin_audit_log` + ajustes de RLS.
-- `supabase/functions/admin-api/index.ts` — novas actions + helper `logAudit()`.
-- `src/components/admin/TeamPanel.tsx` (novo).
-- `src/components/admin/AuditLogPanel.tsx` (novo, dentro da aba Equipe como sub-seção ou modal "Ver histórico").
-- `src/pages/Admin.tsx` — registrar a aba.
+**Bonus:** expor o papel atual via um hook simples (`useAdminRole`) para os componentes saberem se quem está olhando é admin ou moderador — isso é a base do item 2.
 
 ---
 
-## 2. Estatísticas históricas
+## 2. Crítico — UI mostra controles que moderador não pode usar
 
-Nova aba **"Estatísticas"** na sidebar (ícone `BarChart3`).
+Mesmo após corrigir o item 1, moderador veria botões "Adicionar DNS", "Remover DNS", "Aprovar cadastro", aba "Equipe e permissões" etc., e tomaria 401 ao clicar.
 
-**Conteúdo (4 cards de gráficos):**
+**Arquivos:**
+- `src/pages/Admin.tsx` — usar o hook `useAdminRole`:
+  - Esconder a aba **"Equipe e permissões"** para moderador.
+  - Esconder a aba **"Novos cadastros"** para moderador (aprovar/recusar é admin-only).
+  - Em **"DNS / Servidores"**: esconder botões "Adicionar DNS", "Remover", "Editar" e o ícone de lixeira; manter visualização e ping.
+- `src/components/admin/PendingSignupsPanel.tsx` — se entrar mesmo assim, mostrar mensagem de "somente admin".
+- `src/components/admin/TeamPanel.tsx` — idem (defesa em profundidade — backend já bloqueia).
 
-1. **Logins por dia** (últimos 30 dias) — barras empilhadas: sucesso vs falha. Fonte: `login_events`.
-2. **Usuários ativos diários (DAU)** + **mensais (MAU)** — linha. Fonte: `active_sessions` agregado por dia.
-3. **Horário de pico** — heatmap dia da semana × hora (últimos 7 dias). Fonte: `active_sessions.last_seen_at`.
-4. **Top 10 conteúdos assistidos** — lista com tempo total. Fonte: `active_sessions.content_title` somando `duration_s`.
-
-**Filtros:** seletor de período (7d / 30d / 90d) no topo.
-
-**Botão "Exportar CSV"** ao lado de cada card → gera CSV com os dados brutos da janela atual.
-
-### Mudanças técnicas
-- Novas actions na `admin-api`:
-  - `stats_logins_daily({ days })`
-  - `stats_dau_mau({ days })`
-  - `stats_peak_heatmap({ days })`
-  - `stats_top_content({ days, limit })`
-- Reuso do `recharts` já presente no projeto.
-
-### Arquivos a criar/editar
-- `src/components/admin/StatsPanel.tsx` (novo) com sub-componentes para cada gráfico.
-- `src/pages/Admin.tsx` — registrar aba.
-- `supabase/functions/admin-api/index.ts` — 4 actions novas.
+**Faixa visual no header:** mostrar um badge sutil "Moderador" ao lado do título quando o papel não for admin, para o usuário entender por que algumas opções somem.
 
 ---
 
-## 3. Polimento geral
+## 3. Métrica enviesada — Top 10 conteúdos
 
-Aplicar tudo isso de uma vez:
+`stats_top_content` usa `last_seen_at - started_at` (duração da sessão inteira), o que infla o tempo quando o usuário abriu o app antes de tocar no conteúdo.
 
-### Sidebar e navegação
-- **Sidebar mobile:** trocar a lista vertical longa por **menu hambúrguer** com `Sheet` (shadcn) — em telas <lg, header mostra logo + ícone de menu; ao tocar abre drawer com as abas.
-- **Header sticky:** título + botões "Atualizar/Sair" ficam fixos no topo da área principal (com fundo blur).
-- **Badges nas abas com pendência:**
-  - "Reportes" → contador de reportes não resolvidos das últimas 24h.
-  - "Novos cadastros" → contador de pendentes.
-  - "Erros por DNS" → bolinha vermelha se há servidor offline.
-- **Indicador "online agora"** discreto na sidebar (pulse verde + número), atualizado a cada 10s.
-
-### Estado e feedback
-- **"Atualizado há Xs"** ao lado do botão Atualizar (com tick a cada segundo).
-- **Estado vazio** com ilustração + dica nas tabelas vazias (Reportes, Diagnóstico, Estatísticas, Equipe).
-- **Confirm dialog** em todas as ações destrutivas que ainda vão direto: remover DNS, kickar sessão, rejeitar reporte.
-
-### Ajustes finos
-- Padding consistente entre cards (hoje varia entre `p-5` e `p-6`).
-- Tooltip explicando o critério de cada métrica do dashboard (já existe em alguns lugares — espalhar).
-- Atalho `Ctrl/Cmd+K` opcional → command palette para pular entre abas (usando `cmdk` se já estiver, senão fica para outro momento).
+**Arquivo:** `supabase/functions/admin-api/index.ts` (action `stats_top_content`)
+- Trocar para `last_seen_at - content_started_at`, com fallback para `started_at` se `content_started_at` estiver nulo.
+- Descartar entradas com duração > 12h (sessões zumbis ou heartbeat travado).
 
 ---
 
-## Ordem de implementação
+## 4. Heatmap em horário local
 
-1. Migration (enum `moderator` + tabela `admin_audit_log`) e RLS.
-2. Edge function `admin-api`: novas actions de equipe + estatísticas + audit.
-3. `TeamPanel` + `AuditLogPanel` + aba na sidebar.
-4. `StatsPanel` + aba na sidebar.
-5. Polimento (sidebar mobile, header sticky, badges, "atualizado há X", confirms, estados vazios).
+Hoje usa UTC, então pico real às 21h aparece à meia-noite para um usuário BR.
+
+**Arquivo:** `src/components/admin/StatsPanel.tsx`
+- O backend já devolve o grid em UTC. Deslocar no front pelo offset local (`new Date().getTimezoneOffset()`) — rotaciona a coluna da hora; muito mais simples que mudar o backend.
+- Atualizar legenda para "horário local".
 
 ---
 
-## Resumo técnico
+## 5. Convite via e-mail funciona só até 200 contas
 
-**Banco:**
-```sql
--- Adicionar 'moderator' ao enum
-ALTER TYPE app_role ADD VALUE IF NOT EXISTS 'moderator';
+`add_team_member` chama `listUsers({ perPage: 200 })`. Se a base passar disso, pessoas existentes são tratadas como novas e recebem convite duplicado.
 
--- Audit log
-CREATE TABLE admin_audit_log (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  actor_user_id uuid NOT NULL,
-  actor_email text,
-  action text NOT NULL,
-  target_user_id uuid,
-  target_email text,
-  metadata jsonb,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE admin_audit_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Admins read audit" ON admin_audit_log
-  FOR SELECT TO authenticated
-  USING (has_role(auth.uid(), 'admin'));
+**Arquivo:** `supabase/functions/admin-api/index.ts` (action `add_team_member`)
+- Paginar o `listUsers` em loop (até 5 páginas / 1000 contas) parando quando achar o e-mail.
+- Quando ainda não encontrar, seguir para o convite como hoje.
+
+---
+
+## 6. Polimento — confirmações destrutivas
+
+Substituir os `confirm()` nativos por `AlertDialog` (mesma biblioteca já usada no `TeamPanel`).
+
+**Arquivos:**
+- `src/pages/Admin.tsx` — `removeServer`, `unblockUser`, `evictSession`.
+- Já fica consistente com a remoção de membro da equipe.
+
+---
+
+## Detalhes técnicos resumidos
+
+```text
+front:
+  AdminProtectedRoute  →  has_role(admin) || has_role(moderator)
+  AdminLogin           →  redireciona se for admin OU moderator
+  hooks/useAdminRole   →  novo hook exporta { role, isAdmin, isModerator, loading }
+  Admin.tsx            →  filtra abas + esconde CTAs admin-only
+  StatsPanel           →  rotaciona heatmap por offset local
+  AlertDialog          →  troca confirm() em ações destrutivas
+
+backend (admin-api):
+  stats_top_content    →  duração = last_seen_at - COALESCE(content_started_at, started_at)
+                          descarta > 12h
+  add_team_member      →  paginação até 5 páginas no listUsers
 ```
 
-**Frontend:** dois novos painéis + ajustes em `Admin.tsx` (sidebar + header).
+Sem migrations novas — só código de função/edge.
 
-**Edge function:** ~10 novas actions, todas com `requireAdmin()` (e algumas com `requireAdminOrModerator()`).
+---
 
-Tudo respeita RLS via `has_role()` + service role no backend para escritas sensíveis (criar papel, convidar usuário).
+## O que NÃO entra nesta rodada
+
+- Notas/label do servidor no log de auditoria (item menor, dá para incluir se quiser).
+- Botão "Sair" duplicado no header (cosmético).
+- Mostrar `notes`/`label` no `AuditLogPanel` (decisão sua).
+
+Se quiser eu já adiciono esses três no escopo, é só dizer.
