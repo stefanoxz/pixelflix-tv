@@ -359,7 +359,11 @@ const Account = () => {
       </Card>
 
       <div className="flex justify-end">
-        <Button variant="destructive" onClick={() => { logout(); navigate("/login"); }}>
+        <Button
+          variant="destructive"
+          onClick={() => { logout(); navigate("/login"); }}
+          className="w-full md:w-auto tap-feedback"
+        >
           Sair da conta
         </Button>
       </div>
