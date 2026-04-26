@@ -39,7 +39,8 @@ export function LibraryTopBar({
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 -mx-3 md:-mx-6 px-3 md:px-6 py-3 mb-3 flex items-center gap-3",
+        // top-16 = 4rem = altura do Header sticky principal — evita sobreposição
+        "sticky top-16 z-30 -mx-3 md:-mx-6 px-3 md:px-6 py-3 mb-3 flex items-center gap-3",
         "bg-background/85 backdrop-blur border-b border-border/40",
         className,
       )}

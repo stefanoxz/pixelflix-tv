@@ -80,7 +80,7 @@ const App = () => (
                 path="/"
                 element={
                   <ProtectedRoute>
-                    <Index />
+                    <WithChrome><Index /></WithChrome>
                   </ProtectedRoute>
                 }
               />
