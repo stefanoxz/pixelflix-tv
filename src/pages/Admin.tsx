@@ -768,6 +768,7 @@ const Admin = () => {
           <div>
             <h1 className="text-3xl font-bold">
               {tab === "dashboard" ? "Dashboard"
+                : tab === "stats" ? "Estatísticas"
                 : tab === "monitoring" ? "Monitoramento"
                 : tab === "reports" ? "Reportes de usuários"
                 : tab === "dns-errors" ? "Erros por DNS"
@@ -775,10 +776,12 @@ const Admin = () => {
                 : tab === "endpoint-test" ? "Testar endpoint"
                 : tab === "client-diagnostics" ? "Diagnóstico de clientes"
                 : tab === "pending-signups" ? "Novos cadastros"
+                : tab === "team" ? "Equipe e permissões"
                 : "DNS / Servidores"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {tab === "dashboard" ? "Visão geral em tempo real"
+                : tab === "stats" ? "Histórico de logins, usuários ativos e conteúdos mais assistidos"
                 : tab === "monitoring" ? "Sessões ativas, consumo e bloqueios — atualiza a cada 10s"
                 : tab === "reports" ? "Problemas relatados pelos usuários direto do player"
                 : tab === "dns-errors" ? "Distribuição de falhas por servidor — atualiza a cada 10s"
@@ -786,6 +789,7 @@ const Admin = () => {
                 : tab === "endpoint-test" ? "Diagnóstico de uma DNS específica — exibe se a resposta veio direto ou via proxy"
                 : tab === "client-diagnostics" ? "Tentativas de login dos usuários com provedor, velocidade e localização — atualiza a cada 15s"
                 : tab === "pending-signups" ? "Cadastros aguardando sua aprovação para acessar o painel admin"
+                : tab === "team" ? "Gerencie quem tem acesso ao painel e veja o histórico de ações"
                 : "Cadastre as DNS autorizadas. Sem cadastro prévio, o cliente não consegue logar."}
             </p>
           </div>
