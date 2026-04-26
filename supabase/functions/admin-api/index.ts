@@ -858,6 +858,12 @@ Deno.serve(async (req) => {
     if (action === "approve_signup") {
       const id = String(payload?.user_id ?? "");
       if (!id) return bad("user_id obrigatório");
+      // Resolve e-mail do alvo (para o log)
+      let targetEmail: string | null = null;
+      try {
+        const { data: u } = await admin.auth.admin.getUserById(id);
+        targetEmail = u?.user?.email ?? null;
+      } catch { /* ignore */ }
       const { error: roleErr } = await admin
         .from("user_roles")
         .insert({ user_id: id, role: "admin" });
@@ -867,12 +873,18 @@ Deno.serve(async (req) => {
       const { error: delErr } = await admin
         .from("pending_admin_signups").delete().eq("user_id", id);
       if (delErr) { console.error(delErr.message); return internalError(); }
+      await logAudit(user.id, user.email, "approve_signup", { user_id: id, email: targetEmail, metadata: { role: "admin" } });
       return ok({ ok: true });
     }
 
     if (action === "reject_signup") {
       const id = String(payload?.user_id ?? "");
       if (!id) return bad("user_id obrigatório");
+      let targetEmail: string | null = null;
+      try {
+        const { data: u } = await admin.auth.admin.getUserById(id);
+        targetEmail = u?.user?.email ?? null;
+      } catch { /* ignore */ }
       const { error: authErr } = await admin.auth.admin.deleteUser(id);
       if (authErr) {
         console.error("[admin-api] deleteUser failed", authErr.message);
@@ -880,6 +892,7 @@ Deno.serve(async (req) => {
       }
       // Trigger ON DELETE CASCADE não cobre pending (sem FK), limpa manualmente.
       await admin.from("pending_admin_signups").delete().eq("user_id", id);
+      await logAudit(user.id, user.email, "reject_signup", { user_id: id, email: targetEmail });
       return ok({ ok: true });
     }
 
