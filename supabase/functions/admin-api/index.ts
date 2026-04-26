@@ -470,6 +470,7 @@ Deno.serve(async (req) => {
       const { error } = await admin.from("allowed_servers").upsert(
         { server_url: url, label, notes }, { onConflict: "server_url" });
       if (error) { console.error(error.message); return internalError(); }
+      await logAudit(user.id, user.email, "allow_server", { metadata: { server_url: url, label, notes } });
       return ok({ ok: true, server_url: url, warning });
     }
 
@@ -478,6 +479,7 @@ Deno.serve(async (req) => {
       if (!url) return bad("URL do servidor é obrigatória");
       const { error } = await admin.from("allowed_servers").delete().eq("server_url", url);
       if (error) { console.error(error.message); return internalError(); }
+      await logAudit(user.id, user.email, "remove_server", { metadata: { server_url: url } });
       return ok({ ok: true });
     }
 
