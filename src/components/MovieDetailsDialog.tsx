@@ -344,4 +344,5 @@ export const MovieDetailsDialog = forwardRef<HTMLDivElement, MovieDetailsDialogP
       </DialogPortal>
     </Dialog>
   );
-}
+});
+MovieDetailsDialog.displayName = "MovieDetailsDialog";
