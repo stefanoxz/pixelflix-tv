@@ -177,7 +177,7 @@ const Live = () => {
           onChange={setActiveCategory}
           totalCount={channels.length}
           favoritesCount={favorites.size}
-          className="hidden lg:flex h-[calc(100vh-160px)] sticky top-4"
+          className="hidden lg:flex h-[calc(100vh-160px)] [height:calc(100dvh-160px)] sticky top-4"
         />
 
         {/* Coluna central: player + info/EPG */}
@@ -218,7 +218,7 @@ const Live = () => {
         </div>
 
         {/* Lista de canais (tablet/desktop) */}
-        <aside className="hidden lg:flex flex-col rounded-lg bg-card border border-border/50 overflow-hidden h-[calc(100vh-160px)] sticky top-4">
+        <aside className="hidden lg:flex flex-col rounded-lg bg-card border border-border/50 overflow-hidden h-[calc(100vh-160px)] [height:calc(100dvh-160px)] sticky top-4">
           <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
             <h2 className="text-sm font-semibold flex items-center gap-2">
               <Tv className="h-4 w-4 text-primary" />
