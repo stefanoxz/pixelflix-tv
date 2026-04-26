@@ -284,17 +284,18 @@ export function PosterGrid({
             </div>
           )}
 
-          {/* Rodapé discreto: progresso da revelação. */}
+          {/* Rodapé discreto: progresso da revelação local.
+              Spinner só aparece se a query externa ainda está buscando dados. */}
           <div className="py-3 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
             {hasMore ? (
               <>
-                <Loader2 className="h-3 w-3 animate-spin" />
+                {isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
                 <span>
                   Mostrando {visibleItems.length} de {items.length}
                 </span>
               </>
             ) : items.length > pageSize ? (
-              <span>{items.length} itens carregados</span>
+              <span>{items.length} itens</span>
             ) : null}
           </div>
         </div>
