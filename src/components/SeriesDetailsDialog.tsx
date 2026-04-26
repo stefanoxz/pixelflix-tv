@@ -26,6 +26,8 @@ import {
 import { cn } from "@/lib/utils";
 import { SeriesEpisodesPanel } from "@/components/library/SeriesEpisodesPanel";
 import { useTmdbFallback } from "@/hooks/useTmdbFallback";
+import { useTmdbRating } from "@/hooks/useTmdbRating";
+import { useTmdbEpisodes } from "@/hooks/useTmdbEpisodes";
 import {
   getSeriesInfo,
   proxyImageUrl,
@@ -69,17 +71,45 @@ export function SeriesDetailsDialog({
   const releaseDate = series?.releaseDate || info?.releaseDate;
   const year = releaseDate ? releaseDate.slice(0, 4) : null;
 
+  // Always enrich with TMDB so the synopsis can be shown in pt-BR and we
+  // can resolve the tmdb_id used to fetch episode overlays / ratings.
   const { data: tmdb } = useTmdbFallback({
     type: "series",
-    hasCover: (!!sourceCover && !!sourcePlot) || !series,
+    hasCover: false,
     name: series?.name,
     year: year ?? undefined,
+    enabled: !!series && open,
   });
+
+  // Same TMDB rating that the catalog cards display — keeps the number
+  // consistent between "Séries em alta" and the details modal.
+  const { data: tmdbRating } = useTmdbRating({
+    type: "series",
+    tmdb_id: tmdb?.tmdb_id ?? undefined,
+    name: series?.name,
+    year: year ?? undefined,
+    enabled: !!series && open,
+  });
+
+  // pt-BR overlay for episodes (titles + synopses). Lazy per season.
+  const seasonKeys = data?.episodes ? Object.keys(data.episodes) : [];
+  const epOverlay = useTmdbEpisodes(tmdb?.tmdb_id ?? null, seasonKeys);
 
   if (!series) return null;
 
-  const ratingNum = series.rating_5based || 0;
-  const plot = sourcePlot || tmdb?.overview || null;
+  const providerRating = series.rating_5based || 0;
+  const tmdbVotes = tmdbRating?.vote_count ?? 0;
+  const tmdbAvg = tmdbRating?.vote_average ?? 0;
+  const useTmdb = tmdbVotes >= 20 && tmdbAvg > 0;
+  // Display unified rating in 0-10 scale. Provider's 5-based gets doubled.
+  const displayRating = useTmdb ? tmdbAvg : providerRating > 0 && providerRating < 5 ? providerRating * 2 : 0;
+  const ratingSource: "tmdb" | "provider" | null = useTmdb
+    ? "tmdb"
+    : displayRating > 0
+      ? "provider"
+      : null;
+  // Prefer TMDB pt-BR overview when available, fall back to provider plot.
+  const plot = tmdb?.overview || sourcePlot || null;
   const cast = series.cast || info?.cast;
   const director = series.director || info?.director;
   const genre = series.genre || info?.genre;
