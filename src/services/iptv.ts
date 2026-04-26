@@ -1091,7 +1091,11 @@ async function iptvLoginViaEdge(
     duration_ms: durationMs,
     speed_kbps,
   });
-  throw new Error(messageForLoginCode(result.code, result.error));
+  throw new IptvLoginError(
+    messageForLoginCode(result.code, result.error),
+    result.code,
+    (result.extra?.debug as Record<string, unknown> | undefined) ?? null,
+  );
 }
 
 export interface Episode {
