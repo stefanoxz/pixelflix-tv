@@ -69,6 +69,28 @@ const KIND_LABEL: Record<string, string> = {
 
 const HEATMAP_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
+/**
+ * Converte um grid 7x24 de UTC para horário local rotacionando as colunas
+ * pelo offset (em horas) do navegador. Quando a hora local "vira" o dia,
+ * realoca para o dia anterior/posterior.
+ */
+function rotateHeatmapToLocal(utcGrid: number[][], offsetHours: number): number[][] {
+  const off = Math.round(offsetHours); // 1h de granularidade — suficiente para BR
+  const out: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+  for (let day = 0; day < 7; day++) {
+    for (let hour = 0; hour < 24; hour++) {
+      const v = utcGrid[day]?.[hour] ?? 0;
+      if (v === 0) continue;
+      let localHour = hour + off;
+      let localDay = day;
+      while (localHour < 0) { localHour += 24; localDay = (localDay + 6) % 7; }
+      while (localHour >= 24) { localHour -= 24; localDay = (localDay + 1) % 7; }
+      out[localDay][localHour] += v;
+    }
+  }
+  return out;
+}
+
 function HeatmapCell({ value, max }: { value: number; max: number }) {
   const intensity = max === 0 ? 0 : value / max;
   return (
