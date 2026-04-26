@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
@@ -48,16 +49,17 @@ interface Props {
   onToggleFavorite?: () => void;
 }
 
-export function SeriesDetailsDialog({
-  open,
-  onOpenChange,
-  series,
-  creds,
-  onPlayEpisode,
-  onCopyExternal,
-  isFavorite,
-  onToggleFavorite,
-}: Props) {
+export const SeriesDetailsDialog = forwardRef<HTMLDivElement, Props>(
+  function SeriesDetailsDialog({
+    open,
+    onOpenChange,
+    series,
+    creds,
+    onPlayEpisode,
+    onCopyExternal,
+    isFavorite,
+    onToggleFavorite,
+  }, _ref) {
   const { data, isLoading } = useQuery({
     queryKey: ["series-info", series?.series_id],
     queryFn: () => getSeriesInfo(creds, series!.series_id),
