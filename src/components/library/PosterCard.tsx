@@ -208,6 +208,21 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
             </div>
           </div>
         )}
+
+        {/* Barra de progresso ("continue assistindo"). Só aparece quando
+            há progresso salvo (>0%). Renderizada por cima do gradient para
+            garantir contraste no canto inferior do poster. */}
+        {item.progressPct != null && item.progressPct > 0 && (
+          <div
+            className="absolute inset-x-0 bottom-0 h-1 bg-black/60"
+            aria-hidden
+          >
+            <div
+              className="h-full bg-primary"
+              style={{ width: `${Math.min(100, Math.max(0, item.progressPct))}%` }}
+            />
+          </div>
+        )}
       </button>
 
       {onToggleFavorite && (
