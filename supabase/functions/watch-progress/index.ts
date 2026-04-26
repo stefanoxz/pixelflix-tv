@@ -292,6 +292,30 @@ Deno.serve(async (req: Request) => {
     if (!server || !username || !password) {
       return jsonResp(400, { error: "missing_credentials" }, cors);
     }
+    // SSRF guard: aceita apenas servidores na allowlist E rejeita IPs
+    // privados/loopback/metadata como defesa em profundidade.
+    let parsedHost: string;
+    try {
+      parsedHost = new URL(server).hostname;
+    } catch {
+      return jsonResp(400, { error: "invalid_server_url" }, cors);
+    }
+    if (isPrivateHost(parsedHost)) {
+      return jsonResp(403, { error: "server_not_allowed" }, cors);
+    }
+    const allowed = await getAllowedServers();
+    const allowedHosts = new Set(
+      allowed.map((a) => {
+        try { return new URL(a).hostname; } catch { return ""; }
+      }).filter(Boolean),
+    );
+    const inAllowlist =
+      allowed.includes(server) ||
+      allowed.some((a) => normalizeServerUrl(a) === server) ||
+      allowedHosts.has(parsedHost);
+    if (!inAllowlist) {
+      return jsonResp(403, { error: "server_not_allowed" }, cors);
+    }
     const ok = await validateIptvCredentials(server, username, password);
     if (!ok) {
       return jsonResp(401, { error: "invalid_credentials" }, cors);
@@ -300,6 +324,7 @@ Deno.serve(async (req: Request) => {
     const token = await signProgressToken({ s: server, u: username, e: exp });
     return jsonResp(200, { token, expires_at: exp }, cors);
   }
+
 
   // --- Demais ações exigem token ---
   const authHeader = req.headers.get("authorization") ?? "";
