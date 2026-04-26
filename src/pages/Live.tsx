@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Loader2, Tv, Menu } from "lucide-react";
+import { Search, Loader2, Tv } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Player } from "@/components/Player";
+import { LibraryTopBar } from "@/components/library/LibraryTopBar";
 import { ChannelCategoryRail, type RailCategory } from "@/components/live/ChannelCategoryRail";
 import { VirtualChannelList } from "@/components/live/VirtualChannelList";
 import { MobileChannelDrawer } from "@/components/live/MobileChannelDrawer";
