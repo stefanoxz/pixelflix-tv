@@ -347,4 +347,5 @@ export const SeriesDetailsDialog = forwardRef<HTMLDivElement, Props>(
       </DialogPortal>
     </Dialog>
   );
-}
+});
+SeriesDetailsDialog.displayName = "SeriesDetailsDialog";
