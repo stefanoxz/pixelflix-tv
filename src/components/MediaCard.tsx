@@ -6,7 +6,10 @@ import { proxyImageUrl } from "@/services/iptv";
 interface MediaCardProps {
   title: string;
   cover?: string;
+  /** Provider rating (0-5 scale). Often "5" by default — used as fallback. */
   rating?: number | string;
+  /** Real TMDB rating (0-10 scale) — preferred when present. */
+  tmdbRating?: { vote_average: number | null; vote_count: number | null } | null;
   onClick?: () => void;
   aspect?: "poster" | "landscape";
   isFavorite?: boolean;
@@ -14,9 +17,27 @@ interface MediaCardProps {
 }
 
 export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
-  ({ title, cover, rating, onClick, aspect = "poster", isFavorite, onToggleFavorite }, ref) => {
-    const ratingNum = typeof rating === "string" ? parseFloat(rating) : rating;
-    const showRating = ratingNum && !isNaN(ratingNum) && ratingNum > 0;
+  ({ title, cover, rating, tmdbRating, onClick, aspect = "poster", isFavorite, onToggleFavorite }, ref) => {
+    // Prefer real TMDB rating (0-10) when we have a meaningful number of votes.
+    const tmdbVotes = tmdbRating?.vote_count ?? 0;
+    const tmdbAvg = tmdbRating?.vote_average ?? 0;
+    const useTmdb = tmdbVotes >= 20 && tmdbAvg > 0;
+
+    // Fallback: provider rating in 0-5 scale. Hide the "5.0 default" that
+    // the IPTV upstream returns for almost every entry — informs nothing.
+    const providerNum = typeof rating === "string" ? parseFloat(rating) : rating;
+    const showProvider =
+      !useTmdb &&
+      providerNum != null &&
+      !isNaN(providerNum) &&
+      providerNum > 0 &&
+      providerNum < 5;
+
+    const ratingLabel = useTmdb
+      ? tmdbAvg.toFixed(1)
+      : showProvider
+        ? providerNum!.toFixed(1)
+        : null;
     const showFav = typeof onToggleFavorite === "function";
 
     const handleFav = (e: MouseEvent) => {
