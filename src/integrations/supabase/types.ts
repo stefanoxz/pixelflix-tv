@@ -268,6 +268,30 @@ export type Database = {
         }
         Relationships: []
       }
+      tmdb_episode_cache: {
+        Row: {
+          cache_key: string
+          episodes: Json
+          fetched_at: string
+          season_number: number
+          tmdb_id: number
+        }
+        Insert: {
+          cache_key: string
+          episodes?: Json
+          fetched_at?: string
+          season_number: number
+          tmdb_id: number
+        }
+        Update: {
+          cache_key?: string
+          episodes?: Json
+          fetched_at?: string
+          season_number?: number
+          tmdb_id?: number
+        }
+        Relationships: []
+      }
       tmdb_image_cache: {
         Row: {
           backdrop_url: string | null
@@ -275,6 +299,7 @@ export type Database = {
           fetched_at: string
           overview: string | null
           poster_url: string | null
+          tmdb_id: number | null
         }
         Insert: {
           backdrop_url?: string | null
@@ -282,6 +307,7 @@ export type Database = {
           fetched_at?: string
           overview?: string | null
           poster_url?: string | null
+          tmdb_id?: number | null
         }
         Update: {
           backdrop_url?: string | null
@@ -289,6 +315,7 @@ export type Database = {
           fetched_at?: string
           overview?: string | null
           poster_url?: string | null
+          tmdb_id?: number | null
         }
         Relationships: []
       }
