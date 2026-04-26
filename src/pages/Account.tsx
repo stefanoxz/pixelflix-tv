@@ -267,31 +267,91 @@ const Account = () => {
         <div className="relative flex flex-col md:flex-row md:items-center items-center text-center md:text-left gap-5 mb-6">
           <div className="relative shrink-0">
             <div className="absolute inset-0 rounded-full bg-gradient-primary blur-xl opacity-60" />
-            <div className="relative h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-primary text-primary-foreground ring-2 ring-primary/40 flex items-center justify-center text-2xl md:text-3xl font-bold shadow-glow">
-              {(u.username || "U").charAt(0).toUpperCase()}
+            <div className="relative h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-primary text-primary-foreground ring-2 ring-primary/40 flex items-center justify-center shadow-glow">
+              <UserIcon className="h-7 w-7 md:h-9 md:w-9" strokeWidth={2.25} />
             </div>
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-2xl md:text-3xl font-bold truncate">{u.username}</h2>
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-2">
-              <Badge
-                variant="outline"
-                className={isActive
-                  ? "border-success/40 bg-success/10 text-success hover:bg-success/15"
-                  : "border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15"}
-              >
-                <span className={cn(
-                  "mr-1.5 inline-block h-1.5 w-1.5 rounded-full",
-                  isActive ? "bg-success animate-pulse" : "bg-destructive",
-                )} />
-                {isActive ? "Ativo" : "Inativo"}
-              </Badge>
-              {isTrial && (
-                <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">
-                  Trial
-                </Badge>
-              )}
-            </div>
+            {editingName ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    ref={nameInputRef}
+                    value={nameDraft}
+                    onChange={(e) => {
+                      setNameDraft(e.target.value);
+                      if (nameError) setNameError(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveName();
+                      if (e.key === "Escape") cancelEditName();
+                    }}
+                    placeholder="Seu primeiro nome"
+                    maxLength={20}
+                    className="h-10 text-lg font-semibold"
+                    aria-invalid={!!nameError}
+                  />
+                  <Button size="sm" onClick={saveName} className="gap-1 shrink-0">
+                    <Check className="h-4 w-4" /> Salvar
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={cancelEditName} className="shrink-0">
+                    Cancelar
+                  </Button>
+                </div>
+                {nameError && (
+                  <p className="text-xs text-destructive">{nameError}</p>
+                )}
+                {displayName && (
+                  <button
+                    type="button"
+                    onClick={removeName}
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <Trash2 className="h-3 w-3" /> Remover nome personalizado
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-center md:justify-start gap-2 group">
+                  <h2 className="text-2xl md:text-3xl font-bold truncate">
+                    {displayName || u.username}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={startEditName}
+                    aria-label="Editar nome de exibição"
+                    className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors tap-feedback"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {displayName && (
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                    Login: {u.username}
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-2">
+                  <Badge
+                    variant="outline"
+                    className={isActive
+                      ? "border-success/40 bg-success/10 text-success hover:bg-success/15"
+                      : "border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15"}
+                  >
+                    <span className={cn(
+                      "mr-1.5 inline-block h-1.5 w-1.5 rounded-full",
+                      isActive ? "bg-success animate-pulse" : "bg-destructive",
+                    )} />
+                    {isActive ? "Ativo" : "Inativo"}
+                  </Badge>
+                  {isTrial && (
+                    <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">
+                      Trial
+                    </Badge>
+                  )}
+                </div>
+              </>
+            )}
           </div>
           {mySession && (
             <Button variant="outline" size="sm" onClick={endSession} className="gap-2 self-center md:self-center tap-feedback">
