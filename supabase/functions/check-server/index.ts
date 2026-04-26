@@ -162,14 +162,18 @@ Deno.serve(async (req) => {
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData?.user) return json({ error: "Sessão inválida" }, 401);
 
-    const { data: isAdmin, error: roleErr } = await admin.rpc("has_role", {
-      _user_id: userData.user.id,
-      _role: "admin",
-    });
+    // Consulta papéis direto em user_roles com service-role (bypassa RLS).
+    // Não usamos has_role() RPC porque a função SECURITY DEFINER bloqueia
+    // chamadas sem auth.uid() (caso típico de chamadas server-side).
+    const { data: roleRows, error: roleErr } = await admin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userData.user.id);
     if (roleErr) {
       console.error("[check-server] role check error", roleErr.message);
       return json({ error: "Erro interno" }, 500);
     }
+    const isAdmin = (roleRows ?? []).some((r) => r.role === "admin");
     if (!isAdmin) return json({ error: "Acesso restrito a administradores" }, 401);
 
     const body = await req.json().catch(() => ({}));
