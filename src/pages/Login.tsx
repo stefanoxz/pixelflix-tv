@@ -61,8 +61,7 @@ const Login = () => {
       toast.success(`Bem-vindo, ${data.user_info.username}!`);
       navigate("/sync");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      toast.error(msg);
+      handleLoginError(err);
     } finally {
       setLoading(false);
     }
