@@ -172,27 +172,6 @@ function CatBtn({
   );
 }
 
-/** Botão flutuante mobile para abrir o drawer. */
-export function MobileChannelTrigger({
-  count,
-  onClick,
-}: {
-  count: number;
-  onClick: () => void;
-}) {
-  return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button
-          onClick={onClick}
-          size="lg"
-          className="lg:hidden fixed bottom-4 right-4 z-40 shadow-lg shadow-primary/30 rounded-full px-5"
-        >
-          <Tv className="h-4 w-4 mr-2" />
-          Canais
-          <span className="ml-2 text-[10px] tabular-nums opacity-80">{count}</span>
-        </Button>
-      </SheetTrigger>
-    </Sheet>
-  );
-}
+// Nota: o FAB para abrir o drawer vive em `Live.tsx` (posicionado acima da
+// BottomNav). Mantemos esse arquivo focado apenas no Sheet — sem trigger
+// duplicado.

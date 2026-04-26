@@ -172,3 +172,15 @@
   .group:hover .group-hover\:scale-110,
   .group:hover .group-hover\:scale-\[1\.06\] { transform: none !important; }
 }
+
+/* Respeita preferência do usuário por menos movimento — desliga animações
+   contínuas (blob, float, shimmer) que podem causar enjoo ou drenar bateria. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-blob,
+  .animate-float,
+  .skeleton-shimmer { animation: none !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
