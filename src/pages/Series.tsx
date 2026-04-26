@@ -444,6 +444,10 @@ const SeriesPage = () => {
               }}
               streamId={playingEp.ep.id}
               contentKind="episode"
+              initialTime={resumeAt}
+              onProgress={(t, d) =>
+                saveProgress(makeProgressKey("episode", playingEp.ep.id), t, d)
+              }
               onEnded={handleEpisodeEnded}
             />
             <NextEpisodeCard
@@ -463,6 +467,35 @@ const SeriesPage = () => {
           </>
         )}
       </PlayerOverlay>
+
+      <ResumeDialog
+        open={!!pendingResume}
+        onOpenChange={(o) => !o && setPendingResume(null)}
+        resumeAt={pendingResume?.t ?? 0}
+        duration={pendingResume?.d}
+        title={pendingResume?.ep.title}
+        onResume={() => {
+          if (!pendingResume) return;
+          setResumeAt(pendingResume.t);
+          setPlayingEp({
+            ep: pendingResume.ep,
+            seriesId: pendingResume.seriesId,
+            coverFallback: pendingResume.coverFallback,
+          });
+          setPendingResume(null);
+        }}
+        onRestart={() => {
+          if (!pendingResume) return;
+          clearProgress(makeProgressKey("episode", pendingResume.ep.id));
+          setResumeAt(0);
+          setPlayingEp({
+            ep: pendingResume.ep,
+            seriesId: pendingResume.seriesId,
+            coverFallback: pendingResume.coverFallback,
+          });
+          setPendingResume(null);
+        }}
+      />
     </div>
   );
 };
