@@ -1000,7 +1000,7 @@ const Admin = () => {
                             {Math.floor(s.duration_s / 60)}min
                           </div>
                           <div className="col-span-2 text-right">
-                            <Button size="sm" variant="outline" onClick={() => evictSession(s.anon_user_id)}>
+                            <Button size="sm" variant="outline" onClick={() => setConfirmEvictSession(s)}>
                               <X className="h-3 w-3 mr-1" />Encerrar
                             </Button>
                           </div>
