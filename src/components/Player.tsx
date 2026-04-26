@@ -1009,9 +1009,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                       updateStatus("stream_error", "mpegts sem frames em 8s");
                       setRootCauseOnce("bootstrap_timeout", "mpegts sem frames em 8s");
                       setError({
-                        title: "MPEG-TS sem resposta",
-                        description: "Tente o motor HLS ou abra no VLC.",
+                        title: "Canal indisponível no momento",
+                        description: "Esse canal não está transmitindo agora. Tente outro canal.",
                         copyUrl: copyTarget,
+                        external: true,
                       });
                     }, MPEGTS_BOOTSTRAP_TIMEOUT_MS);
                     return;
@@ -1021,9 +1022,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                   updateStatus("stream_error", "mpegts sem frames em 8s");
                   setRootCauseOnce("bootstrap_timeout", "mpegts sem frames em 8s");
                   setError({
-                    title: "MPEG-TS sem resposta",
-                    description: "Tente o motor HLS ou abra no VLC.",
+                    title: "Canal indisponível no momento",
+                    description: "Esse canal não está transmitindo agora. Tente outro canal.",
                     copyUrl: copyTarget,
+                    external: true,
                   });
                 }, MPEGTS_BOOTSTRAP_TIMEOUT_MS);
 
@@ -1219,6 +1221,29 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                     clearStallTimeout();
                   }
                   return;
+                }
+
+                // Manifest fatal failure (ex: stream-proxy 502 porque o
+                // upstream IPTV devolveu erro). Antes de cair na rotina de
+                // network recovery do hls.js (que só faz 1 retry e depois
+                // espera o bootstrap_timeout de 12s), tenta trocar pra mpegts:
+                // o engine .ts direto às vezes funciona em canais Xtream cujo
+                // .m3u8 está quebrado/bloqueado no upstream.
+                if (
+                  data.fatal &&
+                  (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR ||
+                    data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT ||
+                    data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR)
+                ) {
+                  const reason = `manifestLoadError${httpStatus ? ` http=${httpStatus}` : ""}`;
+                  // tryActivateProxyAndRestart só dispara o switch HLS→mpegts
+                  // se for canal ao vivo Xtream e ainda não tentamos. Em
+                  // séries/filmes/HLS não-Xtream vira no-op e seguimos com
+                  // a recuperação tradicional abaixo.
+                  if (tryActivateProxyAndRestart(reason)) {
+                    try { hls.stopLoad(); } catch { /* noop */ }
+                    return;
+                  }
                 }
 
                 // Track repeated frag-load errors when manifest is ready but
