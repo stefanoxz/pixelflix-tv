@@ -1,22 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useIptv } from "@/context/useIptv";
 
 /**
  * Persistência de progresso de reprodução ("continue assistindo").
  *
- * Modelo híbrido:
+ * Modelo híbrido SEGURO (gateway via edge function):
  * - LOCAL (localStorage)  → fonte de verdade durante a sessão. Resposta
  *   instantânea, funciona offline, sobrevive a refresh.
- * - REMOTO (Supabase `watch_progress`) → sincroniza entre dispositivos
- *   da MESMA linha IPTV (chave: server_url + username). Não há
- *   isolamento por pessoa — quem usa a mesma conta IPTV vê o mesmo
- *   progresso (modelo "perfil único por linha").
+ * - REMOTO (Supabase `watch_progress`, via edge function `watch-progress`) →
+ *   sincroniza entre dispositivos da MESMA linha IPTV.
+ *
+ * Segurança: a tabela `watch_progress` está isolada — só o backend
+ * (service_role, dentro da edge function) lê/grava. O cliente troca as
+ * credenciais IPTV (já validadas) por um token HMAC de 24h e usa ele em
+ * cada chamada. Sem o token (= sem credencial IPTV válida), não há acesso.
  *
  * Estratégia de merge (LWW — last-write-wins):
  * - Ao montar: lê remoto, compara com local entrada-a-entrada por
  *   `updatedAt`, mantém a mais recente em ambos os lados.
  * - Ao escrever: grava local IMEDIATO + agenda upsert remoto debounced 5s.
- * - Realtime: assina mudanças do canal e funde no estado local.
+ * - Foco da janela: re-lê remoto (substitui realtime — seria complexo
+ *   broadcastar updates feitos por service_role).
  *
  * Chave de storage local: `pixelflix:progress:<user>`
  * Estrutura:               Record<itemKey, ProgressEntry>
@@ -52,6 +57,8 @@ export const COMPLETED_RATIO = 0.95;
 const MAX_ENTRIES = 200;
 /** Debounce do upsert remoto. */
 const REMOTE_FLUSH_MS = 5_000;
+/** Re-sync remoto quando a aba volta ao foco, no máximo uma vez por X ms. */
+const REFOCUS_SYNC_THROTTLE_MS = 30_000;
 
 export function makeProgressKey(kind: ProgressKind, id: number | string): string {
   return `${kind}:${id}`;
@@ -61,7 +68,7 @@ function storageKeyFor(scope: string | null | undefined): string | null {
   return scope ? `pixelflix:progress:${scope}` : null;
 }
 
-/** Normaliza server_url para casar com o que vai no banco (lower + sem barra final). */
+/** Normaliza server_url para casar com o que vai no banco. */
 function normalizeServerUrl(url: string | null | undefined): string {
   if (!url) return "";
   return url.trim().toLowerCase().replace(/\/+$/, "");
@@ -83,7 +90,6 @@ function readMap(storageKey: string | null): ProgressMap {
 function writeMap(storageKey: string | null, map: ProgressMap): void {
   if (!storageKey) return;
   try {
-    // LRU: mantém só os MAX_ENTRIES mais recentes.
     const entries = Object.entries(map);
     if (entries.length > MAX_ENTRIES) {
       entries.sort((a, b) => b[1].updatedAt - a[1].updatedAt);
@@ -124,6 +130,88 @@ function rowToEntry(row: RemoteRow): ProgressEntry {
   };
 }
 
+// ---------- Token cache (HMAC, 24h) ----------
+
+interface TokenCacheEntry {
+  token: string;
+  expiresAt: number; // epoch seconds
+}
+
+function tokenCacheKey(server: string, username: string): string {
+  return `pixelflix:wp-token:${server}::${username}`;
+}
+
+function readToken(server: string, username: string): string | null {
+  if (!server || !username) return null;
+  try {
+    const raw = localStorage.getItem(tokenCacheKey(server, username));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as TokenCacheEntry;
+    // Margem de 60s pra evitar bater no servidor com token quase expirado.
+    if (parsed.expiresAt > Math.floor(Date.now() / 1000) + 60) return parsed.token;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function saveToken(server: string, username: string, token: string, expiresAt: number) {
+  try {
+    localStorage.setItem(
+      tokenCacheKey(server, username),
+      JSON.stringify({ token, expiresAt }),
+    );
+  } catch { /* ignora */ }
+}
+
+function clearToken(server: string, username: string) {
+  try { localStorage.removeItem(tokenCacheKey(server, username)); } catch { /* ignora */ }
+}
+
+async function fetchToken(
+  server: string,
+  username: string,
+  password: string,
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke("watch-progress", {
+      body: { action: "auth", server, username, password },
+    });
+    if (error) {
+      console.warn("[watch-progress] auth failed:", error);
+      return null;
+    }
+    if (!data?.token || !data?.expires_at) return null;
+    saveToken(server, username, data.token, Number(data.expires_at));
+    return String(data.token);
+  } catch (err) {
+    console.warn("[watch-progress] auth exception:", err);
+    return null;
+  }
+}
+
+async function callWithToken(
+  token: string,
+  body: Record<string, unknown>,
+): Promise<{ ok: boolean; data?: any; expired?: boolean }> {
+  try {
+    const { data, error } = await supabase.functions.invoke("watch-progress", {
+      body,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (error) {
+      // Tenta detectar token expirado para forçar re-auth.
+      const msg = String(error.message ?? "").toLowerCase();
+      const expired = msg.includes("invalid_or_expired") || msg.includes("401");
+      return { ok: false, expired };
+    }
+    return { ok: true, data };
+  } catch (err) {
+    console.warn("[watch-progress] call failed:", err);
+    return { ok: false };
+  }
+}
+
 /**
  * Hook reativo para gerenciar progresso. O `version` interno faz com que
  * componentes que usam `getProgress`/`listInProgress` recalculem ao salvar.
@@ -139,19 +227,40 @@ export function useWatchProgress(
   const storageKey = storageKeyFor(scopeKey);
   const [version, setVersion] = useState(0);
 
-  // Snapshot estável das credenciais para uso dentro de listeners/timers.
+  // Pega a senha da sessão IPTV — necessária pra trocar por token.
+  // O hook é chamado em vários lugares (ContinueWatchingRail, Movies, Series),
+  // todos dentro de IptvProvider. Se algum dia for usado fora, useIptv lança
+  // — mas isso é o comportamento desejado.
+  const { session } = useIptv();
+  const password = session?.creds?.password ?? null;
+
   const usernameRef = useRef<string | null>(scopeKey ?? null);
   const serverRef = useRef<string>(normalizeServerUrl(serverUrl));
+  const passwordRef = useRef<string | null>(password);
   useEffect(() => {
     usernameRef.current = scopeKey ?? null;
     serverRef.current = normalizeServerUrl(serverUrl);
-  }, [scopeKey, serverUrl]);
+    passwordRef.current = password;
+  }, [scopeKey, serverUrl, password]);
 
-  // Buffer de upserts pendentes — evita uma chamada por save().
   const pendingRef = useRef<Map<string, ProgressEntry>>(new Map());
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Marca chaves que já fundimos (evita disparar realtime echo de nós mesmos).
-  const lastWriteAtRef = useRef<Map<string, number>>(new Map());
+
+  /**
+   * Garante um token válido. Reusa cache do localStorage se disponível;
+   * senão troca credenciais por um novo. Retorna null se faltar info ou
+   * o servidor recusar a credencial.
+   */
+  const ensureToken = useCallback(async (): Promise<string | null> => {
+    const server = serverRef.current;
+    const username = usernameRef.current;
+    const pass = passwordRef.current;
+    if (!server || !username) return null;
+    const cached = readToken(server, username);
+    if (cached) return cached;
+    if (!pass) return null;
+    return await fetchToken(server, username, pass);
+  }, []);
 
   const flushRemote = useCallback(async () => {
     flushTimerRef.current = null;
@@ -160,12 +269,10 @@ export function useWatchProgress(
     if (!username || !server || pendingRef.current.size === 0) return;
     const batch = Array.from(pendingRef.current.entries());
     pendingRef.current.clear();
-    const rows = batch.map(([item_key, e]) => {
+    const entries = batch.map(([item_key, e]) => {
       const [kind, ...rest] = item_key.split(":");
       const content_id = rest.join(":");
       return {
-        server_url: server,
-        username,
         item_key,
         kind,
         content_id,
@@ -177,26 +284,39 @@ export function useWatchProgress(
         updated_at: new Date(e.updatedAt).toISOString(),
       };
     });
-    try {
-      const { error } = await supabase
-        .from("watch_progress")
-        .upsert(rows, { onConflict: "server_url,username,item_key" });
-      if (error) throw error;
-    } catch (err) {
-      // Falha de rede: re-coloca na fila p/ próxima tentativa, sem bloquear UX.
+
+    let token = await ensureToken();
+    if (!token) {
+      // Sem token — rebufera pra próxima tentativa, mas evita loop infinito
+      // descartando o batch se nem dá pra autenticar (sem senha em sessão).
+      if (passwordRef.current) {
+        for (const [k, v] of batch) {
+          const existing = pendingRef.current.get(k);
+          if (!existing || existing.updatedAt < v.updatedAt) {
+            pendingRef.current.set(k, v);
+          }
+        }
+      }
+      return;
+    }
+
+    let res = await callWithToken(token, { action: "upsert", entries });
+    if (!res.ok && res.expired) {
+      // Token expirado: limpa cache e tenta uma vez mais.
+      clearToken(serverRef.current, usernameRef.current ?? "");
+      token = await ensureToken();
+      if (token) res = await callWithToken(token, { action: "upsert", entries });
+    }
+    if (!res.ok) {
+      // Falha: re-enfileira (sem perder dados).
       for (const [k, v] of batch) {
         const existing = pendingRef.current.get(k);
         if (!existing || existing.updatedAt < v.updatedAt) {
           pendingRef.current.set(k, v);
         }
       }
-      // log silencioso — sync é "best effort"
-      if (typeof console !== "undefined") {
-        // eslint-disable-next-line no-console
-        console.warn("[watch_progress] upsert failed:", err);
-      }
     }
-  }, []);
+  }, [ensureToken]);
 
   const scheduleFlush = useCallback(() => {
     if (flushTimerRef.current != null) return;
@@ -204,29 +324,24 @@ export function useWatchProgress(
   }, [flushRemote]);
 
   const enqueueRemote = useCallback(
-    (key: string, entry: ProgressEntry | null) => {
+    async (key: string, entry: ProgressEntry | null) => {
       if (!serverRef.current || !usernameRef.current) return;
-      lastWriteAtRef.current.set(key, entry?.updatedAt ?? Date.now());
       if (entry == null) {
-        // Delete: flush imediato (não tem ganho em segurar).
-        const username = usernameRef.current;
-        const server = serverRef.current;
-        void supabase
-          .from("watch_progress")
-          .delete()
-          .match({ server_url: server, username, item_key: key })
-          .then(({ error }) => {
-            if (error && typeof console !== "undefined") {
-              // eslint-disable-next-line no-console
-              console.warn("[watch_progress] delete failed:", error);
-            }
-          });
+        // Delete: imediato, fora do batch.
+        let token = await ensureToken();
+        if (!token) return;
+        let res = await callWithToken(token, { action: "delete", item_key: key });
+        if (!res.ok && res.expired) {
+          clearToken(serverRef.current, usernameRef.current);
+          token = await ensureToken();
+          if (token) res = await callWithToken(token, { action: "delete", item_key: key });
+        }
         return;
       }
       pendingRef.current.set(key, entry);
       scheduleFlush();
     },
-    [scheduleFlush],
+    [ensureToken, scheduleFlush],
   );
 
   // Sincroniza entre abas/janelas do mesmo navegador.
@@ -239,105 +354,67 @@ export function useWatchProgress(
     return () => window.removeEventListener("storage", onStorage);
   }, [storageKey]);
 
-  // Merge inicial remoto → local + canal realtime.
+  // Pull inicial do remoto (e re-pull em foco, com throttle).
+  const lastSyncAtRef = useRef(0);
+  const pullRemote = useCallback(async () => {
+    const storage = storageKey;
+    const username = usernameRef.current;
+    const server = serverRef.current;
+    if (!storage || !username || !server) return;
+    const token = await ensureToken();
+    if (!token) return;
+    const res = await callWithToken(token, { action: "list" });
+    if (!res.ok) {
+      if (res.expired) clearToken(server, username);
+      return;
+    }
+    const rows: RemoteRow[] = Array.isArray(res.data?.entries) ? res.data.entries : [];
+    const local = readMap(storage);
+    let changed = false;
+    const remoteByKey = new Map<string, ProgressEntry>();
+    for (const row of rows) {
+      const remoteEntry = rowToEntry(row);
+      remoteByKey.set(row.item_key, remoteEntry);
+      const localEntry = local[row.item_key];
+      if (!localEntry || localEntry.updatedAt < remoteEntry.updatedAt) {
+        local[row.item_key] = remoteEntry;
+        changed = true;
+      }
+    }
+    // Locals mais novos que o remoto: enfileira pra subir.
+    for (const [k, v] of Object.entries(local)) {
+      const r = remoteByKey.get(k);
+      if (!r || r.updatedAt < v.updatedAt) {
+        pendingRef.current.set(k, v);
+      }
+    }
+    if (pendingRef.current.size > 0) scheduleFlush();
+    if (changed) {
+      writeMap(storage, local);
+      setVersion((v) => v + 1);
+    }
+    lastSyncAtRef.current = Date.now();
+  }, [ensureToken, scheduleFlush, storageKey]);
+
   useEffect(() => {
     if (!storageKey || !scopeKey) return;
-    const server = normalizeServerUrl(serverUrl);
-    if (!server) return;
+    void pullRemote();
+  }, [storageKey, scopeKey, pullRemote]);
 
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("watch_progress")
-          .select("*")
-          .eq("server_url", server)
-          .eq("username", scopeKey);
-        if (error) throw error;
-        if (cancelled || !data) return;
-
-        const local = readMap(storageKey);
-        let changed = false;
-        // Upserts vindos do remoto que ainda precisam ir pro local.
-        for (const row of data as RemoteRow[]) {
-          const remoteEntry = rowToEntry(row);
-          const localEntry = local[row.item_key];
-          if (!localEntry || localEntry.updatedAt < remoteEntry.updatedAt) {
-            local[row.item_key] = remoteEntry;
-            changed = true;
-          }
-        }
-        // Locals mais novos que o remoto: enfileira pra subir.
-        const remoteByKey = new Map<string, ProgressEntry>();
-        for (const row of data as RemoteRow[]) {
-          remoteByKey.set(row.item_key, rowToEntry(row));
-        }
-        for (const [k, v] of Object.entries(local)) {
-          const r = remoteByKey.get(k);
-          if (!r || r.updatedAt < v.updatedAt) {
-            pendingRef.current.set(k, v);
-          }
-        }
-        if (pendingRef.current.size > 0) scheduleFlush();
-        if (changed) {
-          writeMap(storageKey, local);
-          setVersion((v) => v + 1);
-        }
-      } catch (err) {
-        if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
-          console.warn("[watch_progress] initial sync failed:", err);
-        }
-      }
-    })();
-
-    // Realtime: reflete progresso de outro dispositivo na mesma linha.
-    const channel = supabase
-      .channel(`watch_progress:${server}:${scopeKey}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "watch_progress",
-          filter: `username=eq.${scopeKey}`,
-        },
-        (payload) => {
-          // Filtra por server_url no client (filtro composto não suportado).
-          const row = (payload.new ?? payload.old) as RemoteRow | null;
-          if (!row || row.server_url !== server) return;
-
-          const map = readMap(storageKey);
-          if (payload.eventType === "DELETE") {
-            if (map[row.item_key]) {
-              delete map[row.item_key];
-              writeMap(storageKey, map);
-              setVersion((v) => v + 1);
-            }
-            return;
-          }
-          const newRow = payload.new as RemoteRow;
-          const incoming = rowToEntry(newRow);
-          // Echo da nossa própria escrita: ignora se for o mesmo updatedAt.
-          const ourLast = lastWriteAtRef.current.get(newRow.item_key);
-          if (ourLast && Math.abs(ourLast - incoming.updatedAt) < 1000) return;
-
-          const existing = map[newRow.item_key];
-          if (!existing || existing.updatedAt < incoming.updatedAt) {
-            map[newRow.item_key] = incoming;
-            writeMap(storageKey, map);
-            setVersion((v) => v + 1);
-          }
-        },
-      )
-      .subscribe();
-
-    return () => {
-      cancelled = true;
-      void supabase.removeChannel(channel);
+  // Re-sync ao voltar ao foco (no lugar do realtime).
+  useEffect(() => {
+    const onFocus = () => {
+      if (Date.now() - lastSyncAtRef.current < REFOCUS_SYNC_THROTTLE_MS) return;
+      void pullRemote();
     };
-  }, [storageKey, scopeKey, serverUrl, scheduleFlush]);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") onFocus();
+    });
+    return () => {
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [pullRemote]);
 
   // Flush ao desmontar / fechar aba.
   useEffect(() => {
@@ -366,11 +443,6 @@ export function useWatchProgress(
     [storageKey, version],
   );
 
-  /**
-   * Salva progresso. `meta` é opcional e enriquece a entrada com dados
-   * que serão úteis para o rail "Continue assistindo" e para os cards
-   * de séries — sem precisar de uma segunda chamada ao catálogo.
-   */
   const saveProgress = useCallback(
     (
       key: string,
@@ -383,18 +455,17 @@ export function useWatchProgress(
 
       const map = readMap(storageKey);
 
-      // Concluído: remove da lista (não queremos sugerir "continuar do final").
+      // Concluído: remove da lista.
       if (currentTime / duration >= COMPLETED_RATIO) {
         if (map[key]) {
           delete map[key];
           writeMap(storageKey, map);
-          enqueueRemote(key, null);
+          void enqueueRemote(key, null);
           setVersion((v) => v + 1);
         }
         return;
       }
 
-      // Muito no início: ainda não vale guardar (evita poluir).
       if (currentTime < MIN_RESUME_SECONDS) return;
 
       const existing = map[key];
@@ -409,7 +480,7 @@ export function useWatchProgress(
       };
       map[key] = merged;
       writeMap(storageKey, map);
-      enqueueRemote(key, merged);
+      void enqueueRemote(key, merged);
       setVersion((v) => v + 1);
     },
     [storageKey, enqueueRemote],
@@ -422,7 +493,7 @@ export function useWatchProgress(
       if (!map[key]) return;
       delete map[key];
       writeMap(storageKey, map);
-      enqueueRemote(key, null);
+      void enqueueRemote(key, null);
       setVersion((v) => v + 1);
     },
     [storageKey, enqueueRemote],
