@@ -236,10 +236,13 @@ export function SeriesDetailsDialog({
                       <span className="truncate max-w-[260px]">{genre}</span>
                     </span>
                   )}
-                  {ratingNum > 0 && (
+                  {displayRating > 0 && (
                     <span className="flex items-center gap-2 text-sm font-medium">
                       <Star className="h-[18px] w-[18px] fill-yellow-400 text-yellow-400" />
-                      <span>{ratingNum.toFixed(1)}</span>
+                      <span>{displayRating.toFixed(1)}</span>
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80 font-semibold">
+                        {ratingSource === "tmdb" ? "TMDB" : "/10"}
+                      </span>
                     </span>
                   )}
                 </div>
@@ -326,6 +329,7 @@ export function SeriesDetailsDialog({
                 episodesBySeason={data.episodes}
                 onPlay={onPlayEpisode}
                 onCopyExternal={onCopyExternal}
+                overlay={epOverlay}
               />
             ) : isLoading ? (
               <div className="text-sm text-muted-foreground flex items-center gap-2">
