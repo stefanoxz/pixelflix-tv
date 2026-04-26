@@ -35,7 +35,8 @@ function colsFor(width: number): number {
   if (width >= 1024) return 6; // lg
   if (width >= 768) return 5;  // md
   if (width >= 640) return 4;  // sm
-  return 3;
+  if (width >= 360) return 3;  // mobile padrão
+  return 2;                    // telas muito pequenas (<360px)
 }
 
 /**
