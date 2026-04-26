@@ -4,6 +4,14 @@ import { cn } from "@/lib/utils";
 import { proxyImageUrl } from "@/services/iptv";
 import { useTmdbFallback } from "@/hooks/useTmdbFallback";
 
+// Avalia uma única vez por sessão. Em telas touch puras (sem mouse), pular o
+// prefetch por hover evita queimar banda em 3G/4G — `onMouseEnter` ainda
+// dispara em alguns navegadores móveis durante taps/scroll.
+const HAS_REAL_HOVER =
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
 export interface PosterItem {
   id: number;
   title: string;

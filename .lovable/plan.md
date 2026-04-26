@@ -1,95 +1,85 @@
-# Análise: Bugs introduzidos pelas mudanças mobile/PWA
+## Objetivo
 
-Fiz uma varredura completa do sistema buscando regressões pelas mudanças recentes (BottomNav, safe-areas, dvh, hover guard, Touch Optimization, novas animações). Encontrei **5 bugs reais** + **3 melhorias pendentes**.
+Melhorar a percepção de velocidade e reduzir travamentos em 3G/4G nas grades de **Filmes** e **Séries**, sem alterar o comportamento já bom no desktop. As mudanças são todas aditivas (skeletons mais ricos e cargas progressivas mais agressivas no mobile) e não tocam na lógica de negócio nem nas queries existentes.
 
----
+## Diagnóstico atual
 
-## 🔴 BUGS CRÍTICOS
+O que já existe e está bom (vamos preservar):
+- `PosterGrid` já é virtualizado (`@tanstack/react-virtual`) — só renderiza linhas visíveis.
+- `PosterCard` já usa `loading="lazy"` + `decoding="async"` nas imagens.
+- Já existe paginação incremental client-side (`pageSize=120`, `pageIncrement=60`).
+- Já existem skeletons no estado vazio quando `isLoading=true`.
+- `useTmdbFallback` só dispara quando não há cover ou a imagem original falha.
 
-### 1. Página inicial (`/`) sem BottomNav e sem padding-bottom
-`src/pages/Index.tsx` renderiza `<Header />` direto e **não usa o wrapper `WithChrome`** do `App.tsx`. Resultado:
-- No mobile, a tela `/` (Highlights) **não tem barra inferior** — usuário fica sem navegação.
-- Conteúdo no rodapé (último carrossel) fica **escondido atrás de onde a barra apareceria** em outras páginas, criando inconsistência visual.
-- Header é renderizado duas vezes em rotas que usam Index? Não — só em `/`. Mas o padrão fica quebrado.
+O que está machucando o mobile:
+1. **`pageSize=120` é alto demais para celular** — em 3G/4G, são 120 requests TMDB/imagens disparando ao mesmo tempo no primeiro paint, mesmo virtualizado (virtualizer renderiza ~10 linhas, mas as 120 covers já entram em fila no browser).
+2. **Sem skeleton enquanto rola e revela mais itens** — a próxima página aparece "em branco" até a imagem chegar.
+3. **Skeleton inicial só aparece quando `items.length === 0`** — durante refetch silencioso (volta da página, troca de categoria com cache frio) não há feedback visual.
+4. **`onHoverItem` faz prefetch da sinopse** — em mobile não há hover real, então o `onMouseEnter` dispara em scroll/touch e queima banda. Não é problema no desktop.
+5. **Re-render do grid inteiro em cada troca de categoria** — sem skeleton de transição, dá sensação de travada.
 
-**Fix**: Eliminar o `<Header />` interno do `Index.tsx` e envolver `/` com `WithChrome` no `App.tsx`, igual `/live`, `/movies`, etc.
+## Mudanças propostas
 
-### 2. FAB "Canais" duplicado em `/live`
-`Live.tsx` linha 249 tem um FAB próprio, e `MobileChannelDrawer.tsx` linha 189 tem **outro FAB** (`fixed bottom-4 right-4`). Os dois aparecem juntos no mobile, sobrepostos.
+Todas escopadas a `PosterGrid.tsx` + `PosterCard.tsx`, com gates por viewport pra não afetar o desktop.
 
-**Fix**: Remover o FAB interno do `MobileChannelDrawer` (ele já é só um wrapper de `<Sheet>`); manter apenas o do `Live.tsx` que já está posicionado acima do BottomNav.
+### 1. Page size adaptativo por viewport
+- `PosterGrid` já recebe `pageSize` como prop. Manter o default `120` (desktop), mas detectar mobile internamente via `window.matchMedia("(max-width: 767px)")` e usar:
+  - Mobile: `pageSize=36`, `pageIncrement=24`
+  - Desktop: `pageSize=120`, `pageIncrement=60` (inalterado)
+- Reduz drasticamente a fila inicial de imagens em 3G/4G sem mudar o comportamento PC.
 
-### 3. `Movies.tsx` e `Series.tsx` ainda usam `100vh` fixo
-```
-src/pages/Movies.tsx:215  style={{ height: "calc(100vh - 7rem)", minHeight: 520 }}
-src/pages/Series.tsx:319  style={{ height: "calc(100vh - 7rem)", minHeight: 520 }}
-src/pages/Live.tsx:180,221  h-[calc(100vh-160px)]
-```
-A barra dinâmica do Chrome/Safari mobile vai cortar conteúdo. O `LibraryShell` já foi corrigido para `dvh`, mas essas duas páginas ficaram para trás.
+### 2. Skeleton por célula durante revelação progressiva
+No `PosterCard`, adicionar um skeleton shimmer atrás da `<img>` que some quando ela carrega (`onLoad`). Isso preenche o "branco" enquanto a imagem chega — útil em qualquer rede, mas crítico em 3G.
+- Sem custo extra: só uma `div` absoluta com `skeleton-shimmer` (classe já existe em `index.css`) + estado `loaded`.
+- No desktop com cache quente, a imagem já vem cached e o skeleton some em <16ms (invisível).
 
-**Fix**: Trocar para `calc(100dvh - 7rem)` com fallback `vh`.
+### 3. Skeleton overlay durante refetch / troca de categoria
+- Hoje skeletons só aparecem quando `items.length === 0`. Adicionar uma faixa de skeleton sobreposta na primeira linha quando `isLoading && items.length > 0` (refetch silencioso). Mantém os pôsteres atuais visíveis mas sinaliza atualização.
+- Opcional/leve: 1 div com `opacity-60` + spinner pequeno no header, sem repintar a grade.
 
-### 4. Conflito entre `Header` sticky e `LibraryTopBar` sticky
-- `Header`: `sticky top-0 z-40`
-- `LibraryTopBar`: `sticky top-0 z-30`
+### 4. Hover prefetch só com mouse real
+- Trocar `onMouseEnter`/`onFocus` no `PosterCard` por: só dispara `onHover` se `window.matchMedia("(hover: hover) and (pointer: fine)").matches`.
+- Em mobile, o prefetch ainda acontece via `onClick` (já é o comportamento atual no Drawer).
+- Desktop fica idêntico.
 
-Quando rolagem ocorre dentro de `<main>` (não scroll-container), os dois ficam grudados em `top:0`. O LibraryTopBar deveria começar **abaixo** do header (`top: 4rem`), senão fica escondido atrás dele em viewport pequeno onde o usuário rola a página.
+### 5. Lazy decode mais agressivo + `fetchpriority`
+- Trocar `loading="lazy"` por `loading="lazy" fetchpriority="low"` nas covers fora da primeira linha; primeira linha (`vRow.index === 0`) ganha `fetchpriority="high"`.
+- Hint pro browser priorizar o que aparece no fold sem prejudicar o resto.
 
-**Fix**: Em `LibraryTopBar`, mudar para `top-16` (= 4rem, altura do header).
+### 6. Auto-fill mais conservador no mobile
+- Hoje o `useEffect` de auto-fill expande a janela quando `totalSize <= clientHeight + 600`. Em mobile reduzir esse buffer para `+200` pra não disparar 2-3 expansões consecutivas no primeiro paint.
 
-### 5. `BottomNav` cobre o último item de listas em rotas que não usam `pb-bottom-nav`
-O `WithChrome` do `App.tsx` aplica `pb-bottom-nav` no `<main>`, OK. Mas:
-- `Index.tsx` (não usa WithChrome — vide bug #1)
-- Os componentes filhos com scroll interno próprio (`PosterGrid`, `VirtualChannelList`) não recebem o padding porque rolam num container interno, **não no body**. No mobile o último pôster da grade fica escondido pela BottomNav.
+## Garantias de não-regressão (PC/Web)
 
-**Fix**: Em telas mobile (< md), as colunas do `LibraryShell` rolam em altura natural — então o `pb-bottom-nav` do `<main>` resolve. Mas `PosterGrid` no mobile força altura própria? Conferir e adicionar padding-bottom na lista virtualizada quando renderizada em layout mobile.
+- `pageSize` desktop: **inalterado** (120/60).
+- Virtualização: **inalterada**.
+- Hover prefetch desktop: **inalterado** (cobre o caso `hover: hover`).
+- Skeleton por célula: invisível quando imagem vem do cache (caso comum em PC).
+- Layout, grid template, breakpoints, navegação por teclado: **inalterados**.
+- Nenhuma mudança em `Movies.tsx`, `Series.tsx`, queries, contexto ou serviços.
 
----
+## Detalhes técnicos
 
-## 🟡 MELHORIAS / RISCOS MENORES
+Arquivos tocados (apenas 2):
 
-### 6. Animações `blob` e `float` pesadas em mobile
-A `Login.tsx` roda 3 `animate-blob` (16s) + 1 `animate-float` (6s) + 2 radial gradients + grid pattern. Em celulares mais antigos isso causa frame drops na tela de login. Considerar:
-- Desabilitar `animate-blob` quando `prefers-reduced-motion: reduce`.
-- Usar `will-change: transform` apenas no elemento ativo.
+**`src/components/library/PosterGrid.tsx`**
+- Adicionar `useIsMobile`-like inline (via `matchMedia` num `useState` lazy, sem hook novo) para derivar `effectivePageSize` / `effectivePageIncrement` quando o caller não sobrescreve via prop.
+- Reduzir buffer de auto-fill em mobile (`+200` vs `+600`).
+- Passar `rowIndex` para o `PosterCard` (apenas pra primeira linha receber `priority`).
 
-### 7. `MobileChannelDrawer` sem padding safe-area no rodapé
-Drawer abre de baixo no mobile e o conteúdo final pode ficar atrás da gesture bar do iPhone. O `MobileCategoryDrawer` já tem `pb-[env(safe-area-inset-bottom)]` (linha 26), mas `MobileChannelDrawer` precisa receber o mesmo.
+**`src/components/library/PosterCard.tsx`**
+- Novo state `loaded` + skeleton absoluto (`<div className="absolute inset-0 skeleton-shimmer" />`) que some no `onLoad`.
+- Nova prop opcional `priority?: boolean` → mapeia para `fetchpriority="high" | "low"`.
+- Guard de `onHover`: só executa se `matchMedia("(hover: hover)")` for verdade. Pode ser uma const módulo-level pra evitar custo por render:
+  ```ts
+  const HAS_HOVER = typeof window !== "undefined"
+    && window.matchMedia?.("(hover: hover) and (pointer: fine)").matches;
+  ```
 
-### 8. `Header` mobile não esconde em `/sync`
-`Header.tsx` esconde só em `/login` e `/admin`. Já o `BottomNav` esconde em `/login`, `/admin` e `/sync`. Inconsistência: na tela de Sync aparece o avatar dropdown no topo (que pode levar o usuário a navegar antes da sincronização terminar).
+Sem mudança em CSS (a classe `skeleton-shimmer` já existe). Sem nova dependência. Sem mudança de tipos públicos do `PosterItem`.
 
-**Fix**: adicionar `/sync` à lista do Header também.
+## Validação
 
----
-
-## 📋 Plano de implementação
-
-```text
-Phase A — Fixes críticos (5min)
-  1. Index.tsx: remover <Header /> interno + envolver / com WithChrome
-  2. Live.tsx: remover FAB interno do MobileChannelDrawer
-  3. Movies/Series/Live: trocar 100vh → 100dvh com fallback
-  4. LibraryTopBar: top-0 → top-16 em sticky
-  5. Header.tsx: esconder também em /sync
-
-Phase B — Polimento (3min)
-  6. MobileChannelDrawer: pb-[env(safe-area-inset-bottom)]
-  7. Login.tsx: respeitar prefers-reduced-motion
-  8. PosterGrid: garantir padding-bottom no scroll mobile
-```
-
-## Arquivos afetados
-
-- `src/App.tsx` (envolver `/` com WithChrome)
-- `src/pages/Index.tsx` (remover Header)
-- `src/pages/Live.tsx` (dvh + remover FAB duplicado)
-- `src/pages/Movies.tsx` (dvh)
-- `src/pages/Series.tsx` (dvh)
-- `src/components/Header.tsx` (esconder em /sync)
-- `src/components/library/LibraryTopBar.tsx` (top-16)
-- `src/components/live/MobileChannelDrawer.tsx` (remover FAB + safe-area)
-- `src/pages/Login.tsx` (reduced-motion guard)
-- `src/components/library/PosterGrid.tsx` (padding mobile)
-
-Aprovando, eu aplico todos os fixes em sequência.
+1. Desktop (1280+): grid carrega igual ao atual; primeira linha com `fetchpriority=high` aparece levemente mais rápido; nenhum skeleton visível em cache quente.
+2. Mobile (≤768px): primeiro paint dispara apenas ~36 imagens; skeleton shimmer cobre células enquanto carregam; rolagem revela próximos 24 + skeleton; sem prefetch TMDB acidental por scroll.
+3. Troca de categoria: feedback visual imediato (overlay leve) sem repintar a grade inteira.
