@@ -222,7 +222,7 @@ const Live = () => {
           <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
             <h2 className="text-sm font-semibold flex items-center gap-2">
               <Tv className="h-4 w-4 text-primary" />
-              {activeCategory === "favorites"
+              {activeCategory === "__favorites__"
                 ? "Favoritos"
                 : activeCategory === "all"
                 ? "Todos os canais"
