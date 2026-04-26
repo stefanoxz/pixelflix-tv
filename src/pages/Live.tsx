@@ -80,7 +80,7 @@ const Live = () => {
     const q = debouncedSearch.trim().toLowerCase();
     return channels.filter((c) => {
       let matchCat = true;
-      if (activeCategory === "favorites") matchCat = favorites.has(c.stream_id);
+      if (activeCategory === "__favorites__") matchCat = favorites.has(c.stream_id);
       else if (activeCategory !== "all") matchCat = c.category_id === activeCategory;
       const matchSearch = !q || c.name.toLowerCase().includes(q);
       return matchCat && matchSearch;
