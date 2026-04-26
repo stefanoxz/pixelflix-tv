@@ -26,7 +26,31 @@ function corsFor(req: Request): Record<string, string> {
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+/**
+ * Verifica que o caller tem uma sessão Supabase válida (anônima ou não).
+ * Sem isso, qualquer pessoa na internet podia enumerar catálogo / fazer
+ * brute-force contra DNS allow-listadas.
+ */
+async function verifyJwt(req: Request): Promise<boolean> {
+  const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
+  if (!authHeader?.toLowerCase().startsWith("bearer ")) return false;
+  const token = authHeader.slice(7).trim();
+  if (!token) return false;
+  try {
+    const userClient = createClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data, error } = await userClient.auth.getUser();
+    if (error || !data?.user) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const NO_ACCESS_MSG =
   "Você não tem acesso a esta plataforma. Entre em contato com a sua revenda para liberar o seu servidor (DNS).";
