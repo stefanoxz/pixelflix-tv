@@ -94,7 +94,7 @@ export function PosterGrid({
   }, []);
 
   const cols = colsFor(containerWidth || 1200);
-  const gap = containerWidth >= 768 ? 12 : 8; // md:gap-3 vs gap-2
+  const gap = containerWidth >= 768 ? 12 : 10; // mais arejado no mobile (era 8)
   const colWidth = containerWidth
     ? Math.floor((containerWidth - gap * (cols - 1)) / cols)
     : 0;
