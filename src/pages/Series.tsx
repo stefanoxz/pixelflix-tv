@@ -522,9 +522,26 @@ const SeriesPage = () => {
               streamId={playingEp.ep.id}
               contentKind="episode"
               initialTime={resumeAt}
-              onProgress={(t, d) =>
-                saveProgress(makeProgressKey("episode", playingEp.ep.id), t, d)
-              }
+              onProgress={(t, d) => {
+                const ep = playingEp.ep;
+                const seriesObj = openSeries;
+                const seriesName = seriesObj?.name;
+                const epLabel = ep.title
+                  ? seriesName
+                    ? `${seriesName} — ${ep.title}`
+                    : ep.title
+                  : seriesName ?? "Episódio";
+                saveProgress(makeProgressKey("episode", ep.id), t, d, {
+                  kind: "episode",
+                  seriesId: playingEp.seriesId,
+                  title: epLabel,
+                  poster:
+                    ep.info?.movie_image ||
+                    playingEp.coverFallback ||
+                    seriesObj?.cover ||
+                    undefined,
+                });
+              }}
               onEnded={handleEpisodeEnded}
             />
             <NextEpisodeCard
