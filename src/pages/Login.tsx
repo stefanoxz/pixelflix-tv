@@ -1,6 +1,7 @@
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, KeyRound, UserIcon, Link2 } from "lucide-react";
+import { Loader2, KeyRound, UserIcon, Link2, AlertCircle } from "lucide-react";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +13,42 @@ import { iptvLogin, iptvLoginM3u, resolveStreamBase, IptvLoginError } from "@/se
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { parseM3uUrl } from "@/lib/parseM3uUrl";
+import { cn } from "@/lib/utils";
 const logoSuperTech = "/logo-supertech.webp";
+
+// ---------------------------------------------------------------------------
+// Schemas de validação (zod). Aplicados client-side antes de chamar a edge.
+// Limites alinhados com os `maxLength` dos inputs. A edge `iptv-login` ainda
+// valida do lado servidor (defense-in-depth).
+// ---------------------------------------------------------------------------
+const credsSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(1, { message: "Informe o usuário" })
+    .max(120, { message: "Usuário muito longo (máx. 120)" })
+    .regex(/^\S+$/, { message: "Usuário não pode conter espaços" }),
+  password: z
+    .string()
+    .min(1, { message: "Informe a senha" })
+    .max(200, { message: "Senha muito longa (máx. 200)" }),
+});
+
+const m3uSchema = z
+  .string()
+  .trim()
+  .min(1, { message: "Cole a URL M3U" })
+  .max(2000, { message: "URL muito longa (máx. 2000 caracteres)" })
+  .refine(
+    (v) => /^https?:\/\//i.test(v) || /[a-z0-9.-]+\.[a-z]{2,}/i.test(v),
+    { message: "URL precisa conter um endereço (ex.: http://servidor.com/...)" },
+  );
+
+type FieldErrors = {
+  username?: string;
+  password?: string;
+  m3u?: string;
+};
 
 const Login = () => {
   const navigate = useNavigate();
@@ -21,6 +57,7 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [m3uUrl, setM3uUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   /** Núcleo do login: recebe creds já parseadas e roda o fluxo padrão. */
   const performLogin = async (
@@ -70,22 +107,42 @@ const Login = () => {
 
   const handleSubmitCreds = async (e: FormEvent) => {
     e.preventDefault();
-    if (!username || !password) {
-      toast.error("Preencha usuário e senha");
+    const result = credsSchema.safeParse({ username, password });
+    if (!result.success) {
+      const fieldErrors: FieldErrors = {};
+      for (const issue of result.error.issues) {
+        const key = issue.path[0] as keyof FieldErrors;
+        if (key && !fieldErrors[key]) fieldErrors[key] = issue.message;
+      }
+      setErrors(fieldErrors);
+      // Foca o primeiro campo inválido pra acessibilidade.
+      const firstInvalid = (fieldErrors.username && "username") || (fieldErrors.password && "password");
+      if (firstInvalid) {
+        document.getElementById(firstInvalid)?.focus();
+      }
       return;
     }
-    await performLogin(undefined, username.trim(), password);
+    setErrors({});
+    await performLogin(undefined, result.data.username, result.data.password);
   };
 
   const handleSubmitM3u = async (e: FormEvent) => {
     e.preventDefault();
-    const parsed = parseM3uUrl(m3uUrl);
-    if (!parsed) {
-      toast.error(
-        "URL inválida. Use formato get.php ou /playlist/usuario/senha",
-      );
+    const basic = m3uSchema.safeParse(m3uUrl);
+    if (!basic.success) {
+      setErrors({ m3u: basic.error.issues[0]?.message ?? "URL inválida" });
+      document.getElementById("m3u")?.focus();
       return;
     }
+    const parsed = parseM3uUrl(basic.data);
+    if (!parsed) {
+      setErrors({
+        m3u: "Não foi possível extrair usuário/senha. Use o formato get.php?username=…&password=… ou /playlist/usuario/senha",
+      });
+      document.getElementById("m3u")?.focus();
+      return;
+    }
+    setErrors({});
     setLoading(true);
     try {
       const data = await iptvLoginM3u({
@@ -244,7 +301,7 @@ const Login = () => {
           </TabsList>
 
           <TabsContent value="creds">
-            <form onSubmit={handleSubmitCreds} className="space-y-4">
+            <form onSubmit={handleSubmitCreds} className="space-y-4" noValidate>
               <div className="space-y-2">
                 <Label htmlFor="username" className="text-xs">Usuário</Label>
                 <div className="relative">
@@ -253,12 +310,26 @@ const Login = () => {
                     id="username"
                     placeholder="seu usuário"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="pl-10 bg-secondary/50 border-border/50 h-11"
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      if (errors.username) setErrors((p) => ({ ...p, username: undefined }));
+                    }}
+                    className={cn(
+                      "pl-10 bg-secondary/50 border-border/50 h-11",
+                      errors.username && "border-destructive focus-visible:ring-destructive",
+                    )}
                     autoComplete="username"
                     maxLength={120}
+                    aria-invalid={!!errors.username}
+                    aria-describedby={errors.username ? "username-error" : undefined}
                   />
                 </div>
+                {errors.username && (
+                  <p id="username-error" className="text-xs text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {errors.username}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -270,12 +341,26 @@ const Login = () => {
                     type="password"
                     placeholder="••••••••"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 bg-secondary/50 border-border/50 h-11"
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
+                    }}
+                    className={cn(
+                      "pl-10 bg-secondary/50 border-border/50 h-11",
+                      errors.password && "border-destructive focus-visible:ring-destructive",
+                    )}
                     autoComplete="current-password"
                     maxLength={200}
+                    aria-invalid={!!errors.password}
+                    aria-describedby={errors.password ? "password-error" : undefined}
                   />
                 </div>
+                {errors.password && (
+                  <p id="password-error" className="text-xs text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {errors.password}
+                  </p>
+                )}
               </div>
 
               <Button
@@ -296,7 +381,7 @@ const Login = () => {
           </TabsContent>
 
           <TabsContent value="m3u">
-            <form onSubmit={handleSubmitM3u} className="space-y-4">
+            <form onSubmit={handleSubmitM3u} className="space-y-4" noValidate>
               <div className="space-y-2">
                 <Label htmlFor="m3u" className="text-xs">URL M3U</Label>
                 <div className="relative">
@@ -305,16 +390,31 @@ const Login = () => {
                     id="m3u"
                     placeholder="http://servidor.com/get.php?username=...&password=..."
                     value={m3uUrl}
-                    onChange={(e) => setM3uUrl(e.target.value.slice(0, 2000))}
-                    className="pl-10 bg-secondary/50 border-border/50 min-h-[96px] resize-none text-sm"
+                    onChange={(e) => {
+                      setM3uUrl(e.target.value.slice(0, 2000));
+                      if (errors.m3u) setErrors((p) => ({ ...p, m3u: undefined }));
+                    }}
+                    className={cn(
+                      "pl-10 bg-secondary/50 border-border/50 min-h-[96px] resize-none text-sm",
+                      errors.m3u && "border-destructive focus-visible:ring-destructive",
+                    )}
                     autoComplete="off"
                     spellCheck={false}
                     maxLength={2000}
+                    aria-invalid={!!errors.m3u}
+                    aria-describedby={errors.m3u ? "m3u-error" : "m3u-hint"}
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Aceita links no formato <code className="text-foreground/80">get.php?username=…&amp;password=…</code> ou <code className="text-foreground/80">/playlist/usuario/senha</code>
-                </p>
+                {errors.m3u ? (
+                  <p id="m3u-error" className="text-xs text-destructive flex items-start gap-1 leading-relaxed">
+                    <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                    {errors.m3u}
+                  </p>
+                ) : (
+                  <p id="m3u-hint" className="text-[11px] text-muted-foreground leading-relaxed">
+                    Aceita links no formato <code className="text-foreground/80">get.php?username=…&amp;password=…</code> ou <code className="text-foreground/80">/playlist/usuario/senha</code>
+                  </p>
+                )}
               </div>
 
               <Button
