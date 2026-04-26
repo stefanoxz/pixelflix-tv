@@ -11,6 +11,8 @@ import { seededShuffle, todaySeed } from "@/lib/dailyShuffle";
 import { cn } from "@/lib/utils";
 import { SafeImage } from "@/components/SafeImage";
 import { ContinueWatchingRail } from "@/components/highlights/ContinueWatchingRail";
+import { WelcomeNameDialog } from "@/components/WelcomeNameDialog";
+import { getGreeting, hasSeenWelcomeModal, useDisplayName } from "@/lib/displayName";
 
 type FeaturedItem =
   | { kind: "movie"; id: number; title: string; cover: string; rating: number; tmdb: TmdbRatingResult | null }
@@ -157,6 +159,14 @@ const Highlights = () => {
   const [activeIdx, setActiveIdx] = useState(0);
   const pausedRef = useRef(false);
 
+  // Saudação personalizada — calculada no render (custo zero, sem requisição).
+  // Não atualiza no meio da sessão se virar a hora pra evitar "salto" visual.
+  const displayName = useDisplayName(creds.username);
+  const greeting = useMemo(() => getGreeting(), []);
+
+  // Modal de boas-vindas: aparece UMA vez por dispositivo no 1º acesso
+  const [welcomeOpen, setWelcomeOpen] = useState(() => !hasSeenWelcomeModal(creds.username));
+
   // Reseta o índice se o tamanho da fila muda
   useEffect(() => {
     if (activeIdx >= featuredQueue.length) setActiveIdx(0);
@@ -216,6 +226,12 @@ const Highlights = () => {
 
         <div className="relative h-full flex items-end pb-8 md:pb-12 mx-auto max-w-[1800px] px-4 md:px-8 gap-6">
           <div key={featured?.id ?? "empty"} className="max-w-2xl md:max-w-md lg:max-w-xl space-y-4 animate-fade-in flex-1 min-w-0">
+            <p
+              className="text-sm md:text-base text-muted-foreground/90 font-medium tracking-tight"
+              aria-live="polite"
+            >
+              {greeting}{displayName ? `, ${displayName}` : ""}
+            </p>
             <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-xs font-medium text-primary backdrop-blur">
               ✨ Em destaque {featured?.kind === "series" ? "· Série" : featured?.kind === "movie" ? "· Filme" : ""}
             </span>
@@ -450,6 +466,11 @@ const Highlights = () => {
           </section>
         )}
       </div>
+      <WelcomeNameDialog
+        username={creds.username}
+        open={welcomeOpen}
+        onClose={() => setWelcomeOpen(false)}
+      />
     </div>
   );
 };
