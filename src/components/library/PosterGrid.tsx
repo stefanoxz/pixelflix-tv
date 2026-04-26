@@ -68,10 +68,16 @@ export function PosterGrid({
   searchPlaceholder = "Buscar...",
   emptyMessage = "Nenhum item encontrado.",
   totalLabel,
-  pageSize = 120,
-  pageIncrement = 60,
+  pageSize: pageSizeProp,
+  pageIncrement: pageIncrementProp,
   isLoading = false,
 }: Props) {
+  // Defaults adaptativos: mobile recebe páginas bem menores pra reduzir a
+  // fila inicial de imagens em 3G/4G. Desktop mantém o comportamento antigo
+  // (120 / 60). Props explícitas sempre vencem.
+  const pageSize = pageSizeProp ?? (IS_MOBILE_VIEWPORT ? 36 : 120);
+  const pageIncrement = pageIncrementProp ?? (IS_MOBILE_VIEWPORT ? 24 : 60);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const incompatibleKeys = useIncompatibleKeys();
