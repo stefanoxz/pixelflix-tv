@@ -1,102 +1,53 @@
-# Correções no painel admin
+## Objetivo
 
-Após a análise, agrupei as correções por prioridade. Tudo é em código existente — sem novas tabelas nem novas dependências.
+Deixar `/admin` confortável de usar no celular sem alterar nada do webplayer (rotas `/`, `/login`, conteúdo etc.). Todas as mudanças ficam dentro de `src/pages/Admin.tsx` e arquivos novos sob `src/components/admin/`.
 
----
+## Problema atual no mobile
 
-## 1. Crítico — moderador não consegue entrar no painel
+A "sidebar" no mobile vira um bloco vertical com 11 botões empilhados acima do conteúdo. Pra trocar de aba o usuário rola pra cima, encontra o item, clica e rola pra baixo de novo. O header da página também quebra, e ações rápidas (logout, voltar) ficam escondidas.
 
-Hoje o backend aceita `admin` ou `moderator`, mas o front ainda só deixa entrar `admin`. Resultado: o papel "moderador" criado na rodada anterior está inativo.
+## Solução
 
-**Arquivos:**
-- `src/components/AdminProtectedRoute.tsx` — verificar `admin` **OU** `moderator` (chamar `has_role` para os dois e liberar se qualquer um for verdadeiro). Manter o fluxo "pendente" só quando nenhum dos dois retornar true.
-- `src/pages/AdminLogin.tsx` — após login, redirecionar para `/admin` quando o usuário tiver qualquer um dos dois papéis. Mensagem de erro continua a mesma quando não tiver nenhum.
+Manter o desktop exatamente como está (sidebar fixa à esquerda) e introduzir um shell mobile dedicado:
 
-**Bonus:** expor o papel atual via um hook simples (`useAdminRole`) para os componentes saberem se quem está olhando é admin ou moderador — isso é a base do item 2.
+### 1. Top bar mobile fixa
+- Altura compacta (`h-12`), aparece só em `< lg`.
+- Esquerda: botão "menu" (hamburger) que abre um Sheet/Drawer com a navegação completa.
+- Centro: título da seção atual (Dashboard, Estatísticas, etc.).
+- Direita: badge de papel (Admin/Moderador) e menu de overflow com "Voltar ao app" e "Sair".
 
----
+### 2. Bottom navigation mobile
+- Barra fixa no rodapé (`< lg`), 5 atalhos para as seções mais usadas: Dashboard, Estatísticas, Monitoramento, Reportes, Usuários.
+- Item ativo destacado com `text-primary` + indicador.
+- As outras 6 seções (DNS errors, Endpoint, Diagnóstico, Servidores, Cadastros, Equipe) ficam acessíveis pelo Drawer do hamburger — incluindo as `adminOnly` que continuam filtradas por papel.
 
-## 2. Crítico — UI mostra controles que moderador não pode usar
+### 3. Drawer (Sheet lateral) com nav completa
+- Reaproveita a lista atual de itens (`navItems`) e o filtro `adminOnly`.
+- Fecha automaticamente ao escolher uma aba.
+- Inclui "Voltar ao app" e "Sair" dentro do próprio drawer.
 
-Mesmo após corrigir o item 1, moderador veria botões "Adicionar DNS", "Remover DNS", "Aprovar cadastro", aba "Equipe e permissões" etc., e tomaria 401 ao clicar.
+### 4. Ajustes de conteúdo pra caber no celular
+- `<main>` ganha `pb-20 lg:pb-8` pra não esconder conteúdo atrás da bottom-nav.
+- Header da página: título reduz pra `text-2xl` em mobile, badges/ações empilham.
+- Cartões de stats: grid `grid-cols-2 lg:grid-cols-4` (já tá perto disso, conferir).
+- Tabelas largas (login_events, sessions): wrapper `overflow-x-auto` com hint visual de "deslize".
 
-**Arquivos:**
-- `src/pages/Admin.tsx` — usar o hook `useAdminRole`:
-  - Esconder a aba **"Equipe e permissões"** para moderador.
-  - Esconder a aba **"Novos cadastros"** para moderador (aprovar/recusar é admin-only).
-  - Em **"DNS / Servidores"**: esconder botões "Adicionar DNS", "Remover", "Editar" e o ícone de lixeira; manter visualização e ping.
-- `src/components/admin/PendingSignupsPanel.tsx` — se entrar mesmo assim, mostrar mensagem de "somente admin".
-- `src/components/admin/TeamPanel.tsx` — idem (defesa em profundidade — backend já bloqueia).
+### 5. Webplayer intacto
+- Nada fora de `src/pages/Admin.tsx`, `src/components/admin/*`, `src/components/AdminProtectedRoute.tsx` é tocado.
+- Sem mudar `App.tsx`, rotas, theme, tokens globais, ou componentes compartilhados (`Button`, `Sheet`, etc.).
 
-**Faixa visual no header:** mostrar um badge sutil "Moderador" ao lado do título quando o papel não for admin, para o usuário entender por que algumas opções somem.
+## Detalhes técnicos
 
----
+- Extrair os `navItems` (hoje inline) pra constante exportada num arquivo novo `src/components/admin/adminNav.ts` pra reuso entre sidebar desktop, drawer e bottom-nav.
+- Criar `src/components/admin/AdminMobileTopBar.tsx` (Sheet com nav completa).
+- Criar `src/components/admin/AdminBottomNav.tsx` (5 atalhos fixos).
+- A sidebar desktop atual (`<aside class="lg:w-64 …">`) ganha `hidden lg:flex` pra sumir no mobile (em vez de virar bloco empilhado).
+- Bottom-nav usa `fixed bottom-0 inset-x-0 lg:hidden border-t bg-card/95 backdrop-blur z-40`.
+- Seleção da aba ativa continua via `setTab(id)` e `searchParams` — sem mudar a lógica de estado existente.
+- Sem novos pacotes; usa `Sheet` shadcn já instalado.
 
-## 3. Métrica enviesada — Top 10 conteúdos
+## Fora do escopo
 
-`stats_top_content` usa `last_seen_at - started_at` (duração da sessão inteira), o que infla o tempo quando o usuário abriu o app antes de tocar no conteúdo.
-
-**Arquivo:** `supabase/functions/admin-api/index.ts` (action `stats_top_content`)
-- Trocar para `last_seen_at - content_started_at`, com fallback para `started_at` se `content_started_at` estiver nulo.
-- Descartar entradas com duração > 12h (sessões zumbis ou heartbeat travado).
-
----
-
-## 4. Heatmap em horário local
-
-Hoje usa UTC, então pico real às 21h aparece à meia-noite para um usuário BR.
-
-**Arquivo:** `src/components/admin/StatsPanel.tsx`
-- O backend já devolve o grid em UTC. Deslocar no front pelo offset local (`new Date().getTimezoneOffset()`) — rotaciona a coluna da hora; muito mais simples que mudar o backend.
-- Atualizar legenda para "horário local".
-
----
-
-## 5. Convite via e-mail funciona só até 200 contas
-
-`add_team_member` chama `listUsers({ perPage: 200 })`. Se a base passar disso, pessoas existentes são tratadas como novas e recebem convite duplicado.
-
-**Arquivo:** `supabase/functions/admin-api/index.ts` (action `add_team_member`)
-- Paginar o `listUsers` em loop (até 5 páginas / 1000 contas) parando quando achar o e-mail.
-- Quando ainda não encontrar, seguir para o convite como hoje.
-
----
-
-## 6. Polimento — confirmações destrutivas
-
-Substituir os `confirm()` nativos por `AlertDialog` (mesma biblioteca já usada no `TeamPanel`).
-
-**Arquivos:**
-- `src/pages/Admin.tsx` — `removeServer`, `unblockUser`, `evictSession`.
-- Já fica consistente com a remoção de membro da equipe.
-
----
-
-## Detalhes técnicos resumidos
-
-```text
-front:
-  AdminProtectedRoute  →  has_role(admin) || has_role(moderator)
-  AdminLogin           →  redireciona se for admin OU moderator
-  hooks/useAdminRole   →  novo hook exporta { role, isAdmin, isModerator, loading }
-  Admin.tsx            →  filtra abas + esconde CTAs admin-only
-  StatsPanel           →  rotaciona heatmap por offset local
-  AlertDialog          →  troca confirm() em ações destrutivas
-
-backend (admin-api):
-  stats_top_content    →  duração = last_seen_at - COALESCE(content_started_at, started_at)
-                          descarta > 12h
-  add_team_member      →  paginação até 5 páginas no listUsers
-```
-
-Sem migrations novas — só código de função/edge.
-
----
-
-## O que NÃO entra nesta rodada
-
-- Notas/label do servidor no log de auditoria (item menor, dá para incluir se quiser).
-- Botão "Sair" duplicado no header (cosmético).
-- Mostrar `notes`/`label` no `AuditLogPanel` (decisão sua).
-
-Se quiser eu já adiciono esses três no escopo, é só dizer.
+- Refatorar painéis individuais (StatsPanel, MonitoringPanel etc.). Só envolvemos eles num shell mobile melhor.
+- Mudar tema, cores ou tokens globais.
+- Tocar em `/login`, `/`, ou qualquer rota do webplayer.
