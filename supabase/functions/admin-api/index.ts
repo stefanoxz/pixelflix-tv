@@ -1273,40 +1273,12 @@ Deno.serve(async (req) => {
         }
       }
 
-      // 5) Comparativo direto vs proxy (paralelo) sobre player_api.php
-      let route_comparison: {
+      // 5) Comparativo direto vs proxy — desativado (sem proxy configurado).
+      type RouteComparison = {
         direct: { status: number | null; latency_ms: number; error: string | null };
         proxy: { status: number | null; latency_ms: number; error: string | null } | null;
-      } | null = null;
-
-      if (compareRoutes && false) {
-        const compareUrl = target;
-        const tDirect = Date.now();
-        const tProxy = Date.now();
-        const [dRes, pRes] = await Promise.all([
-          fetch(compareUrl, {
-            method: "HEAD",
-            headers: { "User-Agent": TEST_UA },
-            redirect: "follow",
-            signal: AbortSignal.timeout(Math.min(timeoutMs, 6000)),
-          }).then((r) => ({ status: r.status, error: null as string | null, ts: Date.now() - tDirect, body: r.body }))
-            .catch((e) => ({ status: null as number | null, error: e instanceof Error ? e.message : String(e), ts: Date.now() - tDirect, body: null })),
-          fetch(compareUrl, {
-            method: "HEAD",
-            headers: { "User-Agent": TEST_UA },
-            redirect: "follow",
-            signal: AbortSignal.timeout(Math.min(timeoutMs, 6000)),
-          }).then((r) => r ? ({ status: r.status, error: null as string | null, ts: Date.now() - tProxy, body: r.body }) : null)
-            .catch((e) => ({ status: null as number | null, error: e instanceof Error ? e.message : String(e), ts: Date.now() - tProxy, body: null })),
-        ]);
-        // consome bodies para evitar leak
-        try { await dRes?.body?.cancel?.(); } catch { /* noop */ }
-        try { await pRes?.body?.cancel?.(); } catch { /* noop */ }
-        route_comparison = {
-          direct: { status: dRes?.status ?? null, latency_ms: dRes?.ts ?? 0, error: dRes?.error ?? null },
-          proxy: pRes ? { status: pRes.status, latency_ms: pRes.ts, error: pRes.error } : null,
-        };
-      }
+      };
+      const route_comparison: RouteComparison | null = null as RouteComparison | null;
 
       // 6) Veredito
       type Verdict = { level: "ok" | "warn" | "error"; code: string; message: string };

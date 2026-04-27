@@ -1,50 +1,51 @@
-## Objetivo
+## Análise completa do impacto da remoção do proxy
 
-Remover toda a lógica de proxy via Cloudflare Worker do backend, voltando a conexão direta com painéis IPTV. O usuário vai contratar uma VPS no futuro pra resolver o bloqueio do `bkpac.cc`. Enquanto isso, garantir que a mensagem de erro seja honesta (mostrar "servidor bloqueado" em vez de "usuário/senha inválidos").
+### ✅ O que está OK
 
-## O que será feito
+| Área | Status |
+|---|---|
+| Build do frontend (`vite build`) | **Passa** — 0 erros |
+| `iptv-login` type-check | **OK** |
+| `iptv-categories` type-check | **OK** |
+| `check-server` type-check | **OK** |
+| `watch-progress` runtime | **OK** (TS2769 é falso positivo pré-existente do supabase-js no Deno, não bloqueia deploy nem runtime) |
+| Banco/RLS/auth | **Intactos** — não foram tocados |
+| Deploy das 5 funções | **Sucesso** |
 
-### 1. Remover o helper de proxy
-- Apagar `supabase/functions/_shared/proxied-fetch.ts`.
+### ⚠️ Quebra real encontrada — `admin-api/index.ts` (linhas 1276–1325)
 
-### 2. Voltar edge functions a usar `fetch` direto
-Trocar todas as chamadas `proxiedFetch(...)` por `fetch(...)` simples nas funções:
-- `supabase/functions/iptv-login/index.ts`
-- `supabase/functions/iptv-categories/index.ts`
-- `supabase/functions/watch-progress/index.ts`
-- `supabase/functions/check-server/index.ts`
-- `supabase/functions/admin-api/index.ts`
+Quando substituí `proxyOnlyFetch(...)` por `fetch(...)` no bloco "Comparativo direto vs proxy", deixei resíduo: o bloco está dentro de um `if (compareRoutes && false)` (nunca executa), mas o TypeScript ainda valida o conteúdo e dá **6 erros de tipo** (`pRes` possibly null, `route_comparison.direct/proxy` does not exist on type `never`).
 
-Remover imports do `proxied-fetch`. Remover qualquer cache de "host bloqueado" (`_directBlockedUntil`).
+**Impacto real:**
+- Em **runtime** não quebra nada — o bloco está morto (`&& false`).
+- Mas o **próximo deploy** do `admin-api` vai falhar com TS2339/TS18047.
+- O endpoint de teste do admin (`/test-endpoint`) sempre devolve `route_comparison: null` (esperado, já que não há proxy).
 
-### 3. Corrigir classificação de erro no `iptv-login`
-Distinguir entre:
-- **Credenciais inválidas reais** (HTTP 401/403, `auth: 0` da resposta JSON do painel) → "Usuário ou senha inválidos".
-- **Bloqueio/inalcançável** (Connection reset, timeout, 404, DNS fail) → "Servidor indisponível ou bloqueado. Tente novamente ou contate o provedor."
+### Correção proposta
 
-Quando todos os servidores da allowlist falharem com erro de transporte (sem nenhum 401 real), retornar `SERVER_UNREACHABLE` em vez de `INVALID_CREDENTIALS`.
+Remover o bloco morto inteiro (linhas 1282–1309) e deixar `route_comparison` declarado direto como `null`. Resultado: código mais limpo, type-check passa, comportamento idêntico (já era sempre null).
 
-### 4. Atualizar mensagem no frontend
-- `src/services/iptv.ts`: mapear o novo código `SERVER_UNREACHABLE` pra mensagem clara em PT-BR.
+```diff
+- // 5) Comparativo direto vs proxy (paralelo)
+- let route_comparison: {...} | null = null;
+- if (compareRoutes && false) {
+-   const [dRes, pRes] = await Promise.all([...]);
+-   route_comparison = {...};
+- }
++ // 5) Comparativo direto vs proxy — desativado (sem proxy configurado).
++ const route_comparison: {...} | null = null;
+```
 
-### 5. Redeploy
-Redeployar as funções alteradas: `iptv-login`, `iptv-categories`, `watch-progress`, `check-server`, `admin-api`.
+Depois redeployar `admin-api`.
 
-## O que NÃO vai mudar
+### Outras observações
 
-- A allowlist de servidores (incluindo `bkpac.cc`) **fica como está** — quando você tiver a VPS, é só apontar o backend pra ela e os servidores voltam a funcionar.
-- O secret `IPTV_PROXY_URL` continua cadastrado mas **inerte** (nenhum código vai usar). Você pode apagar manualmente em Cloud → Secrets quando quiser, sem afetar nada.
-- Auth, RLS, banco de dados — nada disso é tocado.
+- Frontend usa `route_comparison?.direct/proxy` em `EndpointTestPanel.tsx` — tudo com optional chaining, então receber `null` continua funcionando.
+- Variável `compareRoutes` (input do request) ainda existe mas vira parâmetro inerte. Aceitável manter — clientes que enviarem o flag não quebram, só ignoramos.
 
-## Resultado esperado
+### O que NÃO foi quebrado
 
-- Backend mais simples, sem dependência de proxy externo.
-- Painéis que **não bloqueiam** os IPs do Supabase (a maioria) continuam funcionando normal.
-- Painéis que **bloqueiam** (como `bkpac.cc`) vão mostrar erro honesto: "Servidor indisponível ou bloqueado", não mais "Usuário ou senha inválidos".
-- Quando você contratar a VPS no futuro, basta criar uma edge function nova ou variável apontando pra ela — base limpa pra isso.
-
-## Detalhes técnicos
-
-- `proxied-fetch.ts` será removido com `rm`. Não há outros consumidores fora das 5 funções listadas (vou confirmar com `rg` antes de remover).
-- O `SERVER_UNREACHABLE` será um novo valor no campo `error` do response JSON. Backward-compat: o frontend trata os dois (`INVALID_CREDENTIALS` continua funcionando).
-- Não há mudanças em banco, RLS, secrets ou config.toml.
+- Login IPTV: continua funcionando para painéis que não bloqueiam o backend.
+- Para `bkpac.cc`: continua bloqueado (esperado — só vai funcionar com VPS no futuro), mas agora mostra mensagem honesta "não é problema de senha".
+- `watch-progress`, `iptv-categories`, `check-server`: zero impacto além da troca de import.
+- Banco, RLS, auth, storage, secrets (exceto `IPTV_PROXY_URL` que ficou inerte): intocados.
