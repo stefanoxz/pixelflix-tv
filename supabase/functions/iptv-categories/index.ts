@@ -1,5 +1,4 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
-import { proxiedFetch } from "../_shared/proxied-fetch.ts";
 
 const ALLOWED_SUFFIXES = [".lovable.app", ".lovableproject.com", ".lovable.dev"];
 function corsFor(req: Request): Record<string, string> {
@@ -109,7 +108,7 @@ async function fetchWithRetries(url: string, attemptsPerUa = 1): Promise<
   for (const ua of USER_AGENTS) {
     for (let attempt = 0; attempt < attemptsPerUa; attempt++) {
       try {
-        const res = await proxiedFetch(url, {
+        const res = await fetch(url, {
           headers: { "User-Agent": ua, Accept: "application/json, */*" },
           redirect: "follow",
         });

@@ -1,6 +1,5 @@
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
-import { proxiedFetch, isProxyEnabled } from "../_shared/proxied-fetch.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -61,12 +60,12 @@ async function singlePing(url: string): Promise<Attempt> {
   const target = url.replace(/\/+$/, "") + "/player_api.php";
   const start = Date.now();
   try {
-    let res = await proxiedFetch(target, {
+    let res = await fetch(target, {
       method: "HEAD",
       signal: AbortSignal.timeout(5000),
     });
     if (res.status === 405 || res.status === 501) {
-      res = await proxiedFetch(target, {
+      res = await fetch(target, {
         method: "GET",
         signal: AbortSignal.timeout(5000),
       });
@@ -191,7 +190,7 @@ Deno.serve(async (req) => {
       .slice(0, 50);
 
     const results = await Promise.all(urls.map(pingOne));
-    return json({ results, proxy_enabled: isProxyEnabled() });
+    return json({ results, proxy_enabled: false });
   } catch (e) {
     console.error("[check-server] unhandled", e);
     return json({ error: "Erro interno" }, 500);

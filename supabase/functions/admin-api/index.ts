@@ -1,6 +1,5 @@
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
-import { proxiedFetch, isProxyEnabled, directFetch, proxyOnlyFetch } from "../_shared/proxied-fetch.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -458,7 +457,7 @@ Deno.serve(async (req) => {
       let warning: string | null = null;
       try {
         const probeUrl = `${url}/player_api.php`;
-        const res = await proxiedFetch(probeUrl, {
+        const res = await fetch(probeUrl, {
           method: "HEAD",
           headers: { "User-Agent": "VLC/3.0.20 LibVLC/3.0.20" },
           signal: AbortSignal.timeout(4000),
@@ -1019,8 +1018,7 @@ Deno.serve(async (req) => {
 
     // ---------- TEST ENDPOINT (admin diagnostics) ----------
     // Faz UMA requisição contra um endpoint IPTV usando o pipeline real
-    // (proxiedFetch com fallback automático direto → proxy) e devolve qual
-    // rota foi efetivamente usada + status HTTP + preview do corpo.
+    // (fetch direto) e devolve status HTTP + preview do corpo.
     //
     // payload: {
     //   server_url: string;          // ex: "http://bkpac.cc:80"
@@ -1088,14 +1086,13 @@ Deno.serve(async (req) => {
         const m: "GET" | "HEAD" = opts.method ?? "GET";
         const startedAt = Date.now();
         try {
-          const res = await proxiedFetch(url, {
+          const res = await fetch(url, {
             method: m,
             headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
             redirect: "follow",
             signal: AbortSignal.timeout(opts.timeout ?? timeoutMs),
           });
-          // @ts-ignore - tag injetada por proxiedFetch
-          const route: "direct" | "proxy" = (res as Response & { _iptvRoute?: "direct" | "proxy" })._iptvRoute ?? "direct";
+          const route: "direct" | "proxy" = "direct";
           let body = "";
           let size = 0;
           if (m !== "HEAD") {
@@ -1165,7 +1162,7 @@ Deno.serve(async (req) => {
             ? (await (async () => {
                 // re-fetch corpo completo se preview foi truncado
                 try {
-                  const r2 = await proxiedFetch(target, {
+                  const r2 = await fetch(target, {
                     method: "GET",
                     headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
                     redirect: "follow",
@@ -1229,7 +1226,7 @@ Deno.serve(async (req) => {
             const liveCatProbe = catResults.find((r) => r.name === "live_categories");
             let categoryId: string | null = null;
             if (liveCatProbe && liveCatProbe.status === 200) {
-              const r = await proxiedFetch(buildXtreamUrl("get_live_categories"), {
+              const r = await fetch(buildXtreamUrl("get_live_categories"), {
                 method: "GET",
                 headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
                 signal: AbortSignal.timeout(timeoutMs),
@@ -1242,7 +1239,7 @@ Deno.serve(async (req) => {
 
             if (categoryId) {
               const streamsUrl = `${buildXtreamUrl("get_live_streams")}&category_id=${encodeURIComponent(categoryId)}`;
-              const sr = await proxiedFetch(streamsUrl, {
+              const sr = await fetch(streamsUrl, {
                 method: "GET",
                 headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
                 signal: AbortSignal.timeout(timeoutMs),
@@ -1282,19 +1279,19 @@ Deno.serve(async (req) => {
         proxy: { status: number | null; latency_ms: number; error: string | null } | null;
       } | null = null;
 
-      if (compareRoutes && isProxyEnabled()) {
+      if (compareRoutes && false) {
         const compareUrl = target;
         const tDirect = Date.now();
         const tProxy = Date.now();
         const [dRes, pRes] = await Promise.all([
-          directFetch(compareUrl, {
+          fetch(compareUrl, {
             method: "HEAD",
             headers: { "User-Agent": TEST_UA },
             redirect: "follow",
             signal: AbortSignal.timeout(Math.min(timeoutMs, 6000)),
           }).then((r) => ({ status: r.status, error: null as string | null, ts: Date.now() - tDirect, body: r.body }))
             .catch((e) => ({ status: null as number | null, error: e instanceof Error ? e.message : String(e), ts: Date.now() - tDirect, body: null })),
-          proxyOnlyFetch(compareUrl, {
+          fetch(compareUrl, {
             method: "HEAD",
             headers: { "User-Agent": TEST_UA },
             redirect: "follow",
@@ -1396,7 +1393,7 @@ Deno.serve(async (req) => {
         target,
         method,
         route: primary.route,
-        proxy_configured: isProxyEnabled(),
+        proxy_configured: false,
         ok: primary.status !== null && primary.status >= 200 && primary.status < 300,
         status: primary.status,
         status_text: primary.status_text,
@@ -1490,14 +1487,13 @@ Deno.serve(async (req) => {
         const t0 = Date.now();
         const probeTimeout = Math.min(PER_PROBE_TIMEOUT, Math.max(800, remaining()));
         try {
-          const res = await proxiedFetch(url, {
+          const res = await fetch(url, {
             method: "GET",
             headers: { "User-Agent": TEST_UA, Accept: "application/json, */*" },
             redirect: "follow",
             signal: AbortSignal.timeout(probeTimeout),
           });
-          // @ts-ignore tag
-          const route = (res as Response & { _iptvRoute?: "direct" | "proxy" })._iptvRoute ?? "direct";
+          const route: "direct" | "proxy" = "direct";
           const text = await res.text();
           let isXtream = false;
           let xAuth: number | string | null = null;
@@ -1576,12 +1572,8 @@ Deno.serve(async (req) => {
       const suggestions: string[] = [];
       const best = candidates[0];
 
-      if (failureCode === "geo_blocked" || candidates.some((c) => c.route === "proxy")) {
-        if (isProxyEnabled()) {
-          suggestions.push("Proxy está configurado: requisições já fazem fallback automático quando o IP do Supabase é bloqueado. Nenhuma ação manual necessária.");
-        } else {
-          suggestions.push("Configure o secret IPTV_PROXY_URL para habilitar fallback automático via proxy quando o servidor bloquear o IP do Supabase.");
-        }
+      if (failureCode === "geo_blocked") {
+        suggestions.push("O servidor parece estar bloqueando o IP do backend. Considere usar uma VPS própria como proxy, ou solicite à revenda uma DNS alternativa.");
       }
 
       if (failureCode === "bad_credentials") {
@@ -1622,7 +1614,7 @@ Deno.serve(async (req) => {
         candidates: candidates.map(({ _score, ...r }) => ({ ...r, score: Math.round(_score) })),
         best: best ? { base: best.base, scheme: best.scheme, port: best.port, score: Math.round(best._score) } : null,
         suggestions,
-        proxy_configured: isProxyEnabled(),
+        proxy_configured: false,
       });
     }
 

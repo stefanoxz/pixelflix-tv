@@ -714,7 +714,7 @@ export function EndpointTestPanel({ allowedServers }: Props) {
 
         {result && !result.proxy_configured && (
           <p className="text-xs text-muted-foreground">
-            ⓘ Nenhum proxy configurado (<code>IPTV_PROXY_URL</code>). Comparativo de rotas indisponível.
+            ⓘ Sem proxy configurado. Diagnóstico mostra apenas a rota direta.
           </p>
         )}
       </Card>

@@ -1,5 +1,4 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
-import { proxiedFetch, isProxyEnabled } from "../_shared/proxied-fetch.ts";
 
 // Keep module initialization lightweight. Calling proxy/env helpers at boot can
 // make cold starts more fragile; request handlers log proxy state when needed.
@@ -231,14 +230,13 @@ async function fetchOnce(
   ua: string,
 ): Promise<{ res: Response; body: string; route: "direct" | "proxy" } | { error: string }> {
   try {
-    const res = await proxiedFetch(url, {
+    const res = await fetch(url, {
       headers: { "User-Agent": ua, Accept: "application/json, */*" },
       redirect: "follow",
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     const body = await res.text();
-    // @ts-ignore - tag injetada por proxiedFetch
-    const route = (res._iptvRoute as "direct" | "proxy") ?? "direct";
+    const route: "direct" | "proxy" = "direct";
     return { res, body, route };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -610,7 +608,7 @@ Deno.serve(async (req) => {
       return new Response("ok", { headers: corsHeaders });
     }
 
-    console.log("[iptv-login] start request", { proxy_enabled: isProxyEnabled() });
+    console.log("[iptv-login] start request", { proxy_enabled: false });
 
     const ua = req.headers.get("user-agent") ?? undefined;
     const ip =

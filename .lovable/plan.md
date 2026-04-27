@@ -1,89 +1,50 @@
 ## Objetivo
 
-Fazer o seu webplayer conseguir acessar painéis IPTV HTTP-only que bloqueiam IP do Supabase Edge (como `bkpac.cc`), sem reescrever o app pra TanStack Start e sem contratar VPS paga.
+Remover toda a lógica de proxy via Cloudflare Worker do backend, voltando a conexão direta com painéis IPTV. O usuário vai contratar uma VPS no futuro pra resolver o bloqueio do `bkpac.cc`. Enquanto isso, garantir que a mensagem de erro seja honesta (mostrar "servidor bloqueado" em vez de "usuário/senha inválidos").
 
-## Estratégia
+## O que será feito
 
-Criar um **Cloudflare Worker** (gratuito, 100k requests/dia) que atua como bridge HTTP→HTTPS. Sua edge function `iptv-login` já tem suporte a `IPTV_PROXY_URL` (vimos no código). Basta apontar pro Worker.
+### 1. Remover o helper de proxy
+- Apagar `supabase/functions/_shared/proxied-fetch.ts`.
 
-```text
-[Browser cliente]
-      ↓ HTTPS
-[supertechweb.lovable.app] (estático Lovable)
-      ↓ HTTPS
-[iptv-login edge function] (Supabase, IP bloqueado pelo bkpac.cc)
-      ↓ HTTPS  ← já existe a integração via IPTV_PROXY_URL
-[Cloudflare Worker]  ← NOVO (IP Cloudflare diferente do Supabase)
-      ↓ HTTP
-[bkpac.cc] (HTTP-only, aceita IP Cloudflare Worker)
-```
+### 2. Voltar edge functions a usar `fetch` direto
+Trocar todas as chamadas `proxiedFetch(...)` por `fetch(...)` simples nas funções:
+- `supabase/functions/iptv-login/index.ts`
+- `supabase/functions/iptv-categories/index.ts`
+- `supabase/functions/watch-progress/index.ts`
+- `supabase/functions/check-server/index.ts`
+- `supabase/functions/admin-api/index.ts`
 
-## Etapas
+Remover imports do `proxied-fetch`. Remover qualquer cache de "host bloqueado" (`_directBlockedUntil`).
 
-### 1. Você cria conta Cloudflare (grátis, 5min)
-- Acessa https://dash.cloudflare.com/sign-up
-- Confirma email
-- Vai em **Workers & Pages** → **Create Application** → **Create Worker**
-- Dá nome: `iptv-bridge`
-- Clica **Deploy**
+### 3. Corrigir classificação de erro no `iptv-login`
+Distinguir entre:
+- **Credenciais inválidas reais** (HTTP 401/403, `auth: 0` da resposta JSON do painel) → "Usuário ou senha inválidos".
+- **Bloqueio/inalcançável** (Connection reset, timeout, 404, DNS fail) → "Servidor indisponível ou bloqueado. Tente novamente ou contate o provedor."
 
-### 2. Eu te entrego o código do Worker (10 linhas)
-```js
-export default {
-  async fetch(request) {
-    const url = new URL(request.url);
-    const target = url.searchParams.get('url');
-    if (!target) return new Response('Missing url param', { status: 400 });
-    const upstream = await fetch(target, {
-      method: request.method,
-      headers: { 'User-Agent': 'IPTVSmartersPlayer' },
-      body: ['GET','HEAD'].includes(request.method) ? null : await request.text(),
-    });
-    return new Response(upstream.body, {
-      status: upstream.status,
-      headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': upstream.headers.get('content-type') || 'application/json' },
-    });
-  }
-};
-```
-Você cola no editor do Worker e clica **Save & Deploy**. Pronto, fica disponível em `https://iptv-bridge.SEU-USER.workers.dev`.
+Quando todos os servidores da allowlist falharem com erro de transporte (sem nenhum 401 real), retornar `SERVER_UNREACHABLE` em vez de `INVALID_CREDENTIALS`.
 
-### 3. Você adiciona o secret `IPTV_PROXY_URL` no Lovable
-- Setting do Lovable → Cloud → Secrets
-- Nome: `IPTV_PROXY_URL`
-- Valor: `https://iptv-bridge.SEU-USER.workers.dev`
+### 4. Atualizar mensagem no frontend
+- `src/services/iptv.ts`: mapear o novo código `SERVER_UNREACHABLE` pra mensagem clara em PT-BR.
 
-### 4. Eu testo (sem alterar código, já está pronto)
-- Faço login com `522937712 / 881573355` no seu app
-- Se aparecer "Bem-vindo": ✅ Worker passou pelo bloqueio. Problema resolvido pra TODOS painéis assim.
-- Se der erro: ❌ admin do bkpac.cc bloqueia Cloudflare em geral. Aí é VPS BR mesmo (te oriento na próxima etapa).
+### 5. Redeploy
+Redeployar as funções alteradas: `iptv-login`, `iptv-categories`, `watch-progress`, `check-server`, `admin-api`.
 
-### 5. Bonus (depois que confirmar)
-- Adiciono retry/fallback automático no app: se um painel não responde direto, tenta via proxy
-- Mensagem clara pro usuário: "Conectando via servidor seguro..."
-- Documento como adicionar/trocar VPS no futuro se Worker não bastar
+## O que NÃO vai mudar
 
-## Backup plan
-
-Se Worker falhar (~30% de chance), próximo passo é VPS BR:
-- Hostinger VPS BR R$15/mês (1GB RAM, suficiente)
-- Ou Magalu Cloud R$25/mês (BR garantido)
-- Mesmo processo: secret `IPTV_PROXY_URL` apontando pra IP da VPS
-- Te dou os comandos exatos pra subir Nginx + Caddy proxy
-
-## Custos
-
-| Solução | Custo | Garantia |
-|---|---|---|
-| Cloudflare Worker | R$0/mês | ~70% (provavelmente passa) |
-| VPS BR fallback | R$15-30/mês | 100% |
-
-## Não-objetivos (pra não inflar escopo)
-
-- Não vou reescrever o app pra TanStack Start (semanas de trabalho)
-- Não vou consertar agora os 5 outros bugs do app (sw.js 404, theme 401 etc) — depois disso resolvido, voltamos pra esses
-- Não vou mexer no design ou em outras features
+- A allowlist de servidores (incluindo `bkpac.cc`) **fica como está** — quando você tiver a VPS, é só apontar o backend pra ela e os servidores voltam a funcionar.
+- O secret `IPTV_PROXY_URL` continua cadastrado mas **inerte** (nenhum código vai usar). Você pode apagar manualmente em Cloud → Secrets quando quiser, sem afetar nada.
+- Auth, RLS, banco de dados — nada disso é tocado.
 
 ## Resultado esperado
 
-App `supertechweb.lovable.app` aceitando login com `bkpac.cc` igual o concorrente, sem custo (ou R$15/mês no pior caso).
+- Backend mais simples, sem dependência de proxy externo.
+- Painéis que **não bloqueiam** os IPs do Supabase (a maioria) continuam funcionando normal.
+- Painéis que **bloqueiam** (como `bkpac.cc`) vão mostrar erro honesto: "Servidor indisponível ou bloqueado", não mais "Usuário ou senha inválidos".
+- Quando você contratar a VPS no futuro, basta criar uma edge function nova ou variável apontando pra ela — base limpa pra isso.
+
+## Detalhes técnicos
+
+- `proxied-fetch.ts` será removido com `rm`. Não há outros consumidores fora das 5 funções listadas (vou confirmar com `rg` antes de remover).
+- O `SERVER_UNREACHABLE` será um novo valor no campo `error` do response JSON. Backward-compat: o frontend trata os dois (`INVALID_CREDENTIALS` continua funcionando).
+- Não há mudanças em banco, RLS, secrets ou config.toml.
