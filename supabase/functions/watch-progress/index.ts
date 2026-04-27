@@ -165,11 +165,16 @@ async function validateIptvCredentials(
     return false;
   }
 
-  // Tentamos múltiplas actions porque alguns painéis (ex: bkpac.cc) bloqueiam
-  // o IP do proxy no endpoint base sem `action`, mas respondem normalmente em
-  // endpoints com action. Qualquer resposta JSON 200 indica credenciais válidas
-  // (Xtream retorna 401/403/string vazia para credenciais inválidas).
+  // Tentamos múltiplas actions porque alguns painéis bloqueiam o endpoint base
+  // sem `action` mas respondem em endpoints com action. Qualquer resposta JSON
+  // 200 indica credenciais válidas (Xtream retorna 401/string vazia p/ inválido).
+  //
+  // IMPORTANTE: se TODAS as tentativas falharem por erro de rede ou HTTP não-2xx
+  // (sem nunca recebermos `auth=0`), tratamos como VÁLIDO. O usuário já passou
+  // pela validação no `iptv-login`; uma indisponibilidade temporária do painel
+  // (ex: bloqueio de IP do proxy) não deve invalidar a sessão dele aqui.
   const actions = ["", "get_live_categories", "get_vod_categories"];
+  let sawDefinitiveDeny = false;
   for (const base of bases) {
     for (const action of actions) {
       const qs = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}${action ? `&action=${action}` : ""}`;
@@ -184,18 +189,20 @@ async function validateIptvCredentials(
           redirect: "follow",
         });
         clearTimeout(t);
+        // 401/403 explícito = credencial negada de forma definitiva.
+        if (resp.status === 401 || resp.status === 403) {
+          sawDefinitiveDeny = true;
+          continue;
+        }
         if (!resp.ok) continue;
         const text = await resp.text();
         let data: any;
         try { data = JSON.parse(text); } catch { continue; }
-        // Action base: Xtream retorna user_info.auth.
         if (!action) {
           const auth = data?.user_info?.auth;
           if (auth === 1 || auth === "1") return true;
-          if (auth === 0 || auth === "0") continue; // tenta próxima estratégia
+          if (auth === 0 || auth === "0") { sawDefinitiveDeny = true; continue; }
         } else {
-          // Endpoints com action: array (mesmo vazio) ou objeto = credenciais OK.
-          // Credenciais inválidas tipicamente retornam string vazia / não-JSON / 401.
           if (Array.isArray(data) || (data && typeof data === "object")) return true;
         }
       } catch {
@@ -203,7 +210,12 @@ async function validateIptvCredentials(
       }
     }
   }
-  return false;
+  // Nenhuma resposta conclusiva: só nega se vimos um deny explícito.
+  if (sawDefinitiveDeny) return false;
+  console.warn(
+    `[watch-progress] validateIptvCredentials: painel inacessível para ${server}; aceitando credenciais (já validadas em iptv-login)`,
+  );
+  return true;
 }
 
 // ---------- DB helpers ----------
