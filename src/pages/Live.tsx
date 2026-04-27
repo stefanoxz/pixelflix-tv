@@ -198,23 +198,6 @@ const Live = () => {
             favorite={activeChannel ? isFavorite(activeChannel.stream_id) : false}
             onToggleFavorite={() => activeChannel && toggle(activeChannel.stream_id)}
           />
-
-          {/* Busca mobile (acima do FAB) — sm:hidden */}
-          <div className="md:hidden relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar canal..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              type="search"
-              inputMode="search"
-              enterKeyHint="search"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              className="pl-10 bg-secondary/50 border-border/50"
-            />
-          </div>
         </div>
 
         {/* Lista de canais (tablet/desktop) */}
