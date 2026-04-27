@@ -172,7 +172,7 @@ async function validateIptvCredentials(
       const t = setTimeout(() => ctrl.abort(), VALIDATE_TIMEOUT_MS);
       const resp = await proxiedFetch(url, {
         method: "GET",
-        headers: { "User-Agent": PRIMARY_UA, "Accept": "application/json" },
+        headers: { "User-Agent": PRIMARY_UA, "Accept": "application/json, */*" },
         signal: ctrl.signal,
         redirect: "follow",
       });
