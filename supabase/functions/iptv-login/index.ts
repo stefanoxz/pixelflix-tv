@@ -236,8 +236,7 @@ async function fetchOnce(
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     const body = await res.text();
-    // @ts-ignore - tag injetada por proxiedFetch
-    const route = (res._iptvRoute as "direct" | "proxy") ?? "direct";
+    const route: "direct" | "proxy" = "direct";
     return { res, body, route };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

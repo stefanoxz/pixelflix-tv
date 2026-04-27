@@ -1093,8 +1093,7 @@ Deno.serve(async (req) => {
             redirect: "follow",
             signal: AbortSignal.timeout(opts.timeout ?? timeoutMs),
           });
-          // @ts-ignore - tag injetada por proxiedFetch
-          const route: "direct" | "proxy" = (res as Response & { _iptvRoute?: "direct" | "proxy" })._iptvRoute ?? "direct";
+          const route: "direct" | "proxy" = "direct";
           let body = "";
           let size = 0;
           if (m !== "HEAD") {
@@ -1495,8 +1494,7 @@ Deno.serve(async (req) => {
             redirect: "follow",
             signal: AbortSignal.timeout(probeTimeout),
           });
-          // @ts-ignore tag
-          const route = (res as Response & { _iptvRoute?: "direct" | "proxy" })._iptvRoute ?? "direct";
+          const route: "direct" | "proxy" = "direct";
           const text = await res.text();
           let isXtream = false;
           let xAuth: number | string | null = null;
