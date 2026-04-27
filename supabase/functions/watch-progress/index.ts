@@ -146,7 +146,7 @@ function normalizeServerUrl(url: string | null | undefined): string {
 // ---------- Validação de credencial IPTV ----------
 
 const PRIMARY_UA = "VLC/3.0.20 LibVLC/3.0.20";
-const VALIDATE_TIMEOUT_MS = 5_000;
+const VALIDATE_TIMEOUT_MS = 15_000;
 
 async function validateIptvCredentials(
   server: string,
