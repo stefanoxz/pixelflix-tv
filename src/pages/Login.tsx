@@ -205,8 +205,12 @@ const Login = () => {
    */
   function handleLoginError(err: unknown) {
     const msg = err instanceof Error ? err.message : "Erro desconhecido";
-    if (err instanceof IptvLoginError && err.debug) {
-      const dbg = err.debug as {
+    // Duck-typing por nome em vez de `instanceof IptvLoginError`, para não
+    // forçar o módulo `services/iptv` a entrar no bundle inicial. Quando
+    // o handler é chamado, o módulo já foi carregado pelo dynamic import.
+    const errLike = err as { name?: string; debug?: unknown } | null;
+    if (errLike?.name === "IptvLoginError" && errLike.debug) {
+      const dbg = errLike.debug as {
         httpStatus?: number;
         contentType?: string | null;
         variant?: string;
