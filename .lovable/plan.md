@@ -1,62 +1,27 @@
-## Diagnóstico
+## Diagnóstico do "tela preta agora"
 
-A tela que você vê travada (logo SuperTech + "Uma nova experiência começa agora.") **NÃO é o React** — é o **placeholder estático em `index.html`** que aparece enquanto o bundle JS principal está sendo baixado/avaliado. Se ela fica visível por muito tempo, significa que o entry JS está demorando para chegar ou para executar.
+A cor exata da tela preta no print (`#0a0d18` aproximado) é o `background` definido no `<style>` do placeholder em `index.html`. O React até montou (os logs mostram `Toaster` e `InstallAppDialog` renderizando) mas **algo no boot está atrasando ou bloqueando o render do `<Login />`**, deixando a tela só com o fundo do body enquanto a UI ainda não pintou.
 
-Auditando o entry inicial (`main.tsx` → `App.tsx` → `Login`/`Sync`/`IptvProvider`), encontrei que tudo isto é **carregado de forma síncrona, antes do primeiro render real**:
+A causa provável é o `Suspense fallback={null}` que **embrulhou Sonner+Toaster+InstallAppDialog** na minha última mudança. O `Sonner` importa `next-themes`, que é avaliado de forma síncrona na primeira render — quando colocado dentro de um lazy boundary com `fallback={null}`, isso introduz **uma suspensão extra na árvore raiz** que adia o commit do `<BrowserRouter>` (e portanto do `<Login />`) até que o chunk lazy resolva. Em redes lentas ou no primeiro acesso após publicar, a tela fica preta nesse intervalo.
 
-1. **`src/services/iptv.ts` (1.873 linhas)** entra no bundle inicial via `Login.tsx` (e `IptvProvider`/`Sync`). Esse arquivo concentra ~todo o cliente IPTV (parsers, builders de URL, watchers, helpers de stream) que o `/login` quase não usa.
-2. **`@tanstack/react-query-persist-client` + `query-sync-storage-persister`** são executados de forma síncrona em `main.tsx`, antes do `createRoot`, lendo `localStorage` e re-hidratando o cache.
-3. **`Sync.tsx` é importado de forma não-lazy** em `App.tsx` (justificado para evitar flash, mas custa no boot do `/login`).
-4. **`Sonner`, `Toaster`, `TooltipProvider`, `InstallAppDialog`** entram todos no entry, mesmo na tela de login.
-5. O `IptvProvider` chama `fetchAllowedServers()` (uma edge function) já no boot — não bloqueia render, mas adiciona latência inicial percebida.
+Os warnings `Function components cannot be given refs` no `Toaster`/`InstallAppDialog` são pré-existentes — vieram dos componentes shadcn padrão (`Toaster` recebe ref do Sonner; `Dialog` do Radix). Não são a causa, mas vamos ignorá-los por ora.
 
-Como você só publicou recentemente, o navegador ainda não tem cache do bundle, então o problema fica muito visível.
+## Correção (mínima e segura)
 
-> Importante: as edge functions `admin-api` e `check-server` estão respondendo `200` agora (logs OK). O problema atual é **bundle size / cold start no cliente**, não autenticação ou backend.
+### 1. Reverter o lazy de Sonner/Toaster/InstallAppDialog
+Voltar a importar `Toaster`, `Sonner` e `InstallAppDialog` de forma estática em `App.tsx`. Eles são pequenos comparados ao bundle, e o ganho não vale o risco de bloquear o primeiro paint.
 
-## O que vai mudar
+### 2. Manter o que comprovadamente ajudou
+- `Sync` continua lazy (com `preloadSync()` no `Login` para evitar flash).
+- `services/iptv.ts` (1.873 linhas) continua dynamic-imported pelo `Login` e pelo `IptvProvider` — esse é o ganho real de bundle.
+- `persistQueryClient` continua em `requestIdleCallback` no `main.tsx`.
+- `fetchAllowedServers` continua em `requestIdleCallback` no `IptvProvider`.
 
-Mantém 100% do funcionamento atual. Todas as mudanças são de empacotamento.
-
-### 1. Tornar o `Sync` lazy (com prefetch)
-- `App.tsx`: `const Sync = lazy(() => import("./pages/Sync"))`.
-- Ao final do `Login` (logo antes do `navigate("/sync")`), disparar `import("./pages/Sync")` em paralelo com o login da edge — quando o usuário chegar em `/sync` o bundle já está pronto, sem flash do Suspense.
-
-### 2. Quebrar o `services/iptv.ts` em módulos
-Dividir o arquivo gigante em:
-- `services/iptv/login.ts` — `iptvLogin`, `iptvLoginM3u`, `IptvLoginError`, `fetchAllowedServers`, `resolveStreamBase`, `isHostAllowed` (o mínimo que o `/login` precisa).
-- `services/iptv/catalog.ts` — `getLiveCategories/Streams`, `getVod*`, `getSeries*`.
-- `services/iptv/streams.ts` — `buildLiveStreamUrl`, `buildVodStreamUrl`, `buildSeriesEpisodeUrl`, `requestStreamToken`, watchers.
-- `services/iptv/index.ts` — re-exporta tudo (mantém compatibilidade com imports atuais).
-
-Resultado: o `/login` puxa só `login.ts` (~150 linhas) em vez de 1.873.
-
-### 3. Adiar o persist do React Query
-Mover o `persistQueryClient` (em `main.tsx`) para dentro de um `requestIdleCallback` (com fallback `setTimeout`). O hidrate é só de cache de catálogo — não bloqueia o /login.
-
-### 4. Adiar Sonner/Toaster/InstallAppDialog
-Em `App.tsx`, transformar `Sonner`, `Toaster` e `InstallAppDialog` em `lazy` envoltos em `<Suspense fallback={null}>`. O React renderiza o `/login` antes; eles entram em seguida sem bloquear o LCP.
-
-### 5. Adiar `fetchAllowedServers` no boot
-No `IptvProvider`, só rodar a revalidação de DNS quando já houver `session` salva (já é o caso) **e** com `requestIdleCallback`, para não competir com o paint inicial.
-
-### 6. Verificação
-- `tsc --noEmit` para garantir tipagem dos imports re-exportados.
-- Smoke test mental: `/login` puro → digitar credenciais → `iptvLogin` (carrega `login.ts`) → `navigate('/sync')` → bundle de Sync já preloaded → catálogo carregado.
-
-## Detalhes técnicos (curtos)
-
-- Estratégia "barrel + re-export" mantém `import { iptvLogin, getLiveStreams, buildVodStreamUrl } from "@/services/iptv"` funcionando sem alterar nenhum consumidor.
-- O webplayer principal (Index/Live/Movies/Series) já é lazy — não regride.
-- O `/admin` é lazy — sem impacto.
-- Esperado: redução de ~40–60% no tamanho do JS inicial (entry + chunk do Login). Isso é o que mais ataca o "fica travado no logo após publicar".
+### 3. Remover o `Suspense fallback={null}` extra no App
+Sem o lazy dos toasters, o Suspense raiz não é mais necessário — só o do `<Routes>` permanece.
 
 ## Arquivos a editar
 
-- `src/App.tsx` — Sync lazy; Sonner/Toaster/InstallAppDialog lazy.
-- `src/main.tsx` — persist em idle.
-- `src/context/IptvContext.tsx` — fetchAllowedServers em idle.
-- `src/pages/Login.tsx` — prefetch do bundle de Sync ao iniciar login.
-- `src/services/iptv.ts` → dividir em `src/services/iptv/{login,catalog,streams,index}.ts`.
+- `src/App.tsx` — reverter imports de `Toaster`/`Sonner`/`InstallAppDialog` para estáticos; remover o `<Suspense fallback={null}>` em volta deles.
 
-Sem mudanças de UX, sem mudanças no backend, sem migração de dados.
+Nada mais muda. O ganho de boot (dynamic import do `services/iptv.ts` + idle persist) continua intacto, sem o efeito colateral da tela preta.
