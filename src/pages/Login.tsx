@@ -9,7 +9,11 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIptv } from "@/context/IptvContext";
-import { iptvLogin, iptvLoginM3u, resolveStreamBase, IptvLoginError } from "@/services/iptv";
+// O cliente IPTV (~1.873 linhas) é carregado sob demanda quando o usuário
+// envia o formulário — fora do bundle inicial do /login.
+import { preloadSync } from "@/App";
+const loadIptvClient = () => import("@/services/iptv");
+type IptvClient = typeof import("@/services/iptv");
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { parseM3uUrl } from "@/lib/parseM3uUrl";
