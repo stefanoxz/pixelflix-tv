@@ -1,30 +1,18 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { IptvProvider } from "@/context/IptvContext";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
+import { InstallAppDialog } from "@/components/InstallAppDialog";
 import Login from "./pages/Login";
 
-// Lazy boot: tudo que não é necessário para pintar o /login fica fora do
-// bundle inicial. Isso ataca o "tela travada no logo" depois de publicar
-// (sem cache de bundle no navegador).
-const Sonner = lazy(() =>
-  import("@/components/ui/sonner").then((m) => ({ default: m.Toaster })),
-);
-const Toaster = lazy(() =>
-  import("@/components/ui/toaster").then((m) => ({ default: m.Toaster })),
-);
-const InstallAppDialog = lazy(() =>
-  import("@/components/InstallAppDialog").then((m) => ({
-    default: m.InstallAppDialog,
-  })),
-);
-
-// Sync agora é lazy. Para evitar o flash do Suspense na transição
+// Sync continua lazy. Para evitar o flash do Suspense na transição
 // login→sync, o Login dispara `preloadSync()` em paralelo com a chamada
 // da edge de login.
 const syncLoader = () => import("./pages/Sync");
