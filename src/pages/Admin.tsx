@@ -44,6 +44,7 @@ import TeamPanel from "@/components/admin/TeamPanel";
 import StatsPanel from "@/components/admin/StatsPanel";
 import MaintenancePanel from "@/components/admin/MaintenancePanel";
 import UserDetailDialog from "@/components/admin/UserDetailDialog";
+import StreamEventsPanel from "@/components/admin/StreamEventsPanel";
 import { visibleAdminNav, findNavItem } from "@/components/admin/adminNav";
 import AdminMobileTopBar from "@/components/admin/AdminMobileTopBar";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
