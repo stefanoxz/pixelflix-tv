@@ -837,6 +837,7 @@ const Admin = () => {
                 : tab === "monitoring" ? "Sessões ativas, consumo e bloqueios — atualiza a cada 10s"
                 : tab === "reports" ? "Problemas relatados pelos usuários direto do player"
                 : tab === "dns-errors" ? "Distribuição de falhas por servidor — atualiza a cada 10s"
+                : tab === "stream-events" ? "Tokens, segmentos e erros do player — atualiza a cada 30s"
                 : tab === "users" ? "Quem está acessando a plataforma"
                 : tab === "endpoint-test" ? "Diagnóstico de uma DNS específica — exibe se a resposta veio direto ou via proxy"
                 : tab === "client-diagnostics" ? "Tentativas de login dos usuários com provedor, velocidade e localização — atualiza a cada 15s"
