@@ -44,6 +44,7 @@ import TeamPanel from "@/components/admin/TeamPanel";
 import StatsPanel from "@/components/admin/StatsPanel";
 import MaintenancePanel from "@/components/admin/MaintenancePanel";
 import UserDetailDialog from "@/components/admin/UserDetailDialog";
+import StreamEventsPanel from "@/components/admin/StreamEventsPanel";
 import { visibleAdminNav, findNavItem } from "@/components/admin/adminNav";
 import AdminMobileTopBar from "@/components/admin/AdminMobileTopBar";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
@@ -836,6 +837,7 @@ const Admin = () => {
                 : tab === "monitoring" ? "Sessões ativas, consumo e bloqueios — atualiza a cada 10s"
                 : tab === "reports" ? "Problemas relatados pelos usuários direto do player"
                 : tab === "dns-errors" ? "Distribuição de falhas por servidor — atualiza a cada 10s"
+                : tab === "stream-events" ? "Tokens, segmentos e erros do player — atualiza a cada 30s"
                 : tab === "users" ? "Quem está acessando a plataforma"
                 : tab === "endpoint-test" ? "Diagnóstico de uma DNS específica — exibe se a resposta veio direto ou via proxy"
                 : tab === "client-diagnostics" ? "Tentativas de login dos usuários com provedor, velocidade e localização — atualiza a cada 15s"
@@ -1328,6 +1330,10 @@ const Admin = () => {
                 </>
               );
             })()}
+          </TabsContent>
+
+          <TabsContent value="stream-events" className="space-y-6 mt-0">
+            <StreamEventsPanel />
           </TabsContent>
 
           <TabsContent value="dashboard" className="space-y-6 mt-0">

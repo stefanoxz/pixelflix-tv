@@ -10,6 +10,7 @@ import {
   Stethoscope,
   UserPlus,
   ShieldCheck,
+  ShieldAlert,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
@@ -36,6 +37,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { id: "monitoring", label: "Monitoramento", shortLabel: "Monitor", icon: Monitor, adminOnly: false, primaryMobile: true },
   { id: "reports", label: "Reportes", shortLabel: "Reportes", icon: Flag, adminOnly: false, primaryMobile: true },
   { id: "dns-errors", label: "Erros por DNS", shortLabel: "Erros", icon: AlertOctagon, adminOnly: false },
+  { id: "stream-events", label: "Stream / Segurança", shortLabel: "Stream", icon: ShieldAlert, adminOnly: false },
   { id: "users", label: "Usuários", shortLabel: "Usuários", icon: Users, adminOnly: false, primaryMobile: true },
   { id: "servers", label: "DNS / Servidores", shortLabel: "DNS", icon: Server, adminOnly: true },
   { id: "endpoint-test", label: "Testar endpoint", shortLabel: "Endpoint", icon: FlaskConical, adminOnly: false },
