@@ -491,9 +491,18 @@ const Admin = () => {
     if (!allowed.length) return;
     setHealthLoading(true);
     try {
-      const { data } = await supabase.functions.invoke("check-server", {
+      const { data, error } = await supabase.functions.invoke("check-server", {
         body: { urls: allowed.map((s) => s.server_url) },
       });
+      if (error) {
+        const status = (error as { context?: Response })?.context?.status;
+        if (status === 401 || status === 403) {
+          toast.error("Seu usuário não tem permissão para verificar DNS.");
+        } else if (manual || status === 503) {
+          toast.warning("Verificação de DNS indisponível no momento. Tente novamente em instantes.");
+        }
+        return;
+      }
       const results = (data as { results?: (Partial<HealthStatus> & { url: string; reason?: HealthReason })[] } | null)?.results ?? [];
       // Mapa server_url -> stream_broken (vindo do list_servers / admin-api)
       const brokenMap = new Map<string, boolean>();
@@ -544,7 +553,7 @@ const Admin = () => {
         }
       }
     } catch {
-      // silencioso — fallback "Verificando..." permanece
+      if (manual) toast.warning("Não foi possível verificar as DNS agora.");
     } finally {
       setHealthLoading(false);
     }
