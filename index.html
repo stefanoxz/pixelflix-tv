@@ -3,12 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>SuperTech – IPTV Web Player Premium</title>
-    <meta name="description" content="Player IPTV web moderno com canais ao vivo, filmes e séries em alta qualidade. Compatível com Xtream Codes.">
+    <title>SuperTech – Web Player Premium</title>
+    <meta name="description" content="Player web moderno de alta qualidade.">
     <link rel="preload" as="image" href="/logo-supertech.webp" fetchpriority="high" type="image/webp">
     <link rel="preconnect" href="https://cdn.gpteng.co" crossorigin>
-    <!-- Supabase: usado apenas após interação (login). dns-prefetch é mais barato que preconnect e evita o aviso "Unused preconnect". -->
-    <link rel="dns-prefetch" href="https://vxwwhvticucuzrtnsrzv.supabase.co">
+    <link rel="preconnect" href="https://vxwwhvticucuzrtnsrzv.supabase.co" crossorigin>
     <meta name="author" content="SuperTech" />
 
     <!-- PWA: instalável como aplicativo no PC, Android e iOS -->
@@ -29,51 +28,18 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@Lovable" />
     <meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/5ad1f9a6-41b1-4ad0-a9db-b437d36b6271/id-preview-a2e45b1a--1c24e52c-d430-494c-8e08-55923434b0dd.lovable.app-1777057316278.png">
-    <meta property="og:title" content="SuperTech – IPTV Web Player Premium">
-  <meta name="twitter:title" content="SuperTech – IPTV Web Player Premium">
-  <meta property="og:description" content="Player IPTV web moderno com canais ao vivo, filmes e séries em alta qualidade. Compatível com Xtream Codes.">
-  <meta name="twitter:description" content="Player IPTV web moderno com canais ao vivo, filmes e séries em alta qualidade. Compatível com Xtream Codes.">
+    
+  
+  
+  
+  <meta property="og:title" content="SuperTech – Web Player Premium">
+  <meta name="twitter:title" content="SuperTech – Web Player Premium">
+  <meta property="og:description" content="Player web moderno de alta qualidade.">
+  <meta name="twitter:description" content="Player web moderno de alta qualidade.">
 </head>
 
   <body>
-    <div id="root">
-      <!-- LCP placeholder: pintado imediatamente pelo HTML para reduzir o "element render delay".
-           É substituído assim que o React monta. Tudo inline (zero requests, zero JS, animações 100% GPU). -->
-      <style>
-        /* Reset mínimo só pro placeholder — elimina margem padrão do <body>
-           e a scrollbar branca que apareciam antes do Tailwind montar. */
-        html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#05060c}
-        @keyframes st-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.05);opacity:.92}}
-        @keyframes st-fade{0%{opacity:0;transform:translateY(4px)}100%{opacity:1;transform:translateY(0)}}
-        @keyframes st-text-fade{0%{opacity:0;transform:translateY(6px)}100%{opacity:.85;transform:translateY(0)}}
-        @keyframes st-float{0%{transform:translate3d(0,100vh,0);opacity:0}10%{opacity:.6}90%{opacity:.6}100%{transform:translate3d(0,-10vh,0);opacity:0}}
-        .st-p{position:absolute;bottom:0;width:3px;height:3px;border-radius:50%;background:#3b82f6;box-shadow:0 0 8px rgba(59,130,246,.65);will-change:transform,opacity;animation:st-float linear infinite}
-        .st-p:nth-child(1){left:5%;width:2px;height:2px;animation-duration:11s;animation-delay:-1s}
-        .st-p:nth-child(2){left:13%;width:3px;height:3px;animation-duration:9s;animation-delay:-5s}
-        .st-p:nth-child(3){left:22%;width:2px;height:2px;animation-duration:13s;animation-delay:-8s}
-        .st-p:nth-child(4){left:31%;width:4px;height:4px;animation-duration:10s;animation-delay:-2s}
-        .st-p:nth-child(5){left:40%;width:2px;height:2px;animation-duration:12s;animation-delay:-7s}
-        .st-p:nth-child(6){left:48%;width:3px;height:3px;animation-duration:14s;animation-delay:-3s}
-        .st-p:nth-child(7){left:57%;width:2px;height:2px;animation-duration:9s;animation-delay:-10s}
-        .st-p:nth-child(8){left:66%;width:4px;height:4px;animation-duration:11s;animation-delay:-4s}
-        .st-p:nth-child(9){left:74%;width:2px;height:2px;animation-duration:13s;animation-delay:-6s}
-        .st-p:nth-child(10){left:82%;width:3px;height:3px;animation-duration:8s;animation-delay:-9s}
-        .st-p:nth-child(11){left:90%;width:2px;height:2px;animation-duration:12s;animation-delay:-2s}
-        .st-p:nth-child(12){left:96%;width:3px;height:3px;animation-duration:10s;animation-delay:-11s}
-        @media (prefers-reduced-motion:reduce){.st-p{display:none}img[alt="SuperTech"]{animation:none!important}}
-      </style>
-      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#0d1530 0%,#070a14 60%,#05060c 100%);color:#fafafa;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:1rem;position:relative;overflow:hidden;">
-        <div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;overflow:hidden;">
-          <span class="st-p"></span><span class="st-p"></span><span class="st-p"></span><span class="st-p"></span><span class="st-p"></span><span class="st-p"></span><span class="st-p"></span><span class="st-p"></span><span class="st-p"></span><span class="st-p"></span><span class="st-p"></span><span class="st-p"></span>
-        </div>
-        <div style="position:absolute;top:50%;left:50%;width:480px;height:480px;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(30,120,255,0.18) 0%,transparent 65%);pointer-events:none;filter:blur(20px);"></div>
-        <div style="text-align:center;position:relative;animation:st-fade .5s ease-out both;">
-          <img src="/logo-supertech.webp" alt="SuperTech" width="80" height="80" fetchpriority="high" decoding="async" style="margin:0 auto 1rem;height:5rem;width:5rem;object-fit:contain;filter:drop-shadow(0 0 28px rgba(30,120,255,.55));animation:st-pulse 2.4s ease-in-out infinite;will-change:transform,opacity;" />
-          <h1 style="font-size:1.875rem;line-height:2.25rem;font-weight:700;letter-spacing:-0.02em;margin:0;background:linear-gradient(135deg,#ffffff 0%,#bcd5ff 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">SuperTech</h1>
-          <p style="margin:.75rem 0 0;font-size:.875rem;color:#8aa0c4;letter-spacing:.01em;animation:st-text-fade 1.2s ease-out .8s both;">Uma nova experiência começa agora.</p>
-        </div>
-      </div>
-    </div>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
