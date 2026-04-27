@@ -874,6 +874,10 @@ const Admin = () => {
             <TeamPanel />
           </TabsContent>
 
+          <TabsContent value="maintenance" className="space-y-6 mt-0">
+            <MaintenancePanel />
+          </TabsContent>
+
           <TabsContent value="stats" className="space-y-6 mt-0">
             <StatsPanel />
           </TabsContent>
