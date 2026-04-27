@@ -1332,6 +1332,10 @@ const Admin = () => {
             })()}
           </TabsContent>
 
+          <TabsContent value="stream-events" className="space-y-6 mt-0">
+            <StreamEventsPanel />
+          </TabsContent>
+
           <TabsContent value="dashboard" className="space-y-6 mt-0">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {statCards.map((s) => {
