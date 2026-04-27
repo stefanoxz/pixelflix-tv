@@ -170,7 +170,7 @@ async function validateIptvCredentials(
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), VALIDATE_TIMEOUT_MS);
-      const resp = await fetch(url, {
+      const resp = await proxiedFetch(url, {
         method: "GET",
         headers: { "User-Agent": PRIMARY_UA, "Accept": "application/json" },
         signal: ctrl.signal,
