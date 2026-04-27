@@ -42,6 +42,7 @@ import ClientDiagnosticsPanel from "@/components/admin/ClientDiagnosticsPanel";
 import PendingSignupsPanel from "@/components/admin/PendingSignupsPanel";
 import TeamPanel from "@/components/admin/TeamPanel";
 import StatsPanel from "@/components/admin/StatsPanel";
+import MaintenancePanel from "@/components/admin/MaintenancePanel";
 import { visibleAdminNav, findNavItem } from "@/components/admin/adminNav";
 import AdminMobileTopBar from "@/components/admin/AdminMobileTopBar";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
@@ -481,7 +482,7 @@ const Admin = () => {
   // Se o moderador cair em uma aba admin-only, manda pro dashboard.
   useEffect(() => {
     if (roleLoading) return;
-    const adminOnlyTabs = new Set(["servers", "pending-signups", "team"]);
+    const adminOnlyTabs = new Set(["servers", "pending-signups", "team", "maintenance"]);
     if (isModerator && !isAdmin && adminOnlyTabs.has(tab)) {
       setTab("dashboard");
     }
@@ -838,6 +839,7 @@ const Admin = () => {
                 : tab === "client-diagnostics" ? "Tentativas de login dos usuários com provedor, velocidade e localização — atualiza a cada 15s"
                 : tab === "pending-signups" ? "Cadastros aguardando sua aprovação para acessar o painel admin"
                 : tab === "team" ? "Gerencie quem tem acesso ao painel e veja o histórico de ações"
+                : tab === "maintenance" ? "Limpeza de logs antigos, encerramento de sessões ociosas e status das tabelas"
                 : "Cadastre as DNS autorizadas. Sem cadastro prévio, o cliente não consegue logar."}
             </p>
           </div>
