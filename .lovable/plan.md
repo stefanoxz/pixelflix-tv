@@ -1,61 +1,31 @@
-## Diagnóstico
+## Problema
 
-A tela preta no domínio publicado (`supertechweb.lovable.app`) tem uma causa **clara e específica** — não é cache nem boot lento:
+Na tela **Ao Vivo** (mobile), existe uma barra de busca exibida abaixo do player ("Buscar canal..."). Essa barra **não funciona visualmente** porque:
 
-```
-TypeError: Cannot read properties of undefined (reading 'createContext')
-  at vendor-D9BzRF4i.js
-```
+- A lista de canais filtrada (`filtered`) é renderizada apenas na sidebar desktop (`hidden lg:flex`) e dentro do `MobileChannelDrawer`.
+- No mobile, com o drawer fechado, digitar nessa barra atualiza o estado `search` mas **não há lista visível** para mostrar resultados — o usuário digita "globo" e nada acontece na tela.
+- O `MobileChannelDrawer` já tem sua própria barra de busca interna que funciona corretamente quando o drawer está aberto.
 
-Esse erro derruba o React **antes do primeiro paint**, então só aparece o `<body>` escuro vazio. O preview na Lovable funciona porque usa Vite em dev (sem chunking).
+Resultado: barra duplicada e aparentemente quebrada, conforme o screenshot enviado.
 
-### Causa raiz
+## Solução
 
-O `vite.config.ts` define `manualChunks` que separa o React (`vendor-react`) das bibliotecas que dependem dele (`vendor-radix`, `vendor-router`, `vendor-ui`, e o catch-all `vendor`). Em produção, alguma dessas libs (provavelmente `next-themes` dentro do `Sonner`, ou um `@radix-ui` específico) é avaliada **antes** do chunk do React terminar de inicializar — e quando ela faz `React.createContext(...)` no topo do módulo, o `React` ainda é `undefined`.
+Remover a barra de busca mobile redundante do `Live.tsx`. A busca continuará disponível através do botão flutuante **"Canais"** (FAB) que abre o drawer — onde já existe um campo de busca funcional no topo.
 
-Esse é um problema clássico de ordem de inicialização entre chunks ESM quando se separa o React manualmente. A solução padrão e segura é deixar o Vite agrupar React + libs que dependem de React no mesmo chunk.
+## Mudança técnica
 
-## Correção
+**Arquivo:** `src/pages/Live.tsx`
 
-**Arquivo: `vite.config.ts`**
+Remover o bloco JSX da busca mobile (linhas ~232-247, o `<div className="md:hidden relative">` que contém o `<Input placeholder="Buscar canal...">`).
 
-Remover o `manualChunks` por completo e deixar o Vite usar a heurística padrão (que respeita ordem de import). O ganho de cache que o chunking trazia é marginal comparado ao custo de quebrar o app.
+Nada mais precisa mudar:
+- O estado `search` / `debouncedSearch` continua sendo usado pelo drawer.
+- O atalho de teclado `/` (`onSearchFocus`) continua válido para desktop (foca o input do `LibraryTopBar`).
+- A barra de busca do desktop (dentro do `LibraryTopBar`, `hidden md:block`) permanece intacta.
+- A barra de busca dentro do `MobileChannelDrawer` permanece como fonte única de busca no mobile.
 
-Antes:
-```ts
-build: {
-  rollupOptions: {
-    output: {
-      manualChunks(id) {
-        if (!id.includes("node_modules")) return;
-        if (id.includes("react-dom") || /[\\/]react[\\/]/.test(id) || id.includes("scheduler")) return "vendor-react";
-        if (id.includes("react-router")) return "vendor-router";
-        if (id.includes("@radix-ui")) return "vendor-radix";
-        // ...
-      },
-    },
-  },
-},
-```
+## Resultado esperado
 
-Depois:
-```ts
-build: {
-  // Deixa o Vite decidir o chunking automaticamente.
-  // O manualChunks anterior quebrava a ordem de init (React undefined no createContext).
-},
-```
-
-## Por que isso resolve
-
-1. Sem `manualChunks`, o Vite gera um único `vendor` ou divide automaticamente respeitando o grafo de imports — o React é garantidamente avaliado antes de qualquer lib que o consuma.
-2. Os chunks de página (lazy `Index`, `Live`, `Movies`, `Series`, `Sync`, `Admin`, `iptv.ts` dinâmico) **continuam separados** porque vêm de `import()` dinâmicos no código — não dependem do `manualChunks`.
-3. O bundle inicial fica um pouco maior, mas a app **carrega**, em vez de falhar silenciosamente.
-
-## Próximos passos depois do deploy
-
-1. Aplicar a mudança e clicar em **Update** no diálogo de publicação (mudança de frontend).
-2. Abrir `supertechweb.lovable.app` em aba anônima para evitar SW/cache antigo.
-3. Confirmar que a tela de login aparece.
-
-Se quiser reintroduzir chunking depois pra otimizar cache, dá pra fazer com cuidado (agrupando React + Radix + Router no mesmo chunk), mas isso é otimização — não bloqueia o app.
+- Mobile: usuário toca em **"Canais"** (FAB) → drawer abre → barra de busca no topo do drawer filtra a lista visível ali mesmo.
+- Desktop: continua igual (busca no topbar, lista lateral atualiza).
+- Sem barra fantasma quebrada na tela principal do mobile.
