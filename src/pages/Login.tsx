@@ -9,7 +9,11 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIptv } from "@/context/IptvContext";
-import { iptvLogin, iptvLoginM3u, resolveStreamBase, IptvLoginError } from "@/services/iptv";
+// O cliente IPTV (~1.873 linhas) é carregado sob demanda quando o usuário
+// envia o formulário — fora do bundle inicial do /login.
+import { preloadSync } from "@/App";
+const loadIptvClient = () => import("@/services/iptv");
+type IptvClient = typeof import("@/services/iptv");
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { parseM3uUrl } from "@/lib/parseM3uUrl";
@@ -67,13 +71,17 @@ const Login = () => {
   ) => {
     setLoading(true);
     try {
-      const data = await iptvLogin({
+      // Carrega cliente IPTV e prefetch do bundle de Sync em paralelo —
+      // quando navegar para /sync o chunk já estará pronto.
+      preloadSync();
+      const iptv = await loadIptvClient();
+      const data = await iptv.iptvLogin({
         server: serverArg,
         username: user,
         password: pass,
       });
       const resolvedServer = data.server_url ?? serverArg ?? "";
-      const streamBase = resolveStreamBase(
+      const streamBase = iptv.resolveStreamBase(
         data.server_info,
         resolvedServer,
         data.allowed_servers,
@@ -145,13 +153,15 @@ const Login = () => {
     setErrors({});
     setLoading(true);
     try {
-      const data = await iptvLoginM3u({
+      preloadSync();
+      const iptv = await loadIptvClient();
+      const data = await iptv.iptvLoginM3u({
         server: parsed.server,
         username: parsed.username,
         password: parsed.password,
       });
       const resolvedServer = data.server_url ?? parsed.server;
-      const streamBase = resolveStreamBase(
+      const streamBase = iptv.resolveStreamBase(
         data.server_info,
         resolvedServer,
         data.allowed_servers,
@@ -195,8 +205,12 @@ const Login = () => {
    */
   function handleLoginError(err: unknown) {
     const msg = err instanceof Error ? err.message : "Erro desconhecido";
-    if (err instanceof IptvLoginError && err.debug) {
-      const dbg = err.debug as {
+    // Duck-typing por nome em vez de `instanceof IptvLoginError`, para não
+    // forçar o módulo `services/iptv` a entrar no bundle inicial. Quando
+    // o handler é chamado, o módulo já foi carregado pelo dynamic import.
+    const errLike = err as { name?: string; debug?: unknown } | null;
+    if (errLike?.name === "IptvLoginError" && errLike.debug) {
+      const dbg = errLike.debug as {
         httpStatus?: number;
         contentType?: string | null;
         variant?: string;

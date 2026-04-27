@@ -35,28 +35,39 @@ const PERSISTED_KEYS = new Set([
 ]);
 
 if (typeof window !== "undefined") {
-  const persister = createSyncStoragePersister({
-    storage: window.localStorage,
-    key: "pixelflix-rq-cache",
-    throttleTime: 1000,
-  });
-
-  // Hidratação imperativa — não envolve Suspense, evitando races de mount
-  // que causavam "Failed to execute 'removeChild' on 'Node'" durante o
-  // primeiro commit da rota /login.
-  persistQueryClient({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    queryClient: queryClient as any,
-    persister,
-    maxAge: 12 * 60 * 60 * 1000,
-    buster: "v1",
-    dehydrateOptions: {
-      shouldDehydrateQuery: (q) => {
-        const k = q.queryKey?.[0];
-        return typeof k === "string" && PERSISTED_KEYS.has(k);
+  // Adia a hidratação do cache persistido para idle: o /login não depende
+  // dele e o trabalho de ler+desserializar o localStorage estava competindo
+  // com o paint inicial, deixando o app "travado" no splash do index.html
+  // logo depois de publicar (sem cache de bundle no navegador).
+  const hydrate = () => {
+    const persister = createSyncStoragePersister({
+      storage: window.localStorage,
+      key: "pixelflix-rq-cache",
+      throttleTime: 1000,
+    });
+    persistQueryClient({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      queryClient: queryClient as any,
+      persister,
+      maxAge: 12 * 60 * 60 * 1000,
+      buster: "v1",
+      dehydrateOptions: {
+        shouldDehydrateQuery: (q) => {
+          const k = q.queryKey?.[0];
+          return typeof k === "string" && PERSISTED_KEYS.has(k);
+        },
       },
-    },
-  });
+    });
+  };
+
+  const w = window as Window & {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+  };
+  if (typeof w.requestIdleCallback === "function") {
+    w.requestIdleCallback(hydrate, { timeout: 1500 });
+  } else {
+    setTimeout(hydrate, 200);
+  }
 }
 
 createRoot(document.getElementById("root")!).render(

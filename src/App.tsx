@@ -1,19 +1,35 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Loader2 } from "lucide-react";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { IptvProvider } from "@/context/IptvContext";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
-import { InstallAppDialog } from "@/components/InstallAppDialog";
 import Login from "./pages/Login";
-// Sync é importada de forma direta (não-lazy) para evitar o flash
-// do spinner do Suspense entre o login e a tela de sincronização.
-import Sync from "./pages/Sync";
+
+// Lazy boot: tudo que não é necessário para pintar o /login fica fora do
+// bundle inicial. Isso ataca o "tela travada no logo" depois de publicar
+// (sem cache de bundle no navegador).
+const Sonner = lazy(() =>
+  import("@/components/ui/sonner").then((m) => ({ default: m.Toaster })),
+);
+const Toaster = lazy(() =>
+  import("@/components/ui/toaster").then((m) => ({ default: m.Toaster })),
+);
+const InstallAppDialog = lazy(() =>
+  import("@/components/InstallAppDialog").then((m) => ({
+    default: m.InstallAppDialog,
+  })),
+);
+
+// Sync agora é lazy. Para evitar o flash do Suspense na transição
+// login→sync, o Login dispara `preloadSync()` em paralelo com a chamada
+// da edge de login.
+const syncLoader = () => import("./pages/Sync");
+const Sync = lazy(syncLoader);
+export const preloadSync = syncLoader;
 
 // Lazy-load non-landing routes to reduce initial bundle size.
 // Each route exposes a `preload*` helper so the Sync screen can prefetch
@@ -57,78 +73,82 @@ const WithChrome = ({ children }: { children: React.ReactNode }) => (
 
 const App = () => (
   <IptvProvider>
-      <TooltipProvider>
+    <TooltipProvider>
+      {/* Toasters/InstallDialog ficam atrás de Suspense fallback={null}
+          para não bloquearem o primeiro paint do /login. */}
+      <Suspense fallback={null}>
         <Toaster />
         <Sonner position="top-right" theme="dark" />
         <InstallAppDialog />
-        <BrowserRouter>
-          <Suspense fallback={<RouteFallback />}>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/admin/login" element={<AdminLogin />} />
-              <Route path="/admin/reset-password" element={<AdminResetPassword />} />
-              <Route
-                path="/admin"
-                element={
-                  <AdminProtectedRoute>
-                    <Admin />
-                  </AdminProtectedRoute>
-                }
-              />
+      </Suspense>
+      <BrowserRouter>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/reset-password" element={<AdminResetPassword />} />
+            <Route
+              path="/admin"
+              element={
+                <AdminProtectedRoute>
+                  <Admin />
+                </AdminProtectedRoute>
+              }
+            />
 
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <WithChrome><Index /></WithChrome>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/sync"
-                element={
-                  <ProtectedRoute>
-                    <Sync />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/live"
-                element={
-                  <ProtectedRoute>
-                    <WithChrome><Live /></WithChrome>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/movies"
-                element={
-                  <ProtectedRoute>
-                    <WithChrome><Movies /></WithChrome>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/series"
-                element={
-                  <ProtectedRoute>
-                    <WithChrome><SeriesPage /></WithChrome>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/account"
-                element={
-                  <ProtectedRoute>
-                    <WithChrome><Account /></WithChrome>
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-      </TooltipProvider>
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <WithChrome><Index /></WithChrome>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/sync"
+              element={
+                <ProtectedRoute>
+                  <Sync />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/live"
+              element={
+                <ProtectedRoute>
+                  <WithChrome><Live /></WithChrome>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/movies"
+              element={
+                <ProtectedRoute>
+                  <WithChrome><Movies /></WithChrome>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/series"
+              element={
+                <ProtectedRoute>
+                  <WithChrome><SeriesPage /></WithChrome>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/account"
+              element={
+                <ProtectedRoute>
+                  <WithChrome><Account /></WithChrome>
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+      </BrowserRouter>
+    </TooltipProvider>
   </IptvProvider>
 );
 

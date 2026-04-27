@@ -5,10 +5,6 @@ import {
   type IptvSession,
 } from "./iptv-context";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  fetchAllowedServers,
-  isHostAllowed,
-} from "@/services/iptv";
 import { queryClient } from "@/main";
 import { toast } from "sonner";
 
@@ -36,15 +32,18 @@ export function IptvProvider({ children }: { children: ReactNode }) {
     supabase.auth.signOut().catch(() => {});
   };
 
-  // Boot-time revalidation:
-  //  • Se `creds.server` não está mais na allowlist → logout e novo login.
-  //  • Se `server` está OK mas `streamBase` aponta para host fantasma
-  //    (herdado de server_info de uma sessão antiga), reescreve o streamBase
-  //    para o server autorizado SEM deslogar (UX melhor).
+  // Boot-time revalidation: só roda quando há sessão salva e em
+  // `requestIdleCallback` para não competir com o paint inicial. O
+  // `services/iptv.ts` (1.873 linhas) é carregado via dynamic import —
+  // fica fora do bundle inicial do /login.
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
-    (async () => {
+
+    const run = async () => {
+      const { fetchAllowedServers, isHostAllowed } = await import(
+        "@/services/iptv"
+      );
       const allowed = await fetchAllowedServers();
       if (cancelled || allowed.length === 0) return;
 
@@ -71,9 +70,28 @@ export function IptvProvider({ children }: { children: ReactNode }) {
           creds: { ...session.creds, streamBase: server },
         });
       }
-    })();
+    };
+
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    let idleId: number | undefined;
+    let timeoutId: number | undefined;
+    if (typeof w.requestIdleCallback === "function") {
+      idleId = w.requestIdleCallback(() => {
+        run();
+      }, { timeout: 2500 });
+    } else {
+      timeoutId = window.setTimeout(run, 800);
+    }
+
     return () => {
       cancelled = true;
+      if (idleId !== undefined && typeof w.cancelIdleCallback === "function") {
+        w.cancelIdleCallback(idleId);
+      }
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -1,53 +1,62 @@
-## Objetivo
+## Diagnóstico
 
-Deixar `/admin` confortável de usar no celular sem alterar nada do webplayer (rotas `/`, `/login`, conteúdo etc.). Todas as mudanças ficam dentro de `src/pages/Admin.tsx` e arquivos novos sob `src/components/admin/`.
+A tela que você vê travada (logo SuperTech + "Uma nova experiência começa agora.") **NÃO é o React** — é o **placeholder estático em `index.html`** que aparece enquanto o bundle JS principal está sendo baixado/avaliado. Se ela fica visível por muito tempo, significa que o entry JS está demorando para chegar ou para executar.
 
-## Problema atual no mobile
+Auditando o entry inicial (`main.tsx` → `App.tsx` → `Login`/`Sync`/`IptvProvider`), encontrei que tudo isto é **carregado de forma síncrona, antes do primeiro render real**:
 
-A "sidebar" no mobile vira um bloco vertical com 11 botões empilhados acima do conteúdo. Pra trocar de aba o usuário rola pra cima, encontra o item, clica e rola pra baixo de novo. O header da página também quebra, e ações rápidas (logout, voltar) ficam escondidas.
+1. **`src/services/iptv.ts` (1.873 linhas)** entra no bundle inicial via `Login.tsx` (e `IptvProvider`/`Sync`). Esse arquivo concentra ~todo o cliente IPTV (parsers, builders de URL, watchers, helpers de stream) que o `/login` quase não usa.
+2. **`@tanstack/react-query-persist-client` + `query-sync-storage-persister`** são executados de forma síncrona em `main.tsx`, antes do `createRoot`, lendo `localStorage` e re-hidratando o cache.
+3. **`Sync.tsx` é importado de forma não-lazy** em `App.tsx` (justificado para evitar flash, mas custa no boot do `/login`).
+4. **`Sonner`, `Toaster`, `TooltipProvider`, `InstallAppDialog`** entram todos no entry, mesmo na tela de login.
+5. O `IptvProvider` chama `fetchAllowedServers()` (uma edge function) já no boot — não bloqueia render, mas adiciona latência inicial percebida.
 
-## Solução
+Como você só publicou recentemente, o navegador ainda não tem cache do bundle, então o problema fica muito visível.
 
-Manter o desktop exatamente como está (sidebar fixa à esquerda) e introduzir um shell mobile dedicado:
+> Importante: as edge functions `admin-api` e `check-server` estão respondendo `200` agora (logs OK). O problema atual é **bundle size / cold start no cliente**, não autenticação ou backend.
 
-### 1. Top bar mobile fixa
-- Altura compacta (`h-12`), aparece só em `< lg`.
-- Esquerda: botão "menu" (hamburger) que abre um Sheet/Drawer com a navegação completa.
-- Centro: título da seção atual (Dashboard, Estatísticas, etc.).
-- Direita: badge de papel (Admin/Moderador) e menu de overflow com "Voltar ao app" e "Sair".
+## O que vai mudar
 
-### 2. Bottom navigation mobile
-- Barra fixa no rodapé (`< lg`), 5 atalhos para as seções mais usadas: Dashboard, Estatísticas, Monitoramento, Reportes, Usuários.
-- Item ativo destacado com `text-primary` + indicador.
-- As outras 6 seções (DNS errors, Endpoint, Diagnóstico, Servidores, Cadastros, Equipe) ficam acessíveis pelo Drawer do hamburger — incluindo as `adminOnly` que continuam filtradas por papel.
+Mantém 100% do funcionamento atual. Todas as mudanças são de empacotamento.
 
-### 3. Drawer (Sheet lateral) com nav completa
-- Reaproveita a lista atual de itens (`navItems`) e o filtro `adminOnly`.
-- Fecha automaticamente ao escolher uma aba.
-- Inclui "Voltar ao app" e "Sair" dentro do próprio drawer.
+### 1. Tornar o `Sync` lazy (com prefetch)
+- `App.tsx`: `const Sync = lazy(() => import("./pages/Sync"))`.
+- Ao final do `Login` (logo antes do `navigate("/sync")`), disparar `import("./pages/Sync")` em paralelo com o login da edge — quando o usuário chegar em `/sync` o bundle já está pronto, sem flash do Suspense.
 
-### 4. Ajustes de conteúdo pra caber no celular
-- `<main>` ganha `pb-20 lg:pb-8` pra não esconder conteúdo atrás da bottom-nav.
-- Header da página: título reduz pra `text-2xl` em mobile, badges/ações empilham.
-- Cartões de stats: grid `grid-cols-2 lg:grid-cols-4` (já tá perto disso, conferir).
-- Tabelas largas (login_events, sessions): wrapper `overflow-x-auto` com hint visual de "deslize".
+### 2. Quebrar o `services/iptv.ts` em módulos
+Dividir o arquivo gigante em:
+- `services/iptv/login.ts` — `iptvLogin`, `iptvLoginM3u`, `IptvLoginError`, `fetchAllowedServers`, `resolveStreamBase`, `isHostAllowed` (o mínimo que o `/login` precisa).
+- `services/iptv/catalog.ts` — `getLiveCategories/Streams`, `getVod*`, `getSeries*`.
+- `services/iptv/streams.ts` — `buildLiveStreamUrl`, `buildVodStreamUrl`, `buildSeriesEpisodeUrl`, `requestStreamToken`, watchers.
+- `services/iptv/index.ts` — re-exporta tudo (mantém compatibilidade com imports atuais).
 
-### 5. Webplayer intacto
-- Nada fora de `src/pages/Admin.tsx`, `src/components/admin/*`, `src/components/AdminProtectedRoute.tsx` é tocado.
-- Sem mudar `App.tsx`, rotas, theme, tokens globais, ou componentes compartilhados (`Button`, `Sheet`, etc.).
+Resultado: o `/login` puxa só `login.ts` (~150 linhas) em vez de 1.873.
 
-## Detalhes técnicos
+### 3. Adiar o persist do React Query
+Mover o `persistQueryClient` (em `main.tsx`) para dentro de um `requestIdleCallback` (com fallback `setTimeout`). O hidrate é só de cache de catálogo — não bloqueia o /login.
 
-- Extrair os `navItems` (hoje inline) pra constante exportada num arquivo novo `src/components/admin/adminNav.ts` pra reuso entre sidebar desktop, drawer e bottom-nav.
-- Criar `src/components/admin/AdminMobileTopBar.tsx` (Sheet com nav completa).
-- Criar `src/components/admin/AdminBottomNav.tsx` (5 atalhos fixos).
-- A sidebar desktop atual (`<aside class="lg:w-64 …">`) ganha `hidden lg:flex` pra sumir no mobile (em vez de virar bloco empilhado).
-- Bottom-nav usa `fixed bottom-0 inset-x-0 lg:hidden border-t bg-card/95 backdrop-blur z-40`.
-- Seleção da aba ativa continua via `setTab(id)` e `searchParams` — sem mudar a lógica de estado existente.
-- Sem novos pacotes; usa `Sheet` shadcn já instalado.
+### 4. Adiar Sonner/Toaster/InstallAppDialog
+Em `App.tsx`, transformar `Sonner`, `Toaster` e `InstallAppDialog` em `lazy` envoltos em `<Suspense fallback={null}>`. O React renderiza o `/login` antes; eles entram em seguida sem bloquear o LCP.
 
-## Fora do escopo
+### 5. Adiar `fetchAllowedServers` no boot
+No `IptvProvider`, só rodar a revalidação de DNS quando já houver `session` salva (já é o caso) **e** com `requestIdleCallback`, para não competir com o paint inicial.
 
-- Refatorar painéis individuais (StatsPanel, MonitoringPanel etc.). Só envolvemos eles num shell mobile melhor.
-- Mudar tema, cores ou tokens globais.
-- Tocar em `/login`, `/`, ou qualquer rota do webplayer.
+### 6. Verificação
+- `tsc --noEmit` para garantir tipagem dos imports re-exportados.
+- Smoke test mental: `/login` puro → digitar credenciais → `iptvLogin` (carrega `login.ts`) → `navigate('/sync')` → bundle de Sync já preloaded → catálogo carregado.
+
+## Detalhes técnicos (curtos)
+
+- Estratégia "barrel + re-export" mantém `import { iptvLogin, getLiveStreams, buildVodStreamUrl } from "@/services/iptv"` funcionando sem alterar nenhum consumidor.
+- O webplayer principal (Index/Live/Movies/Series) já é lazy — não regride.
+- O `/admin` é lazy — sem impacto.
+- Esperado: redução de ~40–60% no tamanho do JS inicial (entry + chunk do Login). Isso é o que mais ataca o "fica travado no logo após publicar".
+
+## Arquivos a editar
+
+- `src/App.tsx` — Sync lazy; Sonner/Toaster/InstallAppDialog lazy.
+- `src/main.tsx` — persist em idle.
+- `src/context/IptvContext.tsx` — fetchAllowedServers em idle.
+- `src/pages/Login.tsx` — prefetch do bundle de Sync ao iniciar login.
+- `src/services/iptv.ts` → dividir em `src/services/iptv/{login,catalog,streams,index}.ts`.
+
+Sem mudanças de UX, sem mudanças no backend, sem migração de dados.
