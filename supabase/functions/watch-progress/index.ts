@@ -165,28 +165,42 @@ async function validateIptvCredentials(
     return false;
   }
 
+  // Tentamos múltiplas actions porque alguns painéis (ex: bkpac.cc) bloqueiam
+  // o IP do proxy no endpoint base sem `action`, mas respondem normalmente em
+  // endpoints com action. Qualquer resposta JSON 200 indica credenciais válidas
+  // (Xtream retorna 401/403/string vazia para credenciais inválidas).
+  const actions = ["", "get_live_categories", "get_vod_categories"];
   for (const base of bases) {
-    const url = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), VALIDATE_TIMEOUT_MS);
-      const resp = await proxiedFetch(url, {
-        method: "GET",
-        headers: { "User-Agent": PRIMARY_UA, "Accept": "application/json, */*" },
-        signal: ctrl.signal,
-        redirect: "follow",
-      });
-      clearTimeout(t);
-      if (!resp.ok) continue;
-      const text = await resp.text();
-      let data: any;
-      try { data = JSON.parse(text); } catch { continue; }
-      const auth = data?.user_info?.auth;
-      // Xtream retorna user_info.auth=1 quando válido.
-      if (auth === 1 || auth === "1") return true;
-      if (auth === 0 || auth === "0") return false;
-    } catch {
-      continue;
+    for (const action of actions) {
+      const qs = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}${action ? `&action=${action}` : ""}`;
+      const url = `${base}/player_api.php?${qs}`;
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), VALIDATE_TIMEOUT_MS);
+        const resp = await proxiedFetch(url, {
+          method: "GET",
+          headers: { "User-Agent": PRIMARY_UA, "Accept": "application/json, */*" },
+          signal: ctrl.signal,
+          redirect: "follow",
+        });
+        clearTimeout(t);
+        if (!resp.ok) continue;
+        const text = await resp.text();
+        let data: any;
+        try { data = JSON.parse(text); } catch { continue; }
+        // Action base: Xtream retorna user_info.auth.
+        if (!action) {
+          const auth = data?.user_info?.auth;
+          if (auth === 1 || auth === "1") return true;
+          if (auth === 0 || auth === "0") continue; // tenta próxima estratégia
+        } else {
+          // Endpoints com action: array (mesmo vazio) ou objeto = credenciais OK.
+          // Credenciais inválidas tipicamente retornam string vazia / não-JSON / 401.
+          if (Array.isArray(data) || (data && typeof data === "object")) return true;
+        }
+      } catch {
+        continue;
+      }
     }
   }
   return false;
