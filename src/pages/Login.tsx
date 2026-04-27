@@ -153,13 +153,15 @@ const Login = () => {
     setErrors({});
     setLoading(true);
     try {
-      const data = await iptvLoginM3u({
+      preloadSync();
+      const iptv = await loadIptvClient();
+      const data = await iptv.iptvLoginM3u({
         server: parsed.server,
         username: parsed.username,
         password: parsed.password,
       });
       const resolvedServer = data.server_url ?? parsed.server;
-      const streamBase = resolveStreamBase(
+      const streamBase = iptv.resolveStreamBase(
         data.server_info,
         resolvedServer,
         data.allowed_servers,
