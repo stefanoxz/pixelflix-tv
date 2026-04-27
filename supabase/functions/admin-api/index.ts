@@ -66,7 +66,20 @@ const ADMIN_ONLY_ACTIONS = new Set([
   "update_team_role",
   "remove_team_member",
   "list_audit_log",
+  "cleanup_table",
+  "evict_idle_now",
 ]);
+
+// Tabelas permitidas para limpeza manual via UI. Cada uma mapeia a uma RPC
+// `cleanup_*` SECURITY DEFINER que já existe no banco — evita expor SQL bruto
+// ou nomes arbitrários de tabela na superfície da API.
+const CLEANUP_FUNCTIONS: Record<string, { fn: string; label: string; retentionDays: number }> = {
+  login_events: { fn: "cleanup_login_events", label: "Logins", retentionDays: 90 },
+  stream_events: { fn: "cleanup_stream_events", label: "Eventos de stream", retentionDays: 30 },
+  client_diagnostics: { fn: "cleanup_client_diagnostics", label: "Diagnóstico de clientes", retentionDays: 30 },
+  used_nonces: { fn: "cleanup_used_nonces", label: "Nonces usados", retentionDays: 1 },
+  admin_audit_log: { fn: "cleanup_admin_audit_log", label: "Audit log", retentionDays: 180 },
+};
 
 // Ações que moderador também pode executar (escrita operacional).
 // Esta lista é informativa — qualquer ação não-restrita roda para
