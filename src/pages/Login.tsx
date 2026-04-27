@@ -71,13 +71,17 @@ const Login = () => {
   ) => {
     setLoading(true);
     try {
-      const data = await iptvLogin({
+      // Carrega cliente IPTV e prefetch do bundle de Sync em paralelo —
+      // quando navegar para /sync o chunk já estará pronto.
+      preloadSync();
+      const iptv = await loadIptvClient();
+      const data = await iptv.iptvLogin({
         server: serverArg,
         username: user,
         password: pass,
       });
       const resolvedServer = data.server_url ?? serverArg ?? "";
-      const streamBase = resolveStreamBase(
+      const streamBase = iptv.resolveStreamBase(
         data.server_info,
         resolvedServer,
         data.allowed_servers,
