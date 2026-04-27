@@ -1018,8 +1018,7 @@ Deno.serve(async (req) => {
 
     // ---------- TEST ENDPOINT (admin diagnostics) ----------
     // Faz UMA requisição contra um endpoint IPTV usando o pipeline real
-    // (proxiedFetch com fallback automático direto → proxy) e devolve qual
-    // rota foi efetivamente usada + status HTTP + preview do corpo.
+    // (fetch direto) e devolve status HTTP + preview do corpo.
     //
     // payload: {
     //   server_url: string;          // ex: "http://bkpac.cc:80"
@@ -1573,12 +1572,8 @@ Deno.serve(async (req) => {
       const suggestions: string[] = [];
       const best = candidates[0];
 
-      if (failureCode === "geo_blocked" || candidates.some((c) => c.route === "proxy")) {
-        if (false) {
-          suggestions.push("Proxy está configurado: requisições já fazem fallback automático quando o IP do Supabase é bloqueado. Nenhuma ação manual necessária.");
-        } else {
-          suggestions.push("Configure o secret IPTV_PROXY_URL para habilitar fallback automático via proxy quando o servidor bloquear o IP do Supabase.");
-        }
+      if (failureCode === "geo_blocked") {
+        suggestions.push("O servidor parece estar bloqueando o IP do backend. Considere usar uma VPS própria como proxy, ou solicite à revenda uma DNS alternativa.");
       }
 
       if (failureCode === "bad_credentials") {
