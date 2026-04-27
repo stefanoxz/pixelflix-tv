@@ -40,6 +40,21 @@ let _restBaseUrl: string | null = null;
 let _proxyMode: ProxyMode = "none";
 let _initialized = false;
 
+// Cache de hosts que falharam recentemente no fetch DIRETO. Enquanto o host
+// está nessa lista, pulamos a tentativa direta e vamos direto pro proxy.
+// Isso evita o pile-up de timeouts de 5-15s que esgota o Edge Runtime (503).
+const _directBlockedUntil = new Map<string, number>();
+const DIRECT_BLOCK_TTL_MS = 5 * 60 * 1000; // 5 minutos
+function isDirectBlocked(host: string): boolean {
+  const until = _directBlockedUntil.get(host);
+  if (!until) return false;
+  if (Date.now() > until) { _directBlockedUntil.delete(host); return false; }
+  return true;
+}
+function markDirectBlocked(host: string): void {
+  _directBlockedUntil.set(host, Date.now() + DIRECT_BLOCK_TTL_MS);
+}
+
 /**
  * Decide automaticamente entre modo CONNECT e REST a partir do formato da URL.
  *  - Prefixo `rest:` força modo REST.
@@ -242,6 +257,23 @@ export async function proxiedFetch(
   init();
   const host = hostOf(input);
 
+  // Se o host falhou recentemente no fetch direto E temos proxy disponível,
+  // pula direto pro proxy. Evita pile-up de timeouts que mata o Edge Runtime.
+  if (_proxyMode !== "none" && isDirectBlocked(host)) {
+    try {
+      const res = await doProxyFetch(input, reqInit);
+      console.log(`[proxied-fetch] route=proxy(${_proxyMode},skip-direct) host=${host} status=${res.status}`);
+      return tagRoute(res, "proxy");
+    } catch (proxyErr) {
+      console.error(
+        `[proxied-fetch] route=proxy(${_proxyMode},skip-direct) host=${host} FAIL: ${
+          proxyErr instanceof Error ? proxyErr.message : String(proxyErr)
+        }`,
+      );
+      throw proxyErr;
+    }
+  }
+
   // 1) DIRETO (sempre primeiro)
   try {
     const res = await fetch(input, reqInit);
@@ -257,11 +289,14 @@ export async function proxiedFetch(
       throw directErr;
     }
 
+    // Marca host como bloqueado para próximas chamadas pularem o fetch direto.
+    markDirectBlocked(host);
+
     // 2) PROXY (fallback)
     console.log(
       `[proxied-fetch] direct falhou host=${host} (${
         directErr instanceof Error ? directErr.message : String(directErr)
-      }) — retentando via proxy(${_proxyMode})`,
+      }) — retentando via proxy(${_proxyMode}); host marcado como bloqueado por ${DIRECT_BLOCK_TTL_MS / 1000}s`,
     );
     try {
       const res = await doProxyFetch(input, reqInit);
