@@ -109,7 +109,7 @@ async function fetchWithRetries(url: string, attemptsPerUa = 1): Promise<
   for (const ua of USER_AGENTS) {
     for (let attempt = 0; attempt < attemptsPerUa; attempt++) {
       try {
-        const res = await fetch(url, {
+        const res = await proxiedFetch(url, {
           headers: { "User-Agent": ua, Accept: "application/json, */*" },
           redirect: "follow",
         });
