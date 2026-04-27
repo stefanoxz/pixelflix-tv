@@ -40,6 +40,21 @@ let _restBaseUrl: string | null = null;
 let _proxyMode: ProxyMode = "none";
 let _initialized = false;
 
+// Cache de hosts que falharam recentemente no fetch DIRETO. Enquanto o host
+// está nessa lista, pulamos a tentativa direta e vamos direto pro proxy.
+// Isso evita o pile-up de timeouts de 5-15s que esgota o Edge Runtime (503).
+const _directBlockedUntil = new Map<string, number>();
+const DIRECT_BLOCK_TTL_MS = 5 * 60 * 1000; // 5 minutos
+function isDirectBlocked(host: string): boolean {
+  const until = _directBlockedUntil.get(host);
+  if (!until) return false;
+  if (Date.now() > until) { _directBlockedUntil.delete(host); return false; }
+  return true;
+}
+function markDirectBlocked(host: string): void {
+  _directBlockedUntil.set(host, Date.now() + DIRECT_BLOCK_TTL_MS);
+}
+
 /**
  * Decide automaticamente entre modo CONNECT e REST a partir do formato da URL.
  *  - Prefixo `rest:` força modo REST.
