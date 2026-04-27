@@ -16,6 +16,7 @@
 // usuário (era o buraco crítico).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
+import { proxiedFetch } from "../_shared/proxied-fetch.ts";
 
 console.log("[watch-progress] boot");
 
@@ -145,7 +146,7 @@ function normalizeServerUrl(url: string | null | undefined): string {
 // ---------- Validação de credencial IPTV ----------
 
 const PRIMARY_UA = "VLC/3.0.20 LibVLC/3.0.20";
-const VALIDATE_TIMEOUT_MS = 5_000;
+const VALIDATE_TIMEOUT_MS = 15_000;
 
 async function validateIptvCredentials(
   server: string,
@@ -169,9 +170,9 @@ async function validateIptvCredentials(
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), VALIDATE_TIMEOUT_MS);
-      const resp = await fetch(url, {
+      const resp = await proxiedFetch(url, {
         method: "GET",
-        headers: { "User-Agent": PRIMARY_UA, "Accept": "application/json" },
+        headers: { "User-Agent": PRIMARY_UA, "Accept": "application/json, */*" },
         signal: ctrl.signal,
         redirect: "follow",
       });
