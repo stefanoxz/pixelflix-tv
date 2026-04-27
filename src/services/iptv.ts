@@ -1017,7 +1017,7 @@ function messageForLoginCode(code: string, fallback: string): string {
     case "INVALID_CREDENTIALS":
       return "Usuário ou senha inválidos";
     case "SERVER_UNREACHABLE":
-      return "Servidor IPTV não respondeu. Verifique a DNS ou porta da URL.";
+      return "Não conseguimos conectar ao servidor IPTV (não é problema de senha). Tente novamente em instantes ou contate sua revenda para confirmar a DNS.";
     case "DNS_ERROR":
       return "DNS do servidor IPTV não resolveu. Verifique o endereço.";
     case "TIMEOUT":
