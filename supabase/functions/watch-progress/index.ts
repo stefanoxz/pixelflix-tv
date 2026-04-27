@@ -16,7 +16,6 @@
 // usuário (era o buraco crítico).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
-import { proxiedFetch } from "../_shared/proxied-fetch.ts";
 
 console.log("[watch-progress] boot");
 
@@ -182,7 +181,7 @@ async function validateIptvCredentials(
       try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), VALIDATE_TIMEOUT_MS);
-        const resp = await proxiedFetch(url, {
+        const resp = await fetch(url, {
           method: "GET",
           headers: { "User-Agent": PRIMARY_UA, "Accept": "application/json, */*" },
           signal: ctrl.signal,
