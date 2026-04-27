@@ -343,7 +343,7 @@ Deno.serve(async (req) => {
       const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
       const [{ data: events }, { data: allowed }, { data: brokenEvents }] = await Promise.all([
         admin.from("login_events").select("server_url, success, created_at, username").order("created_at", { ascending: false }).limit(2000),
-        admin.from("allowed_servers").select("id, server_url, label, notes, created_at"),
+        admin.from("allowed_servers").select("id, server_url, label, notes, created_at, consecutive_failures, unreachable_until, last_working_at"),
         admin.from("stream_events")
           .select("meta")
           .eq("event_type", "stream_error")
@@ -378,7 +378,11 @@ Deno.serve(async (req) => {
         item.users.add(row.username);
       }
 
-      const allowedList = (allowed ?? []).map((a: { id: string; server_url: string; label: string | null; notes: string | null; created_at: string }) => {
+      const allowedList = (allowed ?? []).map((a: {
+        id: string; server_url: string; label: string | null; notes: string | null;
+        created_at: string; consecutive_failures: number | null;
+        unreachable_until: string | null; last_working_at: string | null;
+      }) => {
         const s = stats.get(a.server_url);
         let host: string | null = null;
         try { host = new URL(a.server_url).host.toLowerCase(); } catch { /* noop */ }
@@ -394,6 +398,10 @@ Deno.serve(async (req) => {
           fail_count: s?.fail_count ?? 0,
           unique_users: s?.users?.size ?? 0,
           stream_broken: host ? brokenHosts.has(host) : false,
+          consecutive_failures: a.consecutive_failures ?? 0,
+          unreachable_until: a.unreachable_until,
+          last_working_at: a.last_working_at,
+          quarantined: !!(a.unreachable_until && new Date(a.unreachable_until).getTime() > Date.now()),
         };
       });
 
