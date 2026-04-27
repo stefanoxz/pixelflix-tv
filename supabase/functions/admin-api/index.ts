@@ -1957,7 +1957,7 @@ Deno.serve(async (req) => {
       for (const table of targets) {
         const meta = CLEANUP_FUNCTIONS[table];
         const cutoff = new Date(Date.now() - meta.retentionDays * 24 * 60 * 60 * 1000).toISOString();
-        const dateCol = table === "used_nonces" ? "used_at" : "created_at";
+        const dateCol = meta.dateCol;
         const [{ count: total }, { count: expired }, { data: oldestRow }] = await Promise.all([
           admin.from(table).select("*", { count: "exact", head: true }),
           admin.from(table).select("*", { count: "exact", head: true }).lt(dateCol, cutoff),
