@@ -1274,10 +1274,11 @@ Deno.serve(async (req) => {
       }
 
       // 5) Comparativo direto vs proxy — desativado (sem proxy configurado).
-      const route_comparison: {
+      type RouteComparison = {
         direct: { status: number | null; latency_ms: number; error: string | null };
         proxy: { status: number | null; latency_ms: number; error: string | null } | null;
-      } | null = null;
+      };
+      const route_comparison: RouteComparison | null = null as RouteComparison | null;
 
       // 6) Veredito
       type Verdict = { level: "ok" | "warn" | "error"; code: string; message: string };
