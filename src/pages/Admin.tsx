@@ -1432,9 +1432,11 @@ const Admin = () => {
                     <div className="col-span-2 text-right">Total acessos</div>
                   </div>
                   {filteredUsers.map((u) => (
-                    <div
+                    <button
+                      type="button"
                       key={u.username}
-                      className="grid grid-cols-12 gap-3 px-5 py-3 items-center text-sm"
+                      onClick={() => setDetailUsername(u.username)}
+                      className="grid grid-cols-12 gap-3 px-5 py-3 items-center text-sm w-full text-left hover:bg-secondary/40 transition-colors"
                     >
                       <div className="col-span-3 flex items-center gap-2 min-w-0">
                         <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-xs font-medium shrink-0">
@@ -1449,7 +1451,7 @@ const Admin = () => {
                         há {formatRelative(u.last_login)}
                       </div>
                       <div className="col-span-2 text-right">{u.total}</div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
