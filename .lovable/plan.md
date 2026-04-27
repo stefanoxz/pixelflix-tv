@@ -1,83 +1,83 @@
-## Análise do painel admin (estado atual)
+## Análise nova do painel admin
 
-### O que já existe e está funcionando
-O painel tem **11 abas** todas plugadas a 30 ações na `admin-api`:
+### Lacunas funcionais reais que encontrei
 
-| Aba | Status | Ações backend |
-|---|---|---|
-| Dashboard | OK | `dashboard_bundle` |
-| Estatísticas | OK | `stats_logins_daily`, `stats_dau_mau`, `stats_peak_heatmap`, `stats_top_content` |
-| Monitoramento | OK | `monitoring_overview`, `top_consumers`, `evict_session`, `unblock_user` |
-| Reportes | OK | `list_user_reports`, `count_user_reports_24h` |
-| Erros por DNS | OK | `dns_errors` (com séries temporais) |
-| Usuários | OK | `list_users` |
-| DNS / Servidores | OK | `list_servers`, `allow_server`, `remove_server` |
-| Testar endpoint | OK | `test_endpoint`, `resolve_endpoint` |
-| Diagnóstico de clientes | OK | `client_diagnostics_list` |
-| Novos cadastros | OK | `list_pending_signups`, `approve_signup`, `reject_signup` |
-| Equipe + Audit log | OK | `list_team`, `add/update/remove_team_member`, `list_audit_log` |
+**1. 🔥 Eventos de stream invisíveis no painel**
+A tabela `stream_events` tem **8 tipos de evento** sendo gravados, mas **só `user_report` é exposto na UI**. Em 7 dias temos:
 
-Sondagem manual (`probe_server`) também existe via `ServerProbeDialog`.
+| Tipo | Volume 7d | O que é | Exposto? |
+|---|---|---|---|
+| `token_issued` | 243 | Token de stream emitido | ❌ |
+| `token_rejected` | 237 | Token forjado/expirado bloqueado | ❌ **(crítico — sinal de ataque)** |
+| `segment_request` | 124 | Segmento HLS servido | ❌ |
+| `stream_error` | 85 | Player falhou (real ou debounce) | ❌ |
+| `stream_started` | 47 | Reprodução começou | ❌ |
+| `nonce_replay_tolerated` | 39 | Anti-replay aceitou (latência) | ❌ |
+| `user_report` | 7 | Reporte manual | ✅ |
+| `session_evicted` | 1 | Sessão derrubada | ❌ |
 
-**Conclusão:** nenhuma ação está órfã, nenhuma aba está apontando pra endpoint inexistente, nenhum painel está faltando ser montado. O backend e o frontend estão alinhados 1:1.
+**Por que importa:** 237 `token_rejected` em 7 dias é alto demais. Pode ser bug do cliente ou tentativa de pirataria do stream (alguém tentando usar tokens vazados). Sem visualização, ninguém percebe. Os 85 `stream_error` mostram quais hosts/conteúdos estão quebrando — daria pra destacar antes do usuário reportar.
 
-### Lacunas reais que encontrei
+**2. ⚠️ Reportes de usuário sem workflow de resolução**
+A coluna `meta->>'status'` existe mas todos os 7 reportes estão com status `null`. Não há botão "marcar como resolvido / ignorar / em análise" no `UserReportsPanel`. O admin lê e esquece — sem rastro do que foi tratado.
 
-**1. Brecha de segurança ativa (mais crítica):**
-- IP `201.71.212.47` fez **118 logins falhos em 24h** sem sofrer nenhuma consequência.
-- IP `201.71.212.32` fez 26 falhas. Outros 5 IPs com 1–9 falhas.
-- O painel **mostra** "Top IPs com mais rejeições" no Monitoramento, mas **não tem botão pra bloquear o IP dali**. Só dá pra desbloquear `anon_user_id` (perfil), não IP.
-- Não existe rate-limit por IP no `iptv-login`.
+**3. ⚠️ Bloqueio manual de usuário ainda sem UI**
+Confirmei via SQL: `user_blocks` está vazia (0 bloqueios já existiram). O painel só tem botão "Desbloquear" (que nunca aparece, porque nunca há bloqueio). **Não existe "Bloquear usuário X por Y horas"** em nenhum lugar do painel.
 
-**2. Bloqueio manual de usuários sem ferramenta:**
-- A tabela `user_blocks` aceita inserts via RLS (admin/moderador), mas **não há UI** pra criar bloqueio manual. Só dá pra desbloquear o que já existe.
-- Sem um campo "bloquear este IP/usuário por X horas com motivo Y".
+**4. ⚠️ Servidores marcados como `unreachable_until` sem visibilidade**
+A tabela `allowed_servers` tem coluna `unreachable_until` (servidor em quarentena automática) e `consecutive_failures`. Hoje 0 servidores estão em quarentena, mas se algum entrar, o admin não vê isso na lista de DNS — só vê o estado "atual" via ping manual. Deveria mostrar "🚫 Em quarentena até HH:MM (N falhas seguidas)" e ter botão "Limpar quarentena".
 
-**3. Limpeza de dados antigos invisível:**
-- Existem 5 funções `cleanup_*` (login_events, stream_events, used_nonces, audit_log, client_diagnostics) e `evict_idle_sessions`, mas **nenhuma roda em cron** e **não há botão no admin** pra disparar manualmente.
-- Risco: tabelas crescem sem fim. Hoje o banco está pequeno, mas em 6 meses pode pesar.
+**5. ⚪ Tela em branco no Dashboard quando há `pending` servers**
+O dashboard avisa "X servidores tentaram logar e foram bloqueados" e leva pra aba Servers — mas a aba Servers (admin-only) **não existe pra moderador**, então moderador vê o aviso e clica em vazio. Pequeno bug de UX.
 
-**4. Detalhe do usuário muito raso:**
-- A aba "Usuários" mostra só último login + total. Não dá pra clicar num usuário e ver: histórico completo de logins, sessões, conteúdos assistidos, IPs usados, reports relacionados.
+**6. ⚪ Cache TMDB nunca limpo**
+`tmdb_image_cache` (37 linhas) e `tmdb_episode_cache` (18 linhas) crescem sem limite e sem TTL. Tabelas de cache deveriam estar na aba Manutenção pra limpeza manual e mostrar idade.
 
-**5. Secret morto:**
-- `IPTV_PROXY_URL` está configurado mas inerte (Cloudflare proxy foi removido). Polui a lista de secrets.
-
-### Pequenos bugs / polimentos
-- `setEvents`, `setUsers` etc são populados mas a aba **Usuários** não tem indicador "última vez que veio do servidor X" (a coluna existe no tipo mas não é exibida com timezone correto em alguns lugares).
-- Console mostra warning `Unknown message type: RESET_BLANK_CHECK` (vem do iframe do Lovable, não é do código — ignorar).
-- Nenhum erro real nos logs do `admin-api`.
+### O que está OK (sem necessidade de mudança)
+- Aba Manutenção (recém-criada) cobre as 5 tabelas operacionais.
+- Aba Detalhe de usuário cobre histórico individual.
+- Estatísticas (DAU/MAU, heatmap, top conteúdo) já existem.
+- Endpoint test, Diagnóstico de clientes, Audit log, Equipe — completos.
 
 ---
 
-## Plano proposto
+## Plano
 
-Implementar em **3 frentes**, em ordem de impacto:
+Vou implementar as **3 mais impactantes** (#1, #2, #4). Os itens #3, #5, #6 deixo pra um próximo turno se você quiser — eles são menores.
 
-### Frente 1 — Segurança (alta prioridade)
-1. **Rate-limit por IP no `iptv-login`**: depois de 20 falhas em 1h vindas do mesmo IP, bloqueia esse IP por 15min (resposta 429). Tabela nova `ip_blocks` (separada de `user_blocks` que é por anon_user_id).
-2. **Botão "Bloquear este IP" no Monitoramento**, na seção "Top IPs com mais rejeições". Abre dialog: motivo + duração (1h / 6h / 24h / 7d). Insere em `ip_blocks`.
-3. **Lista de IPs bloqueados** no Monitoramento, com botão Desbloquear.
-4. **Limpar agora os 2 IPs já abusivos** (`201.71.212.47` e `.32`) com bloqueio inicial de 24h via migration.
+### 1) Nova aba "Stream / Segurança"
+Painel novo (`StreamEventsPanel.tsx`) com 4 cards no topo + 3 listas:
 
-### Frente 2 — Manutenção (média)
-5. **Aba nova "Manutenção"** (admin-only) com:
-   - Botões "Limpar logs antigos" pra cada tabela (mostra quantas linhas serão removidas antes).
-   - Botão "Encerrar sessões ociosas agora" (`evict_idle_sessions`).
-   - Status de cada tabela: tamanho, linhas, linha mais antiga.
-6. **Apagar o secret inerte `IPTV_PROXY_URL`** (apenas remoção, não muda código).
+- **Cards 24h**: Streams iniciados • Tokens emitidos • **Tokens rejeitados** (destacado se > 0) • Erros de player
+- **Lista "Tokens rejeitados"** — quando aparecer, mostra IP + UA hash + motivo (nonce inválido, expirado, replay). Filtro por janela (1h/24h/7d).
+- **Lista "Erros de player"** — agrupa por host + tipo de erro (`stream_no_data`, `bootstrap_timeout_12s`, etc), com contagem e último ocorrido. Filtro pra ocultar `player_switch_debounced` (ruído).
+- **Lista "Replays tolerados"** — contagem por hora, alerta se passar de threshold (sinal de problema de rede ou ataque).
 
-### Frente 3 — UX (baixa, opcional)
-7. **Detalhe de usuário**: clicar no usuário na aba "Usuários" abre dialog com timeline completa (logins, sessões ativas, watch_progress, reports). Reusa ações já existentes filtradas por username.
+Backend nova ação: `stream_events_overview` no `admin-api`.
+
+### 2) Workflow de resolução em reportes
+- Adicionar botões "Marcar como resolvido" / "Ignorar" / "Reabrir" no `UserReportsPanel`.
+- Filtro por status (Aberto / Resolvido / Ignorado / Todos), default = Aberto.
+- Backend: nova ação `update_report_status` que dá `UPDATE stream_events SET meta = jsonb_set(meta, '{status}', '"resolved"')` por id.
+- Auditoria automática (admin_audit_log).
+
+### 3) Quarentena visível no painel de DNS
+- No card de cada DNS na aba "DNS / Servidores", mostrar badge "🚫 Em quarentena até HH:MM" + tooltip explicando "{N} falhas consecutivas detectadas".
+- Botão "Limpar quarentena" (admin-only) que reseta `unreachable_until = null` e `consecutive_failures = 0`.
+- Backend: nova ação `clear_server_quarantine`.
+- `list_servers` já retorna `consecutive_failures` e `unreachable_until` — só falta usar.
 
 ### Detalhes técnicos
-- Nova migration cria `ip_blocks (ip text, blocked_until, reason, created_at, created_by)` com RLS (admin/moderador).
-- Nova ação no `admin-api`: `block_ip`, `unblock_ip`, `list_blocked_ips`, `cleanup_table` (parametrizada por nome de tabela permitida), `user_detail`.
-- `iptv-login` consulta `ip_blocks` antes de processar e aplica contador in-memory (bucket de 1h) pra disparar bloqueio automático.
-- Tudo registrado em `admin_audit_log`.
+- `stream_events_overview` retorna: contadores agregados 24h, top hosts com erro, lista de token_rejected + nonce_replay (últimas 50, mascarando IP), série temporal por hora.
+- `update_report_status` aceita `id` e `status` ∈ {open, resolved, ignored, investigating}, faz UPDATE em `stream_events.meta` via service-role (RLS bloqueia anon).
+- `clear_server_quarantine` aceita `server_url`, atualiza `allowed_servers` via service-role, registra audit log.
+- Adicionar `Shield` (ou `ShieldAlert`) no `adminNav.ts` como ícone da aba Stream.
+- Aba Stream visível pra admin **e** moderador (igual Reportes).
+- Atualização automática a cada 30s (igual aos outros painéis em tempo real).
 
-### O que fica de fora deste plano
-- Rotação automática de logs por cron (`pg_cron`) — fica como follow-up; por enquanto botão manual basta.
-- ESLint cleanup dos 20 warnings — cosmético, não muda comportamento.
+### O que fica de fora
+- Item #3 (UI de bloqueio manual de usuário) — esbarra no debate de rate-limit. Pode ser próximo passo.
+- Item #5 (esconder aviso "Pendentes" pra moderador) — um if simples, mas pequeno.
+- Item #6 (TMDB cache na Manutenção) — vou estender a Manutenção pra incluir, é trivial.
 
-Quer que eu execute as 3 frentes ou prefere só a Frente 1 (segurança) primeiro?
+Confirma essas 3 + extensão da Manutenção pra incluir TMDB cache?
