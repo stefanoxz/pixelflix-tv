@@ -68,17 +68,20 @@ const ADMIN_ONLY_ACTIONS = new Set([
   "list_audit_log",
   "cleanup_table",
   "evict_idle_now",
+  "clear_server_quarantine",
 ]);
 
 // Tabelas permitidas para limpeza manual via UI. Cada uma mapeia a uma RPC
 // `cleanup_*` SECURITY DEFINER que já existe no banco — evita expor SQL bruto
 // ou nomes arbitrários de tabela na superfície da API.
-const CLEANUP_FUNCTIONS: Record<string, { fn: string; label: string; retentionDays: number }> = {
-  login_events: { fn: "cleanup_login_events", label: "Logins", retentionDays: 90 },
-  stream_events: { fn: "cleanup_stream_events", label: "Eventos de stream", retentionDays: 30 },
-  client_diagnostics: { fn: "cleanup_client_diagnostics", label: "Diagnóstico de clientes", retentionDays: 30 },
-  used_nonces: { fn: "cleanup_used_nonces", label: "Nonces usados", retentionDays: 1 },
-  admin_audit_log: { fn: "cleanup_admin_audit_log", label: "Audit log", retentionDays: 180 },
+const CLEANUP_FUNCTIONS: Record<string, { fn: string; label: string; retentionDays: number; dateCol: string }> = {
+  login_events:        { fn: "cleanup_login_events",        label: "Logins",                  retentionDays: 90,  dateCol: "created_at" },
+  stream_events:       { fn: "cleanup_stream_events",       label: "Eventos de stream",       retentionDays: 30,  dateCol: "created_at" },
+  client_diagnostics:  { fn: "cleanup_client_diagnostics",  label: "Diagnóstico de clientes", retentionDays: 30,  dateCol: "created_at" },
+  used_nonces:         { fn: "cleanup_used_nonces",         label: "Nonces usados",           retentionDays: 1,   dateCol: "used_at" },
+  admin_audit_log:     { fn: "cleanup_admin_audit_log",     label: "Audit log",               retentionDays: 180, dateCol: "created_at" },
+  tmdb_image_cache:    { fn: "cleanup_tmdb_image_cache",    label: "Cache TMDB (imagens)",    retentionDays: 90,  dateCol: "fetched_at" },
+  tmdb_episode_cache:  { fn: "cleanup_tmdb_episode_cache",  label: "Cache TMDB (episódios)",  retentionDays: 30,  dateCol: "fetched_at" },
 };
 
 // Ações que moderador também pode executar (escrita operacional).
