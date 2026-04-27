@@ -62,13 +62,9 @@ const WithChrome = ({ children }: { children: React.ReactNode }) => (
 const App = () => (
   <IptvProvider>
     <TooltipProvider>
-      {/* Toasters/InstallDialog ficam atrás de Suspense fallback={null}
-          para não bloquearem o primeiro paint do /login. */}
-      <Suspense fallback={null}>
-        <Toaster />
-        <Sonner position="top-right" theme="dark" />
-        <InstallAppDialog />
-      </Suspense>
+      <Toaster />
+      <Sonner position="top-right" theme="dark" />
+      <InstallAppDialog />
       <BrowserRouter>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
