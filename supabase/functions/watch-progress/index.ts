@@ -16,6 +16,7 @@
 // usuário (era o buraco crítico).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
+import { proxiedFetch } from "../_shared/proxied-fetch.ts";
 
 console.log("[watch-progress] boot");
 
