@@ -2094,6 +2094,207 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "stream_events_overview") {
+      // Janela em horas (padrão 24h, máx 7d).
+      const hours = Math.min(Math.max(Number(payload?.hours ?? 24), 1), 168);
+      const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+      const includeDebounce = Boolean(payload?.includeDebounce);
+
+      const { data: rows, error } = await admin
+        .from("stream_events")
+        .select("id, event_type, ip, ua_hash, anon_user_id, meta, created_at")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(5000);
+      if (error) {
+        console.error("[admin-api] stream_events_overview", error.message);
+        return internalError();
+      }
+
+      type Row = {
+        id: string;
+        event_type: string;
+        ip: string | null;
+        ua_hash: string | null;
+        anon_user_id: string | null;
+        meta: Record<string, unknown> | null;
+        created_at: string;
+      };
+      const all = (rows ?? []) as Row[];
+
+      // Contadores por tipo
+      const counts: Record<string, number> = {};
+      for (const r of all) counts[r.event_type] = (counts[r.event_type] ?? 0) + 1;
+
+      // Listas detalhadas
+      const tokenRejected = all
+        .filter((r) => r.event_type === "token_rejected")
+        .slice(0, 50)
+        .map((r) => ({
+          id: r.id,
+          ip_masked: maskIp(r.ip),
+          ua_hash: r.ua_hash,
+          reason: (r.meta as { reason?: string } | null)?.reason ?? null,
+          created_at: r.created_at,
+        }));
+
+      const replayTolerated = all
+        .filter((r) => r.event_type === "nonce_replay_tolerated")
+        .slice(0, 50)
+        .map((r) => ({
+          id: r.id,
+          ip_masked: maskIp(r.ip),
+          anon_user_id: r.anon_user_id,
+          created_at: r.created_at,
+        }));
+
+      // Erros agrupados por host + reason (com filtro de debounce)
+      const errorBuckets = new Map<
+        string,
+        { host: string | null; reason: string | null; type: string | null; count: number; last_at: string }
+      >();
+      for (const r of all) {
+        if (r.event_type !== "stream_error") continue;
+        const m = (r.meta ?? {}) as Record<string, string | undefined>;
+        const reason = m.reason ?? null;
+        if (!includeDebounce && reason === "player_switch_debounced") continue;
+        const host = m.host ?? null;
+        const type = m.type ?? null;
+        const key = `${host ?? ""}|${type ?? ""}|${reason ?? ""}`;
+        const cur = errorBuckets.get(key) ?? { host, reason, type, count: 0, last_at: r.created_at };
+        cur.count += 1;
+        if (r.created_at > cur.last_at) cur.last_at = r.created_at;
+        errorBuckets.set(key, cur);
+      }
+      const errors = Array.from(errorBuckets.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 50);
+
+      // Série por hora
+      const seriesMap = new Map<string, {
+        hour: string;
+        token_issued: number;
+        token_rejected: number;
+        stream_started: number;
+        stream_error: number;
+        replay_tolerated: number;
+      }>();
+      for (const r of all) {
+        const h = new Date(r.created_at);
+        h.setMinutes(0, 0, 0);
+        const key = h.toISOString();
+        const cur = seriesMap.get(key) ?? {
+          hour: key,
+          token_issued: 0,
+          token_rejected: 0,
+          stream_started: 0,
+          stream_error: 0,
+          replay_tolerated: 0,
+        };
+        if (r.event_type === "token_issued") cur.token_issued += 1;
+        else if (r.event_type === "token_rejected") cur.token_rejected += 1;
+        else if (r.event_type === "stream_started") cur.stream_started += 1;
+        else if (r.event_type === "stream_error") cur.stream_error += 1;
+        else if (r.event_type === "nonce_replay_tolerated") cur.replay_tolerated += 1;
+        seriesMap.set(key, cur);
+      }
+      const series = Array.from(seriesMap.values()).sort((a, b) => a.hour.localeCompare(b.hour));
+
+      return ok({
+        hours,
+        counts: {
+          token_issued: counts.token_issued ?? 0,
+          token_rejected: counts.token_rejected ?? 0,
+          stream_started: counts.stream_started ?? 0,
+          stream_error: counts.stream_error ?? 0,
+          replay_tolerated: counts.nonce_replay_tolerated ?? 0,
+          segment_request: counts.segment_request ?? 0,
+          session_evicted: counts.session_evicted ?? 0,
+          user_report: counts.user_report ?? 0,
+        },
+        token_rejected: tokenRejected,
+        replay_tolerated: replayTolerated,
+        errors,
+        series,
+      });
+    }
+
+    if (action === "update_report_status") {
+      const id = String(payload?.id ?? "");
+      const status = String(payload?.status ?? "");
+      if (!id) return bad("id obrigatório");
+      const ALLOWED_STATUS = new Set(["open", "investigating", "resolved", "ignored"]);
+      if (!ALLOWED_STATUS.has(status)) return bad("status inválido");
+
+      // Carrega o reporte atual pra validar tipo + preservar meta existente
+      const { data: existing, error: fetchErr } = await admin
+        .from("stream_events")
+        .select("id, event_type, meta")
+        .eq("id", id)
+        .maybeSingle();
+      if (fetchErr) {
+        console.error("[admin-api] update_report_status fetch", fetchErr.message);
+        return internalError();
+      }
+      if (!existing) return bad("Reporte não encontrado", 404);
+      if (existing.event_type !== "user_report") return bad("Evento não é um reporte de usuário");
+
+      const newMeta = {
+        ...((existing.meta as Record<string, unknown> | null) ?? {}),
+        status,
+        status_changed_at: new Date().toISOString(),
+        status_changed_by: user.email ?? user.id,
+      };
+
+      const { error: updateErr } = await admin
+        .from("stream_events")
+        .update({ meta: newMeta })
+        .eq("id", id);
+      if (updateErr) {
+        console.error("[admin-api] update_report_status update", updateErr.message);
+        return internalError();
+      }
+
+      await logAudit(user.id, user.email, "update_report_status", {
+        metadata: { report_id: id, status },
+      });
+      return ok({ id, status });
+    }
+
+    if (action === "clear_server_quarantine") {
+      const url = normalizeServer(String(payload?.server_url ?? ""));
+      if (!url) return bad("URL do servidor é obrigatória");
+
+      const { data: existing, error: fetchErr } = await admin
+        .from("allowed_servers")
+        .select("server_url, unreachable_until, consecutive_failures")
+        .eq("server_url", url)
+        .maybeSingle();
+      if (fetchErr) {
+        console.error("[admin-api] clear_quarantine fetch", fetchErr.message);
+        return internalError();
+      }
+      if (!existing) return bad("Servidor não encontrado", 404);
+
+      const { error: updateErr } = await admin
+        .from("allowed_servers")
+        .update({ unreachable_until: null, consecutive_failures: 0 })
+        .eq("server_url", url);
+      if (updateErr) {
+        console.error("[admin-api] clear_quarantine update", updateErr.message);
+        return internalError();
+      }
+
+      await logAudit(user.id, user.email, "clear_server_quarantine", {
+        metadata: {
+          server_url: url,
+          previous_failures: existing.consecutive_failures ?? 0,
+          previous_unreachable_until: existing.unreachable_until,
+        },
+      });
+      return ok({ server_url: url });
+    }
+
     return bad("Ação inválida");
   } catch (e) {
     console.error("[admin-api] unhandled", e);
