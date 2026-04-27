@@ -89,6 +89,35 @@ export function getGreeting(date: Date = new Date()): "Bom dia" | "Boa tarde" | 
  * Hook que reage a mudanças no nome (ex: usuário edita em outra tela). Re-render
  * automático via evento customizado disparado pelo `setDisplayName`/`clearDisplayName`.
  */
+/**
+ * Abrevia um nome para caber em espaços compactos (ex: header mobile),
+ * preservando a identidade do cliente.
+ *
+ * Regras:
+ * - Vazio → "".
+ * - Cabe inteiro em `maxLen` → mantém como está.
+ * - Tem 2+ palavras → tenta "Primeiro Ú." (primeira palavra + inicial da última).
+ * - Se ainda exceder → usa só o primeiro nome, truncado com reticências.
+ */
+export function abbreviateName(name: string, maxLen = 12): string {
+  const trimmed = (name ?? "").trim().replace(/\s+/g, " ");
+  if (!trimmed) return "";
+  if (trimmed.length <= maxLen) return trimmed;
+
+  const parts = trimmed.split(" ");
+  if (parts.length >= 2) {
+    const first = parts[0];
+    const lastInitial = parts[parts.length - 1].charAt(0).toUpperCase();
+    const candidate = `${first} ${lastInitial}.`;
+    if (candidate.length <= maxLen) return candidate;
+  }
+
+  const first = parts[0];
+  if (first.length <= maxLen) return first;
+  // Reserva 1 char para o ellipsis.
+  return first.slice(0, Math.max(1, maxLen - 1)) + "…";
+}
+
 export function useDisplayName(username: string): string {
   const [name, setName] = useState(() => getDisplayName(username));
 
