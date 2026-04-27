@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { useDisplayName } from "@/lib/displayName";
+import { useDisplayName, abbreviateName } from "@/lib/displayName";
 
 const navItems = [
   { to: "/", label: "Destaques", icon: Sparkles },
@@ -42,6 +42,7 @@ export function Header() {
   const username = session?.userInfo?.username ?? "";
   const displayName = useDisplayName(username);
   const primaryName = displayName || username;
+  const shortName = abbreviateName(primaryName, 12);
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
@@ -146,13 +147,18 @@ export function Header() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="flex items-center gap-2 rounded-full pl-1 pr-2 py-1 hover:bg-secondary/60 transition-colors group tap-feedback"
+                className="flex items-center gap-2 rounded-full pl-1 pr-2.5 py-1 hover:bg-secondary/60 transition-colors group tap-feedback"
                 aria-label="Menu da conta"
                 title={displayName ? `Olá, ${displayName}` : `Olá, ${username}`}
               >
                 <span className="h-9 w-9 rounded-full bg-gradient-primary text-primary-foreground flex items-center justify-center shadow-glow ring-2 ring-primary/30">
                   <User className="h-[18px] w-[18px]" strokeWidth={2.25} />
                 </span>
+                {shortName && (
+                  <span className="text-xs font-medium text-foreground/90 max-w-[110px] truncate">
+                    {shortName}
+                  </span>
+                )}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 mr-2">

@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Sparkles, Filter } from "lucide-react";
+import { ArrowLeft, Sparkles, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useClock } from "@/hooks/useClock";
 import { cn } from "@/lib/utils";
@@ -75,13 +75,14 @@ export function LibraryTopBar({
         {rightExtra}
         {onOpenCategoryDrawer && (
           <Button
-            variant="outline"
+            variant="default"
             size="sm"
-            className="lg:hidden gap-1.5"
+            className="lg:hidden gap-1.5 h-9 px-3 font-semibold shadow-glow ring-1 ring-primary/40"
             onClick={onOpenCategoryDrawer}
+            aria-label="Abrir categorias"
           >
-            <Filter className="h-4 w-4" />
-            <span className="hidden xs:inline">Categorias</span>
+            <LayoutGrid className="h-4 w-4" />
+            <span>Categorias</span>
           </Button>
         )}
         <div className="hidden sm:block text-right leading-tight tabular-nums">
