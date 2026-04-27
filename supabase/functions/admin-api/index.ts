@@ -66,7 +66,20 @@ const ADMIN_ONLY_ACTIONS = new Set([
   "update_team_role",
   "remove_team_member",
   "list_audit_log",
+  "cleanup_table",
+  "evict_idle_now",
 ]);
+
+// Tabelas permitidas para limpeza manual via UI. Cada uma mapeia a uma RPC
+// `cleanup_*` SECURITY DEFINER que já existe no banco — evita expor SQL bruto
+// ou nomes arbitrários de tabela na superfície da API.
+const CLEANUP_FUNCTIONS: Record<string, { fn: string; label: string; retentionDays: number }> = {
+  login_events: { fn: "cleanup_login_events", label: "Logins", retentionDays: 90 },
+  stream_events: { fn: "cleanup_stream_events", label: "Eventos de stream", retentionDays: 30 },
+  client_diagnostics: { fn: "cleanup_client_diagnostics", label: "Diagnóstico de clientes", retentionDays: 30 },
+  used_nonces: { fn: "cleanup_used_nonces", label: "Nonces usados", retentionDays: 1 },
+  admin_audit_log: { fn: "cleanup_admin_audit_log", label: "Audit log", retentionDays: 180 },
+};
 
 // Ações que moderador também pode executar (escrita operacional).
 // Esta lista é informativa — qualquer ação não-restrita roda para
@@ -1924,6 +1937,158 @@ Deno.serve(async (req) => {
         .sort((a, b) => b.total_s - a.total_s)
         .slice(0, limit);
       return ok({ days, items });
+    }
+
+    if (action === "table_stats") {
+      // Retorna contagens e idade da linha mais antiga em cada tabela limpável.
+      // Usado pela aba Manutenção pra mostrar ao admin o que está acumulando.
+      const targets = Object.keys(CLEANUP_FUNCTIONS);
+      const stats: Array<{
+        table: string;
+        label: string;
+        retention_days: number;
+        row_count: number;
+        oldest_at: string | null;
+        expired_count: number;
+      }> = [];
+      for (const table of targets) {
+        const meta = CLEANUP_FUNCTIONS[table];
+        const cutoff = new Date(Date.now() - meta.retentionDays * 24 * 60 * 60 * 1000).toISOString();
+        const dateCol = table === "used_nonces" ? "used_at" : "created_at";
+        const [{ count: total }, { count: expired }, { data: oldestRow }] = await Promise.all([
+          admin.from(table).select("*", { count: "exact", head: true }),
+          admin.from(table).select("*", { count: "exact", head: true }).lt(dateCol, cutoff),
+          admin.from(table).select(dateCol).order(dateCol, { ascending: true }).limit(1).maybeSingle(),
+        ]);
+        stats.push({
+          table,
+          label: meta.label,
+          retention_days: meta.retentionDays,
+          row_count: total ?? 0,
+          oldest_at: (oldestRow as Record<string, string> | null)?.[dateCol] ?? null,
+          expired_count: expired ?? 0,
+        });
+      }
+      // Sessões ativas e bloqueios ativos (não passíveis de cleanup_table mas
+      // úteis pra visão geral).
+      const [{ count: sessions }, { count: blocks }] = await Promise.all([
+        admin.from("active_sessions").select("*", { count: "exact", head: true }),
+        admin.from("user_blocks").select("*", { count: "exact", head: true }),
+      ]);
+      return ok({
+        tables: stats,
+        live: { active_sessions: sessions ?? 0, user_blocks: blocks ?? 0 },
+      });
+    }
+
+    if (action === "cleanup_table") {
+      const table = String(payload?.table ?? "");
+      const meta = CLEANUP_FUNCTIONS[table];
+      if (!meta) return bad("Tabela inválida para limpeza");
+      const { data, error } = await admin.rpc(meta.fn);
+      if (error) {
+        console.error(`[admin-api] cleanup ${meta.fn} failed`, error.message);
+        return internalError();
+      }
+      const removed = typeof data === "number" ? data : 0;
+      await logAudit(user.id, user.email, "cleanup_table", {
+        metadata: { table, removed, retention_days: meta.retentionDays },
+      });
+      return ok({ table, removed });
+    }
+
+    if (action === "evict_idle_now") {
+      const { data, error } = await admin.rpc("evict_idle_sessions");
+      if (error) {
+        console.error("[admin-api] evict_idle_sessions failed", error.message);
+        return internalError();
+      }
+      const removed = typeof data === "number" ? data : 0;
+      await logAudit(user.id, user.email, "evict_idle_sessions", { metadata: { removed } });
+      return ok({ removed });
+    }
+
+    if (action === "user_detail") {
+      const username = String(payload?.username ?? "").trim();
+      if (!username) return bad("username obrigatório");
+
+      // Histórico de logins (últimos 90 dias, máx 100)
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      const [logins, watch, sessions, diagnostics] = await Promise.all([
+        admin
+          .from("login_events")
+          .select("id, server_url, success, reason, ip_address, user_agent, created_at")
+          .eq("username", username)
+          .gte("created_at", ninetyDaysAgo)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        admin
+          .from("watch_progress")
+          .select("kind, content_id, title, poster_url, server_url, position_seconds, duration_seconds, updated_at")
+          .eq("username", username)
+          .order("updated_at", { ascending: false })
+          .limit(50),
+        admin
+          .from("active_sessions")
+          .select("anon_user_id, server_url, ip, started_at, last_seen_at, content_kind, content_title, content_started_at")
+          .eq("iptv_username", username)
+          .order("last_seen_at", { ascending: false })
+          .limit(20),
+        admin
+          .from("client_diagnostics")
+          .select("id, server_url, outcome, client_error, duration_ms, ip, country, region, city, isp, speed_kbps, effective_type, downlink_mbps, created_at")
+          .eq("username", username)
+          .order("created_at", { ascending: false })
+          .limit(30),
+      ]);
+
+      if (logins.error || watch.error || sessions.error || diagnostics.error) {
+        console.error("[admin-api] user_detail error",
+          logins.error?.message ?? watch.error?.message ?? sessions.error?.message ?? diagnostics.error?.message);
+        return internalError();
+      }
+
+      // Resumo: total, sucessos, falhas, IPs únicos, servidores únicos
+      const loginRows = logins.data ?? [];
+      const ips = new Set<string>();
+      const servers = new Set<string>();
+      let successes = 0;
+      let failures = 0;
+      for (const row of loginRows) {
+        if (row.ip_address) ips.add(row.ip_address);
+        if (row.server_url) servers.add(row.server_url);
+        if (row.success) successes++; else failures++;
+      }
+
+      // Mascarar IPs nas listas devolvidas pra não vazar IPs cheios à UI
+      const maskedLogins = loginRows.map((r) => ({
+        ...r,
+        ip_address: r.ip_address ? maskIp(r.ip_address) : null,
+      }));
+      const maskedSessions = (sessions.data ?? []).map((r) => ({
+        ...r,
+        ip: r.ip ? maskIp(r.ip) : null,
+      }));
+      const maskedDiagnostics = (diagnostics.data ?? []).map((r) => ({
+        ...r,
+        ip: r.ip ? maskIp(r.ip) : null,
+      }));
+
+      return ok({
+        username,
+        summary: {
+          total_logins: loginRows.length,
+          success_count: successes,
+          fail_count: failures,
+          unique_ips: ips.size,
+          unique_servers: servers.size,
+          last_login_at: loginRows[0]?.created_at ?? null,
+        },
+        logins: maskedLogins,
+        watch_progress: watch.data ?? [],
+        sessions: maskedSessions,
+        diagnostics: maskedDiagnostics,
+      });
     }
 
     return bad("Ação inválida");
