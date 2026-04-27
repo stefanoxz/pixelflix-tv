@@ -481,6 +481,8 @@ export type Database = {
       cleanup_client_diagnostics: { Args: never; Returns: number }
       cleanup_login_events: { Args: never; Returns: number }
       cleanup_stream_events: { Args: never; Returns: number }
+      cleanup_tmdb_episode_cache: { Args: never; Returns: number }
+      cleanup_tmdb_image_cache: { Args: never; Returns: number }
       cleanup_used_nonces: { Args: never; Returns: number }
       evict_idle_sessions: { Args: never; Returns: number }
       has_role: {
