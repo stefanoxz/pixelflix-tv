@@ -159,8 +159,12 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    const { data: userData, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !userData?.user) return json({ error: "Sessão inválida" }, 401);
+    const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(jwt);
+    if (claimsErr || !claimsData?.claims?.sub) {
+      console.error("[check-server] claims check failed", claimsErr?.message);
+      return json({ error: "Sessão inválida" }, 401);
+    }
+    const userId = claimsData.claims.sub as string;
 
     // Consulta papéis direto em user_roles com service-role (bypassa RLS).
     // Não usamos has_role() RPC porque a função SECURITY DEFINER bloqueia
@@ -168,13 +172,15 @@ Deno.serve(async (req) => {
     const { data: roleRows, error: roleErr } = await admin
       .from("user_roles")
       .select("role")
-      .eq("user_id", userData.user.id);
+      .eq("user_id", userId);
     if (roleErr) {
       console.error("[check-server] role check error", roleErr.message);
       return json({ error: "Erro interno" }, 500);
     }
-    const isAdmin = (roleRows ?? []).some((r) => r.role === "admin");
-    if (!isAdmin) return json({ error: "Acesso restrito a administradores" }, 401);
+    const roles = new Set((roleRows ?? []).map((r) => r.role as string));
+    const isAdmin = roles.has("admin");
+    const isModerator = roles.has("moderator");
+    if (!isAdmin && !isModerator) return json({ error: "Acesso restrito ao painel administrativo" }, 401);
 
     const body = await req.json().catch(() => ({}));
     const rawUrls = (body as { urls?: unknown }).urls;
