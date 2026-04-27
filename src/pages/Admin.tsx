@@ -1894,6 +1894,9 @@ const Admin = () => {
 
       {/* Bottom nav fixa no mobile */}
       <AdminBottomNav tab={tab} onTabChange={setTab} isAdmin={isAdmin} />
+
+      {/* Detalhe completo do usuário (clicar na lista de Usuários) */}
+      <UserDetailDialog username={detailUsername} onClose={() => setDetailUsername(null)} />
     </div>
   );
 };
