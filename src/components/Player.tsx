@@ -1471,7 +1471,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       // Mid-stream stall: arm the stall timeout
       if (stallTimeoutRef.current === null) {
         stallTimeoutRef.current = window.setTimeout(() => {
-          updateStatus("stall_timeout", lastReasonRef.current || "BUFFER_STALLED_ERROR");
+          const reason = lastReasonRef.current || "BUFFER_STALLED_ERROR";
+          // Tenta auto-recuperação silenciosa antes de marcar como erro.
+          if (triggerProgressiveRecovery(reason)) return;
+          updateStatus("stall_timeout", reason);
           pushLog({
             source: "diag",
             level: "error",
@@ -1496,6 +1499,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       }
       if (stallTimeoutRef.current === null) {
         stallTimeoutRef.current = window.setTimeout(() => {
+          if (triggerProgressiveRecovery("BUFFER_STALLED_ERROR")) return;
           updateStatus("stall_timeout", "BUFFER_STALLED_ERROR");
           pushLog({
             source: "diag",
