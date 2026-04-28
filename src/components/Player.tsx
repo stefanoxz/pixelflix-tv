@@ -1746,6 +1746,14 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   useEffect(() => {
     setPlaybackRateState(1);
     if (videoRef.current) videoRef.current.playbackRate = 1;
+    // Reseta o contador de auto-recovery — novo conteúdo merece tentativas frescas.
+    recoveryAttemptsRef.current = 0;
+    recoveryInFlightRef.current = false;
+    lastKnownPositionRef.current = 0;
+    if (playingStableTimerRef.current !== null) {
+      window.clearTimeout(playingStableTimerRef.current);
+      playingStableTimerRef.current = null;
+    }
   }, [src]);
 
   // Aplica rate sempre que o vídeo (re)cria ou o estado muda.
