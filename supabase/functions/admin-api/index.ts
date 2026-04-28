@@ -1881,7 +1881,14 @@ Deno.serve(async (req) => {
         });
         if (getErr) {
           console.error("[admin-api] updateUserById failed", getErr.message);
-          return bad("Falha ao atualizar senha. Verifique se o usuário existe.");
+          const msg = getErr.message || "";
+          if (/weak|pwned|known to be|compromised/i.test(msg)) {
+            return bad("Senha fraca ou vazada em algum site conhecido. Escolha uma senha mais forte (combine letras, números e símbolos).");
+          }
+          if (/not.found|no.*user/i.test(msg)) {
+            return bad("Usuário não encontrado.");
+          }
+          return bad(`Falha ao atualizar senha: ${msg}`);
         }
         targetEmail = u?.user?.email ?? null;
       } catch (e) {
