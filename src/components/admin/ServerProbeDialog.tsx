@@ -12,71 +12,113 @@ import { CheckCircle2, XCircle, Loader2, RefreshCw, Wifi, Copy, Download, Globe 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type ClientReachState = "reachable" | "unreachable" | "error";
+type ClientReachState = "reachable" | "unreachable" | "blocked_mixed" | "error";
 
 interface ClientProbeAttempt {
   variant: string;
   state: ClientReachState;
   latency_ms: number;
+  method: "fetch" | "image" | "skipped";
   detail: string;
 }
 
 interface ClientProbeResult {
   attempts: ClientProbeAttempt[];
   any_reachable: boolean;
+  page_is_https: boolean;
   ran_at: string;
 }
 
+/** Classifica latência de uma falha pra distinguir rejeição local vs servidor */
+function classifyFailureLatency(latencyMs: number): string {
+  if (latencyMs < 25) return "rejeição local (não saiu do dispositivo)";
+  if (latencyMs < 80) return "rejeitado na rede local/ISP";
+  return "servidor recebeu e cortou";
+}
+
 /**
- * Faz um teste client-side do navegador do admin (IP residencial).
- * Como o painel IPTV não envia CORS headers, usamos mode:"no-cors":
- *   - Promise resolve (opaque response) => servidor respondeu ALGO no TCP/HTTP
- *   - Promise rejeita (TypeError "Failed to fetch") => DNS falhou OU TCP recusado/cortado
- * Não conseguimos ler status nem body, mas conseguimos provar que o
- * servidor está acessível do IP do usuário.
+ * Probe via <img>: tenta carregar /favicon.ico como imagem.
+ * - onload => servidor respondeu com bytes (mesmo que não seja imagem válida, em alguns casos)
+ * - onerror => pode ser CORS/mime ou TCP recusado — não é conclusivo de "online", mas
+ *   se a latência for alta (>100ms) é forte indício que o pacote chegou ao servidor.
+ * Funciona em página HTTPS para alvos HTTP em vários navegadores (não bloqueado por mixed content como fetch).
  */
-async function clientProbeOne(variant: string, timeoutMs = 6000): Promise<ClientProbeAttempt> {
-  const url = variant.replace(/\/+$/, "") + "/player_api.php?username=probe&password=probe";
-  const start = performance.now();
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    await fetch(url, {
-      method: "GET",
-      mode: "no-cors",
-      cache: "no-store",
-      signal: ctrl.signal,
-      redirect: "follow",
-    });
-    clearTimeout(t);
-    const latency = Math.round(performance.now() - start);
-    return {
-      variant,
-      state: "reachable",
-      latency_ms: latency,
-      detail: "Servidor respondeu (opaque) — TCP/HTTP acessível do seu IP",
+function imageProbe(url: string, timeoutMs = 5000): Promise<{ ok: boolean; latency: number }> {
+  return new Promise((resolve) => {
+    const start = performance.now();
+    const img = new Image();
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      img.onload = null;
+      img.onerror = null;
+      resolve({ ok, latency: Math.round(performance.now() - start) });
     };
-  } catch (err) {
-    clearTimeout(t);
-    const latency = Math.round(performance.now() - start);
-    const msg = err instanceof Error ? err.message : String(err);
-    const isAbort = /abort/i.test(msg) || ctrl.signal.aborted;
-    if (isAbort) {
-      return { variant, state: "unreachable", latency_ms: latency, detail: "Timeout do navegador" };
+    const t = setTimeout(() => finish(false), timeoutMs);
+    img.onload = () => { clearTimeout(t); finish(true); };
+    img.onerror = () => { clearTimeout(t); finish(false); };
+    // bust cache + força GET de imagem
+    img.src = url.replace(/\/+$/, "") + "/favicon.ico?_=" + Date.now();
+  });
+}
+
+async function clientProbeOne(variant: string, pageIsHttps: boolean, timeoutMs = 6000): Promise<ClientProbeAttempt> {
+  const variantIsHttp = /^http:\/\//i.test(variant);
+  const mixedBlocked = pageIsHttps && variantIsHttp;
+
+  // Caminho 1: fetch no-cors (só funciona quando NÃO há mixed content)
+  if (!mixedBlocked) {
+    const url = variant.replace(/\/+$/, "") + "/player_api.php?username=probe&password=probe";
+    const start = performance.now();
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      await fetch(url, { method: "GET", mode: "no-cors", cache: "no-store", signal: ctrl.signal, redirect: "follow" });
+      clearTimeout(t);
+      const latency = Math.round(performance.now() - start);
+      return {
+        variant, state: "reachable", latency_ms: latency, method: "fetch",
+        detail: "Servidor respondeu (opaque) — TCP/HTTP acessível do seu IP",
+      };
+    } catch (err) {
+      clearTimeout(t);
+      const latency = Math.round(performance.now() - start);
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/abort/i.test(msg) || ctrl.signal.aborted) {
+        return { variant, state: "unreachable", latency_ms: latency, method: "fetch", detail: "Timeout do navegador" };
+      }
+      return {
+        variant, state: "unreachable", latency_ms: latency, method: "fetch",
+        detail: `Falha de rede — ${classifyFailureLatency(latency)}`,
+      };
     }
-    // TypeError "Failed to fetch" / "Load failed" => DNS falhou ou TCP rejeitado
+  }
+
+  // Caminho 2: fallback via <img> quando há mixed content
+  const r = await imageProbe(variant, timeoutMs);
+  if (r.ok) {
     return {
-      variant,
-      state: "unreachable",
-      latency_ms: latency,
-      detail: "Falha de rede (DNS/TCP recusado/cortado) — servidor inacessível do seu IP",
+      variant, state: "reachable", latency_ms: r.latency, method: "image",
+      detail: "Favicon carregou — servidor está vivo (probe via <img>)",
     };
   }
+  // Sem onload, mas latência alta => pacote chegou ao servidor (forte indício)
+  if (r.latency > 100) {
+    return {
+      variant, state: "reachable", latency_ms: r.latency, method: "image",
+      detail: `Sem favicon, mas ${r.latency}ms indica que o pacote chegou ao servidor`,
+    };
+  }
+  // Latência baixa em página HTTPS → mixed content bloqueou tudo localmente
+  return {
+    variant, state: "blocked_mixed", latency_ms: r.latency, method: "image",
+    detail: "Bloqueado pelo navegador (Mixed Content HTTPS→HTTP) — não é falha do servidor",
+  };
 }
 
 async function runClientProbe(serverUrl: string): Promise<ClientProbeResult> {
   const base = serverUrl.replace(/\/+$/, "");
-  // Variantes principais (subset das do backend; sem portas exóticas que travam o navegador)
   const noProto = base.replace(/^https?:\/\//i, "");
   const host = noProto.split("/")[0].split(":")[0];
   const variants = Array.from(new Set([
@@ -85,10 +127,12 @@ async function runClientProbe(serverUrl: string): Promise<ClientProbeResult> {
     `https://${host}`,
     `http://${host}:8080`,
   ]));
-  const attempts = await Promise.all(variants.map((v) => clientProbeOne(v)));
+  const pageIsHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+  const attempts = await Promise.all(variants.map((v) => clientProbeOne(v, pageIsHttps)));
   return {
     attempts,
     any_reachable: attempts.some((a) => a.state === "reachable"),
+    page_is_https: pageIsHttps,
     ran_at: new Date().toISOString(),
   };
 }
