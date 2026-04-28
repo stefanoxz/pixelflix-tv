@@ -1586,16 +1586,36 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       lastReasonRef.current = reason;
       setLastReason(reason);
       pushLog({ source: "video", level: "error", label: "error", details: reason });
+
+      // Auto-recuperação silenciosa para MP4 progressivo com erro de pipeline
+      // (servidor cortou conexão TCP). Codec errors NÃO entram aqui.
+      const isPipelineRead = !isCodec && (code === 2 || /PIPELINE_ERROR_READ|FFmpegDemuxer|data source/i.test(msg ?? ""));
+      if (isPipelineRead && triggerProgressiveRecovery(reason)) {
+        return;
+      }
+
       updateStatus(isCodec ? "codec_incompatible" : "stream_error", reason);
       setRootCauseOnce(isCodec ? "codec_incompatible" : "stream_error", reason);
-      setError({
-        title: isCodec ? "Codec incompatível" : "Não foi possível reproduzir",
-        description: isCodec
-          ? "Este canal usa um codec (provavelmente HEVC/4K) que o navegador não decodifica. Abra no VLC para assistir."
-          : "Este conteúdo pode estar offline, em formato incompatível ou bloqueado pelo servidor.",
-        copyUrl: copyTarget,
-        external: isCodec,
-      });
+
+      // Fallback amigável para streams progressivos quando esgotamos as tentativas.
+      const isProgressivePipeline = isPipelineRead && isProgressiveStream;
+      if (isProgressivePipeline) {
+        setError({
+          title: "Conexão com o servidor encerrada",
+          description: "O servidor de streaming pausou a transmissão deste arquivo. Você pode retomar de onde parou.",
+          copyUrl: copyTarget,
+          canResume: true,
+        });
+      } else {
+        setError({
+          title: isCodec ? "Codec incompatível" : "Não foi possível reproduzir",
+          description: isCodec
+            ? "Este canal usa um codec (provavelmente HEVC/4K) que o navegador não decodifica. Abra no VLC para assistir."
+            : "Este conteúdo pode estar offline, em formato incompatível ou bloqueado pelo servidor.",
+          copyUrl: copyTarget,
+          external: isCodec,
+        });
+      }
       setLoading(false);
       clearBootstrapTimeout();
       clearStallTimeout();
