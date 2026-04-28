@@ -96,7 +96,6 @@ const AdminLogin = () => {
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: `${window.location.origin}/admin` },
       });
       if (error) throw error;
       // Faz logout: cadastro recente fica pendente até admin aprovar.
