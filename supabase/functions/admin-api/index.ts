@@ -269,10 +269,23 @@ Deno.serve(async (req) => {
         e.segments += row.segment_count ?? 0;
       }
       const ids = Array.from(usageMap.keys());
-      let nameMap = new Map<string, string>();
+      // Para cada usuário, busca o nome IPTV E o servidor (DNS) que ele está
+      // usando. Resolve o host pra exibir só o domínio no painel.
+      const nameMap = new Map<string, string>();
+      const serverMap = new Map<string, string>();
       if (ids.length > 0) {
-        const { data: sess } = await admin.from("active_sessions").select("anon_user_id, iptv_username").in("anon_user_id", ids);
-        nameMap = new Map((sess ?? []).map((s: { anon_user_id: string; iptv_username: string | null }) => [s.anon_user_id, s.iptv_username || ""]));
+        const { data: sess } = await admin
+          .from("active_sessions")
+          .select("anon_user_id, iptv_username, server_url")
+          .in("anon_user_id", ids);
+        for (const s of (sess ?? []) as { anon_user_id: string; iptv_username: string | null; server_url: string | null }[]) {
+          nameMap.set(s.anon_user_id, s.iptv_username || "");
+          let host = "";
+          if (s.server_url) {
+            try { host = new URL(s.server_url).host.toLowerCase(); } catch { host = s.server_url; }
+          }
+          serverMap.set(s.anon_user_id, host);
+        }
       }
 
       return ok({
