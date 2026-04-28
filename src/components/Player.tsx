@@ -373,6 +373,28 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const manifestReadyRef = useRef(false);
   const lastReasonRef = useRef<string | null>(null);
 
+  // ===== Auto-recovery para streams MP4 progressivos =====
+  // Servidores Xtream costumam fechar conexão TCP de VOD progressivo após
+  // alguns minutos. Quando isso acontece, a gente retoma silenciosamente
+  // do mesmo ponto sem mostrar erro. Limite de 2 tentativas por sessão
+  // pra não entrar em loop se o servidor estiver de fato fora do ar.
+  const PROGRESSIVE_EXTS = new Set(["mp4", "mkv", "avi", "mov", "webm", "m4v"]);
+  const MAX_PROGRESSIVE_RECOVERIES = 2;
+  const PLAYING_STABLE_RESET_MS = 30_000;
+  const recoveryAttemptsRef = useRef(0);
+  const recoveryInFlightRef = useRef(false);
+  const lastKnownPositionRef = useRef<number>(0);
+  const playingStableTimerRef = useRef<number | null>(null);
+  const isProgressiveStream = useMemo(() => {
+    if (isLiveXtreamUrl(rawUrl ?? src ?? null)) return false;
+    const ext = (containerExt || "").toLowerCase().replace(/^\./, "");
+    if (ext && PROGRESSIVE_EXTS.has(ext)) return true;
+    // fallback: detecta pela URL quando containerExt não veio
+    const urlToCheck = (src ?? rawUrl ?? "").toLowerCase();
+    return /\.(mp4|mkv|avi|mov|webm|m4v)(\?|$)/.test(urlToCheck);
+  }, [containerExt, src, rawUrl]);
+
+
   const [error, setError] = useState<PlayerError | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
