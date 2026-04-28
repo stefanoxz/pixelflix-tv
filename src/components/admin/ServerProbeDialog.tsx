@@ -555,10 +555,14 @@ function buildClientSection(c: ClientProbeResult): string {
   lines.push("TESTE CLIENT-SIDE (do seu navegador / IP residencial)");
   lines.push(sub);
   lines.push(`Executado em      : ${c.ran_at}`);
-  lines.push(`Resultado         : ${c.any_reachable ? "✅ Servidor ALCANÇÁVEL do seu IP" : "❌ Servidor INACESSÍVEL também do seu IP"}`);
+  lines.push(`Página em HTTPS   : ${c.page_is_https ? "sim (alvos http:// usam fallback via <img>)" : "não"}`);
+  const conclusivos = c.attempts.filter((a) => a.state !== "blocked_mixed").length;
+  lines.push(`Variantes testadas: ${c.attempts.length} (${conclusivos} conclusivas)`);
+  lines.push(`Resultado         : ${c.any_reachable ? "✅ Servidor ALCANÇÁVEL do seu IP" : conclusivos === 0 ? "⚠️ INCONCLUSIVO (todas bloqueadas por mixed content)" : "❌ Servidor INACESSÍVEL também do seu IP"}`);
   c.attempts.forEach((a, i) => {
+    const icon = a.state === "reachable" ? "✅ acessível" : a.state === "blocked_mixed" ? "⚠️ inconclusivo" : "❌ inacessível";
     lines.push(`  [${i + 1}] ${a.variant}`);
-    lines.push(`      Estado    : ${a.state === "reachable" ? "✅ acessível" : "❌ inacessível"} (${a.latency_ms}ms)`);
+    lines.push(`      Estado    : ${icon} (${a.latency_ms}ms · método: ${a.method})`);
     lines.push(`      Detalhe   : ${a.detail}`);
   });
   return lines.join("\n");
