@@ -577,32 +577,33 @@ async function tryPlaylistFallback(
         });
         continue;
       }
-    // Sucesso — montamos resposta no formato esperado pelo cliente.
-    return {
-      ok: true,
-      usedVariant: base,
-      data: {
-        user_info: {
-          username,
-          password,
-          auth: 1,
-          status: "Active",
-          message: "playlist-mode",
-          // Indica downstream que não há Xtream API completo.
-          is_trial: 0,
-          active_cons: 0,
-          max_connections: 0,
-          allowed_output_formats: ["m3u8", "ts"],
+      // Sucesso — montamos resposta no formato esperado pelo cliente.
+      return {
+        ok: true,
+        usedVariant: base,
+        data: {
+          user_info: {
+            username,
+            password,
+            auth: 1,
+            status: "Active",
+            message: "playlist-mode",
+            // Indica downstream que não há Xtream API completo.
+            is_trial: 0,
+            active_cons: 0,
+            max_connections: 0,
+            allowed_output_formats: ["m3u8", "ts"],
+          },
+          server_info: {
+            url: base.replace(/^https?:\/\//, ""),
+            server_protocol: base.startsWith("https") ? "https" : "http",
+            time_now: new Date().toISOString(),
+          },
         },
-        server_info: {
-          url: base.replace(/^https?:\/\//, ""),
-          server_protocol: base.startsWith("https") ? "https" : "http",
-          time_now: new Date().toISOString(),
-        },
-      },
-    };
+      };
+    }
   }
-  return { ok: false, reason: "playlist-fallback-failed" };
+  return { ok: false, reason: "playlist-fallback-failed", attempts };
 }
 
 /** Persiste a variante que funcionou + zera contador de falhas. Best-effort. */
