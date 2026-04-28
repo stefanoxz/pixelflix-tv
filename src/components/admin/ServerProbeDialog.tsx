@@ -978,12 +978,18 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
     }
   };
 
+  const recommendation =
+    data ? buildRecommendation(data, clientData, serverUrl ?? "", serverLabel) : null;
+
   const handleCopyReport = async () => {
     if (!data) return;
     let text = buildReport(data, serverLabel);
     if (clientData) {
       text += "\n" + buildClientSection(clientData);
       text += "\n\n─── VEREDITO COMPARATIVO ───\n" + buildComparisonVerdict(data, clientData);
+    }
+    if (recommendation) {
+      text += "\n" + buildRecommendationSection(recommendation);
     }
     try {
       await navigator.clipboard.writeText(text);
@@ -993,12 +999,25 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
     }
   };
 
+  const handleCopyMessageOnly = async () => {
+    if (!recommendation?.message) return;
+    try {
+      await navigator.clipboard.writeText(recommendation.message);
+      toast.success("Mensagem copiada — pronta pra colar no email/WhatsApp");
+    } catch {
+      toast.error("Não foi possível copiar a mensagem.");
+    }
+  };
+
   const handleDownloadReport = () => {
     if (!data) return;
     let text = buildReport(data, serverLabel);
     if (clientData) {
       text += "\n" + buildClientSection(clientData);
       text += "\n\n─── VEREDITO COMPARATIVO ───\n" + buildComparisonVerdict(data, clientData);
+    }
+    if (recommendation) {
+      text += "\n" + buildRecommendationSection(recommendation);
     }
     let host = "servidor";
     try {
