@@ -145,10 +145,11 @@ const Movies = () => {
     () =>
       sortedMovies.map((m) => {
         // Tenta extrair (ano) do nome se ele estiver lá
-        const yearMatch = m.name.match(/\((\d{4})\)\s*$/);
+        const name = m.name ?? "";
+        const yearMatch = name.match(/\((\d{4})\)\s*$/);
         return {
           id: m.stream_id,
-          title: yearMatch ? m.name.replace(/\s*\(\d{4}\)\s*$/, "") : m.name,
+          title: yearMatch ? name.replace(/\s*\(\d{4}\)\s*$/, "") : name,
           cover: m.stream_icon,
           rating: m.rating_5based,
           year: yearMatch ? yearMatch[1] : undefined,
