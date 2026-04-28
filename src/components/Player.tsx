@@ -1667,9 +1667,13 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     // martelar localStorage. timeupdate dispara ~4x/s no Chrome.
     let lastProgressAt = 0;
     const onTimeUpdateProgress = () => {
+      const ct = video.currentTime;
+      // Track posição em tempo real para auto-recovery (sem throttle).
+      if (Number.isFinite(ct) && ct > 0) {
+        lastKnownPositionRef.current = ct;
+      }
       const now = performance.now();
       if (now - lastProgressAt < 5000) return;
-      const ct = video.currentTime;
       const dur = video.duration;
       if (!Number.isFinite(ct) || !Number.isFinite(dur) || dur <= 0) return;
       lastProgressAt = now;
