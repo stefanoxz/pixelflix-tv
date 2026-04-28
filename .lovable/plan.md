@@ -1,83 +1,61 @@
-# Auto-recuperação silenciosa para streams MP4 progressivos
+# Reabrir detalhes do filme ao fechar o player
 
-## Contexto (do log que você colou)
+## Problema
 
-O servidor `tzprosata.fun` cortou a conexão TCP do MP4 progressivo aos **7min38s de reprodução** (posição 1023.5s do filme). O app esperou 20s, marcou `stall_timeout` e mostrou erro genérico `MEDIA_ERR_2`. Não é bug do app — é comportamento conhecido de servidores Xtream com VOD progressivo (timeout de socket por sessão longa).
+Hoje, em `src/pages/Movies.tsx`, ao iniciar a reprodução o código fecha o diálogo de detalhes (`setOpenMovie(null)`) antes de abrir o player. Quando o usuário fecha o player (no fim do filme ou manualmente), o estado `openMovie` já é `null` e o usuário cai direto na grade — perdendo o contexto do título que estava assistindo.
 
-Conserto: o player retoma sozinho do mesmo ponto, sem o usuário ver erro. Se falhar 2 vezes, aí sim mostra mensagem clara com botão "Retomar".
+Em `src/pages/Series.tsx` o comportamento já é o correto: o `SeriesDetailsDialog` permanece montado por trás do player, então ao fechar o player o usuário volta para a tela do título. Vamos alinhar Filmes a esse padrão.
 
-## O que muda
+## Mudanças
 
-**Apenas `src/components/Player.tsx`.** Sem migração, sem novos arquivos, sem mexer em backend/edge functions.
+Arquivo único: **`src/pages/Movies.tsx`**
 
-### 1. Detector de stream "frágil"
+1. **Não fechar o diálogo ao iniciar a reprodução**
+   - Em `playMovie` (hoje na linha 190), remover o `setOpenMovie(null)`.
+   - O `MovieDetailsDialog` continua montado por trás do `PlayerOverlay` (que é uma camada superior), então visualmente o player cobre tudo enquanto o filme toca.
 
-Computar uma flag local:
-```
-isProgressive = engine !== 'hls' real (m3u8) 
-              || ext ∈ {mp4, mkv, avi, mov, webm}
-```
-Streams HLS segmentados já têm recuperação nativa do hls.js; só MP4 progressivo precisa do novo fluxo.
+2. **Mesmo tratamento no fluxo "Continue assistindo" (deep-link com `autoplay`)**
+   - O `useEffect` de deep-link (linha ~88) hoje pula o detalhe e chama `playMovieRef.current?.(m)` direto. Para garantir que ao fechar o player o usuário também volte ao detalhe, adicionar `setOpenMovie(m)` antes de chamar o play. Assim, vindo do rail "Continue assistindo", ao fechar o player o detalhe do filme aparece (mesmo comportamento do clique normal no card).
 
-### 2. Auto-recuperação (sem mostrar erro)
-
-Adicionar `recoveryAttemptsRef` (max 2 por sessão). Disparada quando:
-- `stall_timeout` ocorre **e** `isProgressive` **e** `recoveryAttempts < 2`, OU
-- `onError` com `MEDIA_ERR_2 / PIPELINE_ERROR_READ` **e** `isProgressive` **e** `recoveryAttempts < 2`.
-
-Sequência:
-1. Salvar `video.currentTime` (ou `lastResumePosition` se `currentTime=0`).
-2. `recoveryAttempts++`, log `recovery_attempt`.
-3. Toast discreto: `toast("Reconectando…")` (sonner, sem ícone de erro).
-4. Bumpar `retryNonce` (já existe, força re-setup do `<video>` com novo token).
-5. No próximo `loadedmetadata`, `seek(savedTime - 2)` + `play()`.
-6. **Não** chamar `setError()` — overlay de erro permanece oculto.
-
-### 3. Reset do contador
-
-Zerar `recoveryAttempts`:
-- Quando `src` muda (novo conteúdo).
-- Quando vídeo passa **30s contínuos** em estado `playing` sem erro novo (timer rearmado a cada `playing`/`timeupdate`, cancelado em `waiting`/`error`).
-
-### 4. Fallback amigável (depois de 2 falhas)
-
-Se `recoveryAttempts >= 2` quando der nova falha, em vez do texto genérico atual mostrar:
-
-- **Título:** "Conexão com o servidor encerrada"
-- **Descrição:** "O servidor de streaming pausou a transmissão deste arquivo. Você pode retomar de onde parou."
-- **Botão primário (novo):** **Retomar de onde parou** — zera `recoveryAttempts`, salva posição, bump `retryNonce`, fecha overlay.
-- **Botão secundário:** Voltar (`onClose`, já existe).
-- Mantém botões existentes (Copiar URL, etc.) para casos avançados.
-
-Só aplica essa mensagem específica quando `isProgressive && reason começa com MEDIA_ERR_2`. Outros erros (codec, 404, etc.) mantêm os textos atuais.
-
-## Pontos exatos no `Player.tsx`
-
-| Local atual | Mudança |
-|---|---|
-| Lá perto da linha 1430, antes do `useEffect` dos listeners | Declarar `recoveryAttemptsRef`, `isProgressiveRef`, `playingStableTimerRef` |
-| Linhas 1448–1488 (`onWaiting`/`onStalled` setTimeouts) | Antes de chamar `updateStatus("stall_timeout")`, checar se cabe auto-recovery; se sim, disparar fluxo silencioso e **não** chamar `updateStatus` |
-| Linhas 1490–1510 (`onPlaying`) | Iniciar/rearmar timer de 30s estáveis para resetar `recoveryAttemptsRef` |
-| Linhas 1532–1553 (`onError`) | Antes de `setError(...)`, checar auto-recovery; se cabe, disparar fluxo silencioso e retornar. Se já estourou tentativas e é `isProgressive`, usar texto novo + botão "Retomar" |
-| Bloco do overlay de erro (lá pelas linhas 1870+) | Renderizar botão extra "Retomar de onde parou" quando `error.canResume === true` |
-
-## O que NÃO vai mudar
-
-- Lógica de token / edge functions.
-- Comportamento para streams HLS reais (`.m3u8` segmentado) — já têm recuperação.
-- Comportamento para erros de codec (`MEDIA_ERR_3/4`) — segue indo direto pro fluxo "Abrir no VLC".
-- QualityBadge, layout, controles — nada disso é tocado.
+3. **Não alterar nada mais**
+   - `setPlaying(null)` no `onClose` do `PlayerOverlay` e do `Player` continuam iguais.
+   - O atalho de teclado `Escape` (linha 246-247) já fecha primeiro o player e, num segundo Esc, o detalhe — comportamento desejado preservado.
+   - O `ResumeDialog` continua independente.
 
 ## Resultado esperado
 
-Cenário do seu log, depois da mudança:
-1. Aos 7min38s o servidor corta. App detecta stall.
-2. Toast "Reconectando…" aparece por ~2s.
-3. Player recria source, retoma em 1021.5s, volta a tocar.
-4. Usuário não vê tela de erro.
-5. Se o servidor estiver realmente fora do ar e a 2ª tentativa também falhar, aí mostra "Conexão encerrada" com botão "Retomar de onde parou" — clique único resolve.
+- Clico no card → abre detalhes → "Assistir" → player cobre a tela.
+- Filme termina ou clico em fechar → volto ao **diálogo de detalhes do filme**, não à grade.
+- Um segundo fechamento (X do dialog ou Esc) me leva à grade.
+- Vindo de "Continue assistindo": ao fechar o player, mesmo comportamento — diálogo do filme aparece.
 
-## Arquivos
+## Detalhes técnicos
 
-- Editar: `src/components/Player.tsx`
+```tsx
+// playMovie — antes
+setOpenMovie(null);
+const saved = getProgress(...);
+...
 
+// playMovie — depois
+// (remover setOpenMovie(null); o dialog fica aberto por baixo do player)
+const saved = getProgress(...);
+...
+```
+
+```tsx
+// deep-link autoplay — antes
+if (state?.autoplay) {
+  playMovieRef.current?.(m);
+} else {
+  setOpenMovie(m);
+}
+
+// depois
+setOpenMovie(m); // sempre abre o detalhe (fica por baixo se autoplay)
+if (state?.autoplay) {
+  playMovieRef.current?.(m);
+}
+```
+
+Sem mudanças em outros arquivos, sem migração, sem impacto em Series/Live.

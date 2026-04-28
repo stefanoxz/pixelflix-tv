@@ -98,12 +98,11 @@ const Movies = () => {
       setActiveId(openId);
       const m = movies.find((x) => x.stream_id === openId);
       if (m) {
+        // Sempre abre o detalhe; se for autoplay, o player cobre por cima
+        // e ao fechar o usuário volta para a tela do título.
+        setOpenMovie(m);
         if (state?.autoplay) {
-          // Vem do rail "Continue assistindo": pula o details dialog
-          // e dispara o ResumeDialog se houver progresso, ou toca direto.
           playMovieRef.current?.(m);
-        } else {
-          setOpenMovie(m);
         }
       }
       navigate(location.pathname, { replace: true, state: null });
@@ -187,7 +186,8 @@ const Movies = () => {
 
   const playMovie = useCallback(
     (m: VodStream) => {
-      setOpenMovie(null);
+      // Mantém o MovieDetailsDialog aberto por trás do PlayerOverlay,
+      // para que ao fechar o player o usuário volte ao título e não à grade.
       // Consulta progresso salvo: se houver posição válida (>= MIN_RESUME e < 95%),
       // abre o ResumeDialog; senão toca do início.
       const saved = getProgress(makeProgressKey("movie", m.stream_id));
