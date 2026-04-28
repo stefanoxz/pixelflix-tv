@@ -7,7 +7,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import type { LiveStream, IptvCredentials } from "@/services/iptv";
 import { VirtualChannelList } from "./VirtualChannelList";
-import type { RailCategory } from "./ChannelCategoryRail";
+import { CategorySortToggle, sortCategories, type RailCategory } from "./ChannelCategoryRail";
+import type { CategorySort } from "@/hooks/useCategorySortPreference";
 import { useState } from "react";
 
 interface Props {
@@ -25,6 +26,8 @@ interface Props {
   creds: IptvCredentials;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  sort: CategorySort;
+  onSortChange: (s: CategorySort) => void;
 }
 
 /**
@@ -46,8 +49,11 @@ export function MobileChannelDrawer({
   creds,
   open,
   onOpenChange,
+  sort,
+  onSortChange,
 }: Props) {
   const [tab, setTab] = useState<"channels" | "categories">("channels");
+  const sortedCategories = sortCategories(categories, sort);
 
   const handleSelect = (c: LiveStream) => {
     onSelect(c);
@@ -107,6 +113,10 @@ export function MobileChannelDrawer({
           </TabsContent>
 
           <TabsContent value="categories" className="flex-1 min-h-0 mt-2">
+            <div className="px-4 pb-2 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Ordenar por</span>
+              <CategorySortToggle value={sort} onChange={onSortChange} />
+            </div>
             <ScrollArea className="h-full px-2">
               <div className="space-y-1 pb-4">
                 <CatBtn
@@ -122,18 +132,15 @@ export function MobileChannelDrawer({
                   onClick={() => handleCategory("all")}
                 />
                 <div className="h-px bg-border/40 my-2" />
-                {categories
-                  .slice()
-                  .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
-                  .map((c) => (
-                    <CatBtn
-                      key={c.id}
-                      label={c.name}
-                      count={c.count}
-                      active={activeCategory === c.id}
-                      onClick={() => handleCategory(c.id)}
-                    />
-                  ))}
+                {sortedCategories.map((c) => (
+                  <CatBtn
+                    key={c.id}
+                    label={c.name}
+                    count={c.count}
+                    active={activeCategory === c.id}
+                    onClick={() => handleCategory(c.id)}
+                  />
+                ))}
               </div>
             </ScrollArea>
           </TabsContent>

@@ -1,7 +1,10 @@
 import { memo, useMemo } from "react";
-import { Star, LayoutGrid, Folder } from "lucide-react";
+import { Star, LayoutGrid, Folder, ArrowDownAZ, ArrowDownZA, ListOrdered } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import type { CategorySort } from "@/hooks/useCategorySortPreference";
 
 export interface RailCategory {
   id: string;
@@ -15,6 +18,8 @@ interface Props {
   onChange: (id: string) => void;
   totalCount: number;
   favoritesCount: number;
+  sort: CategorySort;
+  onSortChange: (s: CategorySort) => void;
   className?: string;
 }
 
@@ -28,12 +33,11 @@ export const ChannelCategoryRail = memo(function ChannelCategoryRail({
   onChange,
   totalCount,
   favoritesCount,
+  sort,
+  onSortChange,
   className,
 }: Props) {
-  const sorted = useMemo(
-    () => [...categories].sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
-    [categories],
-  );
+  const sorted = useMemo(() => sortCategories(categories, sort), [categories, sort]);
 
   return (
     <aside
@@ -42,8 +46,9 @@ export const ChannelCategoryRail = memo(function ChannelCategoryRail({
         className,
       )}
     >
-      <div className="px-4 py-3 border-b border-border/50">
+      <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-foreground">Categorias</h2>
+        <CategorySortToggle value={sort} onChange={onSortChange} />
       </div>
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
@@ -79,6 +84,15 @@ export const ChannelCategoryRail = memo(function ChannelCategoryRail({
   );
 });
 
+/** Reutilizável: ordena conforme preferência. */
+export function sortCategories(cats: RailCategory[], sort: CategorySort): RailCategory[] {
+  if (sort === "server") return cats;
+  const arr = [...cats];
+  arr.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  if (sort === "za") arr.reverse();
+  return arr;
+}
+
 interface ItemProps {
   icon: React.ReactNode;
   label: string;
@@ -112,5 +126,51 @@ function RailItem({ icon, label, count, active, onClick, highlight }: ItemProps)
         {count}
       </span>
     </button>
+  );
+}
+
+/** Seletor compacto de ordenação. Exportado para reuso no drawer mobile. */
+export function CategorySortToggle({
+  value,
+  onChange,
+}: {
+  value: CategorySort;
+  onChange: (s: CategorySort) => void;
+}) {
+  return (
+    <TooltipProvider delayDuration={300}>
+      <ToggleGroup
+        type="single"
+        size="sm"
+        value={value}
+        onValueChange={(v) => v && onChange(v as CategorySort)}
+        className="gap-0.5"
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <ToggleGroupItem value="az" aria-label="Ordenar A a Z" className="h-7 w-7 p-0">
+              <ArrowDownAZ className="h-3.5 w-3.5" />
+            </ToggleGroupItem>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">A → Z</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <ToggleGroupItem value="za" aria-label="Ordenar Z a A" className="h-7 w-7 p-0">
+              <ArrowDownZA className="h-3.5 w-3.5" />
+            </ToggleGroupItem>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Z → A</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <ToggleGroupItem value="server" aria-label="Ordem do servidor" className="h-7 w-7 p-0">
+              <ListOrdered className="h-3.5 w-3.5" />
+            </ToggleGroupItem>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Ordem do servidor</TooltipContent>
+        </Tooltip>
+      </ToggleGroup>
+    </TooltipProvider>
   );
 }

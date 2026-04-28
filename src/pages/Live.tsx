@@ -22,6 +22,7 @@ import {
   proxyImageUrl,
   type LiveStream,
 } from "@/services/iptv";
+import { useCategorySortPreference } from "@/hooks/useCategorySortPreference";
 
 // Pré-aquece as edge functions de stream — elimina o cold-start de
 // ~500-1000ms no primeiro canal aberto. Dispara só uma vez por sessão.
@@ -51,6 +52,7 @@ const Live = () => {
   const [activeChannel, setActiveChannel] = useState<LiveStream | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const { sort: categorySort, setSort: setCategorySort } = useCategorySortPreference();
 
   const { favorites, toggle, isFavorite } = useFavorites(creds.username, "live");
 
@@ -177,6 +179,8 @@ const Live = () => {
           onChange={setActiveCategory}
           totalCount={channels.length}
           favoritesCount={favorites.size}
+          sort={categorySort}
+          onSortChange={setCategorySort}
           className="hidden lg:flex h-[calc(100vh-160px)] [height:calc(100dvh-160px)] sticky top-4"
         />
 
@@ -255,6 +259,8 @@ const Live = () => {
         creds={creds}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+        sort={categorySort}
+        onSortChange={setCategorySort}
       />
     </div>
   );
