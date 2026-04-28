@@ -904,6 +904,10 @@ const Admin = () => {
             <PendingSignupsPanel />
           </TabsContent>
 
+          <TabsContent value="blocked-dns" className="space-y-6 mt-0">
+            <BlockedDnsPanel />
+          </TabsContent>
+
           <TabsContent value="monitoring" className="space-y-6 mt-0">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <Card className="p-5 bg-gradient-card border-border/50">
