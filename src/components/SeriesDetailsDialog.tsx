@@ -57,6 +57,7 @@ export const SeriesDetailsDialog = forwardRef<HTMLDivElement, Props>(
     isFavorite,
     onToggleFavorite,
   }, _ref) {
+  const [showFullPlot, setShowFullPlot] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: ["series-info", series?.series_id],
     queryFn: () => getSeriesInfo(creds, series!.series_id),
