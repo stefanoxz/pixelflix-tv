@@ -40,11 +40,24 @@ function isTransient(details: FunctionErrorDetails): boolean {
   return TRANSIENT_ADMIN_API_ERROR.test(`${details.code ?? ""} ${details.message}`);
 }
 
+export class AdminApiSessionError extends Error {
+  status = 401;
+  constructor(message = "Sessão expirada. Faça login novamente.") {
+    super(message);
+    this.name = "AdminApiSessionError";
+  }
+}
+
 export async function invokeAdminApi<T>(
   action: string,
   payload?: Record<string, unknown>,
   retries = 2,
 ): Promise<T> {
+  // Pré-checagem: se não há sessão ativa (logout em andamento, token expirado),
+  // não bate na função — devolve erro silencioso de sessão.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new AdminApiSessionError();
+
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -55,6 +68,10 @@ export async function invokeAdminApi<T>(
 
       if (error) {
         const details = await readFunctionError(error);
+        // 401 = sessão inválida/expirada — não retentar e usar erro tipado.
+        if (details.status === 401) {
+          throw new AdminApiSessionError(details.message || "Sessão expirada. Faça login novamente.");
+        }
         const e = new Error(details.message) as Error & FunctionErrorDetails;
         e.code = details.code;
         e.status = details.status;
@@ -68,6 +85,9 @@ export async function invokeAdminApi<T>(
       return data as T;
     } catch (error) {
       lastError = error;
+      // Sessão inválida nunca é transiente — propaga imediatamente.
+      if (error instanceof AdminApiSessionError) throw error;
+
       const details: FunctionErrorDetails = {
         message: error instanceof Error ? error.message : String(error),
         code: (error as { code?: string })?.code,
