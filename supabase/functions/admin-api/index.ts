@@ -88,6 +88,7 @@ const CLEANUP_FUNCTIONS: Record<string, { fn: string; label: string; retentionDa
   admin_audit_log:     { fn: "cleanup_admin_audit_log",     label: "Audit log",               retentionDays: 180, dateCol: "created_at" },
   tmdb_image_cache:    { fn: "cleanup_tmdb_image_cache",    label: "Cache TMDB (imagens)",    retentionDays: 90,  dateCol: "fetched_at" },
   tmdb_episode_cache:  { fn: "cleanup_tmdb_episode_cache",  label: "Cache TMDB (episódios)",  retentionDays: 30,  dateCol: "fetched_at" },
+  blocked_dns_failures:{ fn: "cleanup_blocked_dns_failures",label: "Falhas DNS bloqueados",   retentionDays: 2,   dateCol: "created_at" },
 };
 
 // Ações que moderador também pode executar (escrita operacional).
