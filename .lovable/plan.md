@@ -1,61 +1,36 @@
-# Reabrir detalhes do filme ao fechar o player
+# Corrigir: detalhe do filme some ao fechar o player
 
-## Problema
+## Causa raiz
 
-Hoje, em `src/pages/Movies.tsx`, ao iniciar a reprodução o código fecha o diálogo de detalhes (`setOpenMovie(null)`) antes de abrir o player. Quando o usuário fecha o player (no fim do filme ou manualmente), o estado `openMovie` já é `null` e o usuário cai direto na grade — perdendo o contexto do título que estava assistindo.
+A mudança anterior já mantém `openMovie` setado ao iniciar a reprodução. Mas o `MovieDetailsDialog` (Radix Dialog modal) ainda está fechando sozinho quando o player é fechado.
 
-Em `src/pages/Series.tsx` o comportamento já é o correto: o `SeriesDetailsDialog` permanece montado por trás do player, então ao fechar o player o usuário volta para a tela do título. Vamos alinhar Filmes a esse padrão.
+Por quê: o `PlayerOverlay` é portalizado para `document.body` como **irmão** do portal do Radix Dialog. Ao desmontar o overlay, o foco volta via `previousFocusRef.current?.focus?.()`, e o Radix Dialog do detalhe interpreta eventos de foco/escape vazados como "fechar" — disparando `onOpenChange(false)`, que executa `setOpenMovie(null)` na linha 328 de `src/pages/Movies.tsx`.
 
-## Mudanças
+## Mudança
 
-Arquivo único: **`src/pages/Movies.tsx`**
+Arquivo único: **`src/pages/Movies.tsx`** (linhas 326-334).
 
-1. **Não fechar o diálogo ao iniciar a reprodução**
-   - Em `playMovie` (hoje na linha 190), remover o `setOpenMovie(null)`.
-   - O `MovieDetailsDialog` continua montado por trás do `PlayerOverlay` (que é uma camada superior), então visualmente o player cobre tudo enquanto o filme toca.
-
-2. **Mesmo tratamento no fluxo "Continue assistindo" (deep-link com `autoplay`)**
-   - O `useEffect` de deep-link (linha ~88) hoje pula o detalhe e chama `playMovieRef.current?.(m)` direto. Para garantir que ao fechar o player o usuário também volte ao detalhe, adicionar `setOpenMovie(m)` antes de chamar o play. Assim, vindo do rail "Continue assistindo", ao fechar o player o detalhe do filme aparece (mesmo comportamento do clique normal no card).
-
-3. **Não alterar nada mais**
-   - `setPlaying(null)` no `onClose` do `PlayerOverlay` e do `Player` continuam iguais.
-   - O atalho de teclado `Escape` (linha 246-247) já fecha primeiro o player e, num segundo Esc, o detalhe — comportamento desejado preservado.
-   - O `ResumeDialog` continua independente.
-
-## Resultado esperado
-
-- Clico no card → abre detalhes → "Assistir" → player cobre a tela.
-- Filme termina ou clico em fechar → volto ao **diálogo de detalhes do filme**, não à grade.
-- Um segundo fechamento (X do dialog ou Esc) me leva à grade.
-- Vindo de "Continue assistindo": ao fechar o player, mesmo comportamento — diálogo do filme aparece.
-
-## Detalhes técnicos
+Tornar o `onOpenChange` do `MovieDetailsDialog` resistente a fechamentos enquanto o player estiver aberto:
 
 ```tsx
-// playMovie — antes
-setOpenMovie(null);
-const saved = getProgress(...);
-...
-
-// playMovie — depois
-// (remover setOpenMovie(null); o dialog fica aberto por baixo do player)
-const saved = getProgress(...);
-...
+<MovieDetailsDialog
+  open={!!openMovie}
+  onOpenChange={(o) => {
+    // Ignora qualquer pedido de fechar enquanto o player estiver tocando.
+    // Evita que eventos de foco/escape do PlayerOverlay (portal irmão)
+    // façam o Radix Dialog fechar o detalhe por baixo.
+    if (!o && playing) return;
+    if (!o) setOpenMovie(null);
+  }}
+  movie={openMovie}
+  ...
+/>
 ```
 
-```tsx
-// deep-link autoplay — antes
-if (state?.autoplay) {
-  playMovieRef.current?.(m);
-} else {
-  setOpenMovie(m);
-}
+## Resultado
 
-// depois
-setOpenMovie(m); // sempre abre o detalhe (fica por baixo se autoplay)
-if (state?.autoplay) {
-  playMovieRef.current?.(m);
-}
-```
+- Abrir card → detalhe → "Assistir" → player cobre tudo.
+- Fechar player → o `setPlaying(null)` é executado; o `MovieDetailsDialog` ignora qualquer `onOpenChange(false)` espúrio e permanece aberto.
+- Usuário vê o detalhe do filme novamente; um segundo "X" / Esc fecha o detalhe e volta à grade.
 
-Sem mudanças em outros arquivos, sem migração, sem impacto em Series/Live.
+Sem outras mudanças.
