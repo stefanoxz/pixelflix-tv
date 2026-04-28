@@ -934,6 +934,7 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
   const [data, setData] = useState<ProbeResponse | null>(null);
   const [clientLoading, setClientLoading] = useState(false);
   const [clientData, setClientData] = useState<ClientProbeResult | null>(null);
+  const [blockedDnsDialogOpen, setBlockedDnsDialogOpen] = useState(false);
 
   const runProbe = async () => {
     if (!serverUrl) return;
