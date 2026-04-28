@@ -942,7 +942,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           });
           console.log("[player] manifest_method:", method, { kind, host: extractUpstreamHost(src), mode: segmentModeRef.current, tokenMs });
 
-          // Heartbeat (renew session lifecycle on backend every 45s)
+          // Heartbeat imediato — popula content_kind/title já no primeiro
+          // segundo, sem esperar 45s (sessões curtas precisam disso).
+          reportStreamEvent("session_heartbeat", { url: src ?? undefined, meta: buildContentMeta() });
+          // Renovações periódicas (renew session lifecycle a cada 45s).
           heartbeatRef.current = window.setInterval(() => {
             reportStreamEvent("session_heartbeat", { url: src ?? undefined, meta: buildContentMeta() });
           }, HEARTBEAT_INTERVAL_MS);
