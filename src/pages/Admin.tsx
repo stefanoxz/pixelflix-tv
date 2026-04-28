@@ -1465,8 +1465,8 @@ const Admin = () => {
           </TabsContent>
 
           <TabsContent value="servers" className="space-y-6 mt-0">
-            <div className="flex gap-3 flex-wrap">
-              <div className="relative flex-1 min-w-[240px] max-w-md">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
+              <div className="relative w-full sm:flex-1 sm:min-w-[240px] sm:max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar DNS..."
@@ -1475,19 +1475,29 @@ const Admin = () => {
                   className="pl-9"
                 />
               </div>
-              <Button
-                onClick={() => checkAllServers(true)}
-                variant="outline"
-                size="sm"
-                disabled={healthLoading || allowed.length === 0}
-              >
-                <RefreshCw className={"h-4 w-4 mr-2 " + (healthLoading ? "animate-spin" : "")} />
-                Atualizar pings
-              </Button>
-              <Button onClick={() => setAddOpen(true)} variant="default" size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Cadastrar DNS
-              </Button>
+              <div className="flex gap-2 sm:gap-3">
+                <Button
+                  onClick={() => checkAllServers(true)}
+                  variant="outline"
+                  size="sm"
+                  disabled={healthLoading || allowed.length === 0}
+                  className="flex-1 sm:flex-none"
+                >
+                  <RefreshCw className={"h-4 w-4 mr-2 " + (healthLoading ? "animate-spin" : "")} />
+                  <span className="sm:hidden">Pings</span>
+                  <span className="hidden sm:inline">Atualizar pings</span>
+                </Button>
+                <Button
+                  onClick={() => setAddOpen(true)}
+                  variant="default"
+                  size="sm"
+                  className="flex-1 sm:flex-none"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  <span className="sm:hidden">Nova DNS</span>
+                  <span className="hidden sm:inline">Cadastrar DNS</span>
+                </Button>
+              </div>
             </div>
 
             {/* Allowed servers */}
@@ -1510,46 +1520,46 @@ const Admin = () => {
                       {filteredAllowed.map((s) => (
                         <div
                           key={s.id}
-                          className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap"
+                          className="px-4 py-4 sm:px-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4"
                         >
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1 space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <ShieldCheck className="h-4 w-4 text-success shrink-0" />
                               {s.label && (
                                 <span className="text-sm font-semibold">{s.label}</span>
                               )}
-                              <span className="font-mono text-sm text-muted-foreground truncate">
+                              <span className="font-mono text-sm text-muted-foreground truncate min-w-0">
                                 {s.server_url}
                               </span>
                             </div>
-                            <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
-                              <span>{s.unique_users} usuários</span>
-                              <span className="text-success">{s.success_count} ok</span>
-                              <span className="text-destructive">{s.fail_count} falhas</span>
+                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                              <span className="whitespace-nowrap">{s.unique_users} usuários</span>
+                              <span className="whitespace-nowrap text-success">{s.success_count} ok</span>
+                              <span className="whitespace-nowrap text-destructive">{s.fail_count} falhas</span>
                               {s.last_seen ? (
-                                <span>último uso há {formatRelative(s.last_seen)}</span>
+                                <span className="whitespace-nowrap">último uso há {formatRelative(s.last_seen)}</span>
                               ) : (
-                                <span className="italic">nunca usado</span>
+                                <span className="italic whitespace-nowrap">nunca usado</span>
                               )}
-                              {s.notes && <span>• {s.notes}</span>}
+                              {s.notes && <span className="whitespace-nowrap">• {s.notes}</span>}
                             </div>
                             {(() => {
                               const h = health[s.server_url];
                               if (!h) {
                                 return (
-                                  <div className="text-xs text-muted-foreground mt-1">
+                                  <div className="text-xs text-muted-foreground">
                                     Verificando ping…
                                   </div>
                                 );
                               }
                               return (
-                                <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                                   {(() => {
                                     const b = stateBadge(h.state);
                                     return (
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <span className={`${b.cls} cursor-help`}>
+                                          <span className={`${b.cls} cursor-help whitespace-nowrap`}>
                                             {b.dot} {b.label}
                                           </span>
                                         </TooltipTrigger>
@@ -1566,7 +1576,7 @@ const Admin = () => {
                                     return (
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <span className={`px-1.5 py-0.5 rounded border border-border/50 cursor-help ${info.cls}`}>
+                                          <span className={`px-1.5 py-0.5 rounded border border-border/50 cursor-help whitespace-nowrap ${info.cls}`}>
                                             {info.label}
                                           </span>
                                         </TooltipTrigger>
@@ -1578,7 +1588,7 @@ const Admin = () => {
                                   })()}
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <span className={`${latencyClass(h.latency)} cursor-help`}>
+                                      <span className={`${latencyClass(h.latency)} cursor-help whitespace-nowrap`}>
                                         {h.latency != null ? `${h.latency} ms` : "—"}
                                       </span>
                                     </TooltipTrigger>
@@ -1590,7 +1600,7 @@ const Admin = () => {
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <span
-                                          className={`px-1.5 py-0.5 rounded font-mono cursor-help ${statusClass(h.status)}`}
+                                          className={`px-1.5 py-0.5 rounded font-mono cursor-help whitespace-nowrap ${statusClass(h.status)}`}
                                         >
                                           HTTP {h.status}
                                         </span>
@@ -1602,7 +1612,7 @@ const Admin = () => {
                                   ) : h.error ? (
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <span className="px-1.5 py-0.5 rounded font-mono text-warning bg-warning/10 cursor-help">
+                                        <span className="px-1.5 py-0.5 rounded font-mono text-warning bg-warning/10 cursor-help whitespace-nowrap">
                                           {h.error === "timeout" ? "timeout" : "rede"}
                                         </span>
                                       </TooltipTrigger>
@@ -1625,7 +1635,7 @@ const Admin = () => {
                                   )}
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <span className="text-muted-foreground cursor-help">
+                                      <span className="text-muted-foreground cursor-help whitespace-nowrap">
                                         último ping {formatTime(h.checked_at)}
                                       </span>
                                     </TooltipTrigger>
@@ -1637,11 +1647,12 @@ const Admin = () => {
                               );
                             })()}
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 w-full md:w-auto md:shrink-0">
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => setProbeServer(s)}
+                              className="flex-1 md:flex-none"
                             >
                               <Wifi className="h-4 w-4 mr-2" />
                               Testar
@@ -1656,6 +1667,7 @@ const Admin = () => {
                                 setNewNotes(s.notes ?? "");
                                 setAddOpen(true);
                               }}
+                              className="flex-1 md:flex-none"
                             >
                               <Pencil className="h-4 w-4 mr-2" />
                               Editar
@@ -1663,7 +1675,7 @@ const Admin = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="text-destructive hover:text-destructive"
+                              className="text-destructive hover:text-destructive flex-1 md:flex-none"
                               onClick={() => setConfirmRemoveServer(s.server_url)}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
@@ -1695,22 +1707,23 @@ const Admin = () => {
                     {filteredPending.map((s) => (
                       <div
                         key={s.server_url}
-                        className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap"
+                        className="px-4 py-4 sm:px-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4"
                       >
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <XCircle className="h-4 w-4 text-destructive shrink-0" />
-                            <span className="font-mono text-sm truncate">{s.server_url}</span>
+                            <span className="font-mono text-sm truncate min-w-0">{s.server_url}</span>
                           </div>
-                          <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
-                            <span>{s.unique_users} usuários tentaram</span>
-                            <span>{s.total_logins} tentativas</span>
-                            <span>última há {formatRelative(s.last_seen)}</span>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                            <span className="whitespace-nowrap">{s.unique_users} usuários tentaram</span>
+                            <span className="whitespace-nowrap">{s.total_logins} tentativas</span>
+                            <span className="whitespace-nowrap">última há {formatRelative(s.last_seen)}</span>
                           </div>
                         </div>
                         <Button
                           variant="default"
                           size="sm"
+                          className="w-full md:w-auto md:shrink-0"
                           onClick={() => {
                             setNewUrl(s.server_url);
                             setAddOpen(true);
