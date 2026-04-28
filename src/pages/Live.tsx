@@ -22,6 +22,7 @@ import {
   proxyImageUrl,
   type LiveStream,
 } from "@/services/iptv";
+import { useCategorySortPreference } from "@/hooks/useCategorySortPreference";
 
 // Pré-aquece as edge functions de stream — elimina o cold-start de
 // ~500-1000ms no primeiro canal aberto. Dispara só uma vez por sessão.
