@@ -257,7 +257,16 @@ export default function TeamPanel() {
                     </Select>
                   </div>
                   <div className="col-span-2 text-xs text-muted-foreground">{formatDate(m.created_at)}</div>
-                  <div className="col-span-2 flex justify-end">
+                  <div className="col-span-2 flex justify-end gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openPasswordDialog(m)}
+                      disabled={busyId === m.user_id}
+                      title={m.is_self ? "Trocar minha senha" : "Trocar senha deste membro"}
+                    >
+                      <KeyRound className="h-3 w-3" />
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"
