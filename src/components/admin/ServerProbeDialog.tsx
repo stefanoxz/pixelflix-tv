@@ -821,52 +821,69 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
                 Compara o resultado do backend (datacenter) com o seu IP residencial. Se o backend falha mas seu navegador alcança, é bloqueio anti-datacenter.
               </p>
 
-              {clientData && (
-                <div className="space-y-2">
-                  <div
-                    className={`rounded-md border p-2 text-sm ${
-                      !data?.best_variant && clientData.any_reachable
-                        ? "border-warning/40 bg-warning/10"
-                        : clientData.any_reachable
-                          ? "border-success/30 bg-success/5"
-                          : "border-destructive/30 bg-destructive/5"
-                    }`}
-                  >
-                    {!data?.best_variant && clientData.any_reachable && (
-                      <p className="font-semibold text-warning">
-                        🎯 Bloqueio anti-datacenter confirmado
-                      </p>
-                    )}
-                    {data?.best_variant && clientData.any_reachable && (
-                      <p className="font-semibold text-success">
-                        ✅ Acessível em ambas origens
-                      </p>
-                    )}
-                    {!clientData.any_reachable && (
-                      <p className="font-semibold text-destructive">
-                        ❌ Inacessível também do seu IP
-                      </p>
-                    )}
+              {clientData && (() => {
+                const conclusivos = clientData.attempts.filter((a) => a.state !== "blocked_mixed").length;
+                const allMixed = conclusivos === 0;
+                return (
+                  <div className="space-y-2">
+                    <div
+                      className={`rounded-md border p-2 text-sm ${
+                        allMixed
+                          ? "border-warning/40 bg-warning/10"
+                          : !data?.best_variant && clientData.any_reachable
+                            ? "border-warning/40 bg-warning/10"
+                            : clientData.any_reachable
+                              ? "border-success/30 bg-success/5"
+                              : "border-destructive/30 bg-destructive/5"
+                      }`}
+                    >
+                      {allMixed && (
+                        <>
+                          <p className="font-semibold text-warning">⚠️ Inconclusivo (Mixed Content)</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            App está em HTTPS e o navegador bloqueou as variantes HTTP. O resultado do backend continua válido.
+                          </p>
+                        </>
+                      )}
+                      {!allMixed && !data?.best_variant && clientData.any_reachable && (
+                        <p className="font-semibold text-warning">🎯 Bloqueio anti-datacenter confirmado</p>
+                      )}
+                      {!allMixed && data?.best_variant && clientData.any_reachable && (
+                        <p className="font-semibold text-success">✅ Acessível em ambas origens</p>
+                      )}
+                      {!allMixed && !clientData.any_reachable && (
+                        <p className="font-semibold text-destructive">❌ Inacessível também do seu IP</p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      {clientData.attempts.map((a) => {
+                        const color =
+                          a.state === "reachable"
+                            ? "text-success"
+                            : a.state === "blocked_mixed"
+                              ? "text-warning"
+                              : "text-destructive";
+                        const icon =
+                          a.state === "reachable" ? "✓" : a.state === "blocked_mixed" ? "⚠" : "✗";
+                        return (
+                          <div
+                            key={a.variant}
+                            className="text-xs rounded border border-border/40 bg-background/40 px-2 py-1.5"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-mono break-all">{a.variant}</span>
+                              <span className={`tabular-nums ${color}`}>
+                                {icon} {a.latency_ms}ms
+                              </span>
+                            </div>
+                            <p className={`mt-0.5 ${color} opacity-80`}>{a.detail}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    {clientData.attempts.map((a) => (
-                      <div
-                        key={a.variant}
-                        className="flex items-center justify-between gap-2 text-xs rounded border border-border/40 bg-background/40 px-2 py-1.5"
-                      >
-                        <span className="font-mono break-all">{a.variant}</span>
-                        <span
-                          className={`tabular-nums ${
-                            a.state === "reachable" ? "text-success" : "text-destructive"
-                          }`}
-                        >
-                          {a.state === "reachable" ? "✓" : "✗"} {a.latency_ms}ms
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         )}
