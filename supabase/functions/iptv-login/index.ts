@@ -147,6 +147,13 @@ function classifyReason(reason: string): { code: string; message: string } {
       message: "Servidor IPTV retornou erro interno. Tente novamente em alguns minutos.",
     };
   }
+  if (/http\s*404/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message:
+        "O servidor respondeu, mas o endpoint Xtream não foi encontrado (HTTP 404). A DNS pode estar desatualizada — peça uma URL M3U nova ao seu provedor.",
+    };
+  }
   if (/http\s*44[34]/.test(r)) {
     return {
       code: "SERVER_UNREACHABLE",
@@ -836,21 +843,30 @@ Deno.serve(async (req) => {
       let r = await attemptLogin(fullBase, username, password, existingRow, admin);
 
       // Fallback playlist-mode: o servidor respondeu HTTP mas não em formato
-      // Xtream (HTML, M3U cru, JSON sem user_info). Tenta /get.php?type=m3u_plus
-      // antes de devolver erro — cobre painéis tipo maxtv.uk que só servem M3U.
-      if (
+      // Xtream válido. Cobre:
+      //  - HTML / M3U cru / JSON sem user_info (status 200 não JSON)
+      //  - 401 com corpo não-Xtream (alguns painéis exigem /get.php)
+      //  - 404 em /player_api.php quando o painel só implementa /get.php
+      //    (caso comum: Cloudflare na frente de origin que só serve M3U)
+      const failStatus = (r as { status?: number }).status;
+      const failReason = (r as { reason?: string }).reason ?? "";
+      const shouldTryPlaylist =
         !r.ok &&
-        ((r as { reason?: string }).reason === "resposta não JSON" ||
-          (r as { reason?: string }).reason === "credenciais inválidas") &&
-        ((r as { status?: number }).status === 200 ||
-          (r as { status?: number }).status === 401)
-      ) {
+        (failStatus === 200 || failStatus === 401 || failStatus === 404) &&
+        (failReason === "resposta não JSON" ||
+          failReason === "credenciais inválidas" ||
+          /^HTTP 404$/i.test(failReason));
+      if (shouldTryPlaylist) {
         const pl = await tryPlaylistFallback(fullBase, username, password);
         if (pl.ok) {
           console.log(
-            `[iptv-login] m3u_register PLAYLIST_FALLBACK_OK server=${fullBase} variant=${pl.usedVariant}`,
+            `[iptv-login] m3u_register PLAYLIST_FALLBACK_OK after=${failStatus} server=${fullBase} variant=${pl.usedVariant}`,
           );
           r = { ok: true as const, data: pl.data, usedVariant: pl.usedVariant, route: "direct" } as any;
+        } else {
+          console.log(
+            `[iptv-login] m3u_register PLAYLIST_FALLBACK_FAIL after=${failStatus} server=${fullBase} reason=${pl.reason}`,
+          );
         }
       }
 

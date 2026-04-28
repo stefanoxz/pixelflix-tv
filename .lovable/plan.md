@@ -1,21 +1,37 @@
-## Objetivo
+## Diagnóstico
 
-Reduzir o número de canais que morrem com `stream_no_data` no primeiro 404 de fragmento. Os logs mostram canais (`A&E HD`, `ADULT SWIM`, `Southampton x Ipswich`) caindo todos com o mesmo padrão: manifest carrega ok, primeiro `.ts` dá 404 no upstream `spclick.shop`, player desiste imediatamente.
+O erro indica que o login via URL M3U chegou até a função de login, mas o servidor extraído da URL (`http://anverif.top`) respondeu **HTTP 404** no endpoint Xtream testado (`/player_api.php`). Hoje o fluxo trata esse 404 como falha definitiva e para imediatamente.
 
-## Causa raiz
+Em painéis IPTV, isso pode acontecer por dois motivos comuns:
 
-1. **`FRAG_LOAD_ERROR_THRESHOLD = 1`** em `src/components/Player.tsx`: o player declara `stream_no_data` na primeira falha de fragmento, sem deixar o hls.js (que tem `fragLoadingMaxRetry: 8`) tentar o próximo segmento. Painéis IPTV frequentemente têm 1-2 segmentos furados na borda do sliding window do HLS — eles se autocorrigem se a gente não desistir.
+1. A DNS existe, mas o Xtream API não está disponível exatamente na variante testada.
+2. A URL M3U funciona em `/get.php?...type=m3u_plus`, mesmo quando `/player_api.php` retorna 404.
 
-2. **`SEGMENT_FETCH_TIMEOUT_MS = 8_000`** em `supabase/functions/stream-proxy/index.ts`: 8s é apertado pra alguns painéis lentos. Logs da edge mostram `TimeoutError: Signal timed out` recorrente.
+## Plano de correção
 
-## O que fazer
+1. **Ampliar o fallback do login M3U**
+   - No `m3u_register`, quando o `/player_api.php` retornar `404`, tentar também o fallback de playlist em `/get.php?username=...&password=...&type=m3u_plus&output=ts`.
+   - Hoje esse fallback só roda para `200 não JSON` ou `401`; será expandido para `404`.
 
-1. **`src/components/Player.tsx`** — subir `FRAG_LOAD_ERROR_THRESHOLD` de `1` → `3`. Atualizar o comentário explicando o porquê (deixar hls.js pular fragmentos ruins isolados antes de declarar morte).
+2. **Melhorar classificação do erro 404 vazio**
+   - Mapear `HTTP 404` sem corpo como `SERVER_UNREACHABLE` com mensagem mais clara: DNS/endpoint não parece ser um painel Xtream válido ou está desatualizado.
+   - Manter os detalhes técnicos no toast para diagnóstico.
 
-2. **`supabase/functions/stream-proxy/index.ts`** — subir `SEGMENT_FETCH_TIMEOUT_MS` de `8_000` → `12_000` ms pra dar margem em painéis lentos. Redeploy automático da edge function.
+3. **Preservar segurança do auto-cadastro**
+   - A DNS só será auto-cadastrada se um dos testes autenticar de verdade:
+     - `player_api.php` retornar `user_info.auth=1`, ou
+     - `get.php` retornar uma playlist válida começando com `#EXTM3U`.
+   - Um 404 sozinho nunca cadastra a DNS.
 
-## O que NÃO muda
+4. **Atualizar logs para facilitar suporte**
+   - Registrar no log quando o fallback de playlist foi tentado após 404.
+   - Isso diferencia “DNS offline/desatualizada” de “painel sem Xtream API mas playlist válida”.
 
-- `fragLoadingMaxRetry`, `levelLoadingMaxRetry` e demais configs do hls.js continuam como estão (já estão bons em 8-10).
-- Nenhuma mudança em token, autenticação, ou lógica do proxy — só a janela de timeout.
-- Se o canal estiver realmente offline (todos os fragmentos 404), o player ainda vai cair em `stream_no_data` depois de 3 tentativas — só não vai mais cair no primeiro tropeço.
+## Arquivos a alterar
+
+- `supabase/functions/iptv-login/index.ts`
+
+## Resultado esperado
+
+- Se a URL M3U for válida mas o painel não responder em `/player_api.php`, o app ainda tenta `/get.php` antes de falhar.
+- Se `anverif.top` realmente estiver retornando 404 também no M3U, o usuário verá um erro mais claro indicando DNS/endpoint inválido ou desatualizado.
