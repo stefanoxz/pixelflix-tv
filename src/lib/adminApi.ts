@@ -144,3 +144,5 @@ export const dismissBlockedDns = (id: string) =>
 
 export const reactivateBlockedDns = (id: string) =>
   invokeAdminApi<BlockedDnsItem>("blocked_dns_reactivate", { id });
+export const setTeamPassword = (userId: string, newPassword: string) =>
+  invokeAdminApi<{ ok: true }>("set_team_password", { user_id: userId, new_password: newPassword });

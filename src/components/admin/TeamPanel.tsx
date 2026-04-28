@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, RefreshCw, UserPlus, Trash2, ShieldCheck, Shield, History } from "lucide-react";
+import { Loader2, RefreshCw, UserPlus, Trash2, ShieldCheck, Shield, History, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { invokeAdminApi } from "@/lib/adminApi";
+import { invokeAdminApi, setTeamPassword } from "@/lib/adminApi";
 import AuditLogPanel from "@/components/admin/AuditLogPanel";
 
 type TeamRole = "admin" | "moderator";
@@ -69,6 +69,43 @@ export default function TeamPanel() {
 
   const [confirmRemove, setConfirmRemove] = useState<TeamMember | null>(null);
   const [auditOpen, setAuditOpen] = useState(false);
+
+  const [passwordTarget, setPasswordTarget] = useState<TeamMember | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  const openPasswordDialog = (member: TeamMember) => {
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordTarget(member);
+  };
+
+  const submitPassword = async () => {
+    if (!passwordTarget) return;
+    if (newPassword.length < 8) {
+      toast.error("Senha precisa ter ao menos 8 caracteres");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("As senhas não coincidem");
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await setTeamPassword(passwordTarget.user_id, newPassword);
+      toast.success(
+        passwordTarget.is_self
+          ? "Sua senha foi atualizada"
+          : `Senha de ${passwordTarget.email ?? "usuário"} atualizada`,
+      );
+      setPasswordTarget(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao atualizar senha");
+    } finally {
+      setSavingPassword(false);
+    }
+  };
 
   const fetchTeam = useCallback(async () => {
     setLoading(true);
@@ -162,8 +199,8 @@ export default function TeamPanel() {
         </div>
 
         <div className="rounded-md bg-secondary/30 border border-border/40 p-3 text-xs text-muted-foreground mb-4 leading-relaxed">
-          <strong className="text-foreground">Admin:</strong> acesso total — gerencia DNS, equipe e aprova cadastros.{" "}
-          <strong className="text-foreground">Moderador:</strong> visualiza tudo, encerra sessões e aplica bloqueios temporários, mas não mexe em DNS nem na equipe.
+          <strong className="text-foreground">Admin:</strong> acesso total — gerencia DNS, servidores, equipe, aprova cadastros, troca senhas e vê o audit log.{" "}
+          <strong className="text-foreground">Moderador:</strong> vê todo o painel (estatísticas, sessões, reports, diagnósticos, login events) e pode encerrar sessões ao vivo, aplicar bloqueios temporários e atualizar status de reports — mas não mexe em DNS, servidores, equipe nem em aprovações.
         </div>
 
         {loading && team.length === 0 ? (
@@ -220,7 +257,16 @@ export default function TeamPanel() {
                     </Select>
                   </div>
                   <div className="col-span-2 text-xs text-muted-foreground">{formatDate(m.created_at)}</div>
-                  <div className="col-span-2 flex justify-end">
+                  <div className="col-span-2 flex justify-end gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openPasswordDialog(m)}
+                      disabled={busyId === m.user_id}
+                      title={m.is_self ? "Trocar minha senha" : "Trocar senha deste membro"}
+                    >
+                      <KeyRound className="h-3 w-3" />
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -308,6 +354,63 @@ export default function TeamPanel() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Trocar senha */}
+      <Dialog open={!!passwordTarget} onOpenChange={(o) => !o && !savingPassword && setPasswordTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {passwordTarget?.is_self ? "Trocar minha senha" : "Trocar senha do membro"}
+            </DialogTitle>
+            <DialogDescription>
+              {passwordTarget?.is_self ? (
+                <>Defina uma nova senha para a sua conta administrativa.</>
+              ) : (
+                <>
+                  Definir nova senha para{" "}
+                  <strong className="text-foreground">{passwordTarget?.email ?? "este membro"}</strong>.
+                  Ele(a) precisará usar essa senha no próximo login — comunique por canal seguro.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-password" className="text-xs">Nova senha (mín. 8 caracteres)</Label>
+              <Input
+                id="new-password"
+                type="password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                disabled={savingPassword}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password" className="text-xs">Confirmar nova senha</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={savingPassword}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPasswordTarget(null)} disabled={savingPassword}>
+              Cancelar
+            </Button>
+            <Button onClick={submitPassword} disabled={savingPassword}>
+              {savingPassword
+                ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                : <KeyRound className="h-4 w-4 mr-2" />}
+              Salvar senha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Histórico de auditoria */}
       <Dialog open={auditOpen} onOpenChange={setAuditOpen}>

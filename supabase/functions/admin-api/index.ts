@@ -65,6 +65,7 @@ const ADMIN_ONLY_ACTIONS = new Set([
   "add_team_member",
   "update_team_role",
   "remove_team_member",
+  "set_team_password",
   "list_audit_log",
   "cleanup_table",
   "evict_idle_now",
@@ -1843,6 +1844,56 @@ Deno.serve(async (req) => {
       if (error) { console.error(error.message); return internalError(); }
 
       await logAudit(user.id, user.email, "remove_team_member", { user_id: targetId, email: targetEmail });
+      return ok({ ok: true });
+    }
+
+    if (action === "set_team_password") {
+      const targetId = String(payload?.user_id ?? "");
+      const newPassword = String(payload?.new_password ?? "");
+      if (!targetId) return bad("user_id obrigatório");
+      if (newPassword.length < 8) return bad("Senha precisa ter ao menos 8 caracteres");
+      if (newPassword.length > 72) return bad("Senha muito longa (máx. 72 caracteres)");
+
+      // Confirma que o alvo é admin ou moderator (não permite trocar senha de
+      // contas que não são da equipe).
+      const { data: targetRoles, error: targetRolesErr } = await admin
+        .from("user_roles").select("role").eq("user_id", targetId);
+      if (targetRolesErr) { console.error(targetRolesErr.message); return internalError(); }
+      const targetRoleSet = new Set((targetRoles ?? []).map((r) => r.role as string));
+      if (!targetRoleSet.has("admin") && !targetRoleSet.has("moderator")) {
+        return bad("Usuário não pertence à equipe administrativa");
+      }
+
+      // Trava: se alvo é o último admin e quem está executando NÃO é o próprio,
+      // bloqueia (evita reset acidental por outro admin que não consegue avisar).
+      if (targetRoleSet.has("admin") && targetId !== user.id) {
+        const { count } = await admin
+          .from("user_roles").select("*", { count: "exact", head: true }).eq("role", "admin");
+        if ((count ?? 0) <= 1) {
+          return bad("Não é possível trocar a senha do último administrador. Faça pela conta dele.");
+        }
+      }
+
+      let targetEmail: string | null = null;
+      try {
+        const { data: u, error: getErr } = await admin.auth.admin.updateUserById(targetId, {
+          password: newPassword,
+        });
+        if (getErr) {
+          console.error("[admin-api] updateUserById failed", getErr.message);
+          return bad("Falha ao atualizar senha. Verifique se o usuário existe.");
+        }
+        targetEmail = u?.user?.email ?? null;
+      } catch (e) {
+        console.error("[admin-api] set_team_password exception", (e as Error).message);
+        return internalError();
+      }
+
+      await logAudit(user.id, user.email, "set_team_password", {
+        user_id: targetId,
+        email: targetEmail,
+        metadata: { self: targetId === user.id },
+      });
       return ok({ ok: true });
     }
 
