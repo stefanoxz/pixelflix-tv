@@ -77,7 +77,7 @@ export function PlayerOverlay({ open, onClose, children }: Props) {
       <div
         ref={frameRef}
         tabIndex={-1}
-        className="relative w-auto h-auto max-h-[calc(100vh-2rem)] max-w-[min(100vw-2rem,1600px)] aspect-video outline-none animate-scale-in"
+        className="relative w-auto h-auto max-h-[calc(100vh-2rem)] max-w-[min(100vw-2rem,1600px)] aspect-video outline-none transition-opacity duration-200 motion-safe:animate-[player-fade-in_220ms_ease-out_both]"
       >
         {/* Dica "Pressione Esc para fechar" — canto superior esquerdo, fora do quadro do vídeo
             (escondido em telas pequenas para não competir com os controles). */}
