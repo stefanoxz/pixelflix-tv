@@ -196,10 +196,10 @@ const Highlights = () => {
   // já se escondem sozinhas enquanto não houver dados (renderização progressiva).
 
   return (
-    <div className="space-y-12 pb-12 animate-fade-in">
+    <div className="space-y-10 md:space-y-8 pb-12 animate-fade-in">
       {/* HERO ROTATIVO */}
       <section
-        className="relative h-[55vh] md:h-[68vh] min-h-[380px] md:min-h-[460px] w-full overflow-hidden"
+        className="relative h-[55vh] md:h-[58vh] lg:h-[60vh] min-h-[380px] md:min-h-[420px] md:max-h-[640px] w-full overflow-hidden"
         onMouseEnter={() => (pausedRef.current = true)}
         onMouseLeave={() => (pausedRef.current = false)}
       >
@@ -224,7 +224,7 @@ const Highlights = () => {
         {/* Glow sutil no canto superior */}
         <div className="absolute -top-20 -left-20 h-96 w-96 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
 
-        <div className="relative h-full flex items-end pb-8 md:pb-12 mx-auto max-w-[1800px] px-4 md:px-8 gap-6">
+        <div className="relative h-full flex items-end pb-8 md:pb-8 mx-auto max-w-[1800px] px-4 md:px-8 gap-6">
           <div key={featured?.id ?? "empty"} className="max-w-2xl md:max-w-md lg:max-w-xl space-y-4 animate-fade-in flex-1 min-w-0">
             <p
               className="text-[10px] md:text-sm text-muted-foreground/70 md:text-muted-foreground/90 font-semibold tracking-[0.12em] md:tracking-tight uppercase md:normal-case md:font-medium"
@@ -265,7 +265,7 @@ const Highlights = () => {
               </div>
             )}
 
-            <p className="text-base md:text-lg text-muted-foreground max-w-xl">
+            <p className="md:hidden text-base text-muted-foreground max-w-xl">
               Descubra milhares de filmes, séries e canais ao vivo em alta qualidade.
               Streaming sem limites, em qualquer dispositivo.
             </p>
@@ -387,7 +387,7 @@ const Highlights = () => {
 
       <div className="mx-auto max-w-[1800px] px-4 md:px-8 space-y-12">
         {/* QUICK STATS */}
-        <section className="grid grid-cols-3 gap-3 md:gap-4">
+        <section className="grid grid-cols-3 gap-3 md:gap-5">
           {[
             { icon: Tv, label: "Canais ao vivo", value: live.length, to: "/live", color: "from-rose-500/20 to-rose-500/5" },
             { icon: Film, label: "Filmes", value: movies.length, to: "/movies", color: "from-primary/20 to-primary/5" },
@@ -396,22 +396,26 @@ const Highlights = () => {
             <button
               key={s.label}
               onClick={() => navigate(s.to)}
-              className="relative overflow-hidden rounded-xl bg-gradient-card border border-border/50 p-4 md:p-6 text-left transition-all duration-300 hover:border-primary/60 hover:shadow-hover hover:-translate-y-1 group"
+              className="relative overflow-hidden rounded-xl bg-gradient-card border border-border/50 p-4 md:p-7 lg:p-8 text-left transition-all duration-300 hover:border-primary/60 hover:shadow-hover hover:-translate-y-1 group"
             >
               <div className={cn(
-                "absolute -top-12 -right-12 h-32 w-32 rounded-full bg-gradient-to-br blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500",
+                "absolute -top-12 -right-12 h-32 w-32 md:h-40 md:w-40 rounded-full bg-gradient-to-br blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500",
                 s.color,
               )} />
               <div className="relative">
-                <div className="h-9 w-9 md:h-10 md:w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-300">
-                  <s.icon className="h-4 w-4 md:h-5 md:w-5" />
+                <div className="h-9 w-9 md:h-14 md:w-14 lg:h-16 lg:w-16 rounded-lg md:rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-3 md:mb-4 group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-300">
+                  <s.icon className="h-4 w-4 md:h-7 md:w-7 lg:h-8 lg:w-8" />
                 </div>
-                <p className="text-2xl md:text-3xl font-bold tabular-nums">
+                <p className="text-2xl md:text-4xl lg:text-5xl font-bold tabular-nums">
                   {s.value.toLocaleString("pt-BR")}
                 </p>
-                <p className="text-xs md:text-sm text-muted-foreground mt-1">{s.label}</p>
+                <p className="text-xs md:text-base text-muted-foreground mt-1 md:mt-2">{s.label}</p>
+                <span className="hidden md:inline-flex items-center gap-1 mt-3 lg:mt-4 text-sm font-medium text-muted-foreground/70 group-hover:text-primary transition-colors duration-300">
+                  Explorar
+                  <span className="transition-transform duration-300 group-hover:translate-x-1">→</span>
+                </span>
               </div>
-              <span className="absolute top-4 right-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-1 transition-all duration-300">
+              <span className="md:hidden absolute top-4 right-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-1 transition-all duration-300">
                 →
               </span>
             </button>
