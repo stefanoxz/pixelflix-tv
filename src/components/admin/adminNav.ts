@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   Wrench,
+  Ban,
   type LucideIcon,
 } from "lucide-react";
 
