@@ -12,71 +12,113 @@ import { CheckCircle2, XCircle, Loader2, RefreshCw, Wifi, Copy, Download, Globe 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type ClientReachState = "reachable" | "unreachable" | "error";
+type ClientReachState = "reachable" | "unreachable" | "blocked_mixed" | "error";
 
 interface ClientProbeAttempt {
   variant: string;
   state: ClientReachState;
   latency_ms: number;
+  method: "fetch" | "image" | "skipped";
   detail: string;
 }
 
 interface ClientProbeResult {
   attempts: ClientProbeAttempt[];
   any_reachable: boolean;
+  page_is_https: boolean;
   ran_at: string;
 }
 
+/** Classifica latência de uma falha pra distinguir rejeição local vs servidor */
+function classifyFailureLatency(latencyMs: number): string {
+  if (latencyMs < 25) return "rejeição local (não saiu do dispositivo)";
+  if (latencyMs < 80) return "rejeitado na rede local/ISP";
+  return "servidor recebeu e cortou";
+}
+
 /**
- * Faz um teste client-side do navegador do admin (IP residencial).
- * Como o painel IPTV não envia CORS headers, usamos mode:"no-cors":
- *   - Promise resolve (opaque response) => servidor respondeu ALGO no TCP/HTTP
- *   - Promise rejeita (TypeError "Failed to fetch") => DNS falhou OU TCP recusado/cortado
- * Não conseguimos ler status nem body, mas conseguimos provar que o
- * servidor está acessível do IP do usuário.
+ * Probe via <img>: tenta carregar /favicon.ico como imagem.
+ * - onload => servidor respondeu com bytes (mesmo que não seja imagem válida, em alguns casos)
+ * - onerror => pode ser CORS/mime ou TCP recusado — não é conclusivo de "online", mas
+ *   se a latência for alta (>100ms) é forte indício que o pacote chegou ao servidor.
+ * Funciona em página HTTPS para alvos HTTP em vários navegadores (não bloqueado por mixed content como fetch).
  */
-async function clientProbeOne(variant: string, timeoutMs = 6000): Promise<ClientProbeAttempt> {
-  const url = variant.replace(/\/+$/, "") + "/player_api.php?username=probe&password=probe";
-  const start = performance.now();
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    await fetch(url, {
-      method: "GET",
-      mode: "no-cors",
-      cache: "no-store",
-      signal: ctrl.signal,
-      redirect: "follow",
-    });
-    clearTimeout(t);
-    const latency = Math.round(performance.now() - start);
-    return {
-      variant,
-      state: "reachable",
-      latency_ms: latency,
-      detail: "Servidor respondeu (opaque) — TCP/HTTP acessível do seu IP",
+function imageProbe(url: string, timeoutMs = 5000): Promise<{ ok: boolean; latency: number }> {
+  return new Promise((resolve) => {
+    const start = performance.now();
+    const img = new Image();
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      img.onload = null;
+      img.onerror = null;
+      resolve({ ok, latency: Math.round(performance.now() - start) });
     };
-  } catch (err) {
-    clearTimeout(t);
-    const latency = Math.round(performance.now() - start);
-    const msg = err instanceof Error ? err.message : String(err);
-    const isAbort = /abort/i.test(msg) || ctrl.signal.aborted;
-    if (isAbort) {
-      return { variant, state: "unreachable", latency_ms: latency, detail: "Timeout do navegador" };
+    const t = setTimeout(() => finish(false), timeoutMs);
+    img.onload = () => { clearTimeout(t); finish(true); };
+    img.onerror = () => { clearTimeout(t); finish(false); };
+    // bust cache + força GET de imagem
+    img.src = url.replace(/\/+$/, "") + "/favicon.ico?_=" + Date.now();
+  });
+}
+
+async function clientProbeOne(variant: string, pageIsHttps: boolean, timeoutMs = 6000): Promise<ClientProbeAttempt> {
+  const variantIsHttp = /^http:\/\//i.test(variant);
+  const mixedBlocked = pageIsHttps && variantIsHttp;
+
+  // Caminho 1: fetch no-cors (só funciona quando NÃO há mixed content)
+  if (!mixedBlocked) {
+    const url = variant.replace(/\/+$/, "") + "/player_api.php?username=probe&password=probe";
+    const start = performance.now();
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      await fetch(url, { method: "GET", mode: "no-cors", cache: "no-store", signal: ctrl.signal, redirect: "follow" });
+      clearTimeout(t);
+      const latency = Math.round(performance.now() - start);
+      return {
+        variant, state: "reachable", latency_ms: latency, method: "fetch",
+        detail: "Servidor respondeu (opaque) — TCP/HTTP acessível do seu IP",
+      };
+    } catch (err) {
+      clearTimeout(t);
+      const latency = Math.round(performance.now() - start);
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/abort/i.test(msg) || ctrl.signal.aborted) {
+        return { variant, state: "unreachable", latency_ms: latency, method: "fetch", detail: "Timeout do navegador" };
+      }
+      return {
+        variant, state: "unreachable", latency_ms: latency, method: "fetch",
+        detail: `Falha de rede — ${classifyFailureLatency(latency)}`,
+      };
     }
-    // TypeError "Failed to fetch" / "Load failed" => DNS falhou ou TCP rejeitado
+  }
+
+  // Caminho 2: fallback via <img> quando há mixed content
+  const r = await imageProbe(variant, timeoutMs);
+  if (r.ok) {
     return {
-      variant,
-      state: "unreachable",
-      latency_ms: latency,
-      detail: "Falha de rede (DNS/TCP recusado/cortado) — servidor inacessível do seu IP",
+      variant, state: "reachable", latency_ms: r.latency, method: "image",
+      detail: "Favicon carregou — servidor está vivo (probe via <img>)",
     };
   }
+  // Sem onload, mas latência alta => pacote chegou ao servidor (forte indício)
+  if (r.latency > 100) {
+    return {
+      variant, state: "reachable", latency_ms: r.latency, method: "image",
+      detail: `Sem favicon, mas ${r.latency}ms indica que o pacote chegou ao servidor`,
+    };
+  }
+  // Latência baixa em página HTTPS → mixed content bloqueou tudo localmente
+  return {
+    variant, state: "blocked_mixed", latency_ms: r.latency, method: "image",
+    detail: "Bloqueado pelo navegador (Mixed Content HTTPS→HTTP) — não é falha do servidor",
+  };
 }
 
 async function runClientProbe(serverUrl: string): Promise<ClientProbeResult> {
   const base = serverUrl.replace(/\/+$/, "");
-  // Variantes principais (subset das do backend; sem portas exóticas que travam o navegador)
   const noProto = base.replace(/^https?:\/\//i, "");
   const host = noProto.split("/")[0].split(":")[0];
   const variants = Array.from(new Set([
@@ -85,10 +127,12 @@ async function runClientProbe(serverUrl: string): Promise<ClientProbeResult> {
     `https://${host}`,
     `http://${host}:8080`,
   ]));
-  const attempts = await Promise.all(variants.map((v) => clientProbeOne(v)));
+  const pageIsHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+  const attempts = await Promise.all(variants.map((v) => clientProbeOne(v, pageIsHttps)));
   return {
     attempts,
     any_reachable: attempts.some((a) => a.state === "reachable"),
+    page_is_https: pageIsHttps,
     ran_at: new Date().toISOString(),
   };
 }
@@ -511,10 +555,14 @@ function buildClientSection(c: ClientProbeResult): string {
   lines.push("TESTE CLIENT-SIDE (do seu navegador / IP residencial)");
   lines.push(sub);
   lines.push(`Executado em      : ${c.ran_at}`);
-  lines.push(`Resultado         : ${c.any_reachable ? "✅ Servidor ALCANÇÁVEL do seu IP" : "❌ Servidor INACESSÍVEL também do seu IP"}`);
+  lines.push(`Página em HTTPS   : ${c.page_is_https ? "sim (alvos http:// usam fallback via <img>)" : "não"}`);
+  const conclusivos = c.attempts.filter((a) => a.state !== "blocked_mixed").length;
+  lines.push(`Variantes testadas: ${c.attempts.length} (${conclusivos} conclusivas)`);
+  lines.push(`Resultado         : ${c.any_reachable ? "✅ Servidor ALCANÇÁVEL do seu IP" : conclusivos === 0 ? "⚠️ INCONCLUSIVO (todas bloqueadas por mixed content)" : "❌ Servidor INACESSÍVEL também do seu IP"}`);
   c.attempts.forEach((a, i) => {
+    const icon = a.state === "reachable" ? "✅ acessível" : a.state === "blocked_mixed" ? "⚠️ inconclusivo" : "❌ inacessível";
     lines.push(`  [${i + 1}] ${a.variant}`);
-    lines.push(`      Estado    : ${a.state === "reachable" ? "✅ acessível" : "❌ inacessível"} (${a.latency_ms}ms)`);
+    lines.push(`      Estado    : ${icon} (${a.latency_ms}ms · método: ${a.method})`);
     lines.push(`      Detalhe   : ${a.detail}`);
   });
   return lines.join("\n");
@@ -523,6 +571,10 @@ function buildClientSection(c: ClientProbeResult): string {
 function buildComparisonVerdict(backend: ProbeResponse, client: ClientProbeResult): string {
   const backendOk = !!backend.best_variant;
   const clientOk = client.any_reachable;
+  const conclusivos = client.attempts.filter((a) => a.state !== "blocked_mixed").length;
+  if (conclusivos === 0) {
+    return "⚠️ Teste client-side INCONCLUSIVO — todas as variantes HTTP foram bloqueadas pelo navegador (Mixed Content, página em HTTPS). Para teste conclusivo, abra o painel num navegador HTTP ou use a versão app/desktop. O resultado do backend continua válido.";
+  }
   if (!backendOk && clientOk) {
     return "🎯 BLOQUEIO ANTI-DATACENTER CONFIRMADO\n  • Backend (datacenter) NÃO conseguiu acessar o servidor\n  • Seu navegador (IP residencial) ALCANÇOU o servidor\n  • Conclusão: o painel está vivo, mas filtra ranges de cloud/datacenter\n  • Solução: usar proxy em IP residencial brasileiro, ou pedir à revenda whitelist do nosso IP de backend";
   }
@@ -567,7 +619,10 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
     try {
       const res = await runClientProbe(serverUrl);
       setClientData(res);
-      if (res.any_reachable && data && !data.best_variant) {
+      const conclusivos = res.attempts.filter((a) => a.state !== "blocked_mixed").length;
+      if (conclusivos === 0) {
+        toast.warning("Inconclusivo: app está em HTTPS e o navegador bloqueou os testes HTTP (Mixed Content)");
+      } else if (res.any_reachable && data && !data.best_variant) {
         toast.success("Bloqueio anti-datacenter confirmado: servidor responde ao seu IP");
       } else if (res.any_reachable) {
         toast.success("Servidor alcançável do seu navegador");
@@ -766,52 +821,69 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
                 Compara o resultado do backend (datacenter) com o seu IP residencial. Se o backend falha mas seu navegador alcança, é bloqueio anti-datacenter.
               </p>
 
-              {clientData && (
-                <div className="space-y-2">
-                  <div
-                    className={`rounded-md border p-2 text-sm ${
-                      !data?.best_variant && clientData.any_reachable
-                        ? "border-warning/40 bg-warning/10"
-                        : clientData.any_reachable
-                          ? "border-success/30 bg-success/5"
-                          : "border-destructive/30 bg-destructive/5"
-                    }`}
-                  >
-                    {!data?.best_variant && clientData.any_reachable && (
-                      <p className="font-semibold text-warning">
-                        🎯 Bloqueio anti-datacenter confirmado
-                      </p>
-                    )}
-                    {data?.best_variant && clientData.any_reachable && (
-                      <p className="font-semibold text-success">
-                        ✅ Acessível em ambas origens
-                      </p>
-                    )}
-                    {!clientData.any_reachable && (
-                      <p className="font-semibold text-destructive">
-                        ❌ Inacessível também do seu IP
-                      </p>
-                    )}
+              {clientData && (() => {
+                const conclusivos = clientData.attempts.filter((a) => a.state !== "blocked_mixed").length;
+                const allMixed = conclusivos === 0;
+                return (
+                  <div className="space-y-2">
+                    <div
+                      className={`rounded-md border p-2 text-sm ${
+                        allMixed
+                          ? "border-warning/40 bg-warning/10"
+                          : !data?.best_variant && clientData.any_reachable
+                            ? "border-warning/40 bg-warning/10"
+                            : clientData.any_reachable
+                              ? "border-success/30 bg-success/5"
+                              : "border-destructive/30 bg-destructive/5"
+                      }`}
+                    >
+                      {allMixed && (
+                        <>
+                          <p className="font-semibold text-warning">⚠️ Inconclusivo (Mixed Content)</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            App está em HTTPS e o navegador bloqueou as variantes HTTP. O resultado do backend continua válido.
+                          </p>
+                        </>
+                      )}
+                      {!allMixed && !data?.best_variant && clientData.any_reachable && (
+                        <p className="font-semibold text-warning">🎯 Bloqueio anti-datacenter confirmado</p>
+                      )}
+                      {!allMixed && data?.best_variant && clientData.any_reachable && (
+                        <p className="font-semibold text-success">✅ Acessível em ambas origens</p>
+                      )}
+                      {!allMixed && !clientData.any_reachable && (
+                        <p className="font-semibold text-destructive">❌ Inacessível também do seu IP</p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      {clientData.attempts.map((a) => {
+                        const color =
+                          a.state === "reachable"
+                            ? "text-success"
+                            : a.state === "blocked_mixed"
+                              ? "text-warning"
+                              : "text-destructive";
+                        const icon =
+                          a.state === "reachable" ? "✓" : a.state === "blocked_mixed" ? "⚠" : "✗";
+                        return (
+                          <div
+                            key={a.variant}
+                            className="text-xs rounded border border-border/40 bg-background/40 px-2 py-1.5"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-mono break-all">{a.variant}</span>
+                              <span className={`tabular-nums ${color}`}>
+                                {icon} {a.latency_ms}ms
+                              </span>
+                            </div>
+                            <p className={`mt-0.5 ${color} opacity-80`}>{a.detail}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    {clientData.attempts.map((a) => (
-                      <div
-                        key={a.variant}
-                        className="flex items-center justify-between gap-2 text-xs rounded border border-border/40 bg-background/40 px-2 py-1.5"
-                      >
-                        <span className="font-mono break-all">{a.variant}</span>
-                        <span
-                          className={`tabular-nums ${
-                            a.state === "reachable" ? "text-success" : "text-destructive"
-                          }`}
-                        >
-                          {a.state === "reachable" ? "✓" : "✗"} {a.latency_ms}ms
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         )}
