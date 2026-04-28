@@ -14,8 +14,9 @@ import { useMemo } from "react";
  */
 
 /** lowercase + remove diacríticos. "João" → "joao". */
-export function normalize(s: string): string {
-  return s
+export function normalize(s: string | null | undefined): string {
+  if (s == null) return "";
+  return String(s)
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
