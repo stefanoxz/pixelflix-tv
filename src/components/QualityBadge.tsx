@@ -156,7 +156,10 @@ export function QualityBadge({ videoRef, hlsRef }: Props) {
   return (
     <div
       className={cn(
-        "pointer-events-none absolute bottom-12 right-3 z-10 select-none rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-white/85 backdrop-blur-sm transition-opacity duration-200 sm:text-xs",
+        // Posicionado dentro da faixa da barra de controles nativa,
+        // logo após o display de tempo (ex: "0:34 / 1:00"). Não cobre
+        // o vídeo — fica sobreposto à faixa escura dos controles nativos.
+        "pointer-events-none absolute bottom-1.5 left-[7.25rem] z-10 select-none rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white/90 backdrop-blur-sm transition-opacity duration-200 sm:bottom-2 sm:left-32 sm:text-xs",
         visible ? "opacity-100" : "opacity-0",
       )}
       aria-label={`Qualidade atual: ${label}`}
