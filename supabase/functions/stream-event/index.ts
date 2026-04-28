@@ -146,7 +146,10 @@ Deno.serve(async (req) => {
           if (changed) baseUpdate.content_started_at = nowIso;
         }
 
-        await admin.from("active_sessions").update(baseUpdate).eq("anon_user_id", userId);
+        // Upsert (não update): se a linha foi evicted ou ainda não criada
+        // pelo stream-token, garantimos que o heartbeat não se perde.
+        baseUpdate.anon_user_id = userId;
+        await admin.from("active_sessions").upsert(baseUpdate, { onConflict: "anon_user_id" });
       } catch (e) {
         console.error("[stream-event] heartbeat update failed", e);
         return softFail("heartbeat_persist_failed");

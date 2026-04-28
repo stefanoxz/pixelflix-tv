@@ -1939,7 +1939,7 @@ Deno.serve(async (req) => {
         .select("content_kind, content_title, content_id, started_at, last_seen_at, content_started_at")
         .gte("last_seen_at", since)
         .not("content_title", "is", null)
-        .neq("content_kind", "idle")
+        .in("content_kind", ["live", "movie", "episode"])
         .limit(20000);
       if (error) { console.error(error.message); return internalError(); }
 
