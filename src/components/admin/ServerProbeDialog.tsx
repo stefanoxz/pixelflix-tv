@@ -20,6 +20,7 @@ interface ProbeResult {
   is_xtream: boolean;
   auth: number | string | null;
   body_preview: string;
+  headers?: Record<string, string>;
   error: string | null;
 }
 
@@ -98,57 +99,253 @@ function fmtTimestamp(d: Date) {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-function diagnoseVariant(r: ProbeResult): string {
-  const body = (r.body_preview || "").toLowerCase();
-  if (body.includes("account has been suspended") || body.includes("account suspended")) {
-    return "Conta suspensa pela hospedagem (Cloudflare 444)";
+function h(r: ProbeResult, key: string): string {
+  if (!r.headers) return "";
+  const lower = key.toLowerCase();
+  for (const [k, v] of Object.entries(r.headers)) {
+    if (k.toLowerCase() === lower) return v;
   }
-  if (r.is_xtream && (r.auth === 1 || r.auth === "1")) return "Painel Xtream OK (credenciais válidas)";
-  if (r.is_xtream && (r.auth === 0 || r.auth === "0")) return "Painel Xtream OK mas auth=0 (credenciais inválidas)";
-  if (r.status === 401) return "Painel vivo, exige autenticação (HTTP 401)";
-  if (r.status === 403) return "Acesso proibido — possível bloqueio de IP (HTTP 403)";
-  if (r.status === 404) return "Endpoint não encontrado (HTTP 404) — DNS responde mas Xtream não está no caminho esperado, ou IP bloqueado";
-  if (r.status === 444) return "Conexão fechada sem resposta (Cloudflare 444 — geralmente conta suspensa ou WAF)";
-  if (r.status === 502 || r.status === 503 || r.status === 504) return `Servidor de origem inacessível (HTTP ${r.status})`;
-  if (r.status && r.status >= 500) return `Erro no servidor do painel (HTTP ${r.status})`;
-  if (r.status && r.status >= 200 && r.status < 400) return `Respondeu HTTP ${r.status} mas não é resposta Xtream válida`;
+  return "";
+}
+
+type BlockKind =
+  | "suspended"
+  | "expired_account"
+  | "waf_challenge"
+  | "waf_block"
+  | "ddos_protection"
+  | "rate_limit"
+  | "geoblock"
+  | "ip_block_403"
+  | "ip_block_404_nginx"
+  | "ip_block_reset"
+  | "default_landing"
+  | "redirect_loop"
+  | "wrong_protocol"
+  | "auth_required"
+  | "xtream_ok"
+  | "xtream_invalid_creds"
+  | "server_error"
+  | "timeout"
+  | "refused"
+  | "tls_error"
+  | "dns_error"
+  | "unknown_2xx"
+  | null;
+
+function detectBlockKind(r: ProbeResult): BlockKind {
+  const body = (r.body_preview || "").toLowerCase();
+  const err = (r.error || "").toLowerCase();
+  const server = h(r, "server").toLowerCase();
+  const cfMitigated = h(r, "cf-mitigated").toLowerCase();
+  const cfRay = h(r, "cf-ray");
+  const sucuri = h(r, "x-sucuri-id");
+  const retryAfter = h(r, "retry-after");
+  const rateRemaining = h(r, "x-ratelimit-remaining");
+  const location = h(r, "location");
+
+  // 1) Sucesso explícito
+  if (r.is_xtream && (r.auth === 1 || r.auth === "1")) return "xtream_ok";
+  if (r.is_xtream && (r.auth === 0 || r.auth === "0")) return "xtream_invalid_creds";
+
+  // 2) Conta IPTV expirada (string típica do Xtream)
+  if (/expired|trial.*ended|account.*disabled/.test(body) && !/suspend/.test(body)) {
+    return "expired_account";
+  }
+
+  // 3) Conta de hospedagem suspensa
+  if (/account (has been )?suspended|account suspended|site suspended|account disabled by/.test(body)) {
+    return "suspended";
+  }
+
+  // 4) Página default de servidor (DNS aponta pra IP errado/sem vhost)
+  if (/welcome to nginx|apache2 (ubuntu|debian|centos) default|it works!|test page for the apache/.test(body)) {
+    return "default_landing";
+  }
+
+  // 5) Rate limit
+  if (r.status === 429 || retryAfter || rateRemaining === "0") return "rate_limit";
+
+  // 6) DDoS protection challenge (Cloudflare JS challenge, DDoS-Guard, StackPath)
+  if (
+    /just a moment|checking your browser|attention required|please enable javascript and cookies|ddos.guard|ddos-guard|stackpath/.test(body) ||
+    cfMitigated === "challenge"
+  ) {
+    return "ddos_protection";
+  }
+
+  // 7) WAF block (Cloudflare 403 + cf-mitigated, Sucuri, Imunify, ModSecurity)
+  if (
+    cfMitigated === "block" ||
+    (sucuri && r.status === 403) ||
+    /access denied.*sucuri|imunify|mod_security|modsecurity|blocked by.*firewall/.test(body)
+  ) {
+    return "waf_block";
+  }
+
+  // 8) Geoblock
+  if (
+    /not available in your (country|region|location)|geo.?(block|restricted)|country.*blocked|region.*restricted|access denied.*country/.test(body)
+  ) {
+    return "geoblock";
+  }
+
+  // 9) Redirect loop / location estranho
+  if (r.status && r.status >= 300 && r.status < 400 && location) {
+    if (/login|portal|index\.html?/.test(location.toLowerCase())) return "redirect_loop";
+  }
+
+  // 10) Códigos HTTP clássicos de bloqueio
+  if (r.status === 403) return "ip_block_403";
+  if (r.status === 401) return "auth_required";
+  if (r.status === 404) {
+    // 404 com nginx default = IP block disfarçado
+    if (server.includes("nginx") || server.includes("cloudflare") || cfRay) return "ip_block_404_nginx";
+    return "ip_block_404_nginx";
+  }
+  if (r.status === 444) return "suspended";
+  if (r.status && r.status >= 500 && r.status < 600) return "server_error";
+
+  // 11) HTTPS no painel só HTTP (ou vice-versa)
+  if (/wrong version|protocol|invalid http|http_request_sent_to_https_port/.test(err)) return "wrong_protocol";
+
+  // 12) Erros de transporte
+  if (/reset by peer|os error 104/.test(err)) return "ip_block_reset";
+  if (/timeout|timed out|deadline/.test(err)) return "timeout";
+  if (/refused|os error 111/.test(err)) return "refused";
+  if (/certificate|tls|ssl|handshake|unrecognisedname/.test(err)) return "tls_error";
+  if (/getaddrinfo|name resolution|nxdomain/.test(err)) return "dns_error";
+
+  // 13) 2xx sem ser Xtream
+  if (r.status && r.status >= 200 && r.status < 300) return "unknown_2xx";
+
+  return null;
+}
+
+const KIND_LABEL: Record<NonNullable<BlockKind>, string> = {
+  xtream_ok: "Xtream OK (credenciais válidas)",
+  xtream_invalid_creds: "Xtream respondeu mas auth=0 (credenciais inválidas)",
+  suspended: "Conta da hospedagem SUSPENSA na origem",
+  expired_account: "Conta IPTV expirada / desabilitada",
+  waf_challenge: "WAF exigindo desafio (Cloudflare Challenge)",
+  waf_block: "WAF/Firewall bloqueando explicitamente",
+  ddos_protection: "Proteção anti-DDoS exigindo navegador real (JS challenge)",
+  rate_limit: "Rate limit atingido (HTTP 429 / Retry-After)",
+  geoblock: "Bloqueio geográfico (país/região não permitido)",
+  ip_block_403: "IP bloqueado (HTTP 403 Forbidden)",
+  ip_block_404_nginx: "IP bloqueado disfarçado de 404 (nginx/cloudflare)",
+  ip_block_reset: "Conexão cortada — filtro anti-datacenter (Reset by peer)",
+  default_landing: "Página default do servidor (DNS aponta pro IP errado / sem vhost)",
+  redirect_loop: "Redirecionando para login/portal (não é endpoint Xtream)",
+  wrong_protocol: "Protocolo errado (HTTP×HTTPS misturado)",
+  auth_required: "Painel vivo, exige autenticação (HTTP 401)",
+  server_error: "Erro no servidor de origem (5xx)",
+  timeout: "Timeout — servidor não respondeu no prazo",
+  refused: "Conexão recusada — porta fechada/serviço parado",
+  tls_error: "Erro de TLS/certificado",
+  dns_error: "DNS não resolveu",
+  unknown_2xx: "Respondeu 2xx mas não é Xtream válido",
+};
+
+function diagnoseVariant(r: ProbeResult): string {
+  const kind = detectBlockKind(r);
+  if (kind) {
+    let extra = "";
+    const cfRay = h(r, "cf-ray");
+    const cfMit = h(r, "cf-mitigated");
+    const retryAfter = h(r, "retry-after");
+    const server = h(r, "server");
+    if (kind === "rate_limit" && retryAfter) extra = ` (Retry-After: ${retryAfter})`;
+    else if ((kind === "waf_block" || kind === "ddos_protection") && cfMit) extra = ` (cf-mitigated: ${cfMit})`;
+    else if (kind === "ip_block_404_nginx" && cfRay) extra = ` (CF-Ray: ${cfRay.slice(0, 16)}…)`;
+    else if (kind === "default_landing" && server) extra = ` (Server: ${server})`;
+    return KIND_LABEL[kind] + extra;
+  }
+  if (r.status) return `HTTP ${r.status} sem padrão reconhecido`;
   if (r.error) return classifyError(r.error);
   return "Sem resposta";
 }
 
 function interpretResults(d: ProbeResponse): string {
   const results = d.results;
-  const all = (pred: (r: ProbeResult) => boolean) => results.length > 0 && results.every(pred);
-  const any = (pred: (r: ProbeResult) => boolean) => results.some(pred);
+  if (!results.length) return "Sem variantes testadas.";
 
-  if (any((r) => r.is_xtream && (r.auth === 1 || r.auth === "1"))) {
-    return "✅ Painel está OK e respondendo como Xtream válido. Credenciais aceitas. Se o app continua sem carregar, o problema é específico do cliente (rede do usuário, codec, ou conta IPTV expirada).";
+  const kinds = results.map(detectBlockKind);
+  const allSame = kinds.every((k) => k === kinds[0]) ? kinds[0] : null;
+
+  // Caso unânime
+  if (allSame === "xtream_ok") {
+    return "✅ Painel está OK e respondendo como Xtream válido em todas as variantes. Credenciais aceitas. Se o app continua sem carregar, o problema é específico do cliente (rede do usuário, codec, ou conta IPTV expirada).";
   }
-  if (all((r) => (r.body_preview || "").toLowerCase().includes("account") && (r.body_preview || "").toLowerCase().includes("suspend"))) {
-    return "❌ A conta da hospedagem do painel foi SUSPENSA. O servidor retorna 'account suspended' para qualquer requisição, de qualquer IP, em todas as variantes (HTTP/HTTPS, com/sem /c/). Não é problema de bloqueio, firewall ou credencial — é desativação na origem.\n\nAções sugeridas:\n  • Verificar status da conta no datacenter/revenda do painel\n  • Possível takedown por denúncia\n  • Migrar usuários para nova URL/DNS";
+  if (allSame === "xtream_invalid_creds") {
+    return "⚠️ Painel está vivo e respondendo Xtream, mas as credenciais foram REJEITADAS (auth=0). Verifique se o usuário/senha digitados estão corretos ou se a conta foi desabilitada na revenda.";
   }
-  if (all((r) => r.status === 444)) {
-    return "❌ Todas as variantes retornaram HTTP 444 (Cloudflare fechou conexão sem resposta). Geralmente indica conta suspensa, WAF bloqueando, ou origin server desligado. O painel não está atendendo ninguém.";
+  if (allSame === "expired_account") {
+    return "❌ A CONTA IPTV deste usuário está EXPIRADA ou foi desabilitada pela revenda. O painel está funcionando normalmente — é a assinatura específica que precisa ser renovada.";
   }
-  if (all((r) => r.status === 404)) {
-    return "⚠️ Todas as variantes retornaram HTTP 404. Duas leituras possíveis:\n  (a) O painel está vivo mas o endpoint Xtream (/player_api.php) não existe nesse caminho — confirmar URL correta com a revenda.\n  (b) O painel está bloqueando ATIVAMENTE nosso range de IPs (datacenter) e devolvendo 404 como resposta de bloqueio. Se o painel funciona em IPs residenciais brasileiros mas não no nosso, é esse caso.";
+  if (allSame === "suspended") {
+    return "❌ A conta da HOSPEDAGEM do painel foi SUSPENSA. O servidor retorna 'account suspended' / HTTP 444 para qualquer requisição, de qualquer IP, em todas as variantes (HTTP/HTTPS, com/sem /c/). Não é problema de bloqueio, firewall ou credencial — é desativação na origem.\n\nAções sugeridas:\n  • Verificar status da conta no datacenter/provedor de hospedagem do painel\n  • Possível takedown por denúncia/abuso\n  • Migrar usuários para nova URL/DNS";
   }
-  if (all((r) => /reset by peer|os error 104/i.test(r.error || ""))) {
-    return "❌ Todas as conexões foram CORTADAS pelo servidor (Reset by peer). Indica filtro anti-datacenter ativo no painel — ele aceita conexões de IPs residenciais mas bloqueia ranges de cloud (Supabase, AWS, GCP, Cloudflare). Painel está vivo, mas inacessível pra qualquer backend serverless.";
+  if (allSame === "default_landing") {
+    return "⚠️ Em todas as variantes o servidor respondeu com a PÁGINA DEFAULT (nginx/Apache 'Welcome'). Isso indica que o domínio aponta pra um IP correto, mas o painel IPTV NÃO está instalado/configurado nesse host. Provavelmente DNS aponta pro lugar errado ou o painel foi desinstalado.";
   }
-  if (all((r) => /timeout|timed out/i.test(r.error || ""))) {
-    return "❌ Todas as variantes deram TIMEOUT. Servidor não respondeu no prazo. Pode estar offline, sobrecarregado ou com firewall silencioso (DROP).";
+  if (allSame === "ddos_protection") {
+    return "❌ O painel está atrás de PROTEÇÃO ANTI-DDOS (Cloudflare Challenge / DDoS-Guard) que exige um navegador real executando JavaScript. Backends serverless e bots não conseguem passar pelo challenge. Pra resolver, a revenda precisa colocar o painel em modo 'whitelist API' ou desativar o challenge no path /player_api.php.";
   }
-  if (all((r) => /refused|os error 111/i.test(r.error || ""))) {
-    return "❌ Conexão recusada em todas as portas. Servidor desligado ou serviço HTTP/HTTPS parado.";
+  if (allSame === "waf_block") {
+    return "❌ O WAF (firewall de aplicação) do painel está BLOQUEANDO nossas requisições explicitamente. Veja headers cf-mitigated/x-sucuri-id no detalhamento. A revenda precisa adicionar o IP do nosso backend à allowlist do WAF, ou desativar a regra que está bloqueando.";
   }
-  if (any((r) => r.status === 401 || r.status === 403)) {
-    return "⚠️ Painel respondeu mas exige autenticação válida (401/403). O servidor está vivo mas as credenciais testadas não foram aceitas, OU o IP de origem está bloqueado por ACL.";
+  if (allSame === "rate_limit") {
+    return "❌ Atingimos o RATE LIMIT do painel (HTTP 429). O servidor está limitando requisições por IP/minuto. Reduzir frequência de chamadas ou pedir à revenda para aumentar o limite para o IP do nosso backend.";
   }
-  if (any((r) => r.status && r.status >= 200 && r.status < 400)) {
-    return "⚠️ Painel respondeu com sucesso (2xx/3xx) mas resposta não é um Xtream válido. URL pode estar correta, porém o serviço não é compatível com o protocolo Xtream Codes esperado pelo webplayer.";
+  if (allSame === "geoblock") {
+    return "❌ Bloqueio GEOGRÁFICO ativo. O painel só aceita conexões de países/regiões específicas e nosso backend (datacenter US/EU) está fora dessa lista. Resolveria com VPS no Brasil ou pedindo à revenda pra liberar o país do nosso datacenter.";
   }
-  return "⚠️ Resultado misto. Veja o detalhamento por variante acima — algumas portas/protocolos respondem e outras não. Pode indicar painel parcialmente disponível ou bloqueio seletivo.";
+  if (allSame === "ip_block_403") {
+    return "❌ Todas as variantes retornaram HTTP 403 Forbidden. Nosso IP de origem está EXPLICITAMENTE bloqueado por ACL/firewall do painel. Painel funciona em outros IPs. Solução: VPS com IP residencial brasileiro ou liberar nosso IP na revenda.";
+  }
+  if (allSame === "ip_block_404_nginx") {
+    return "❌ Todas as variantes retornaram HTTP 404 (nginx/cloudflare). Duas leituras possíveis:\n  (a) O painel está vivo mas o endpoint Xtream (/player_api.php) não existe nesse caminho — confirmar URL correta com a revenda.\n  (b) O painel está bloqueando ATIVAMENTE nosso range de IPs (datacenter) e devolvendo 404 como resposta de bloqueio disfarçado.\n\nSe o painel funciona em IPs residenciais brasileiros mas não no nosso, é o caso (b) — solução: VPS BR ou whitelist de IP.";
+  }
+  if (allSame === "ip_block_reset") {
+    return "❌ Todas as conexões foram CORTADAS pelo servidor (Reset by peer / TCP RST). Indica filtro anti-datacenter ativo no painel — ele aceita conexões de IPs residenciais mas bloqueia ranges de cloud (Supabase, AWS, GCP, Cloudflare). Painel está vivo, mas inacessível pra qualquer backend serverless.";
+  }
+  if (allSame === "timeout") {
+    return "❌ Todas as variantes deram TIMEOUT. Servidor não respondeu no prazo. Pode estar offline, sobrecarregado ou com firewall silencioso (DROP em vez de REJECT).";
+  }
+  if (allSame === "refused") {
+    return "❌ Conexão recusada em todas as portas/protocolos. Servidor desligado, serviço HTTP/HTTPS parado, ou portas 80/443 fechadas no firewall.";
+  }
+  if (allSame === "tls_error") {
+    return "❌ Erro de TLS/certificado em todas as variantes HTTPS. Certificado expirado, inválido ou hostname não bate com o CN/SAN. Pode tentar via HTTP se o painel suportar.";
+  }
+  if (allSame === "dns_error") {
+    return "❌ O domínio não resolveu DNS. Pode ter sido removido (takedown), o domínio expirou, ou está apontando pra registros inválidos.";
+  }
+  if (allSame === "auth_required") {
+    return "⚠️ Painel respondeu mas exige autenticação válida (401). Servidor está vivo. Credenciais usadas no teste podem estar erradas, ou o IP precisa estar em allowlist antes de autenticar.";
+  }
+  if (allSame === "server_error") {
+    return "❌ Servidor retornou erro 5xx em todas as variantes. Painel está com problema interno (banco caiu, php-fpm parado, disco cheio). É problema do hosting, não do nosso lado.";
+  }
+
+  // Casos parcialmente ok
+  if (kinds.some((k) => k === "xtream_ok")) {
+    const okList = results.filter((_, i) => kinds[i] === "xtream_ok").map((r) => r.variant);
+    return `✅ Pelo menos uma variante respondeu Xtream OK:\n  ${okList.join("\n  ")}\n\nUse essa(s) URL(s) na configuração. As outras variantes falharam mas não impedem o funcionamento.`;
+  }
+  if (kinds.some((k) => k === "auth_required")) {
+    return "⚠️ Algumas variantes respondem 401 (servidor vivo, exige login) mas nenhuma respondeu como Xtream válido. Verifique se a URL do painel está correta e se as credenciais são válidas.";
+  }
+
+  // Misto sem padrão claro
+  const summary = new Map<string, number>();
+  kinds.forEach((k) => {
+    const label = k ? KIND_LABEL[k] : "Sem diagnóstico";
+    summary.set(label, (summary.get(label) ?? 0) + 1);
+  });
+  const breakdown = Array.from(summary.entries()).map(([k, c]) => `  • ${c}× ${k}`).join("\n");
+  return `⚠️ Resultado MISTO entre as variantes — nenhum padrão único de bloqueio:\n${breakdown}\n\nVeja o detalhamento por variante acima. Pode indicar painel parcialmente disponível, bloqueio seletivo por porta/protocolo, ou configuração inconsistente do servidor.`;
 }
 
 function buildReport(d: ProbeResponse, label: string | null | undefined): string {
@@ -197,9 +394,19 @@ function buildReport(d: ProbeResponse, label: string | null | undefined): string
     if (r.auth !== null && r.auth !== undefined) lines.push(`    auth=         : ${r.auth}`);
     if (r.error) lines.push(`    Erro técnico  : ${r.error.length > 200 ? r.error.slice(0, 200) + "…" : r.error}`);
     lines.push(`    Diagnóstico   : ${diagnoseVariant(r)}`);
+    if (r.headers && Object.keys(r.headers).length > 0) {
+      const interesting = ["server", "cf-ray", "cf-mitigated", "cf-cache-status", "x-powered-by", "retry-after", "x-ratelimit-remaining", "x-sucuri-id", "via", "location"];
+      const hdrs = interesting
+        .map((k) => {
+          const v = h(r, k);
+          return v ? `${k}: ${v.length > 80 ? v.slice(0, 80) + "…" : v}` : null;
+        })
+        .filter(Boolean);
+      if (hdrs.length > 0) lines.push(`    Headers       : ${hdrs.join(" | ")}`);
+    }
     if (r.body_preview) {
-      const preview = r.body_preview.length > 150 ? r.body_preview.slice(0, 150) + "…" : r.body_preview;
-      lines.push(`    Resposta      : "${preview.replace(/\n/g, " ")}"`);
+      const preview = r.body_preview.length > 200 ? r.body_preview.slice(0, 200) + "…" : r.body_preview;
+      lines.push(`    Resposta      : "${preview.replace(/\s+/g, " ").trim()}"`);
     }
   });
   lines.push("");
