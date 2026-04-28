@@ -2020,11 +2020,11 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   };
 
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black shadow-card animate-scale-in">
+    <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black shadow-card">
       {showVideo && (
         <video
           ref={videoRef}
-          className="h-full w-full"
+          className="h-full w-full object-cover"
           controls
           playsInline
           poster={poster}
@@ -2147,10 +2147,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       </div>
 
       {loading && !error && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <p className="text-xs text-white/80">Conectando…</p>
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black animate-fade-in">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-[11px] uppercase tracking-[0.2em] text-white/70">Conectando…</p>
           </div>
         </div>
       )}
