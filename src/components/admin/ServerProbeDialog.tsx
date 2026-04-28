@@ -389,9 +389,27 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
           </div>
         )}
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 flex-wrap sm:flex-nowrap">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Fechar
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleDownloadReport}
+            disabled={loading || !data}
+            title="Baixar relatório como arquivo .txt"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Baixar .txt
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={handleCopyReport}
+            disabled={loading || !data}
+            title="Copiar relatório para enviar à revenda"
+          >
+            <Copy className="h-4 w-4 mr-2" />
+            Copiar relatório
           </Button>
           <Button onClick={runProbe} disabled={loading || !serverUrl}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
