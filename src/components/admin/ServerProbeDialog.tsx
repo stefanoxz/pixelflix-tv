@@ -587,6 +587,347 @@ function buildComparisonVerdict(backend: ProbeResponse, client: ClientProbeResul
   return "✅ Servidor acessível tanto do backend quanto do seu navegador. Sem indicação de bloqueio por origem.";
 }
 
+// ============================================================
+// AÇÃO 4 — Recomendação automática + email pronto
+// ============================================================
+
+type RecommendationTarget = "supplier" | "reseller" | "end_user" | "config" | "none";
+type RecommendationPriority = "alta" | "media" | "baixa";
+
+interface RecommendationResult {
+  title: string;
+  action: string;
+  target: RecommendationTarget;
+  targetLabel: string;
+  priority: RecommendationPriority;
+  resellerWarning?: string;
+  message?: string;
+}
+
+function unanimousKind(d: ProbeResponse): NonNullable<BlockKind> | null {
+  if (!d.results.length) return null;
+  const kinds = d.results.map(detectBlockKind);
+  const first = kinds[0];
+  if (!first) return null;
+  return kinds.every((k) => k === first) ? first : null;
+}
+
+function backendLatencyHint(d: ProbeResponse): string {
+  const lat = d.results.find((r) => r.latency_ms > 0)?.latency_ms;
+  return lat ? `${lat}ms` : "tempo de resposta variável";
+}
+
+function clientLatencyHint(c: ClientProbeResult | null): string | null {
+  if (!c) return null;
+  const reach = c.attempts.find((a) => a.state === "reachable");
+  return reach ? `${reach.latency_ms}ms (${reach.variant})` : null;
+}
+
+function listClosedPorts(d: ProbeResponse): string {
+  const closed = d.results
+    .filter((r) => /refused|os error 111/i.test(r.error || ""))
+    .map((r) => {
+      try {
+        const u = new URL(r.variant);
+        return u.port || (u.protocol === "https:" ? "443" : "80");
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+  const uniq = Array.from(new Set(closed));
+  return uniq.length ? uniq.join(", ") : "—";
+}
+
+function buildRecommendation(
+  d: ProbeResponse,
+  c: ClientProbeResult | null,
+  serverUrl: string,
+  serverLabel: string | null | undefined,
+): RecommendationResult | null {
+  const backendOk = !!d.best_variant;
+  const clientConclusivos = c ? c.attempts.filter((a) => a.state !== "blocked_mixed").length : 0;
+  const clientOk = !!c && c.any_reachable && clientConclusivos > 0;
+  const kind = unanimousKind(d);
+  const host = (() => {
+    try { return new URL(d.normalized).hostname; } catch { return serverUrl; }
+  })();
+  const labelPart = serverLabel ? ` (${serverLabel})` : "";
+
+  // Caso 1: Bloqueio anti-datacenter confirmado
+  if (!backendOk && clientOk) {
+    const backendLat = backendLatencyHint(d);
+    const clientLat = clientLatencyHint(c);
+    const closedPorts = listClosedPorts(d);
+    const message =
+`Olá,
+
+Identificamos que o servidor ${serverUrl}${labelPart} está bloqueando ativamente conexões originadas de IPs de datacenter/cloud, mas aceita conexões de IPs residenciais brasileiros normalmente.
+
+Evidência técnica do nosso diagnóstico:
+  • Backend (cloud): conexão recusada/cortada em ~${backendLat}${clientLat ? `\n  • Navegador residencial: pacote aceito em ~${clientLat}` : ""}
+  • Portas testadas e fechadas para cloud: ${closedPorts}
+
+Isso impede que o painel funcione em qualquer aplicativo web hospedado em nuvem (Vercel, AWS, Cloudflare, Supabase, etc.).
+
+Solicitamos uma das opções a seguir:
+  1. Adicionar nosso range de IPs à whitelist do firewall do painel
+  2. Desativar a regra anti-datacenter para o endpoint /player_api.php
+  3. Confirmar se há um endpoint/proxy alternativo para integrações web
+
+Posso enviar o relatório técnico completo se for útil.
+
+Atenciosamente.`;
+    return {
+      title: "🎯 Pedir whitelist ao fornecedor",
+      action: "Contatar o fornecedor do painel para liberar IPs de cloud no firewall.",
+      target: "supplier",
+      targetLabel: `Dono/admin do painel ${host}`,
+      priority: "alta",
+      resellerWarning:
+        "Este servidor NÃO funciona em apps web (datacenter blocked). Recomende aos revendedores que o substituam ou aguardem liberação do whitelist antes de cadastrar novos clientes.",
+      message,
+    };
+  }
+
+  // Caso 2: WAF / DDoS challenge
+  if (kind === "waf_block" || kind === "ddos_protection" || kind === "waf_challenge") {
+    const message =
+`Olá,
+
+O painel ${serverUrl}${labelPart} está com WAF/proteção anti-DDoS ativa que exige um navegador real executando JavaScript. Isso impede integração com qualquer backend serverless ou aplicativo web.
+
+Diagnóstico: ${KIND_LABEL[kind]}.
+
+Solicitamos:
+  1. Desativar o challenge no endpoint /player_api.php (modo "API allowlist")
+  2. OU adicionar nosso range de IPs à allowlist do WAF
+  3. OU informar um endpoint alternativo de integração
+
+Atenciosamente.`;
+    return {
+      title: kind === "ddos_protection" ? "🛡️ Pedir liberação do anti-DDoS" : "🛡️ Pedir liberação do WAF",
+      action: "Pedir ao fornecedor pra desativar challenge no /player_api.php ou liberar nosso IP.",
+      target: "supplier",
+      targetLabel: `Dono/admin do painel ${host}`,
+      priority: "alta",
+      resellerWarning:
+        "Servidor exige challenge de browser real — não funciona em backends. Suspender cadastros novos até liberação.",
+      message,
+    };
+  }
+
+  // Caso 3: 403/404 unânime (IP block)
+  if (kind === "ip_block_403" || kind === "ip_block_404_nginx") {
+    const message =
+`Olá,
+
+O painel ${serverUrl}${labelPart} está retornando ${kind === "ip_block_403" ? "HTTP 403 Forbidden" : "HTTP 404 (nginx/cloudflare)"} em TODAS as variantes testadas a partir do nosso backend de cloud.
+
+Isso indica que nosso range de IPs está bloqueado por ACL/firewall do painel.
+
+Solicitamos liberar nosso IP de backend na allowlist, ou desativar a regra que está retornando ${kind === "ip_block_403" ? "403" : "404"} para datacenters.
+
+Atenciosamente.`;
+    return {
+      title: kind === "ip_block_403" ? "🚫 Liberar IP (403 Forbidden)" : "🚫 Liberar IP (404 disfarçado)",
+      action: "Pedir ao fornecedor pra adicionar nosso IP de backend na allowlist.",
+      target: "supplier",
+      targetLabel: `Dono/admin do painel ${host}`,
+      priority: "alta",
+      resellerWarning: "Servidor bloqueia nosso range de IPs. Não cadastrar novos clientes até liberação.",
+      message,
+    };
+  }
+
+  // Caso 4: Geoblock
+  if (kind === "geoblock") {
+    const message =
+`Olá,
+
+O painel ${serverUrl}${labelPart} está com bloqueio geográfico que recusa conexões da região do nosso datacenter.
+
+Solicitamos liberar a região onde rodamos nosso backend, ou nos informar quais países estão na allowlist atual.
+
+Atenciosamente.`;
+    return {
+      title: "🌍 Pedir liberação geográfica",
+      action: "Pedir ao fornecedor pra incluir o país/região do nosso datacenter na allowlist.",
+      target: "supplier",
+      targetLabel: `Dono/admin do painel ${host}`,
+      priority: "alta",
+      resellerWarning: "Painel só aceita conexões de regiões específicas. Confirmar com fornecedor antes de novos cadastros.",
+      message,
+    };
+  }
+
+  // Caso 5: Rate limit
+  if (kind === "rate_limit") {
+    const message =
+`Olá,
+
+Estamos atingindo o rate limit do painel ${serverUrl}${labelPart} (HTTP 429). Pedimos que aumentem o limite de requisições por minuto para o nosso IP de backend, ou que nos informem o limite atual para que possamos ajustar a frequência das chamadas.
+
+Atenciosamente.`;
+    return {
+      title: "⏱️ Pedir aumento de rate limit",
+      action: "Pedir ao fornecedor pra aumentar limite de requisições para nosso IP.",
+      target: "supplier",
+      targetLabel: `Dono/admin do painel ${host}`,
+      priority: "media",
+      message,
+    };
+  }
+
+  // Caso 6: Hospedagem suspensa
+  if (kind === "suspended") {
+    return {
+      title: "🛑 Hospedagem do painel SUSPENSA",
+      action: "Migrar usuários para nova URL — não há solução do lado do cliente.",
+      target: "reseller",
+      targetLabel: "Revenda / equipe interna",
+      priority: "alta",
+      resellerWarning:
+        "A conta da hospedagem deste painel foi suspensa na origem (possível takedown ou inadimplência). Painel não voltará. Comunicar revendedores e migrar clientes para outra URL.",
+    };
+  }
+
+  // Caso 7: Conta IPTV expirada
+  if (kind === "expired_account") {
+    return {
+      title: "💳 Renovar assinatura IPTV",
+      action: "Avisar usuário/revenda que a assinatura individual expirou.",
+      target: "end_user",
+      targetLabel: "Usuário final / revenda",
+      priority: "media",
+      message:
+`Olá,
+
+A assinatura IPTV neste painel (${host}${labelPart}) consta como EXPIRADA ou desabilitada. O painel está funcionando normalmente — apenas a sua conta precisa ser renovada com a revenda.
+
+Por favor, entre em contato com quem te vendeu o acesso para renovar.
+
+Atenciosamente.`,
+    };
+  }
+
+  // Caso 8: Credenciais inválidas
+  if (kind === "xtream_invalid_creds") {
+    return {
+      title: "🔑 Credenciais inválidas",
+      action: "Conferir usuário e senha — o servidor está respondendo, mas auth=0.",
+      target: "end_user",
+      targetLabel: "Usuário final / revenda",
+      priority: "baixa",
+      message:
+`Olá,
+
+O painel ${host}${labelPart} está respondendo normalmente, mas as credenciais informadas (usuário/senha) foram REJEITADAS. Confira se digitou corretamente, ou peça à revenda para confirmar/redefinir suas credenciais.
+
+Atenciosamente.`,
+    };
+  }
+
+  // Caso 9: DNS error
+  if (kind === "dns_error") {
+    return {
+      title: "📡 Domínio não resolve (DNS)",
+      action: "Confirmar com o fornecedor se o domínio mudou ou foi removido.",
+      target: "supplier",
+      targetLabel: `Fornecedor do painel ${host}`,
+      priority: "alta",
+      resellerWarning:
+        "O domínio deste painel não resolve mais via DNS. Pode ter sido removido (takedown), expirado, ou trocado. Suspender uso até confirmação.",
+    };
+  }
+
+  // Caso 10: Default landing
+  if (kind === "default_landing") {
+    return {
+      title: "🌐 DNS aponta para o lugar errado",
+      action: "Pedir ao fornecedor pra confirmar a URL correta do painel.",
+      target: "supplier",
+      targetLabel: `Fornecedor do painel ${host}`,
+      priority: "media",
+      message:
+`Olá,
+
+A URL ${serverUrl}${labelPart} responde com a página default do servidor web (nginx/Apache "Welcome"), o que indica que o painel IPTV não está instalado nesse host, ou o DNS está apontando para o IP errado.
+
+Podem confirmar a URL correta do painel?
+
+Atenciosamente.`,
+    };
+  }
+
+  // Caso 11: Tudo offline
+  if (!backendOk && c && !clientOk && clientConclusivos > 0) {
+    return {
+      title: "⛔ Servidor inacessível de qualquer origem",
+      action: "Servidor parece realmente offline — confirmar com fornecedor.",
+      target: "supplier",
+      targetLabel: `Fornecedor do painel ${host}`,
+      priority: "alta",
+      resellerWarning:
+        "Servidor não responde nem do nosso backend nem do IP residencial do admin. Provavelmente offline. Suspender uso até retorno.",
+    };
+  }
+
+  // Caso 12: Funcionou
+  if (kind === "xtream_ok" || (backendOk && d.results.some((r) => r.is_xtream))) {
+    return {
+      title: "✅ Use a URL detectada",
+      action: `Configure o painel usando a variante: ${d.best_variant ?? "(ver detalhamento)"}.`,
+      target: "config",
+      targetLabel: "Configuração interna",
+      priority: "baixa",
+    };
+  }
+
+  return null;
+}
+
+function targetLabelText(t: RecommendationTarget): string {
+  switch (t) {
+    case "supplier": return "Fornecedor do painel";
+    case "reseller": return "Revenda / equipe interna";
+    case "end_user": return "Usuário final";
+    case "config": return "Configuração interna";
+    default: return "—";
+  }
+}
+
+function priorityLabelText(p: RecommendationPriority): string {
+  switch (p) {
+    case "alta": return "Alta";
+    case "media": return "Média";
+    case "baixa": return "Baixa";
+  }
+}
+
+function buildRecommendationSection(rec: RecommendationResult): string {
+  const sub = "─".repeat(55);
+  const lines: string[] = [];
+  lines.push("");
+  lines.push(sub);
+  lines.push("RECOMENDAÇÃO AUTOMÁTICA");
+  lines.push(sub);
+  lines.push("");
+  lines.push(`Ação sugerida    : ${rec.action}`);
+  lines.push(`Responsável      : ${rec.targetLabel} (${targetLabelText(rec.target)})`);
+  lines.push(`Prioridade       : ${priorityLabelText(rec.priority)}`);
+  if (rec.resellerWarning) {
+    lines.push(`Aviso revendas   : ⚠️ ${rec.resellerWarning}`);
+  }
+  if (rec.message) {
+    lines.push("");
+    lines.push("─── MENSAGEM PRONTA PARA COPIAR E ENVIAR ───");
+    lines.push("");
+    lines.push(rec.message);
+  }
+  return lines.join("\n");
+}
+
 export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }: Props) {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ProbeResponse | null>(null);
