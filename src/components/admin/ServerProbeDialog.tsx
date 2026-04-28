@@ -571,6 +571,10 @@ function buildClientSection(c: ClientProbeResult): string {
 function buildComparisonVerdict(backend: ProbeResponse, client: ClientProbeResult): string {
   const backendOk = !!backend.best_variant;
   const clientOk = client.any_reachable;
+  const conclusivos = client.attempts.filter((a) => a.state !== "blocked_mixed").length;
+  if (conclusivos === 0) {
+    return "⚠️ Teste client-side INCONCLUSIVO — todas as variantes HTTP foram bloqueadas pelo navegador (Mixed Content, página em HTTPS). Para teste conclusivo, abra o painel num navegador HTTP ou use a versão app/desktop. O resultado do backend continua válido.";
+  }
   if (!backendOk && clientOk) {
     return "🎯 BLOQUEIO ANTI-DATACENTER CONFIRMADO\n  • Backend (datacenter) NÃO conseguiu acessar o servidor\n  • Seu navegador (IP residencial) ALCANÇOU o servidor\n  • Conclusão: o painel está vivo, mas filtra ranges de cloud/datacenter\n  • Solução: usar proxy em IP residencial brasileiro, ou pedir à revenda whitelist do nosso IP de backend";
   }
