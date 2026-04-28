@@ -619,7 +619,10 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
     try {
       const res = await runClientProbe(serverUrl);
       setClientData(res);
-      if (res.any_reachable && data && !data.best_variant) {
+      const conclusivos = res.attempts.filter((a) => a.state !== "blocked_mixed").length;
+      if (conclusivos === 0) {
+        toast.warning("Inconclusivo: app está em HTTPS e o navegador bloqueou os testes HTTP (Mixed Content)");
+      } else if (res.any_reachable && data && !data.best_variant) {
         toast.success("Bloqueio anti-datacenter confirmado: servidor responde ao seu IP");
       } else if (res.any_reachable) {
         toast.success("Servidor alcançável do seu navegador");
