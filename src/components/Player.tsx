@@ -1718,6 +1718,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       video.removeEventListener("stalled", onStalled);
       video.removeEventListener("error", onError);
       video.removeEventListener("ended", onEndedNative);
+      if (playingStableTimerRef.current !== null) {
+        window.clearTimeout(playingStableTimerRef.current);
+        playingStableTimerRef.current = null;
+      }
       // Salva uma última vez ao desmontar (usuário fechou o player).
       // Guarda contra o caso de o vídeo já ter sido limpo (src=""):
       // currentTime cai para 0 e gravaríamos lixo por cima do progresso real.
