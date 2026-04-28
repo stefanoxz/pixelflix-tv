@@ -1374,6 +1374,36 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <BlockedDnsDialog
+        open={blockedDnsDialogOpen}
+        onOpenChange={setBlockedDnsDialogOpen}
+        defaults={{
+          server_url: serverUrl ?? "",
+          block_type: "anti_datacenter",
+          evidence: data
+            ? {
+                source: "manual_probe",
+                probed_at: new Date().toISOString(),
+                normalized: data.normalized,
+                results_summary: data.results.map((r) => ({
+                  variant: r.variant,
+                  ok: r.ok,
+                  status: r.status,
+                  latency_ms: r.latency_ms,
+                  error: r.error,
+                })),
+                client_reachable: clientData?.any_reachable ?? null,
+              }
+            : null,
+          notes: `Catalogado via probe em ${new Date().toLocaleString("pt-BR")}.${
+            clientData?.any_reachable
+              ? " Confirmado: backend bloqueado, navegador residencial alcançou o servidor."
+              : ""
+          }`,
+        }}
+        onSaved={() => toast.success("Adicionado à lista de DNS bloqueados")}
+      />
     </Dialog>
   );
 }
