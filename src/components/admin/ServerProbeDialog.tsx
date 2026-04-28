@@ -238,6 +238,40 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
     }
   };
 
+  const handleCopyReport = async () => {
+    if (!data) return;
+    const text = buildReport(data, serverLabel);
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Relatório copiado para a área de transferência");
+    } catch {
+      toast.error("Não foi possível copiar. Use 'Baixar .txt' como alternativa.");
+    }
+  };
+
+  const handleDownloadReport = () => {
+    if (!data) return;
+    const text = buildReport(data, serverLabel);
+    let host = "servidor";
+    try {
+      host = new URL(data.normalized).hostname.replace(/[^a-z0-9.-]/gi, "_");
+    } catch {
+      /* ignore */
+    }
+    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const filename = `diagnostico-${host}-${ts}.txt`;
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Relatório salvo: ${filename}`);
+  };
+
   // Auto-run quando abre
   useEffect(() => {
     if (open && serverUrl) {
