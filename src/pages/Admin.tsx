@@ -167,7 +167,6 @@ interface MonitoringOverview {
   top_rejected_ips: { ip_masked: string; count: number }[];
 }
 interface TopConsumer {
-interface TopConsumer {
   anon_user_id: string;
   iptv_username: string;
   server_host: string;
