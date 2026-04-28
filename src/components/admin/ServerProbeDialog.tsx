@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, Loader2, RefreshCw, Wifi, Copy, Download, Globe } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, RefreshCw, Wifi, Copy, Download, Globe, Mail, AlertTriangle, Lightbulb } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
