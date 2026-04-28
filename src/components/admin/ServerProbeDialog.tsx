@@ -20,6 +20,7 @@ interface ProbeResult {
   is_xtream: boolean;
   auth: number | string | null;
   body_preview: string;
+  headers?: Record<string, string>;
   error: string | null;
 }
 
