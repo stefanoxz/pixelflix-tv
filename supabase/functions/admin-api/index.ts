@@ -995,6 +995,19 @@ Deno.serve(async (req) => {
                 authValue = parsed.user_info.auth ?? null;
               }
             } catch { /* não é JSON */ }
+            // Captura headers úteis para diagnóstico (WAF/rate-limit/geo/cache)
+            const headersOfInterest = [
+              "server", "cf-ray", "cf-mitigated", "cf-cache-status", "cf-chl-bypass",
+              "x-powered-by", "via", "x-cache", "x-served-by",
+              "retry-after", "x-ratelimit-remaining", "x-ratelimit-limit", "x-ratelimit-reset",
+              "x-sucuri-id", "x-sucuri-cache", "x-iinfo",
+              "content-type", "x-frame-options", "location",
+            ];
+            const respHeaders: Record<string, string> = {};
+            for (const h of headersOfInterest) {
+              const v = res.headers.get(h);
+              if (v) respHeaders[h] = v.length > 200 ? v.slice(0, 200) : v;
+            }
             return {
               variant: base,
               ok: res.ok,
@@ -1002,7 +1015,8 @@ Deno.serve(async (req) => {
               latency_ms: elapsed,
               is_xtream: isXtream,
               auth: authValue,
-              body_preview: body.slice(0, 200),
+              body_preview: body.slice(0, 400),
+              headers: respHeaders,
               error: null as string | null,
             };
           } catch (err) {
@@ -1013,6 +1027,7 @@ Deno.serve(async (req) => {
               ok: false,
               status: null as number | null,
               latency_ms: elapsed,
+              headers: {} as Record<string, string>,
               is_xtream: false,
               auth: null as number | string | null,
               body_preview: "",
