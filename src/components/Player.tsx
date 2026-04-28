@@ -1515,6 +1515,24 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         }, STALL_TIMEOUT_MS);
       }
     };
+    const armPlayingStableTimer = () => {
+      if (playingStableTimerRef.current !== null) {
+        window.clearTimeout(playingStableTimerRef.current);
+      }
+      playingStableTimerRef.current = window.setTimeout(() => {
+        if (recoveryAttemptsRef.current > 0) {
+          pushLog({
+            source: "diag",
+            level: "info",
+            label: "recovery_counter_reset",
+            details: `${Math.round(PLAYING_STABLE_RESET_MS / 1000)}s estáveis`,
+          });
+        }
+        recoveryAttemptsRef.current = 0;
+        recoveryInFlightRef.current = false;
+        playingStableTimerRef.current = null;
+      }, PLAYING_STABLE_RESET_MS);
+    };
     const onPlaying = () => {
       const wasFirst = !playbackStartedRef.current;
       playbackStartedRef.current = true;
@@ -1522,6 +1540,9 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       clearBootstrapTimeout();
       clearStallTimeout();
       clearLoadeddataWatchdog();
+      // Marca recovery como concluído assim que voltamos a tocar.
+      recoveryInFlightRef.current = false;
+      armPlayingStableTimer();
       if (wasFirst) {
         firstFrameAtRef.current = performance.now();
         const ttff = setupStartRef.current ? Math.round(firstFrameAtRef.current - setupStartRef.current) : 0;
