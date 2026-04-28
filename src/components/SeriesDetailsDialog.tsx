@@ -1,9 +1,8 @@
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   Calendar,
-  Clapperboard,
   Film,
   Heart,
   Layers,
@@ -11,8 +10,6 @@ import {
   Loader2,
   Star,
   Tv,
-  Users,
-  Video,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
