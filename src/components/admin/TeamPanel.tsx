@@ -199,8 +199,8 @@ export default function TeamPanel() {
         </div>
 
         <div className="rounded-md bg-secondary/30 border border-border/40 p-3 text-xs text-muted-foreground mb-4 leading-relaxed">
-          <strong className="text-foreground">Admin:</strong> acesso total — gerencia DNS, equipe e aprova cadastros.{" "}
-          <strong className="text-foreground">Moderador:</strong> visualiza tudo, encerra sessões e aplica bloqueios temporários, mas não mexe em DNS nem na equipe.
+          <strong className="text-foreground">Admin:</strong> acesso total — gerencia DNS, servidores, equipe, aprova cadastros, troca senhas e vê o audit log.{" "}
+          <strong className="text-foreground">Moderador:</strong> vê todo o painel (estatísticas, sessões, reports, diagnósticos, login events) e pode encerrar sessões ao vivo, aplicar bloqueios temporários e atualizar status de reports — mas não mexe em DNS, servidores, equipe nem em aprovações.
         </div>
 
         {loading && team.length === 0 ? (
