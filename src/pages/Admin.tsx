@@ -1465,8 +1465,8 @@ const Admin = () => {
           </TabsContent>
 
           <TabsContent value="servers" className="space-y-6 mt-0">
-            <div className="flex gap-3 flex-wrap">
-              <div className="relative flex-1 min-w-[240px] max-w-md">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
+              <div className="relative w-full sm:flex-1 sm:min-w-[240px] sm:max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar DNS..."
@@ -1475,19 +1475,29 @@ const Admin = () => {
                   className="pl-9"
                 />
               </div>
-              <Button
-                onClick={() => checkAllServers(true)}
-                variant="outline"
-                size="sm"
-                disabled={healthLoading || allowed.length === 0}
-              >
-                <RefreshCw className={"h-4 w-4 mr-2 " + (healthLoading ? "animate-spin" : "")} />
-                Atualizar pings
-              </Button>
-              <Button onClick={() => setAddOpen(true)} variant="default" size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Cadastrar DNS
-              </Button>
+              <div className="flex gap-2 sm:gap-3">
+                <Button
+                  onClick={() => checkAllServers(true)}
+                  variant="outline"
+                  size="sm"
+                  disabled={healthLoading || allowed.length === 0}
+                  className="flex-1 sm:flex-none"
+                >
+                  <RefreshCw className={"h-4 w-4 mr-2 " + (healthLoading ? "animate-spin" : "")} />
+                  <span className="sm:hidden">Pings</span>
+                  <span className="hidden sm:inline">Atualizar pings</span>
+                </Button>
+                <Button
+                  onClick={() => setAddOpen(true)}
+                  variant="default"
+                  size="sm"
+                  className="flex-1 sm:flex-none"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  <span className="sm:hidden">Nova DNS</span>
+                  <span className="hidden sm:inline">Cadastrar DNS</span>
+                </Button>
+              </div>
             </div>
 
             {/* Allowed servers */}
