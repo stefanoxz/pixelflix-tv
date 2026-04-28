@@ -2035,7 +2035,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         />
       )}
 
-      {title && !error && (
+      {title && !error && !loading && (
         <div className="pointer-events-none absolute left-0 top-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-4">
           <div className="flex items-center gap-2 pr-32">
             <h3 className="text-sm font-semibold text-white drop-shadow truncate">{title}</h3>
@@ -2053,7 +2053,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       {/* Custom controls bar — top-right (skip ±10s, speed, report)
           Agrupados num único "pill" com glassmorphism coeso para parecer
           uma barra de ferramentas única em vez de botões soltos. */}
-      {showVideo && !error && (
+      {showVideo && !error && !loading && (
         <div className="pointer-events-auto absolute top-3 right-3 z-20 flex items-center gap-0.5 rounded-full border border-white/10 bg-black/55 px-1.5 py-1 backdrop-blur-md shadow-[0_8px_24px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/5">
           {!isLive && (
             <>
@@ -2135,40 +2135,58 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       )}
 
       {/* Diagnostic card — small, non-blocking, bottom-right.
-          Mesma linguagem visual da toolbar (pill glass) com dot pulsante. */}
-      <div
-        className={cn(
-          "pointer-events-none absolute bottom-3 right-3 z-20 max-w-[260px] rounded-full border border-white/10 px-3 py-1.5 backdrop-blur-md shadow-[0_8px_24px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/5 text-[11px] leading-tight",
-          statusTone[status],
-        )}
-        role="status"
-        aria-live="polite"
-      >
-        <div className="flex items-center gap-2 font-semibold">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-current opacity-60 animate-ping" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
-          </span>
-          <span>{STATUS_LABEL[status]}</span>
-        </div>
-        {lastReason && (
-          <div className="mt-0.5 truncate opacity-80 pl-4" title={lastReason}>
-            {lastReason}
+          Mesma linguagem visual da toolbar (pill glass) com dot pulsante.
+          Escondido durante loading (overlay central já comunica estado). */}
+      {!loading && !error && (
+        <div
+          className={cn(
+            "pointer-events-none absolute bottom-3 right-3 z-20 max-w-[260px] rounded-full border border-white/10 px-3 py-1.5 backdrop-blur-md shadow-[0_8px_24px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/5 text-[11px] leading-tight",
+            statusTone[status],
+          )}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center gap-2 font-semibold">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-current opacity-60 animate-ping" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
+            </span>
+            <span>{STATUS_LABEL[status]}</span>
           </div>
-        )}
-      </div>
+          {lastReason && (
+            <div className="mt-0.5 truncate opacity-80 pl-4" title={lastReason}>
+              {lastReason}
+            </div>
+          )}
+        </div>
+      )}
 
       {loading && !error && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-gradient-to-b from-black via-black to-black/95 animate-fade-in">
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative">
-              <div className="absolute inset-0 rounded-full bg-primary/20 blur-2xl animate-pulse" aria-hidden />
-              <Loader2 className="relative h-10 w-10 animate-spin text-primary" />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black animate-fade-in p-6">
+          {poster ? (
+            <div className="relative flex items-center justify-center h-full max-h-full">
+              <img
+                src={poster}
+                alt=""
+                aria-hidden
+                className="block h-full max-h-full w-auto object-contain rounded-lg shadow-2xl select-none"
+                draggable={false}
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
+              {/* Spinner + label sobrepostos no centro do poster */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/35 rounded-lg">
+                <Loader2 className="h-10 w-10 animate-spin text-white drop-shadow-lg" />
+                <p className="text-sm font-medium text-white drop-shadow">Conectando...</p>
+              </div>
             </div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-white/60 font-medium">
-              Conectando
-            </p>
-          </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-10 w-10 animate-spin text-white" />
+              <p className="text-sm font-medium text-white">Conectando...</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -2265,22 +2283,25 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         </div>
       )}
 
-      {/* Logs panel toggle — bottom-left (mesma linguagem visual da toolbar) */}
-      <button
-        type="button"
-        onClick={() => setLogsPanelOpen((o) => !o)}
-        className={cn(
-          "pointer-events-auto absolute bottom-3 left-3 z-20 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium backdrop-blur-md shadow-[0_8px_24px_-12px_rgba(0,0,0,0.7)] ring-1 transition-colors",
-          logsPanelOpen
-            ? "border-primary/40 bg-primary/20 text-primary ring-primary/20"
-            : "border-white/10 bg-black/55 text-white/80 hover:bg-black/70 hover:text-white ring-white/5",
-        )}
-        aria-pressed={logsPanelOpen}
-        aria-label="Alternar logs do player"
-      >
-        <Terminal className="h-3 w-3" />
-        Logs
-      </button>
+      {/* Logs panel toggle — bottom-left (mesma linguagem visual da toolbar).
+          Escondido durante loading para deixar o overlay limpo (igual referência). */}
+      {!loading && !error && (
+        <button
+          type="button"
+          onClick={() => setLogsPanelOpen((o) => !o)}
+          className={cn(
+            "pointer-events-auto absolute bottom-3 left-3 z-20 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium backdrop-blur-md shadow-[0_8px_24px_-12px_rgba(0,0,0,0.7)] ring-1 transition-colors",
+            logsPanelOpen
+              ? "border-primary/40 bg-primary/20 text-primary ring-primary/20"
+              : "border-white/10 bg-black/55 text-white/80 hover:bg-black/70 hover:text-white ring-white/5",
+          )}
+          aria-pressed={logsPanelOpen}
+          aria-label="Alternar logs do player"
+        >
+          <Terminal className="h-3 w-3" />
+          Logs
+        </button>
+      )}
 
       {/* Logs panel — right side overlay */}
       {logsPanelOpen && (
