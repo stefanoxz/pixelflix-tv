@@ -2265,15 +2265,15 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         </div>
       )}
 
-      {/* Logs panel toggle — bottom-left */}
+      {/* Logs panel toggle — bottom-left (mesma linguagem visual da toolbar) */}
       <button
         type="button"
         onClick={() => setLogsPanelOpen((o) => !o)}
         className={cn(
-          "pointer-events-auto absolute bottom-3 left-3 z-20 inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium backdrop-blur-md shadow-sm transition-colors",
+          "pointer-events-auto absolute bottom-3 left-3 z-20 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium backdrop-blur-md shadow-[0_8px_24px_-12px_rgba(0,0,0,0.7)] ring-1 transition-colors",
           logsPanelOpen
-            ? "border-primary/50 bg-primary/20 text-primary-foreground"
-            : "border-border bg-background/80 text-muted-foreground hover:bg-background/95",
+            ? "border-primary/40 bg-primary/20 text-primary ring-primary/20"
+            : "border-white/10 bg-black/55 text-white/80 hover:bg-black/70 hover:text-white ring-white/5",
         )}
         aria-pressed={logsPanelOpen}
         aria-label="Alternar logs do player"
