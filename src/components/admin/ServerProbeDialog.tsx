@@ -1316,15 +1316,28 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
 {recommendation.message}
                       </pre>
                     </details>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleCopyMessageOnly}
-                      className="w-full sm:w-auto"
-                    >
-                      <Mail className="h-3.5 w-3.5 mr-1.5" />
-                      Copiar mensagem para enviar
-                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCopyMessageOnly}
+                        className="w-full sm:w-auto"
+                      >
+                        <Mail className="h-3.5 w-3.5 mr-1.5" />
+                        Copiar mensagem para enviar
+                      </Button>
+                      {recommendation.target === "supplier" && (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => setBlockedDnsDialogOpen(true)}
+                          className="w-full sm:w-auto"
+                        >
+                          <Ban className="h-3.5 w-3.5 mr-1.5" />
+                          Catalogar como DNS bloqueado
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
