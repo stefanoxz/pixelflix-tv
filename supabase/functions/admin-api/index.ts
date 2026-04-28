@@ -69,6 +69,12 @@ const ADMIN_ONLY_ACTIONS = new Set([
   "cleanup_table",
   "evict_idle_now",
   "clear_server_quarantine",
+  "blocked_dns_create",
+  "blocked_dns_update",
+  "blocked_dns_delete",
+  "blocked_dns_confirm",
+  "blocked_dns_dismiss",
+  "blocked_dns_reactivate",
 ]);
 
 // Tabelas permitidas para limpeza manual via UI. Cada uma mapeia a uma RPC
