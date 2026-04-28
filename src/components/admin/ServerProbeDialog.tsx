@@ -1245,8 +1245,91 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
                 );
               })()}
             </div>
+
+            {/* Recomendação automática (Ação 4) */}
+            {recommendation && (
+              <div
+                className={`rounded-lg border p-4 space-y-3 ${
+                  recommendation.priority === "alta"
+                    ? "border-warning/40 bg-warning/10"
+                    : recommendation.priority === "media"
+                      ? "border-primary/30 bg-primary/5"
+                      : "border-success/30 bg-success/5"
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  <Lightbulb
+                    className={`h-5 w-5 mt-0.5 shrink-0 ${
+                      recommendation.priority === "alta"
+                        ? "text-warning"
+                        : recommendation.priority === "media"
+                          ? "text-primary"
+                          : "text-success"
+                    }`}
+                  />
+                  <div className="space-y-1 min-w-0">
+                    <h3 className="text-sm font-semibold">{recommendation.title}</h3>
+                    <p className="text-sm text-foreground/90">{recommendation.action}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className="rounded border border-border/40 bg-background/40 px-2 py-1.5">
+                    <span className="text-muted-foreground">Responsável: </span>
+                    <span className="font-medium">{recommendation.targetLabel}</span>
+                  </div>
+                  <div className="rounded border border-border/40 bg-background/40 px-2 py-1.5">
+                    <span className="text-muted-foreground">Prioridade: </span>
+                    <span
+                      className={`font-medium ${
+                        recommendation.priority === "alta"
+                          ? "text-warning"
+                          : recommendation.priority === "media"
+                            ? "text-primary"
+                            : "text-success"
+                      }`}
+                    >
+                      {priorityLabelText(recommendation.priority)}
+                    </span>
+                  </div>
+                </div>
+
+                {recommendation.resellerWarning && (
+                  <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 p-2 text-xs">
+                    <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                    <p className="text-foreground/90">
+                      <span className="font-semibold text-destructive">Aviso para revendas: </span>
+                      {recommendation.resellerWarning}
+                    </p>
+                  </div>
+                )}
+
+                {recommendation.message && (
+                  <div className="space-y-2">
+                    <details className="rounded border border-border/40 bg-background/40">
+                      <summary className="cursor-pointer px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
+                        Ver mensagem pronta para enviar
+                      </summary>
+                      <pre className="whitespace-pre-wrap break-words px-2 py-2 text-xs text-foreground/90 border-t border-border/40">
+{recommendation.message}
+                      </pre>
+                    </details>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCopyMessageOnly}
+                      className="w-full sm:w-auto"
+                    >
+                      <Mail className="h-3.5 w-3.5 mr-1.5" />
+                      Copiar mensagem para enviar
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
+
 
         <DialogFooter className="gap-2 flex-wrap sm:flex-nowrap">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
