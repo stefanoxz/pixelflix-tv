@@ -1,136 +1,104 @@
 ## Objetivo
 
-Criar área **"DNS bloqueados"** no admin pra catalogar servidores com bloqueio anti-datacenter (tipo `bkpac.cc`). Inclui **detecção automática conservadora** que sugere candidatos, mas **nada entra na lista oficial sem você confirmar**.
+Eliminar os 36 warnings do linter sem quebrar nada — admins/mods continuam acessando, edge functions continuam funcionando, e o webplayer anônimo (visitantes do `signInAnonymously`) continua usando o app normalmente.
 
-## Fluxo geral
+## Diagnóstico dos 36 warnings
 
-```text
-iptv-login falha → classifica erro → se padrão anti-datacenter:
-  ↓
-incrementa contador no servidor
-  ↓
-atingiu 5 falhas em 24h de 2+ IPs distintos?
-  ↓ sim
-cria/atualiza entrada com status = 'suggested'
-  ↓
-você revisa em "DNS bloqueados → Sugestões"
-  ↓
-[Confirmar] → vira 'confirmed'   |   [Descartar] → vira 'dismissed' (some pra sempre)
-```
-
-## 1. Banco de dados
-
-**Nova tabela `blocked_dns_servers`:**
-
-| Campo | Tipo | Notas |
+| Grupo | Qtd | Tipo |
 |---|---|---|
-| `id` | uuid PK | |
-| `server_url` | text UNIQUE | normalizado via `normalize_server_url()` |
-| `label` | text | nome amigável (ex: "Black") |
-| `provider_name` | text | nome da revenda/fornecedor |
-| `block_type` | text | `anti_datacenter`, `geoblock`, `waf`, `dns_error`, `outro` |
-| `status` | text | `suggested`, `confirmed`, `dismissed` |
-| `notes` | text | observações livres |
-| `evidence` | jsonb | último relatório de probe + amostra de falhas |
-| `failure_count` | int | total de falhas detectadas |
-| `distinct_ip_count` | int | IPs únicos que viram a falha |
-| `first_detected_at` | timestamptz | |
-| `last_detected_at` | timestamptz | |
-| `confirmed_at` | timestamptz | quando você clicou confirmar |
-| `dismissed_at` | timestamptz | quando você descartou |
-| `created_at`, `updated_at` | timestamptz | |
+| A. Extensão no schema `public` | 1 | `pg_net` ou `pg_cron` instalada em `public` |
+| B. Funções SECURITY DEFINER executáveis por `anon` | 9 | `cleanup_*`, `evict_idle_sessions`, `normalize_server_url`, etc. |
+| C. Funções SECURITY DEFINER executáveis por `authenticated` | 9 | Mesmas funções acima — `has_role` precisa continuar |
+| D. Políticas RLS aplicadas ao role `anon` (16 tabelas) | 16 | Todas as policies sem `TO authenticated` |
+| E. `cron.job` / `cron.job_run_details` com policy para anon | 2 | Schema `cron` — **NÃO MEXER** (reservado) |
 
-**Tabela auxiliar `blocked_dns_failures`** (rolling window de 24h pra contar falhas):
+## O que vai mudar
 
-| Campo | Tipo |
-|---|---|
-| `id` | uuid PK |
-| `server_url` | text |
-| `error_kind` | text (`reset`, `timeout`, etc.) |
-| `ip_hash` | text (hash do IP, não o IP cru — privacidade) |
-| `created_at` | timestamptz |
+### 1. Revogar EXECUTE de `anon` e `authenticated` nas funções de limpeza/manutenção
 
-Função de cleanup `cleanup_blocked_dns_failures()` que apaga registros > 48h (segue padrão das outras `cleanup_*`).
+Funções afetadas (são chamadas apenas por edge functions com `service_role`, nunca pelo cliente):
+- `cleanup_client_diagnostics`
+- `cleanup_login_events`
+- `cleanup_stream_events`
+- `cleanup_used_nonces`
+- `cleanup_admin_audit_log`
+- `cleanup_tmdb_image_cache`
+- `cleanup_tmdb_episode_cache`
+- `cleanup_blocked_dns_failures`
+- `evict_idle_sessions`
 
-**RLS:** admins ALL, moderadores SELECT.
-
-## 2. Detecção automática no `iptv-login`
-
-Adiciona helper `recordPotentialBlock(serverUrl, errorKind, ipHash)`:
-
-1. Insere linha em `blocked_dns_failures`
-2. Conta falhas dos últimos 24h pro `server_url`
-3. Se `count >= 5` E `distinct(ip_hash) >= 2`:
-   - Verifica se já existe em `blocked_dns_servers`
-   - Se existe e status = `dismissed` → **não faz nada** (descarte permanente)
-   - Se existe e status = `confirmed` → só atualiza contadores
-   - Se existe e status = `suggested` → atualiza `failure_count`, `last_detected_at`
-   - Se não existe → cria com `status='suggested'`, preenche `evidence` com amostra dos últimos erros
-
-Chamado **só** quando o erro for classificado como `reset` ou `timeout` em **todas** as variantes testadas (padrão anti-datacenter — não dispara em 401, 5xx genérico ou DNS error puro).
-
-## 3. UI — `BlockedDnsPanel.tsx`
-
-Layout em **abas**:
-
-**🔔 Sugestões** (badge com contador)
-- Lista de candidatos detectados automaticamente
-- Cada linha mostra: URL, falhas (X em Yh), IPs distintos, último erro, evidência
-- Ações: `[Confirmar bloqueio]` (abre dialog pra preencher label/fornecedor) | `[Descartar permanentemente]` (com confirmação tipo "Tem certeza? Esse DNS nunca mais será sugerido.")
-
-**✅ Confirmados**
-- Lista oficial de DNS bloqueados
-- Filtro/busca por label ou URL
-- Editar label, fornecedor, notas
-- Remover (volta a poder ser sugerido se voltar a falhar)
-
-**🚫 Descartados** (collapsed por padrão)
-- Pra você ver o que descartou e poder **reativar** se mudou de ideia
-- Botão `[Reativar]` move de volta pra sugestões
-
-**Botão "Adicionar manualmente"** no topo (caso queira catalogar sem esperar detecção).
-
-## 4. Atalho no `ServerProbeDialog`
-
-Quando o veredito atual for `anti-datacenter`, mostra:
-> **📌 Catalogar como DNS bloqueado** → abre dialog pré-preenchido com URL, `block_type='anti_datacenter'`, `evidence` do probe, status já vai direto pra `confirmed`.
-
-## 5. Endpoints no `admin-api`
-
-- `GET /admin/blocked-dns?status=suggested|confirmed|dismissed`
-- `POST /admin/blocked-dns` (criação manual ou via probe)
-- `PATCH /admin/blocked-dns/:id` (editar campos / mudar status)
-- `DELETE /admin/blocked-dns/:id`
-
-Todos exigem role `admin`.
-
-## 6. Item no menu
-
-`adminNav.ts`:
-```ts
-{ id: "blocked-dns", label: "DNS bloqueados", shortLabel: "Bloq.", icon: Ban, adminOnly: true }
+```sql
+REVOKE EXECUTE ON FUNCTION public.cleanup_xxx() FROM anon, authenticated, public;
+GRANT EXECUTE ON FUNCTION public.cleanup_xxx() TO service_role;
 ```
 
-Badge com contador de sugestões pendentes aparece ao lado do label quando > 0.
+### 2. `has_role` — manter acessível a `authenticated` (é usada nas RLS policies)
 
-## Arquivos afetados
+A função `has_role` PRECISA continuar executável por `authenticated` porque é referenciada em todas as policies. Mas vamos revogar de `anon` e `public`:
 
-**Criar:**
-- `supabase/migrations/<ts>_blocked_dns_servers.sql` — 2 tabelas + RLS + função cleanup
-- `src/components/admin/BlockedDnsPanel.tsx` — painel com abas
-- `src/components/admin/BlockedDnsDialog.tsx` — criar/editar/confirmar
+```sql
+REVOKE EXECUTE ON FUNCTION public.has_role(uuid, app_role) FROM anon, public;
+-- authenticated mantém acesso (necessário para RLS)
+```
 
-**Editar:**
-- `src/components/admin/adminNav.ts` — novo item
-- `src/pages/Admin.tsx` — registrar seção
-- `src/lib/adminApi.ts` — funções list/create/update/delete/dismiss/confirm
-- `supabase/functions/admin-api/index.ts` — 4 endpoints novos
-- `supabase/functions/iptv-login/index.ts` — chamar `recordPotentialBlock` nos pontos de falha apropriados
-- `src/components/admin/ServerProbeDialog.tsx` — botão "Catalogar"
-- `src/components/admin/MaintenancePanel.tsx` — adicionar `cleanup_blocked_dns_failures` na lista de jobs (segue padrão)
+### 3. `normalize_server_url` e `update_blocked_dns_updated_at`
 
-## O que continua NÃO sendo feito
+- `normalize_server_url`: é IMMUTABLE, sem dados sensíveis, mas não há motivo para anon executar. Revogar de anon.
+- `update_blocked_dns_updated_at`: é trigger function, não precisa de EXECUTE para ninguém além do owner.
 
-- Nenhum proxy / Worker / VPS
-- Nenhum fallback automático no fluxo do usuário final
-- DNS bloqueado **não** impede login automaticamente — usuários afetados continuam vendo o erro normal (decisão sua: se quiser bloquear o login pra esses servidores no futuro, é só ligar uma flag na lista)
+### 4. `handle_new_admin_signup`
+
+É trigger no `auth.users` — disparada pelo Postgres internamente. Revogar EXECUTE de anon/authenticated/public (mantém só para o owner que dispara o trigger).
+
+### 5. Restringir todas as policies RLS ao role `authenticated`
+
+Hoje as policies não especificam role explicitamente, então o linter as considera aplicáveis a `anon` também. Vamos recriar cada uma com `TO authenticated`.
+
+Tabelas afetadas (14 tabelas em `public`):
+`active_sessions`, `admin_audit_log`, `allowed_servers`, `blocked_dns_failures`, `blocked_dns_servers`, `client_diagnostics`, `login_events`, `pending_admin_signups`, `stream_events`, `usage_counters`, `user_blocks`, `user_roles`, `watch_progress`
+
+**Importante sobre o webplayer anônimo**: Os visitantes do webplayer fazem `signInAnonymously()` — isso lhes dá uma sessão com role `authenticated` (não `anon`). Então `TO authenticated` continua cobrindo eles. ✅
+
+### 6. Caches públicos do TMDB — manter público mas explícito
+
+`tmdb_image_cache` e `tmdb_episode_cache` precisam continuar legíveis por todos (são usados antes do login). Vamos:
+- Manter a policy SELECT pública
+- O warning vai persistir nessas 2 tabelas, mas é **intencional** (decisão de produto, não falha)
+- Vou marcar como `ignore` no painel de segurança com justificativa
+
+### 7. Schema `cron` (warnings 20, 21)
+
+NÃO TOCAR. É schema reservado do Supabase para `pg_cron`. Vou marcar como `ignore` com justificativa.
+
+### 8. Extensão em public (warning 1)
+
+É geralmente `pg_net`/`pg_cron` instaladas pela própria Lovable Cloud no `public`. Mover extensões existentes pode quebrar dependências. Vou marcar como `ignore` (informacional) — é prática padrão do Supabase managed.
+
+## Resumo do impacto
+
+| Após a migração | Resultado |
+|---|---|
+| Admins logados | Continuam acessando tudo via RLS ✅ |
+| Moderators logados | Continuam acessando o que já podiam ✅ |
+| Webplayer anônimo (`signInAnonymously`) | Continua funcionando — sessão é `authenticated` ✅ |
+| Edge functions (service_role) | Continuam executando todas as funções ✅ |
+| Visitantes 100% sem auth (anon puro) | Só leem `tmdb_*_cache` (intencional) ✅ |
+| Warnings do linter | Cai de **36 → 3** (extensão + 2 cron, todos justificados) ✅ |
+
+## Entregáveis
+
+1. **1 migração SQL** (`supabase/migrations/...security_hardening.sql`):
+   - REVOKE EXECUTE em 11 funções de anon/public
+   - GRANT EXECUTE em cleanup_* para service_role
+   - DROP + CREATE de ~30 policies adicionando `TO authenticated`
+
+2. **3 findings marcadas como ignore** no painel de segurança (cron + extensão + tmdb_cache público) com justificativa.
+
+3. **Sem mudanças em código TypeScript** — nenhuma chamada do cliente precisa mudar.
+
+## Validação pós-deploy
+
+- Rodar `supabase--linter` novamente (esperado: ~3 warnings restantes, todos justificados)
+- Testar login admin no painel
+- Testar webplayer anônimo (carregar home + abrir um vídeo)
+- Verificar que edge function `iptv-login` continua gravando em `login_events`
