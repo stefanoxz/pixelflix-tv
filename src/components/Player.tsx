@@ -2161,10 +2161,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
             <div
               className={cn(
                 "mx-auto h-14 w-14 rounded-full flex items-center justify-center",
-                error.noData ? "bg-yellow-500/15" : "bg-destructive/15",
+                error.noData || error.canResume ? "bg-yellow-500/15" : "bg-destructive/15",
               )}
             >
-              {error.noData ? (
+              {error.canResume ? (
+                <RefreshCw className="h-7 w-7 text-yellow-400" />
+              ) : error.noData ? (
                 <VideoOff className="h-7 w-7 text-yellow-400" />
               ) : (
                 <AlertTriangle className="h-7 w-7 text-destructive" />
