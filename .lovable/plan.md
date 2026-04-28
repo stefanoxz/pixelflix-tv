@@ -1,57 +1,33 @@
-# Polir tela de detalhes de Séries (multi-dispositivo)
+# Carrossel horizontal de episódios
 
-## Problema
-Hoje o modal mostra um pôster gigante (~520px de altura) + sinopse + cards grandes. O usuário **sempre precisa rolar** para ver os episódios. A imagem de referência mostra um layout muito mais enxuto onde poster, infos, abas de temporada e episódios já aparecem juntos na primeira tela.
+## O que muda
+Trocar o **grid em colunas fixas** (que faz o card-imagem ficar pequeno e a primeira fileira ocupar muito espaço vertical) por um **carrossel horizontal**, igual à imagem de referência: cards lado a lado, com peek do próximo card e setas de navegação no desktop.
 
-## Objetivo
-Reorganizar o modal para que os **episódios da temporada selecionada já apareçam sem rolar**, em **todos os tamanhos** suportados pelo webplayer:
-- Mobile (≤ 640px) — celulares
-- Tablet (641–1024px) — iPad e similares
-- Desktop pequeno (1025–1366px) — notebooks
-- Desktop grande (≥ 1367px) — TVs e monitores
+## Comportamento por dispositivo
 
-Cada faixa mantém suas particularidades; nada é sacrificado em uma para melhorar outra.
+### Desktop (≥ md)
+- Trilha horizontal com `overflow-x-auto`, `scroll-snap-x mandatory`.
+- Cada card tem largura fixa: `w-64 lg:w-72 xl:w-80` (em vez de `1fr` no grid).
+- **Setas de navegação** (◀ ▶) flutuando nas laterais, aparecem no hover do trilho. Clicam e fazem `scrollBy({ left: ±larguraVisível * 0.85 })`.
+- Setas ficam desabilitadas/escondidas quando chega no início/fim (detecta via `scrollLeft`).
+- Mostra ~4 cards inteiros + peek do 5º na largura típica de 1366px (mesmo efeito da imagem de referência).
+- Badge **"E02"** no canto superior esquerdo do card (estilo da referência), em vez do número junto ao título.
+- Título do episódio embaixo da imagem, centralizado/à esquerda, com `truncate`.
+- Sinopse: **escondida no card** (deixa o card limpo como na referência); aparece em tooltip nativo via `title=`.
 
-## Mudanças por dispositivo
+### Mobile (< md)
+- Mesmo carrossel horizontal, com cards menores: `w-56`.
+- Sem setas — usuário arrasta com o dedo (gesto nativo).
+- `scroll-snap` para o card grudar no lugar.
+- Mostra ~1.5 cards na tela (peek do próximo, indicando que dá pra arrastar).
 
-### Desktop (≥ md, 768px+)
-- **Pôster lateral menor**: troca os atuais 42% (~420px) por um pôster fixo `w-44 lg:w-52 xl:w-56` com proporção 2/3, alinhado ao topo. Libera ~250px de espaço horizontal para o conteúdo.
-- **Meta-dados em linha única**: substitui o "card pílula" volumoso por uma linha inline com ícone+valor separados por `·` (Tv 8 Temporadas · Layers 20 Episódios · 2018 · Crime, Drama · ★ 9). Estilo da referência.
-- **Direção/Elenco**: uma linha cada (label em negrito + valor truncado), sem card com borda.
-- **Sinopse**: parágrafo simples com `line-clamp-3` e botão "ver mais" inline para expandir, sem card grande.
-- **Botão Favoritar** menor (`h-10`), inline com a linha de ações.
-- Altura total do cabeçalho alvo: **~280-320px** (hoje ~520px) — garante a primeira linha de episódios visível em telas a partir de 720px de altura.
+## Arquivo afetado
+- `src/components/library/SeriesEpisodesPanel.tsx`
+  - Substituir o `<div class="grid ...">` por trilho horizontal + setas.
+  - Adicionar `useRef` para o container e funções `scrollPrev` / `scrollNext`.
+  - Remover o `<p line-clamp-2>` da sinopse no card.
+  - Mover número do episódio para badge "E{n}" no canto superior esquerdo.
+  - Manter as abas de temporada underline (já implementadas).
 
-### Tablet (md, 768–1024px)
-- Mesmo layout horizontal do desktop, mas com pôster `w-40` e grid de episódios em **3 colunas**.
-- Tabs de temporada com scroll horizontal se houver muitas temporadas (já natural com `flex-wrap` → trocaremos por `overflow-x-auto` com `whitespace-nowrap` para evitar quebra em duas linhas em tablets).
-
-### Mobile (< 768px) — preservado
-- Mantém backdrop horizontal no topo, capa flutuante 2/3 e infos empilhadas.
-- Aplica o novo estilo de tabs underline das temporadas (também melhora a usabilidade no celular vs. botões grandes atuais).
-- Grid de episódios continua em 2 colunas.
-
-### TV / Desktop muito grande (≥ xl, 1280px+)
-- Modal sobe de `max-w-5xl` para `max-w-6xl` para aproveitar a tela.
-- Grid de episódios em **4 colunas** (já implementado).
-- Pôster até `w-56`, tipografia ligeiramente maior nos títulos.
-
-## Tabs de temporada (todos os dispositivos)
-- Trocar os botões grandes "T1" "T2" por **tabs underline** estilo da referência: "Temporada 1 | Temporada 2 | …" com sublinhado amarelo na ativa.
-- Container com `overflow-x-auto` e `scroll-snap` para passar o dedo no mobile.
-- Remover o título redundante "Temporadas".
-
-## Grid de episódios
-- Reduzir `max-h-[55vh]` para `max-h-[45vh]` no desktop (cabeçalho ficou bem menor, então a primeira linha já fica visível) e manter `max-h-[55vh]` no mobile.
-- Layout responsivo de cards já existe (2 / 3 / 4 colunas) — preservado.
-
-## Arquivos afetados
-- `src/components/SeriesDetailsDialog.tsx` — reestrutura desktop, preserva mobile, ajusta `max-w` e paddings por breakpoint.
-- `src/components/library/SeriesEpisodesPanel.tsx` — substitui botões de temporada por tabs underline com scroll horizontal; remove título "Temporadas".
-
-## QA visual antes de entregar
-Verificar em quatro viewports (375, 820, 1366, 1920) que:
-1. A primeira linha de episódios aparece sem rolar no desktop e tablet em landscape.
-2. No mobile, o layout permanece igual ao atual (sem regressão).
-3. Tabs de temporada não quebram em duas linhas — usam scroll horizontal quando necessário.
-4. Pôster mantém proporção e nitidez em todas as faixas.
+## Resultado
+Igual à imagem que você enviou: **uma fileira de capas dos episódios**, com o título embaixo, e o usuário **rola lateralmente** (arrastando no celular ou clicando setas no PC) para ver os próximos. Muito mais compacto verticalmente.
