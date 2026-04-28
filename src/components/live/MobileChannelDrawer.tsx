@@ -26,6 +26,8 @@ interface Props {
   creds: IptvCredentials;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  sort: CategorySort;
+  onSortChange: (s: CategorySort) => void;
 }
 
 /**
