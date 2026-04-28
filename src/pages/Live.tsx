@@ -52,6 +52,7 @@ const Live = () => {
   const [activeChannel, setActiveChannel] = useState<LiveStream | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const { sort: categorySort, setSort: setCategorySort } = useCategorySortPreference();
 
   const { favorites, toggle, isFavorite } = useFavorites(creds.username, "live");
 
