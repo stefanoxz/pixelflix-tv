@@ -81,3 +81,66 @@ export async function invokeAdminApi<T>(
 
   throw lastError instanceof Error ? lastError : new Error("Falha ao carregar dados");
 }
+
+// =====================================================
+// Blocked DNS — DNS com bloqueio anti-datacenter
+// =====================================================
+
+export type BlockedDnsStatus = "suggested" | "confirmed" | "dismissed";
+export type BlockedDnsType = "anti_datacenter" | "geoblock" | "waf" | "dns_error" | "outro";
+
+export interface BlockedDnsItem {
+  id: string;
+  server_url: string;
+  label: string | null;
+  provider_name: string | null;
+  block_type: BlockedDnsType;
+  status: BlockedDnsStatus;
+  notes: string | null;
+  evidence: Record<string, unknown> | null;
+  failure_count: number;
+  distinct_ip_count: number;
+  first_detected_at: string | null;
+  last_detected_at: string | null;
+  confirmed_at: string | null;
+  dismissed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BlockedDnsListResponse {
+  items: BlockedDnsItem[];
+  counts: { suggested: number; confirmed: number; dismissed: number };
+}
+
+export const listBlockedDns = (status?: BlockedDnsStatus | null) =>
+  invokeAdminApi<BlockedDnsListResponse>("blocked_dns_list", status ? { status } : {});
+
+export const createBlockedDns = (payload: {
+  server_url: string;
+  label?: string | null;
+  provider_name?: string | null;
+  block_type?: BlockedDnsType;
+  status?: BlockedDnsStatus;
+  notes?: string | null;
+  evidence?: Record<string, unknown> | null;
+}) => invokeAdminApi<BlockedDnsItem>("blocked_dns_create", payload);
+
+export const updateBlockedDns = (
+  id: string,
+  patch: Partial<Pick<BlockedDnsItem, "label" | "provider_name" | "notes" | "block_type">>,
+) => invokeAdminApi<BlockedDnsItem>("blocked_dns_update", { id, ...patch });
+
+export const deleteBlockedDns = (id: string) =>
+  invokeAdminApi<{ id: string }>("blocked_dns_delete", { id });
+
+export const confirmBlockedDns = (
+  id: string,
+  extra?: { label?: string | null; provider_name?: string | null; notes?: string | null },
+) => invokeAdminApi<BlockedDnsItem>("blocked_dns_confirm", { id, ...(extra ?? {}) });
+
+export const dismissBlockedDns = (id: string) =>
+  invokeAdminApi<BlockedDnsItem>("blocked_dns_dismiss", { id });
+
+export const reactivateBlockedDns = (id: string) =>
+  invokeAdminApi<BlockedDnsItem>("blocked_dns_reactivate", { id });
