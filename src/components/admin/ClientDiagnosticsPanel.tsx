@@ -6,7 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { RefreshCw, Wifi, MapPin, Clock, AlertTriangle } from "lucide-react";
+import { RefreshCw, Wifi, MapPin, Clock, AlertTriangle, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+const NETWORK_QUALITY_HINT =
+  "Classificação do navegador baseada em latência e velocidade. '4g' = boa conexão (inclui Wi-Fi e fibra). Não indica o tipo físico do link (móvel vs Wi-Fi).";
 
 interface DiagRow {
   id: string;
