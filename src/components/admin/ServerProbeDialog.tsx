@@ -8,9 +8,90 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, Loader2, RefreshCw, Wifi, Copy, Download } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, RefreshCw, Wifi, Copy, Download, Globe } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+
+type ClientReachState = "reachable" | "unreachable" | "error";
+
+interface ClientProbeAttempt {
+  variant: string;
+  state: ClientReachState;
+  latency_ms: number;
+  detail: string;
+}
+
+interface ClientProbeResult {
+  attempts: ClientProbeAttempt[];
+  any_reachable: boolean;
+  ran_at: string;
+}
+
+/**
+ * Faz um teste client-side do navegador do admin (IP residencial).
+ * Como o painel IPTV não envia CORS headers, usamos mode:"no-cors":
+ *   - Promise resolve (opaque response) => servidor respondeu ALGO no TCP/HTTP
+ *   - Promise rejeita (TypeError "Failed to fetch") => DNS falhou OU TCP recusado/cortado
+ * Não conseguimos ler status nem body, mas conseguimos provar que o
+ * servidor está acessível do IP do usuário.
+ */
+async function clientProbeOne(variant: string, timeoutMs = 6000): Promise<ClientProbeAttempt> {
+  const url = variant.replace(/\/+$/, "") + "/player_api.php?username=probe&password=probe";
+  const start = performance.now();
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    await fetch(url, {
+      method: "GET",
+      mode: "no-cors",
+      cache: "no-store",
+      signal: ctrl.signal,
+      redirect: "follow",
+    });
+    clearTimeout(t);
+    const latency = Math.round(performance.now() - start);
+    return {
+      variant,
+      state: "reachable",
+      latency_ms: latency,
+      detail: "Servidor respondeu (opaque) — TCP/HTTP acessível do seu IP",
+    };
+  } catch (err) {
+    clearTimeout(t);
+    const latency = Math.round(performance.now() - start);
+    const msg = err instanceof Error ? err.message : String(err);
+    const isAbort = /abort/i.test(msg) || ctrl.signal.aborted;
+    if (isAbort) {
+      return { variant, state: "unreachable", latency_ms: latency, detail: "Timeout do navegador" };
+    }
+    // TypeError "Failed to fetch" / "Load failed" => DNS falhou ou TCP rejeitado
+    return {
+      variant,
+      state: "unreachable",
+      latency_ms: latency,
+      detail: "Falha de rede (DNS/TCP recusado/cortado) — servidor inacessível do seu IP",
+    };
+  }
+}
+
+async function runClientProbe(serverUrl: string): Promise<ClientProbeResult> {
+  const base = serverUrl.replace(/\/+$/, "");
+  // Variantes principais (subset das do backend; sem portas exóticas que travam o navegador)
+  const noProto = base.replace(/^https?:\/\//i, "");
+  const host = noProto.split("/")[0].split(":")[0];
+  const variants = Array.from(new Set([
+    base,
+    `http://${host}`,
+    `https://${host}`,
+    `http://${host}:8080`,
+  ]));
+  const attempts = await Promise.all(variants.map((v) => clientProbeOne(v)));
+  return {
+    attempts,
+    any_reachable: attempts.some((a) => a.state === "reachable"),
+    ran_at: new Date().toISOString(),
+  };
+}
 
 interface ProbeResult {
   variant: string;
