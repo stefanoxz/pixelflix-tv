@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { ArrowLeft } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -78,6 +79,17 @@ export function PlayerOverlay({ open, onClose, children }: Props) {
         tabIndex={-1}
         className="relative w-auto h-auto max-h-[calc(100vh-2rem)] max-w-[min(100vw-2rem,1600px)] aspect-video outline-none animate-scale-in"
       >
+        {/* Dica "Pressione Esc para fechar" — canto superior esquerdo, fora do quadro do vídeo
+            (escondido em telas pequenas para não competir com os controles). */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fechar player (Esc)"
+          className="hidden md:inline-flex absolute -top-3 -translate-y-full left-0 z-10 items-center gap-2 rounded-full bg-black/70 hover:bg-black/85 backdrop-blur px-3 py-1.5 text-xs text-white/90 border border-white/10 shadow-lg transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>Pressione <kbd className="font-sans font-semibold text-white">Esc</kbd> para fechar</span>
+        </button>
         {children}
       </div>
     </div>,
