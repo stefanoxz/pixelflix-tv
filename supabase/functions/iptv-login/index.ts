@@ -898,6 +898,20 @@ Deno.serve(async (req) => {
         (failReason === "resposta não JSON" ||
           failReason === "credenciais inválidas" ||
           /^HTTP 404$/i.test(failReason));
+      let playlistFallbackDebug:
+        | {
+            tried: boolean;
+            reason?: string;
+            attempts?: Array<{
+              variant: string;
+              endpoint: string;
+              status?: number;
+              contentType?: string | null;
+              bodyPreview?: string;
+              error?: string;
+            }>;
+          }
+        | undefined;
       if (shouldTryPlaylist) {
         const pl = await tryPlaylistFallback(fullBase, username, password);
         if (pl.ok) {
@@ -906,15 +920,34 @@ Deno.serve(async (req) => {
           );
           r = { ok: true as const, data: pl.data, usedVariant: pl.usedVariant, route: "direct" } as any;
         } else {
+          playlistFallbackDebug = {
+            tried: true,
+            reason: pl.reason,
+            attempts: pl.attempts,
+          };
+          const summary = (pl.attempts ?? [])
+            .slice(0, 4)
+            .map((a) => `${a.endpoint}=${a.status ?? a.error ?? "?"}`)
+            .join(" ");
           console.log(
-            `[iptv-login] m3u_register PLAYLIST_FALLBACK_FAIL after=${failStatus} server=${fullBase} reason=${pl.reason}`,
+            `[iptv-login] m3u_register PLAYLIST_FALLBACK_FAIL after=${failStatus} server=${fullBase} reason=${pl.reason} attempts=${summary}`,
           );
         }
       }
 
       if (!r.ok) {
         await logEvent({ server: fullBase, username, success: false, reason: `m3u_register:${r.reason}`, ua, ip });
-        const { code, message } = classifyReason(r.reason);
+        let { code, message } = classifyReason(r.reason);
+        // Caso clássico: /player_api.php deu 404 vazio E o fallback de playlist
+        // também não achou nada válido. A DNS está viva mas não expõe nem
+        // Xtream nem M3U nesse caminho — provável URL incompleta.
+        if (
+          playlistFallbackDebug?.tried &&
+          /^HTTP 404$/i.test(r.reason)
+        ) {
+          message =
+            "A DNS respondeu, mas não encontramos endpoints Xtream (/player_api.php) nem M3U (/get.php, /playlist) válidos nesse endereço. Verifique se a URL M3U está completa (com porta e caminho corretos) ou peça uma nova ao seu provedor.";
+        }
         const hint = maybeOriginSuspectHint((r as { status?: number }).status, (r as { body?: string }).body);
         const rawBody = String((r as { body?: string }).body ?? "");
         const bodyPreview = rawBody.slice(0, 300);
@@ -926,6 +959,7 @@ Deno.serve(async (req) => {
           looksLikeHtml: /^\s*<(!doctype|html|head|body)/i.test(rawBody),
           looksLikeM3u: /^\s*#extm3u/i.test(rawBody),
           reason: r.reason,
+          ...(playlistFallbackDebug ? { playlistFallback: playlistFallbackDebug } : {}),
         };
         console.log(
           `[iptv-login] m3u_register FAIL host=${fullBase} reason=${r.reason} status=${debug.httpStatus} ct=${debug.contentType} preview=${bodyPreview.slice(0, 120).replace(/\s+/g, " ")}`,
