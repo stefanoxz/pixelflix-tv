@@ -1,59 +1,57 @@
-# Refinar tela inicial (Destaques) no desktop
+# Polir tela de detalhes de Séries (multi-dispositivo)
 
-## Diagnóstico do que está incomodando
-Olhando a captura enviada (1347×853, layout `md+`):
-1. **Hero ocupa quase toda a dobra** (`h-[68vh]` no md, `min-h-[460px]`) — em telas widescreen baixas (≈800–900px de altura), só o herói aparece, gerando a sensação de "tela vazia".
-2. **Texto descritivo genérico** ("Descubra milhares de filmes...") repete o que o pôster já comunica e empurra os botões pra baixo.
-3. **Quick stats (Canais ao Vivo / Filmes / Séries)** ficam abaixo da dobra, com ícones de apenas 40×40px (`h-10 w-10`) e tipografia de stat menor — parecem secundários quando deveriam ser **atalhos primários**.
-4. **Mobile e tablet estão bem dimensionados** — qualquer ajuste precisa ser escopado por breakpoint pra não quebrá-los.
+## Problema
+Hoje o modal mostra um pôster gigante (~520px de altura) + sinopse + cards grandes. O usuário **sempre precisa rolar** para ver os episódios. A imagem de referência mostra um layout muito mais enxuto onde poster, infos, abas de temporada e episódios já aparecem juntos na primeira tela.
 
-## O que vou mudar (somente desktop ≥ md, mobile intocado)
+## Objetivo
+Reorganizar o modal para que os **episódios da temporada selecionada já apareçam sem rolar**, em **todos os tamanhos** suportados pelo webplayer:
+- Mobile (≤ 640px) — celulares
+- Tablet (641–1024px) — iPad e similares
+- Desktop pequeno (1025–1366px) — notebooks
+- Desktop grande (≥ 1367px) — TVs e monitores
 
-### 1) Hero mais compacto e cheio
-Arquivo: `src/pages/Highlights.tsx` — `<section>` do hero (linhas ~201–383)
+Cada faixa mantém suas particularidades; nada é sacrificado em uma para melhorar outra.
 
-- **Altura**: trocar `md:h-[68vh] md:min-h-[460px]` por `md:h-[58vh] lg:h-[60vh] md:min-h-[420px] md:max-h-[640px]`. Mantém `h-[55vh] min-h-[380px]` no mobile.
-- **Remover o parágrafo genérico** "Descubra milhares de filmes..." apenas no desktop (mantém no mobile, onde ainda preenche bem). Implementação: envolver o `<p>` em `className="... md:hidden"`.
-- **Padding inferior** do hero: reduzir `md:pb-12` → `md:pb-8` para aproximar os atalhos rápidos da dobra.
+## Mudanças por dispositivo
 
-### 2) Atalhos rápidos com mais peso visual no desktop
-Arquivo: `src/pages/Highlights.tsx` — `<section className="grid grid-cols-3 ...">` (linhas ~390–419)
+### Desktop (≥ md, 768px+)
+- **Pôster lateral menor**: troca os atuais 42% (~420px) por um pôster fixo `w-44 lg:w-52 xl:w-56` com proporção 2/3, alinhado ao topo. Libera ~250px de espaço horizontal para o conteúdo.
+- **Meta-dados em linha única**: substitui o "card pílula" volumoso por uma linha inline com ícone+valor separados por `·` (Tv 8 Temporadas · Layers 20 Episódios · 2018 · Crime, Drama · ★ 9). Estilo da referência.
+- **Direção/Elenco**: uma linha cada (label em negrito + valor truncado), sem card com borda.
+- **Sinopse**: parágrafo simples com `line-clamp-3` e botão "ver mais" inline para expandir, sem card grande.
+- **Botão Favoritar** menor (`h-10`), inline com a linha de ações.
+- Altura total do cabeçalho alvo: **~280-320px** (hoje ~520px) — garante a primeira linha de episódios visível em telas a partir de 720px de altura.
 
-Reescrever o card mantendo a mesma estrutura semântica, mas escalando ícone, número e adicionando uma label de ação no md+:
+### Tablet (md, 768–1024px)
+- Mesmo layout horizontal do desktop, mas com pôster `w-40` e grid de episódios em **3 colunas**.
+- Tabs de temporada com scroll horizontal se houver muitas temporadas (já natural com `flex-wrap` → trocaremos por `overflow-x-auto` com `whitespace-nowrap` para evitar quebra em duas linhas em tablets).
 
-- Ícone container: `h-9 w-9 md:h-14 md:w-14 lg:h-16 lg:w-16` (era `md:h-10 md:w-10`) com `rounded-xl` e ícone interno `h-4 w-4 md:h-7 md:w-7 lg:h-8 lg:w-8`.
-- Número: `text-2xl md:text-4xl lg:text-5xl` (era `md:text-3xl`).
-- Label: `text-xs md:text-base` + uma micro-label "Explorar →" em `md:` que substitui a setinha do canto superior por um CTA mais explícito.
-- Padding do card: `p-4 md:p-7 lg:p-8` (era `md:p-6`).
-- Adicionar gap maior entre cards no desktop: `gap-3 md:gap-5`.
+### Mobile (< 768px) — preservado
+- Mantém backdrop horizontal no topo, capa flutuante 2/3 e infos empilhadas.
+- Aplica o novo estilo de tabs underline das temporadas (também melhora a usabilidade no celular vs. botões grandes atuais).
+- Grid de episódios continua em 2 colunas.
 
-Isso deixa cada atalho ≈40% mais "presente" no desktop sem aumentar nada no mobile (mesmo `h-9 w-9`, `text-2xl`, `p-4`, `gap-3`).
+### TV / Desktop muito grande (≥ xl, 1280px+)
+- Modal sobe de `max-w-5xl` para `max-w-6xl` para aproveitar a tela.
+- Grid de episódios em **4 colunas** (já implementado).
+- Pôster até `w-56`, tipografia ligeiramente maior nos títulos.
 
-### 3) Ajuste fino de respiro
-- Reduzir o `space-y-12` do container principal para `space-y-10 md:space-y-8` — fecha o "buraco" entre hero e stats no desktop, mantém respiro confortável no mobile.
+## Tabs de temporada (todos os dispositivos)
+- Trocar os botões grandes "T1" "T2" por **tabs underline** estilo da referência: "Temporada 1 | Temporada 2 | …" com sublinhado amarelo na ativa.
+- Container com `overflow-x-auto` e `scroll-snap` para passar o dedo no mobile.
+- Remover o título redundante "Temporadas".
 
-## Resumo visual antes/depois (desktop ~1347×853)
-
-```text
-ANTES                              DEPOIS
-┌──────────────────────────┐      ┌──────────────────────────┐
-│  Header                  │      │  Header                  │
-├──────────────────────────┤      ├──────────────────────────┤
-│                          │      │                          │
-│      HERO 68vh           │      │      HERO 58vh           │
-│   (texto longo + dots)   │      │   (sem parágrafo extra)  │
-│                          │      │                          │
-│                          │      ├──────────────────────────┤
-└──────────────────────────┘      │ ⬛ 245     ⬛ 12k    ⬛ 8k │
-   ↓ (scroll necessário)          │ Canais    Filmes   Séries│
-   ⬜ 245  ⬜ 12k  ⬜ 8k            │ Explorar→ Explorar→ ...  │
-                                  └──────────────────────────┘
-```
+## Grid de episódios
+- Reduzir `max-h-[55vh]` para `max-h-[45vh]` no desktop (cabeçalho ficou bem menor, então a primeira linha já fica visível) e manter `max-h-[55vh]` no mobile.
+- Layout responsivo de cards já existe (2 / 3 / 4 colunas) — preservado.
 
 ## Arquivos afetados
-- `src/pages/Highlights.tsx` (único arquivo) — alterações isoladas em três blocos: `<section>` do hero, parágrafo descritivo, `<section>` dos quick stats, e `space-y` do container.
+- `src/components/SeriesDetailsDialog.tsx` — reestrutura desktop, preserva mobile, ajusta `max-w` e paddings por breakpoint.
+- `src/components/library/SeriesEpisodesPanel.tsx` — substitui botões de temporada por tabs underline com scroll horizontal; remove título "Temporadas".
 
-## Garantias de não-regressão mobile/tablet
-- Todos os tamanhos novos (`md:h-14`, `md:text-4xl`, `md:p-7`, `md:hidden`, etc.) usam o prefixo `md:` ou maior — nada abaixo de 768px é alterado.
-- O hero rotativo, mini-pôsteres laterais, dots e CTAs continuam idênticos em comportamento.
-- `ContinueWatchingRail`, `Filmes populares` e `Séries em alta` ficam intactos.
+## QA visual antes de entregar
+Verificar em quatro viewports (375, 820, 1366, 1920) que:
+1. A primeira linha de episódios aparece sem rolar no desktop e tablet em landscape.
+2. No mobile, o layout permanece igual ao atual (sem regressão).
+3. Tabs de temporada não quebram em duas linhas — usam scroll horizontal quando necessário.
+4. Pôster mantém proporção e nitidez em todas as faixas.
