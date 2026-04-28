@@ -1891,13 +1891,18 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         />
       )}
 
-      {showVideo && !error && (
-        <QualityBadge videoRef={videoRef} hlsRef={hlsRef} />
-      )}
-
       {title && !error && (
         <div className="pointer-events-none absolute left-0 top-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-4">
-          <h3 className="text-sm font-semibold text-white drop-shadow pr-32">{title}</h3>
+          <div className="flex items-center gap-2 pr-32">
+            <h3 className="text-sm font-semibold text-white drop-shadow truncate">{title}</h3>
+            {showVideo && <QualityBadge videoRef={videoRef} hlsRef={hlsRef} />}
+          </div>
+        </div>
+      )}
+
+      {!title && showVideo && !error && (
+        <div className="pointer-events-none absolute left-4 top-4 z-10">
+          <QualityBadge videoRef={videoRef} hlsRef={hlsRef} />
         </div>
       )}
 

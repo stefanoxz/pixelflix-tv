@@ -1,6 +1,5 @@
 import { useEffect, useState, type RefObject } from "react";
 import type Hls from "hls.js";
-import { cn } from "@/lib/utils";
 
 interface Props {
   videoRef: RefObject<HTMLVideoElement>;
@@ -18,20 +17,19 @@ function labelFor(height: number): string | null {
 }
 
 /**
- * Mini chip discreto que mostra a qualidade REAL entregue ao player
+ * Chip discreto com a qualidade REAL entregue ao player
  * (4K / 1080p / 720p / 480p / SD), detectada via `videoHeight` do
  * `<video>` com fallback para o nível ativo do hls.js.
  *
- * Posicionado no canto inferior direito (alinhado com a barra nativa
- * de controles). Aparece/some junto com os controles: visível enquanto
- * pausado, em hover, ou em até ~2.5s após movimento do mouse durante
- * a reprodução.
+ * Componente "puro": renderiza apenas o chip inline; o pai cuida do
+ * posicionamento. Isso garante consistência cross-device (desktop,
+ * mobile, tablet, TV) sem depender do shadow DOM dos controles nativos.
+ *
+ * Renderiza `null` enquanto não houver primeiro frame decodificado.
  */
 export function QualityBadge({ videoRef, hlsRef }: Props) {
   const [height, setHeight] = useState<number>(0);
-  const [visible, setVisible] = useState<boolean>(true);
 
-  // Detecta qualidade real
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -89,82 +87,15 @@ export function QualityBadge({ videoRef, hlsRef }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sincroniza visibilidade com a atividade do usuário (imita controles nativos)
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-
-    const HIDE_AFTER_MS = 2500;
-    let hideTimer: number | null = null;
-
-    const clearHide = () => {
-      if (hideTimer !== null) {
-        window.clearTimeout(hideTimer);
-        hideTimer = null;
-      }
-    };
-    const scheduleHide = () => {
-      clearHide();
-      if (v.paused) return;
-      hideTimer = window.setTimeout(() => setVisible(false), HIDE_AFTER_MS);
-    };
-    const show = () => {
-      setVisible(true);
-      scheduleHide();
-    };
-    const onPause = () => {
-      clearHide();
-      setVisible(true);
-    };
-    const onPlay = () => {
-      setVisible(true);
-      scheduleHide();
-    };
-
-    const host = v.parentElement ?? v;
-
-    host.addEventListener("mousemove", show);
-    host.addEventListener("mouseenter", show);
-    host.addEventListener("mouseleave", scheduleHide);
-    host.addEventListener("touchstart", show, { passive: true });
-    v.addEventListener("pause", onPause);
-    v.addEventListener("play", onPlay);
-    v.addEventListener("playing", onPlay);
-
-    if (v.paused) {
-      setVisible(true);
-    } else {
-      scheduleHide();
-    }
-
-    return () => {
-      clearHide();
-      host.removeEventListener("mousemove", show);
-      host.removeEventListener("mouseenter", show);
-      host.removeEventListener("mouseleave", scheduleHide);
-      host.removeEventListener("touchstart", show);
-      v.removeEventListener("pause", onPause);
-      v.removeEventListener("play", onPlay);
-      v.removeEventListener("playing", onPlay);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const label = labelFor(height);
   if (!label) return null;
 
   return (
-    <div
-      className={cn(
-        // Posicionado dentro da faixa da barra de controles nativa,
-        // logo após o display de tempo (ex: "0:34 / 1:00"). Não cobre
-        // o vídeo — fica sobreposto à faixa escura dos controles nativos.
-        "pointer-events-none absolute bottom-1.5 left-[7.25rem] z-10 select-none rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white/90 backdrop-blur-sm transition-opacity duration-200 sm:bottom-2 sm:left-32 sm:text-xs",
-        visible ? "opacity-100" : "opacity-0",
-      )}
+    <span
+      className="inline-flex shrink-0 items-center rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white/90 backdrop-blur-sm sm:text-xs"
       aria-label={`Qualidade atual: ${label}`}
     >
       {label}
-    </div>
+    </span>
   );
 }
