@@ -214,6 +214,8 @@ function buildReport(d: ProbeResponse, label: string | null | undefined): string
 
   return lines.join("\n");
 }
+
+export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }: Props) {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ProbeResponse | null>(null);
 
