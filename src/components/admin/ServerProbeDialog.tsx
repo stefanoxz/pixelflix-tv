@@ -8,9 +8,90 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, Loader2, RefreshCw, Wifi, Copy, Download } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, RefreshCw, Wifi, Copy, Download, Globe } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+
+type ClientReachState = "reachable" | "unreachable" | "error";
+
+interface ClientProbeAttempt {
+  variant: string;
+  state: ClientReachState;
+  latency_ms: number;
+  detail: string;
+}
+
+interface ClientProbeResult {
+  attempts: ClientProbeAttempt[];
+  any_reachable: boolean;
+  ran_at: string;
+}
+
+/**
+ * Faz um teste client-side do navegador do admin (IP residencial).
+ * Como o painel IPTV não envia CORS headers, usamos mode:"no-cors":
+ *   - Promise resolve (opaque response) => servidor respondeu ALGO no TCP/HTTP
+ *   - Promise rejeita (TypeError "Failed to fetch") => DNS falhou OU TCP recusado/cortado
+ * Não conseguimos ler status nem body, mas conseguimos provar que o
+ * servidor está acessível do IP do usuário.
+ */
+async function clientProbeOne(variant: string, timeoutMs = 6000): Promise<ClientProbeAttempt> {
+  const url = variant.replace(/\/+$/, "") + "/player_api.php?username=probe&password=probe";
+  const start = performance.now();
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    await fetch(url, {
+      method: "GET",
+      mode: "no-cors",
+      cache: "no-store",
+      signal: ctrl.signal,
+      redirect: "follow",
+    });
+    clearTimeout(t);
+    const latency = Math.round(performance.now() - start);
+    return {
+      variant,
+      state: "reachable",
+      latency_ms: latency,
+      detail: "Servidor respondeu (opaque) — TCP/HTTP acessível do seu IP",
+    };
+  } catch (err) {
+    clearTimeout(t);
+    const latency = Math.round(performance.now() - start);
+    const msg = err instanceof Error ? err.message : String(err);
+    const isAbort = /abort/i.test(msg) || ctrl.signal.aborted;
+    if (isAbort) {
+      return { variant, state: "unreachable", latency_ms: latency, detail: "Timeout do navegador" };
+    }
+    // TypeError "Failed to fetch" / "Load failed" => DNS falhou ou TCP rejeitado
+    return {
+      variant,
+      state: "unreachable",
+      latency_ms: latency,
+      detail: "Falha de rede (DNS/TCP recusado/cortado) — servidor inacessível do seu IP",
+    };
+  }
+}
+
+async function runClientProbe(serverUrl: string): Promise<ClientProbeResult> {
+  const base = serverUrl.replace(/\/+$/, "");
+  // Variantes principais (subset das do backend; sem portas exóticas que travam o navegador)
+  const noProto = base.replace(/^https?:\/\//i, "");
+  const host = noProto.split("/")[0].split(":")[0];
+  const variants = Array.from(new Set([
+    base,
+    `http://${host}`,
+    `https://${host}`,
+    `http://${host}:8080`,
+  ]));
+  const attempts = await Promise.all(variants.map((v) => clientProbeOne(v)));
+  return {
+    attempts,
+    any_reachable: attempts.some((a) => a.state === "reachable"),
+    ran_at: new Date().toISOString(),
+  };
+}
 
 interface ProbeResult {
   variant: string;
@@ -422,9 +503,43 @@ function buildReport(d: ProbeResponse, label: string | null | undefined): string
   return lines.join("\n");
 }
 
+function buildClientSection(c: ClientProbeResult): string {
+  const sub = "─".repeat(55);
+  const lines: string[] = [];
+  lines.push("");
+  lines.push(sub);
+  lines.push("TESTE CLIENT-SIDE (do seu navegador / IP residencial)");
+  lines.push(sub);
+  lines.push(`Executado em      : ${c.ran_at}`);
+  lines.push(`Resultado         : ${c.any_reachable ? "✅ Servidor ALCANÇÁVEL do seu IP" : "❌ Servidor INACESSÍVEL também do seu IP"}`);
+  c.attempts.forEach((a, i) => {
+    lines.push(`  [${i + 1}] ${a.variant}`);
+    lines.push(`      Estado    : ${a.state === "reachable" ? "✅ acessível" : "❌ inacessível"} (${a.latency_ms}ms)`);
+    lines.push(`      Detalhe   : ${a.detail}`);
+  });
+  return lines.join("\n");
+}
+
+function buildComparisonVerdict(backend: ProbeResponse, client: ClientProbeResult): string {
+  const backendOk = !!backend.best_variant;
+  const clientOk = client.any_reachable;
+  if (!backendOk && clientOk) {
+    return "🎯 BLOQUEIO ANTI-DATACENTER CONFIRMADO\n  • Backend (datacenter) NÃO conseguiu acessar o servidor\n  • Seu navegador (IP residencial) ALCANÇOU o servidor\n  • Conclusão: o painel está vivo, mas filtra ranges de cloud/datacenter\n  • Solução: usar proxy em IP residencial brasileiro, ou pedir à revenda whitelist do nosso IP de backend";
+  }
+  if (backendOk && !clientOk) {
+    return "⚠️ Inverso: backend acessa mas seu navegador não. Pode ser problema de DNS/rede local do seu lado, firewall corporativo ou ISP bloqueando.";
+  }
+  if (!backendOk && !clientOk) {
+    return "❌ Servidor inacessível DE QUALQUER ORIGEM (backend e seu IP). Provavelmente está realmente offline, derrubado, ou domínio expirado/removido.";
+  }
+  return "✅ Servidor acessível tanto do backend quanto do seu navegador. Sem indicação de bloqueio por origem.";
+}
+
 export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }: Props) {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ProbeResponse | null>(null);
+  const [clientLoading, setClientLoading] = useState(false);
+  const [clientData, setClientData] = useState<ClientProbeResult | null>(null);
 
   const runProbe = async () => {
     if (!serverUrl) return;
@@ -445,9 +560,35 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
     }
   };
 
+  const runClientTest = async () => {
+    if (!serverUrl) return;
+    setClientLoading(true);
+    setClientData(null);
+    try {
+      const res = await runClientProbe(serverUrl);
+      setClientData(res);
+      if (res.any_reachable && data && !data.best_variant) {
+        toast.success("Bloqueio anti-datacenter confirmado: servidor responde ao seu IP");
+      } else if (res.any_reachable) {
+        toast.success("Servidor alcançável do seu navegador");
+      } else {
+        toast.error("Servidor inacessível também do seu navegador");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro no teste client-side";
+      toast.error(msg);
+    } finally {
+      setClientLoading(false);
+    }
+  };
+
   const handleCopyReport = async () => {
     if (!data) return;
-    const text = buildReport(data, serverLabel);
+    let text = buildReport(data, serverLabel);
+    if (clientData) {
+      text += "\n" + buildClientSection(clientData);
+      text += "\n\n─── VEREDITO COMPARATIVO ───\n" + buildComparisonVerdict(data, clientData);
+    }
     try {
       await navigator.clipboard.writeText(text);
       toast.success("Relatório copiado para a área de transferência");
@@ -458,7 +599,11 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
 
   const handleDownloadReport = () => {
     if (!data) return;
-    const text = buildReport(data, serverLabel);
+    let text = buildReport(data, serverLabel);
+    if (clientData) {
+      text += "\n" + buildClientSection(clientData);
+      text += "\n\n─── VEREDITO COMPARATIVO ───\n" + buildComparisonVerdict(data, clientData);
+    }
     let host = "servidor";
     try {
       host = new URL(data.normalized).hostname.replace(/[^a-z0-9.-]/gi, "_");
@@ -483,8 +628,10 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
   useEffect(() => {
     if (open && serverUrl) {
       runProbe();
+      setClientData(null);
     } else if (!open) {
       setData(null);
+      setClientData(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, serverUrl]);
@@ -592,6 +739,79 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Teste client-side */}
+            <div className="rounded-lg border border-border/50 p-4 bg-muted/30 space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-primary" />
+                  <h3 className="text-sm font-semibold">Teste do seu navegador (IP residencial)</h3>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={runClientTest}
+                  disabled={clientLoading || !serverUrl}
+                >
+                  {clientLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Globe className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Testar do meu navegador
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Compara o resultado do backend (datacenter) com o seu IP residencial. Se o backend falha mas seu navegador alcança, é bloqueio anti-datacenter.
+              </p>
+
+              {clientData && (
+                <div className="space-y-2">
+                  <div
+                    className={`rounded-md border p-2 text-sm ${
+                      !data?.best_variant && clientData.any_reachable
+                        ? "border-warning/40 bg-warning/10"
+                        : clientData.any_reachable
+                          ? "border-success/30 bg-success/5"
+                          : "border-destructive/30 bg-destructive/5"
+                    }`}
+                  >
+                    {!data?.best_variant && clientData.any_reachable && (
+                      <p className="font-semibold text-warning">
+                        🎯 Bloqueio anti-datacenter confirmado
+                      </p>
+                    )}
+                    {data?.best_variant && clientData.any_reachable && (
+                      <p className="font-semibold text-success">
+                        ✅ Acessível em ambas origens
+                      </p>
+                    )}
+                    {!clientData.any_reachable && (
+                      <p className="font-semibold text-destructive">
+                        ❌ Inacessível também do seu IP
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    {clientData.attempts.map((a) => (
+                      <div
+                        key={a.variant}
+                        className="flex items-center justify-between gap-2 text-xs rounded border border-border/40 bg-background/40 px-2 py-1.5"
+                      >
+                        <span className="font-mono break-all">{a.variant}</span>
+                        <span
+                          className={`tabular-nums ${
+                            a.state === "reachable" ? "text-success" : "text-destructive"
+                          }`}
+                        >
+                          {a.state === "reachable" ? "✓" : "✗"} {a.latency_ms}ms
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
