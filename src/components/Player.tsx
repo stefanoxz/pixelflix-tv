@@ -2060,22 +2060,22 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-full text-white/90 hover:bg-white/10 hover:text-white"
+                className="h-11 w-11 sm:h-8 sm:w-8 rounded-full text-white/90 hover:bg-white/10 hover:text-white"
                 onClick={() => skipBy(-10)}
                 title="Voltar 10 segundos (←)"
                 aria-label="Voltar 10 segundos"
               >
-                <Rewind className="h-4 w-4" />
+                <Rewind className="h-5 w-5 sm:h-4 sm:w-4" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-full text-white/90 hover:bg-white/10 hover:text-white"
+                className="h-11 w-11 sm:h-8 sm:w-8 rounded-full text-white/90 hover:bg-white/10 hover:text-white"
                 onClick={() => skipBy(10)}
                 title="Avançar 10 segundos (→)"
                 aria-label="Avançar 10 segundos"
               >
-                <FastForward className="h-4 w-4" />
+                <FastForward className="h-5 w-5 sm:h-4 sm:w-4" />
               </Button>
               <span className="mx-0.5 h-5 w-px bg-white/10" aria-hidden />
             </>
@@ -2085,10 +2085,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 px-2 rounded-full text-white/90 hover:bg-white/10 hover:text-white gap-1 tabular-nums"
+                className="h-11 sm:h-8 px-2.5 sm:px-2 rounded-full text-white/90 hover:bg-white/10 hover:text-white gap-1 tabular-nums"
                 title="Velocidade de reprodução"
               >
-                <Gauge className="h-3.5 w-3.5" />
+                <Gauge className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                 <span className="text-xs font-semibold">{playbackRate}x</span>
               </Button>
             </DropdownMenuTrigger>
@@ -2098,7 +2098,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                   key={r}
                   onClick={() => setPlaybackRate(r)}
                   className={cn(
-                    "justify-between tabular-nums",
+                    "justify-between tabular-nums py-2.5 sm:py-1.5",
                     r === playbackRate && "bg-primary/10 text-primary font-medium",
                   )}
                 >
@@ -2112,23 +2112,23 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-full text-white/90 hover:bg-destructive/80 hover:text-white"
+            className="h-11 w-11 sm:h-8 sm:w-8 rounded-full text-white/90 hover:bg-destructive/80 hover:text-white"
             onClick={() => setReportOpen(true)}
             title="Reportar problema"
             aria-label="Reportar problema"
           >
-            <Flag className="h-4 w-4" />
+            <Flag className="h-5 w-5 sm:h-4 sm:w-4" />
           </Button>
           {onClose && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full text-white/90 hover:bg-white/10 hover:text-white"
+              className="h-11 w-11 sm:h-8 sm:w-8 rounded-full text-white/90 hover:bg-white/10 hover:text-white"
               onClick={onClose}
               title="Fechar (Esc)"
               aria-label="Fechar player"
             >
-              <X className="h-4 w-4" />
+              <X className="h-5 w-5 sm:h-4 sm:w-4" />
             </Button>
           )}
         </div>
