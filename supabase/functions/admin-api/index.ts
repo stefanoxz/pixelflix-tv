@@ -2324,6 +2324,186 @@ Deno.serve(async (req) => {
       return ok({ server_url: url });
     }
 
+    // ==========================================================
+    // BLOCKED DNS — catálogo de DNS com bloqueio anti-datacenter
+    // ==========================================================
+
+    if (action === "blocked_dns_list") {
+      const status = (payload?.status as string | undefined) ?? null; // 'suggested' | 'confirmed' | 'dismissed' | null=all
+      let q = admin
+        .from("blocked_dns_servers")
+        .select("id, server_url, label, provider_name, block_type, status, notes, evidence, failure_count, distinct_ip_count, first_detected_at, last_detected_at, confirmed_at, dismissed_at, created_at, updated_at")
+        .order("last_detected_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false });
+      if (status && ["suggested", "confirmed", "dismissed"].includes(status)) {
+        q = q.eq("status", status);
+      }
+      const { data, error } = await q;
+      if (error) {
+        console.error("[admin-api] blocked_dns_list", error.message);
+        return internalError();
+      }
+
+      // Contadores por status (sempre — pra UI mostrar badges)
+      const { data: counts } = await admin
+        .from("blocked_dns_servers")
+        .select("status");
+      const tally = { suggested: 0, confirmed: 0, dismissed: 0 } as Record<string, number>;
+      for (const row of counts ?? []) {
+        const s = (row as { status: string }).status;
+        if (s in tally) tally[s] += 1;
+      }
+
+      return ok({ items: data ?? [], counts: tally });
+    }
+
+    if (action === "blocked_dns_create") {
+      const url = normalizeServer(String(payload?.server_url ?? ""));
+      if (!url) return bad("URL do servidor é obrigatória");
+      const block_type = String(payload?.block_type ?? "anti_datacenter");
+      const status = String(payload?.status ?? "confirmed");
+      if (!["anti_datacenter", "geoblock", "waf", "dns_error", "outro"].includes(block_type)) {
+        return bad("Tipo de bloqueio inválido");
+      }
+      if (!["suggested", "confirmed", "dismissed"].includes(status)) {
+        return bad("Status inválido");
+      }
+      const now = new Date().toISOString();
+      const insertRow: Record<string, unknown> = {
+        server_url: url,
+        label: payload?.label ?? null,
+        provider_name: payload?.provider_name ?? null,
+        block_type,
+        status,
+        notes: payload?.notes ?? null,
+        evidence: payload?.evidence ?? null,
+      };
+      if (status === "confirmed") insertRow.confirmed_at = now;
+      if (status === "dismissed") insertRow.dismissed_at = now;
+
+      const { data, error } = await admin
+        .from("blocked_dns_servers")
+        .upsert(insertRow, { onConflict: "server_url" })
+        .select()
+        .single();
+      if (error) {
+        console.error("[admin-api] blocked_dns_create", error.message);
+        return bad(error.message);
+      }
+      await logAudit(user.id, user.email, "blocked_dns_create", {
+        metadata: { server_url: url, block_type, status, label: payload?.label ?? null },
+      });
+      return ok(data);
+    }
+
+    if (action === "blocked_dns_update") {
+      const id = String(payload?.id ?? "");
+      if (!id) return bad("ID obrigatório");
+      const patch: Record<string, unknown> = {};
+      if ("label" in (payload ?? {})) patch.label = payload?.label ?? null;
+      if ("provider_name" in (payload ?? {})) patch.provider_name = payload?.provider_name ?? null;
+      if ("notes" in (payload ?? {})) patch.notes = payload?.notes ?? null;
+      if ("block_type" in (payload ?? {})) {
+        const bt = String(payload?.block_type);
+        if (!["anti_datacenter", "geoblock", "waf", "dns_error", "outro"].includes(bt)) {
+          return bad("Tipo de bloqueio inválido");
+        }
+        patch.block_type = bt;
+      }
+      if (Object.keys(patch).length === 0) return bad("Nada para atualizar");
+      const { data, error } = await admin
+        .from("blocked_dns_servers")
+        .update(patch)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) {
+        console.error("[admin-api] blocked_dns_update", error.message);
+        return bad(error.message);
+      }
+      await logAudit(user.id, user.email, "blocked_dns_update", { metadata: { id, ...patch } });
+      return ok(data);
+    }
+
+    if (action === "blocked_dns_delete") {
+      const id = String(payload?.id ?? "");
+      if (!id) return bad("ID obrigatório");
+      const { error } = await admin.from("blocked_dns_servers").delete().eq("id", id);
+      if (error) {
+        console.error("[admin-api] blocked_dns_delete", error.message);
+        return bad(error.message);
+      }
+      await logAudit(user.id, user.email, "blocked_dns_delete", { metadata: { id } });
+      return ok({ id });
+    }
+
+    if (action === "blocked_dns_confirm") {
+      const id = String(payload?.id ?? "");
+      if (!id) return bad("ID obrigatório");
+      const patch: Record<string, unknown> = {
+        status: "confirmed",
+        confirmed_at: new Date().toISOString(),
+        dismissed_at: null,
+      };
+      if (payload?.label !== undefined) patch.label = payload.label;
+      if (payload?.provider_name !== undefined) patch.provider_name = payload.provider_name;
+      if (payload?.notes !== undefined) patch.notes = payload.notes;
+      const { data, error } = await admin
+        .from("blocked_dns_servers")
+        .update(patch)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) {
+        console.error("[admin-api] blocked_dns_confirm", error.message);
+        return bad(error.message);
+      }
+      await logAudit(user.id, user.email, "blocked_dns_confirm", { metadata: { id } });
+      return ok(data);
+    }
+
+    if (action === "blocked_dns_dismiss") {
+      const id = String(payload?.id ?? "");
+      if (!id) return bad("ID obrigatório");
+      const { data, error } = await admin
+        .from("blocked_dns_servers")
+        .update({
+          status: "dismissed",
+          dismissed_at: new Date().toISOString(),
+          confirmed_at: null,
+        })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) {
+        console.error("[admin-api] blocked_dns_dismiss", error.message);
+        return bad(error.message);
+      }
+      await logAudit(user.id, user.email, "blocked_dns_dismiss", { metadata: { id } });
+      return ok(data);
+    }
+
+    if (action === "blocked_dns_reactivate") {
+      const id = String(payload?.id ?? "");
+      if (!id) return bad("ID obrigatório");
+      const { data, error } = await admin
+        .from("blocked_dns_servers")
+        .update({
+          status: "suggested",
+          dismissed_at: null,
+          confirmed_at: null,
+        })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) {
+        console.error("[admin-api] blocked_dns_reactivate", error.message);
+        return bad(error.message);
+      }
+      await logAudit(user.id, user.email, "blocked_dns_reactivate", { metadata: { id } });
+      return ok(data);
+    }
+
     return bad("Ação inválida");
   } catch (e) {
     console.error("[admin-api] unhandled", e);
