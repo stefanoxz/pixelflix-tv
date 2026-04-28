@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   Wrench,
+  Ban,
   type LucideIcon,
 } from "lucide-react";
 
@@ -40,6 +41,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { id: "stream-events", label: "Stream / Segurança", shortLabel: "Stream", icon: ShieldAlert, adminOnly: false },
   { id: "users", label: "Usuários", shortLabel: "Usuários", icon: Users, adminOnly: false, primaryMobile: true },
   { id: "servers", label: "DNS / Servidores", shortLabel: "DNS", icon: Server, adminOnly: true },
+  { id: "blocked-dns", label: "DNS bloqueados", shortLabel: "Bloq.", icon: Ban, adminOnly: true },
   { id: "endpoint-test", label: "Testar endpoint", shortLabel: "Endpoint", icon: FlaskConical, adminOnly: false },
   { id: "client-diagnostics", label: "Diagnóstico de clientes", shortLabel: "Clientes", icon: Stethoscope, adminOnly: false },
   { id: "pending-signups", label: "Novos cadastros", shortLabel: "Cadastros", icon: UserPlus, adminOnly: true },

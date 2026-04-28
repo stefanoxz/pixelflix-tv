@@ -43,6 +43,7 @@ import PendingSignupsPanel from "@/components/admin/PendingSignupsPanel";
 import TeamPanel from "@/components/admin/TeamPanel";
 import StatsPanel from "@/components/admin/StatsPanel";
 import MaintenancePanel from "@/components/admin/MaintenancePanel";
+import BlockedDnsPanel from "@/components/admin/BlockedDnsPanel";
 import UserDetailDialog from "@/components/admin/UserDetailDialog";
 import StreamEventsPanel from "@/components/admin/StreamEventsPanel";
 import { visibleAdminNav, findNavItem } from "@/components/admin/adminNav";
@@ -901,6 +902,10 @@ const Admin = () => {
 
           <TabsContent value="pending-signups" className="space-y-6 mt-0">
             <PendingSignupsPanel />
+          </TabsContent>
+
+          <TabsContent value="blocked-dns" className="space-y-6 mt-0">
+            <BlockedDnsPanel />
           </TabsContent>
 
           <TabsContent value="monitoring" className="space-y-6 mt-0">

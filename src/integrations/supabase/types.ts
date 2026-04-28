@@ -128,6 +128,87 @@ export type Database = {
         }
         Relationships: []
       }
+      blocked_dns_failures: {
+        Row: {
+          created_at: string
+          error_kind: string
+          id: string
+          ip_hash: string | null
+          server_url: string
+        }
+        Insert: {
+          created_at?: string
+          error_kind: string
+          id?: string
+          ip_hash?: string | null
+          server_url: string
+        }
+        Update: {
+          created_at?: string
+          error_kind?: string
+          id?: string
+          ip_hash?: string | null
+          server_url?: string
+        }
+        Relationships: []
+      }
+      blocked_dns_servers: {
+        Row: {
+          block_type: string
+          confirmed_at: string | null
+          created_at: string
+          dismissed_at: string | null
+          distinct_ip_count: number
+          evidence: Json | null
+          failure_count: number
+          first_detected_at: string | null
+          id: string
+          label: string | null
+          last_detected_at: string | null
+          notes: string | null
+          provider_name: string | null
+          server_url: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          block_type?: string
+          confirmed_at?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          distinct_ip_count?: number
+          evidence?: Json | null
+          failure_count?: number
+          first_detected_at?: string | null
+          id?: string
+          label?: string | null
+          last_detected_at?: string | null
+          notes?: string | null
+          provider_name?: string | null
+          server_url: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          block_type?: string
+          confirmed_at?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          distinct_ip_count?: number
+          evidence?: Json | null
+          failure_count?: number
+          first_detected_at?: string | null
+          id?: string
+          label?: string | null
+          last_detected_at?: string | null
+          notes?: string | null
+          provider_name?: string | null
+          server_url?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       client_diagnostics: {
         Row: {
           city: string | null
@@ -478,6 +559,7 @@ export type Database = {
     }
     Functions: {
       cleanup_admin_audit_log: { Args: never; Returns: number }
+      cleanup_blocked_dns_failures: { Args: never; Returns: number }
       cleanup_client_diagnostics: { Args: never; Returns: number }
       cleanup_login_events: { Args: never; Returns: number }
       cleanup_stream_events: { Args: never; Returns: number }

@@ -8,9 +8,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, Loader2, RefreshCw, Wifi, Copy, Download, Globe, Mail, AlertTriangle, Lightbulb } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, RefreshCw, Wifi, Copy, Download, Globe, Mail, AlertTriangle, Lightbulb, Ban } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { BlockedDnsDialog } from "./BlockedDnsDialog";
 
 type ClientReachState = "reachable" | "unreachable" | "blocked_mixed" | "error";
 
@@ -933,6 +934,7 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
   const [data, setData] = useState<ProbeResponse | null>(null);
   const [clientLoading, setClientLoading] = useState(false);
   const [clientData, setClientData] = useState<ClientProbeResult | null>(null);
+  const [blockedDnsDialogOpen, setBlockedDnsDialogOpen] = useState(false);
 
   const runProbe = async () => {
     if (!serverUrl) return;
@@ -1314,15 +1316,28 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
 {recommendation.message}
                       </pre>
                     </details>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleCopyMessageOnly}
-                      className="w-full sm:w-auto"
-                    >
-                      <Mail className="h-3.5 w-3.5 mr-1.5" />
-                      Copiar mensagem para enviar
-                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCopyMessageOnly}
+                        className="w-full sm:w-auto"
+                      >
+                        <Mail className="h-3.5 w-3.5 mr-1.5" />
+                        Copiar mensagem para enviar
+                      </Button>
+                      {recommendation.target === "supplier" && (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => setBlockedDnsDialogOpen(true)}
+                          className="w-full sm:w-auto"
+                        >
+                          <Ban className="h-3.5 w-3.5 mr-1.5" />
+                          Catalogar como DNS bloqueado
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1359,6 +1374,36 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <BlockedDnsDialog
+        open={blockedDnsDialogOpen}
+        onOpenChange={setBlockedDnsDialogOpen}
+        defaults={{
+          server_url: serverUrl ?? "",
+          block_type: "anti_datacenter",
+          evidence: data
+            ? {
+                source: "manual_probe",
+                probed_at: new Date().toISOString(),
+                normalized: data.normalized,
+                results_summary: data.results.map((r) => ({
+                  variant: r.variant,
+                  ok: r.ok,
+                  status: r.status,
+                  latency_ms: r.latency_ms,
+                  error: r.error,
+                })),
+                client_reachable: clientData?.any_reachable ?? null,
+              }
+            : null,
+          notes: `Catalogado via probe em ${new Date().toLocaleString("pt-BR")}.${
+            clientData?.any_reachable
+              ? " Confirmado: backend bloqueado, navegador residencial alcançou o servidor."
+              : ""
+          }`,
+        }}
+        onSaved={() => toast.success("Adicionado à lista de DNS bloqueados")}
+      />
     </Dialog>
   );
 }
