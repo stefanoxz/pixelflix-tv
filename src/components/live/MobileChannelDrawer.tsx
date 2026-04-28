@@ -113,6 +113,10 @@ export function MobileChannelDrawer({
           </TabsContent>
 
           <TabsContent value="categories" className="flex-1 min-h-0 mt-2">
+            <div className="px-4 pb-2 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Ordenar por</span>
+              <CategorySortToggle value={sort} onChange={onSortChange} />
+            </div>
             <ScrollArea className="h-full px-2">
               <div className="space-y-1 pb-4">
                 <CatBtn
@@ -128,18 +132,15 @@ export function MobileChannelDrawer({
                   onClick={() => handleCategory("all")}
                 />
                 <div className="h-px bg-border/40 my-2" />
-                {categories
-                  .slice()
-                  .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
-                  .map((c) => (
-                    <CatBtn
-                      key={c.id}
-                      label={c.name}
-                      count={c.count}
-                      active={activeCategory === c.id}
-                      onClick={() => handleCategory(c.id)}
-                    />
-                  ))}
+                {sortedCategories.map((c) => (
+                  <CatBtn
+                    key={c.id}
+                    label={c.name}
+                    count={c.count}
+                    active={activeCategory === c.id}
+                    onClick={() => handleCategory(c.id)}
+                  />
+                ))}
               </div>
             </ScrollArea>
           </TabsContent>
