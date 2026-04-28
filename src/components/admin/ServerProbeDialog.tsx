@@ -740,6 +740,79 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
                 ))}
               </div>
             </div>
+
+            {/* Teste client-side */}
+            <div className="rounded-lg border border-border/50 p-4 bg-muted/30 space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-primary" />
+                  <h3 className="text-sm font-semibold">Teste do seu navegador (IP residencial)</h3>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={runClientTest}
+                  disabled={clientLoading || !serverUrl}
+                >
+                  {clientLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Globe className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Testar do meu navegador
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Compara o resultado do backend (datacenter) com o seu IP residencial. Se o backend falha mas seu navegador alcança, é bloqueio anti-datacenter.
+              </p>
+
+              {clientData && (
+                <div className="space-y-2">
+                  <div
+                    className={`rounded-md border p-2 text-sm ${
+                      !data?.best_variant && clientData.any_reachable
+                        ? "border-warning/40 bg-warning/10"
+                        : clientData.any_reachable
+                          ? "border-success/30 bg-success/5"
+                          : "border-destructive/30 bg-destructive/5"
+                    }`}
+                  >
+                    {!data?.best_variant && clientData.any_reachable && (
+                      <p className="font-semibold text-warning">
+                        🎯 Bloqueio anti-datacenter confirmado
+                      </p>
+                    )}
+                    {data?.best_variant && clientData.any_reachable && (
+                      <p className="font-semibold text-success">
+                        ✅ Acessível em ambas origens
+                      </p>
+                    )}
+                    {!clientData.any_reachable && (
+                      <p className="font-semibold text-destructive">
+                        ❌ Inacessível também do seu IP
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    {clientData.attempts.map((a) => (
+                      <div
+                        key={a.variant}
+                        className="flex items-center justify-between gap-2 text-xs rounded border border-border/40 bg-background/40 px-2 py-1.5"
+                      >
+                        <span className="font-mono break-all">{a.variant}</span>
+                        <span
+                          className={`tabular-nums ${
+                            a.state === "reachable" ? "text-success" : "text-destructive"
+                          }`}
+                        >
+                          {a.state === "reachable" ? "✓" : "✗"} {a.latency_ms}ms
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
