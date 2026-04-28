@@ -147,6 +147,13 @@ function classifyReason(reason: string): { code: string; message: string } {
       message: "Servidor IPTV retornou erro interno. Tente novamente em alguns minutos.",
     };
   }
+  if (/http\s*404/.test(r)) {
+    return {
+      code: "SERVER_UNREACHABLE",
+      message:
+        "O servidor respondeu, mas o endpoint Xtream não foi encontrado (HTTP 404). A DNS pode estar desatualizada — peça uma URL M3U nova ao seu provedor.",
+    };
+  }
   if (/http\s*44[34]/.test(r)) {
     return {
       code: "SERVER_UNREACHABLE",
