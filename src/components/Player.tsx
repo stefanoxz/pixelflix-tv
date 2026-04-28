@@ -2179,14 +2179,29 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
               {error.description && (
                 <p className="mt-1 text-sm text-muted-foreground">{error.description}</p>
               )}
-              {!error.noData && (
+              {!error.noData && !error.canResume && (
                 <p className="mt-2 text-xs text-muted-foreground">
                   Copie o link e abra no VLC, MX Player ou outro player externo.
                 </p>
               )}
             </div>
             <div className="flex flex-wrap items-center justify-center gap-2">
-              {error.noData ? (
+              {error.canResume ? (
+                <>
+                  <Button onClick={handleResumeFromLastPosition} variant="default" size="sm" className="gap-2">
+                    <RefreshCw className="h-4 w-4" />
+                    Retomar de onde parou
+                  </Button>
+                  <Button onClick={handleClose} variant="outline" size="sm" className="gap-2">
+                    <X className="h-4 w-4" />
+                    Voltar
+                  </Button>
+                  <Button onClick={handleCopy} variant="ghost" size="sm" className="gap-2">
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {copied ? "Copiado" : "Copiar link"}
+                  </Button>
+                </>
+              ) : error.noData ? (
                 <>
                   <Button onClick={handleRetry} variant="default" size="sm" className="gap-2">
                     <RefreshCw className="h-4 w-4" />
