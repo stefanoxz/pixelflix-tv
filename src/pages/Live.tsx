@@ -179,6 +179,8 @@ const Live = () => {
           onChange={setActiveCategory}
           totalCount={channels.length}
           favoritesCount={favorites.size}
+          sort={categorySort}
+          onSortChange={setCategorySort}
           className="hidden lg:flex h-[calc(100vh-160px)] [height:calc(100dvh-160px)] sticky top-4"
         />
 
