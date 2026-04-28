@@ -316,9 +316,11 @@ function extractUpstreamHost(rawUrl?: string | null): string | null {
   try { return new URL(rawUrl).host; } catch { return null; }
 }
 
-// Reduzido para 1: o primeiro fragLoadError antes do primeiro frame já
-// indica bloqueio de segmento — ativa o proxy do host imediatamente.
-const FRAG_LOAD_ERROR_THRESHOLD = 1;
+// Tolerância a fragmentos ruins antes de declarar morte do stream.
+// Painéis IPTV frequentemente devolvem 404 em 1-2 segmentos isolados quando
+// rotacionam o sliding window do HLS — o hls.js consegue pular pro próximo
+// fragmento se a gente não declarar `stream_no_data` na primeira falha.
+const FRAG_LOAD_ERROR_THRESHOLD = 3;
 
 export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player({
   src,

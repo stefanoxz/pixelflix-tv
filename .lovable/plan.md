@@ -1,20 +1,21 @@
 ## Objetivo
 
-Remover a exigência de confirmação de e-mail no cadastro do painel admin. Hoje o Supabase Auth bloqueia o login com a mensagem "E-mail ainda não confirmado. Verifique sua caixa de entrada." (vista no print enviado).
+Reduzir o número de canais que morrem com `stream_no_data` no primeiro 404 de fragmento. Os logs mostram canais (`A&E HD`, `ADULT SWIM`, `Southampton x Ipswich`) caindo todos com o mesmo padrão: manifest carrega ok, primeiro `.ts` dá 404 no upstream `spclick.shop`, player desiste imediatamente.
+
+## Causa raiz
+
+1. **`FRAG_LOAD_ERROR_THRESHOLD = 1`** em `src/components/Player.tsx`: o player declara `stream_no_data` na primeira falha de fragmento, sem deixar o hls.js (que tem `fragLoadingMaxRetry: 8`) tentar o próximo segmento. Painéis IPTV frequentemente têm 1-2 segmentos furados na borda do sliding window do HLS — eles se autocorrigem se a gente não desistir.
+
+2. **`SEGMENT_FETCH_TIMEOUT_MS = 8_000`** em `supabase/functions/stream-proxy/index.ts`: 8s é apertado pra alguns painéis lentos. Logs da edge mostram `TimeoutError: Signal timed out` recorrente.
 
 ## O que fazer
 
-1. **Ativar auto-confirm no Supabase Auth** (`supabase/config.toml` → `[auth.email] enable_confirmations = false`) usando `cloud--configure_auth`. Isso faz com que novos cadastros já fiquem com o e-mail confirmado e possam autenticar imediatamente — sem precisar clicar em link nenhum.
+1. **`src/components/Player.tsx`** — subir `FRAG_LOAD_ERROR_THRESHOLD` de `1` → `3`. Atualizar o comentário explicando o porquê (deixar hls.js pular fragmentos ruins isolados antes de declarar morte).
 
-2. **Limpar o frontend de cadastro** (`src/pages/AdminLogin.tsx`):
-   - Remover `emailRedirectTo` da chamada `supabase.auth.signUp` (não tem mais para onde redirecionar).
-   - Remover o ramo `"email not confirmed"` da função `describeAuthError`, que deixa de ser alcançável.
-   - Manter a lógica atual de `signOut()` logo após o cadastro + toast "Aguarde a aprovação do administrador" — esse fluxo não muda. O que muda é que o bloqueio passa a ser só o de aprovação/role (admin/moderator), não mais o de e-mail.
-
-3. **Confirmar contas já existentes que ficaram pendentes** (como a do print): rodar uma migration que marca `email_confirmed_at = now()` em `auth.users` para os usuários ainda não confirmados, para destravar quem já tentou cadastrar antes. Sem isso, contas antigas continuam com o erro mesmo após desligar a flag.
+2. **`supabase/functions/stream-proxy/index.ts`** — subir `SEGMENT_FETCH_TIMEOUT_MS` de `8_000` → `12_000` ms pra dar margem em painéis lentos. Redeploy automático da edge function.
 
 ## O que NÃO muda
 
-- Aprovação manual pelo admin (atribuição de role admin/moderator) continua sendo o gate de acesso ao `/admin`.
-- Reset de senha por e-mail (`/reset-password`) continua funcionando normalmente — só o passo de "confirmar e-mail no signup" é removido.
-- Templates de e-mail / domínio de envio: nada para mexer.
+- `fragLoadingMaxRetry`, `levelLoadingMaxRetry` e demais configs do hls.js continuam como estão (já estão bons em 8-10).
+- Nenhuma mudança em token, autenticação, ou lógica do proxy — só a janela de timeout.
+- Se o canal estiver realmente offline (todos os fragmentos 404), o player ainda vai cair em `stream_no_data` depois de 3 tentativas — só não vai mais cair no primeiro tropeço.
