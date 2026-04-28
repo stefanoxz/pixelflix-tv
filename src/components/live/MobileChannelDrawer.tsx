@@ -49,8 +49,11 @@ export function MobileChannelDrawer({
   creds,
   open,
   onOpenChange,
+  sort,
+  onSortChange,
 }: Props) {
   const [tab, setTab] = useState<"channels" | "categories">("channels");
+  const sortedCategories = sortCategories(categories, sort);
 
   const handleSelect = (c: LiveStream) => {
     onSelect(c);
