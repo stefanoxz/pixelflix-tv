@@ -7,7 +7,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import type { LiveStream, IptvCredentials } from "@/services/iptv";
 import { VirtualChannelList } from "./VirtualChannelList";
-import type { RailCategory } from "./ChannelCategoryRail";
+import { CategorySortToggle, sortCategories, type RailCategory } from "./ChannelCategoryRail";
+import type { CategorySort } from "@/hooks/useCategorySortPreference";
 import { useState } from "react";
 
 interface Props {
