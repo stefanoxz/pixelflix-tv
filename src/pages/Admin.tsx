@@ -1559,7 +1559,7 @@ const Admin = () => {
                                     return (
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <span className={`${b.cls} cursor-help`}>
+                                          <span className={`${b.cls} cursor-help whitespace-nowrap`}>
                                             {b.dot} {b.label}
                                           </span>
                                         </TooltipTrigger>
@@ -1576,7 +1576,7 @@ const Admin = () => {
                                     return (
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <span className={`px-1.5 py-0.5 rounded border border-border/50 cursor-help ${info.cls}`}>
+                                          <span className={`px-1.5 py-0.5 rounded border border-border/50 cursor-help whitespace-nowrap ${info.cls}`}>
                                             {info.label}
                                           </span>
                                         </TooltipTrigger>
@@ -1588,7 +1588,7 @@ const Admin = () => {
                                   })()}
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <span className={`${latencyClass(h.latency)} cursor-help`}>
+                                      <span className={`${latencyClass(h.latency)} cursor-help whitespace-nowrap`}>
                                         {h.latency != null ? `${h.latency} ms` : "—"}
                                       </span>
                                     </TooltipTrigger>
@@ -1600,7 +1600,7 @@ const Admin = () => {
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <span
-                                          className={`px-1.5 py-0.5 rounded font-mono cursor-help ${statusClass(h.status)}`}
+                                          className={`px-1.5 py-0.5 rounded font-mono cursor-help whitespace-nowrap ${statusClass(h.status)}`}
                                         >
                                           HTTP {h.status}
                                         </span>
@@ -1612,7 +1612,7 @@ const Admin = () => {
                                   ) : h.error ? (
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <span className="px-1.5 py-0.5 rounded font-mono text-warning bg-warning/10 cursor-help">
+                                        <span className="px-1.5 py-0.5 rounded font-mono text-warning bg-warning/10 cursor-help whitespace-nowrap">
                                           {h.error === "timeout" ? "timeout" : "rede"}
                                         </span>
                                       </TooltipTrigger>
@@ -1635,7 +1635,7 @@ const Admin = () => {
                                   )}
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <span className="text-muted-foreground cursor-help">
+                                      <span className="text-muted-foreground cursor-help whitespace-nowrap">
                                         último ping {formatTime(h.checked_at)}
                                       </span>
                                     </TooltipTrigger>
@@ -1647,11 +1647,12 @@ const Admin = () => {
                               );
                             })()}
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 w-full md:w-auto md:shrink-0">
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => setProbeServer(s)}
+                              className="flex-1 md:flex-none"
                             >
                               <Wifi className="h-4 w-4 mr-2" />
                               Testar
@@ -1666,6 +1667,7 @@ const Admin = () => {
                                 setNewNotes(s.notes ?? "");
                                 setAddOpen(true);
                               }}
+                              className="flex-1 md:flex-none"
                             >
                               <Pencil className="h-4 w-4 mr-2" />
                               Editar
@@ -1673,7 +1675,7 @@ const Admin = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="text-destructive hover:text-destructive"
+                              className="text-destructive hover:text-destructive flex-1 md:flex-none"
                               onClick={() => setConfirmRemoveServer(s.server_url)}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
