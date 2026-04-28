@@ -1707,22 +1707,23 @@ const Admin = () => {
                     {filteredPending.map((s) => (
                       <div
                         key={s.server_url}
-                        className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap"
+                        className="px-4 py-4 sm:px-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4"
                       >
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <XCircle className="h-4 w-4 text-destructive shrink-0" />
-                            <span className="font-mono text-sm truncate">{s.server_url}</span>
+                            <span className="font-mono text-sm truncate min-w-0">{s.server_url}</span>
                           </div>
-                          <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
-                            <span>{s.unique_users} usuários tentaram</span>
-                            <span>{s.total_logins} tentativas</span>
-                            <span>última há {formatRelative(s.last_seen)}</span>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                            <span className="whitespace-nowrap">{s.unique_users} usuários tentaram</span>
+                            <span className="whitespace-nowrap">{s.total_logins} tentativas</span>
+                            <span className="whitespace-nowrap">última há {formatRelative(s.last_seen)}</span>
                           </div>
                         </div>
                         <Button
                           variant="default"
                           size="sm"
+                          className="w-full md:w-auto md:shrink-0"
                           onClick={() => {
                             setNewUrl(s.server_url);
                             setAddOpen(true);
