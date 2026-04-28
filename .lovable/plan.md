@@ -1,57 +1,83 @@
-## Revisão — por que tentativas anteriores falharam
+# Auto-recuperação silenciosa para streams MP4 progressivos
 
-Tentei posicionar o badge "ao lado de `0:34 / 1:00`" usando `left-32`. Isso **só funciona em um cenário específico** (Chrome desktop, idioma PT, tempo curto). Em outros dispositivos o resultado é o que você viu na imagem: badge solto no meio do player.
+## Contexto (do log que você colou)
 
-**Causa raiz**: os controles `<video controls>` vivem em **shadow DOM** do browser. Cada engine (Chromium, WebKit/Safari, Gecko/Firefox, navegadores de TV) renderiza o play, tempo, slider, volume, PiP e fullscreen com larguras e ordens **diferentes**. Não existe API nem CSS que permita "ancorar ao lado do display de tempo" de forma confiável cross-device.
+O servidor `tzprosata.fun` cortou a conexão TCP do MP4 progressivo aos **7min38s de reprodução** (posição 1023.5s do filme). O app esperou 20s, marcou `stall_timeout` e mostrou erro genérico `MEDIA_ERR_2`. Não é bug do app — é comportamento conhecido de servidores Xtream com VOD progressivo (timeout de socket por sessão longa).
 
-## Decisão
+Conserto: o player retoma sozinho do mesmo ponto, sem o usuário ver erro. Se falhar 2 vezes, aí sim mostra mensagem clara com botão "Retomar".
 
-Abandonar a tentativa de colar no tempo. Usar **âncora de canto fixo do quadro do vídeo** — esse referencial é igual em todos os dispositivos.
+## O que muda
 
-**Posição escolhida**: **canto superior esquerdo, inline ao lado do título** do filme/canal/episódio.
+**Apenas `src/components/Player.tsx`.** Sem migração, sem novos arquivos, sem mexer em backend/edge functions.
 
-Por quê:
-- Já existe ali um gradiente preto + o `<h3>` do título → o badge encaixa visualmente no mesmo bloco.
-- Não conflita com os botões já posicionados no topo direito (skip ±10s, velocidade, X, Logs).
-- Não cobre nada do vídeo — fica sobre o gradiente que já existe.
-- Funciona idêntico em desktop, mobile, tablet, TV — depende só do tamanho do quadro.
+### 1. Detector de stream "frágil"
 
-Para canais ao vivo onde `title` pode estar vazio, o badge fica num wrapper próprio no mesmo canto (`absolute top-3 left-3`) com o mesmo gradiente fraco.
+Computar uma flag local:
+```
+isProgressive = engine !== 'hls' real (m3u8) 
+              || ext ∈ {mp4, mkv, avi, mov, webm}
+```
+Streams HLS segmentados já têm recuperação nativa do hls.js; só MP4 progressivo precisa do novo fluxo.
 
-## Mudanças
+### 2. Auto-recuperação (sem mostrar erro)
 
-**1. `src/components/QualityBadge.tsx`**
-- Remover toda a lógica de `absolute`, `bottom-*`, `left-*` e o `useEffect` de visibilidade sincronizada com mouse/pause.
-- O componente vira um chip puro: detecta a qualidade e renderiza apenas `<span class="...">1440p</span>` (ou `null` se não há altura).
-- Estilo do chip: `inline-flex items-center rounded bg-white/15 px-1.5 py-0.5 text-[10px] sm:text-xs font-semibold tracking-wide text-white/90 backdrop-blur-sm`.
+Adicionar `recoveryAttemptsRef` (max 2 por sessão). Disparada quando:
+- `stall_timeout` ocorre **e** `isProgressive` **e** `recoveryAttempts < 2`, OU
+- `onError` com `MEDIA_ERR_2 / PIPELINE_ERROR_READ` **e** `isProgressive` **e** `recoveryAttempts < 2`.
 
-**2. `src/components/Player.tsx`**
-- Remover o bloco standalone `{showVideo && !error && <QualityBadge … />}` (linhas 1894–1896).
-- Dentro do bloco do título (linha 1898–1902), trocar o `<h3>` por um flex que coloca o título e o badge lado a lado:
-  ```tsx
-  <div className="pointer-events-none absolute left-0 top-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-4">
-    <div className="flex items-center gap-2 pr-32">
-      <h3 className="text-sm font-semibold text-white drop-shadow truncate">{title}</h3>
-      {showVideo && !error && <QualityBadge videoRef={videoRef} hlsRef={hlsRef} />}
-    </div>
-  </div>
-  ```
-- Para casos sem `title` (ex: live sem nome carregado), adicionar um wrapper de fallback que renderiza só o badge no mesmo canto:
-  ```tsx
-  {!title && showVideo && !error && (
-    <div className="pointer-events-none absolute left-4 top-4">
-      <QualityBadge videoRef={videoRef} hlsRef={hlsRef} />
-    </div>
-  )}
-  ```
+Sequência:
+1. Salvar `video.currentTime` (ou `lastResumePosition` se `currentTime=0`).
+2. `recoveryAttempts++`, log `recovery_attempt`.
+3. Toast discreto: `toast("Reconectando…")` (sonner, sem ícone de erro).
+4. Bumpar `retryNonce` (já existe, força re-setup do `<video>` com novo token).
+5. No próximo `loadedmetadata`, `seek(savedTime - 2)` + `play()`.
+6. **Não** chamar `setError()` — overlay de erro permanece oculto.
+
+### 3. Reset do contador
+
+Zerar `recoveryAttempts`:
+- Quando `src` muda (novo conteúdo).
+- Quando vídeo passa **30s contínuos** em estado `playing` sem erro novo (timer rearmado a cada `playing`/`timeupdate`, cancelado em `waiting`/`error`).
+
+### 4. Fallback amigável (depois de 2 falhas)
+
+Se `recoveryAttempts >= 2` quando der nova falha, em vez do texto genérico atual mostrar:
+
+- **Título:** "Conexão com o servidor encerrada"
+- **Descrição:** "O servidor de streaming pausou a transmissão deste arquivo. Você pode retomar de onde parou."
+- **Botão primário (novo):** **Retomar de onde parou** — zera `recoveryAttempts`, salva posição, bump `retryNonce`, fecha overlay.
+- **Botão secundário:** Voltar (`onClose`, já existe).
+- Mantém botões existentes (Copiar URL, etc.) para casos avançados.
+
+Só aplica essa mensagem específica quando `isProgressive && reason começa com MEDIA_ERR_2`. Outros erros (codec, 404, etc.) mantêm os textos atuais.
+
+## Pontos exatos no `Player.tsx`
+
+| Local atual | Mudança |
+|---|---|
+| Lá perto da linha 1430, antes do `useEffect` dos listeners | Declarar `recoveryAttemptsRef`, `isProgressiveRef`, `playingStableTimerRef` |
+| Linhas 1448–1488 (`onWaiting`/`onStalled` setTimeouts) | Antes de chamar `updateStatus("stall_timeout")`, checar se cabe auto-recovery; se sim, disparar fluxo silencioso e **não** chamar `updateStatus` |
+| Linhas 1490–1510 (`onPlaying`) | Iniciar/rearmar timer de 30s estáveis para resetar `recoveryAttemptsRef` |
+| Linhas 1532–1553 (`onError`) | Antes de `setError(...)`, checar auto-recovery; se cabe, disparar fluxo silencioso e retornar. Se já estourou tentativas e é `isProgressive`, usar texto novo + botão "Retomar" |
+| Bloco do overlay de erro (lá pelas linhas 1870+) | Renderizar botão extra "Retomar de onde parou" quando `error.canResume === true` |
+
+## O que NÃO vai mudar
+
+- Lógica de token / edge functions.
+- Comportamento para streams HLS reais (`.m3u8` segmentado) — já têm recuperação.
+- Comportamento para erros de codec (`MEDIA_ERR_3/4`) — segue indo direto pro fluxo "Abrir no VLC".
+- QualityBadge, layout, controles — nada disso é tocado.
 
 ## Resultado esperado
 
-- Badge sempre no mesmo lugar — colado ao título, em qualquer dispositivo/browser.
-- Aparece junto com o título (sem precisar sincronizar com controles).
-- Não cobre o conteúdo do vídeo.
-- Sem conflito com os botões do topo direito.
+Cenário do seu log, depois da mudança:
+1. Aos 7min38s o servidor corta. App detecta stall.
+2. Toast "Reconectando…" aparece por ~2s.
+3. Player recria source, retoma em 1021.5s, volta a tocar.
+4. Usuário não vê tela de erro.
+5. Se o servidor estiver realmente fora do ar e a 2ª tentativa também falhar, aí mostra "Conexão encerrada" com botão "Retomar de onde parou" — clique único resolve.
 
 ## Arquivos
 
-- Editar: `src/components/QualityBadge.tsx`, `src/components/Player.tsx`.
+- Editar: `src/components/Player.tsx`
+
