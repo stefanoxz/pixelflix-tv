@@ -269,10 +269,23 @@ Deno.serve(async (req) => {
         e.segments += row.segment_count ?? 0;
       }
       const ids = Array.from(usageMap.keys());
-      let nameMap = new Map<string, string>();
+      // Para cada usuário, busca o nome IPTV E o servidor (DNS) que ele está
+      // usando. Resolve o host pra exibir só o domínio no painel.
+      const nameMap = new Map<string, string>();
+      const serverMap = new Map<string, string>();
       if (ids.length > 0) {
-        const { data: sess } = await admin.from("active_sessions").select("anon_user_id, iptv_username").in("anon_user_id", ids);
-        nameMap = new Map((sess ?? []).map((s: { anon_user_id: string; iptv_username: string | null }) => [s.anon_user_id, s.iptv_username || ""]));
+        const { data: sess } = await admin
+          .from("active_sessions")
+          .select("anon_user_id, iptv_username, server_url")
+          .in("anon_user_id", ids);
+        for (const s of (sess ?? []) as { anon_user_id: string; iptv_username: string | null; server_url: string | null }[]) {
+          nameMap.set(s.anon_user_id, s.iptv_username || "");
+          let host = "";
+          if (s.server_url) {
+            try { host = new URL(s.server_url).host.toLowerCase(); } catch { host = s.server_url; }
+          }
+          serverMap.set(s.anon_user_id, host);
+        }
       }
 
       return ok({
@@ -291,7 +304,7 @@ Deno.serve(async (req) => {
           recent_errors: (recentErrors.data ?? []).map((e: { id: string; anon_user_id: string | null; event_type: string; ip: string | null; meta: Record<string, unknown> | null; created_at: string }) => ({ id: e.id, anon_user_id: e.anon_user_id, event_type: e.event_type, ip_masked: maskIp(e.ip), meta: e.meta, created_at: e.created_at })),
           top_rejected_ips: Array.from(ipCounts.entries()).map(([ip, count]) => ({ ip_masked: maskIp(ip), count })).sort((a, b) => b.count - a.count).slice(0, 10),
         },
-        top_consumers: Array.from(usageMap.values()).map((r) => ({ ...r, iptv_username: nameMap.get(r.anon_user_id) || "" })).sort((a, b) => b.requests - a.requests).slice(0, 20),
+        top_consumers: Array.from(usageMap.values()).map((r) => ({ ...r, iptv_username: nameMap.get(r.anon_user_id) || "", server_host: serverMap.get(r.anon_user_id) || "" })).sort((a, b) => b.requests - a.requests).slice(0, 20),
       });
     }
 

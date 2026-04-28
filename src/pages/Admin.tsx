@@ -169,6 +169,7 @@ interface MonitoringOverview {
 interface TopConsumer {
   anon_user_id: string;
   iptv_username: string;
+  server_host: string;
   requests: number;
   segments: number;
 }
@@ -1039,9 +1040,16 @@ const Admin = () => {
                 ) : (
                   <div className="divide-y divide-border/50">
                     {topConsumers.map((c) => (
-                      <div key={c.anon_user_id} className="flex items-center justify-between py-2 text-sm">
-                        <span className="font-medium truncate">{c.iptv_username || c.anon_user_id.slice(0, 8)}</span>
-                        <span className="text-xs text-muted-foreground">
+                      <div key={c.anon_user_id} className="flex items-center justify-between py-2 text-sm gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">
+                            {c.iptv_username || `${c.anon_user_id.slice(0, 8)}…`}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {c.server_host || "servidor desconhecido"}
+                          </p>
+                        </div>
+                        <span className="text-xs text-muted-foreground shrink-0">
                           {c.requests} req • {c.segments} seg
                         </span>
                       </div>
