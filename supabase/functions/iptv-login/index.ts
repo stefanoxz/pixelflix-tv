@@ -522,46 +522,88 @@ async function tryPlaylistFallback(
   password: string,
 ): Promise<
   | { ok: true; data: any; usedVariant: string }
-  | { ok: false; reason: string; bodyPreview?: string }
+  | {
+      ok: false;
+      reason: string;
+      attempts: Array<{
+        variant: string;
+        endpoint: string;
+        status?: number;
+        contentType?: string | null;
+        bodyPreview?: string;
+        error?: string;
+      }>;
+    }
 > {
   const variants = buildVariants(serverBase, "fast");
+  // Endpoints de playlist mais comuns em painéis Xtream/clones. Cada base
+  // (http/https/porta) é combinada com cada endpoint.
+  const endpoints = (u: string, p: string) => [
+    `/get.php?username=${u}&password=${p}&type=m3u_plus&output=ts`,
+    `/get.php?username=${u}&password=${p}&type=m3u_plus`,
+    `/get.php?username=${u}&password=${p}&type=m3u`,
+    `/playlist/${u}/${p}/m3u_plus`,
+  ];
+  const u = encodeURIComponent(username);
+  const p = encodeURIComponent(password);
+  const attempts: Array<{
+    variant: string;
+    endpoint: string;
+    status?: number;
+    contentType?: string | null;
+    bodyPreview?: string;
+    error?: string;
+  }> = [];
+
   for (const base of variants) {
-    const url = `${base}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`;
-    const r = await fetchOnce(url, PRIMARY_UA);
-    if ("error" in r) continue;
-    const { res, body } = r;
-    if (!res.ok) continue;
-    const trimmed = (body ?? "").trimStart();
-    if (!trimmed.startsWith("#EXTM3U")) {
-      // Guardamos preview só do primeiro candidato para retorno em erro.
-      continue;
+    for (const ep of endpoints(u, p)) {
+      const url = `${base}${ep}`;
+      const r = await fetchOnce(url, PRIMARY_UA);
+      if ("error" in r) {
+        attempts.push({ variant: base, endpoint: ep, error: r.error });
+        // Erro de transporte para esta base — pula os demais endpoints dela.
+        break;
+      }
+      const { res, body } = r;
+      const contentType = res.headers.get("content-type");
+      const trimmed = (body ?? "").trimStart();
+      if (!res.ok || !trimmed.startsWith("#EXTM3U")) {
+        attempts.push({
+          variant: base,
+          endpoint: ep,
+          status: res.status,
+          contentType,
+          bodyPreview: trimmed.slice(0, 160),
+        });
+        continue;
+      }
+      // Sucesso — montamos resposta no formato esperado pelo cliente.
+      return {
+        ok: true,
+        usedVariant: base,
+        data: {
+          user_info: {
+            username,
+            password,
+            auth: 1,
+            status: "Active",
+            message: "playlist-mode",
+            // Indica downstream que não há Xtream API completo.
+            is_trial: 0,
+            active_cons: 0,
+            max_connections: 0,
+            allowed_output_formats: ["m3u8", "ts"],
+          },
+          server_info: {
+            url: base.replace(/^https?:\/\//, ""),
+            server_protocol: base.startsWith("https") ? "https" : "http",
+            time_now: new Date().toISOString(),
+          },
+        },
+      };
     }
-    // Sucesso — montamos resposta no formato esperado pelo cliente.
-    return {
-      ok: true,
-      usedVariant: base,
-      data: {
-        user_info: {
-          username,
-          password,
-          auth: 1,
-          status: "Active",
-          message: "playlist-mode",
-          // Indica downstream que não há Xtream API completo.
-          is_trial: 0,
-          active_cons: 0,
-          max_connections: 0,
-          allowed_output_formats: ["m3u8", "ts"],
-        },
-        server_info: {
-          url: base.replace(/^https?:\/\//, ""),
-          server_protocol: base.startsWith("https") ? "https" : "http",
-          time_now: new Date().toISOString(),
-        },
-      },
-    };
   }
-  return { ok: false, reason: "playlist-fallback-failed" };
+  return { ok: false, reason: "playlist-fallback-failed", attempts };
 }
 
 /** Persiste a variante que funcionou + zera contador de falhas. Best-effort. */
@@ -856,6 +898,20 @@ Deno.serve(async (req) => {
         (failReason === "resposta não JSON" ||
           failReason === "credenciais inválidas" ||
           /^HTTP 404$/i.test(failReason));
+      let playlistFallbackDebug:
+        | {
+            tried: boolean;
+            reason?: string;
+            attempts?: Array<{
+              variant: string;
+              endpoint: string;
+              status?: number;
+              contentType?: string | null;
+              bodyPreview?: string;
+              error?: string;
+            }>;
+          }
+        | undefined;
       if (shouldTryPlaylist) {
         const pl = await tryPlaylistFallback(fullBase, username, password);
         if (pl.ok) {
@@ -864,15 +920,34 @@ Deno.serve(async (req) => {
           );
           r = { ok: true as const, data: pl.data, usedVariant: pl.usedVariant, route: "direct" } as any;
         } else {
+          playlistFallbackDebug = {
+            tried: true,
+            reason: pl.reason,
+            attempts: pl.attempts,
+          };
+          const summary = (pl.attempts ?? [])
+            .slice(0, 4)
+            .map((a) => `${a.endpoint}=${a.status ?? a.error ?? "?"}`)
+            .join(" ");
           console.log(
-            `[iptv-login] m3u_register PLAYLIST_FALLBACK_FAIL after=${failStatus} server=${fullBase} reason=${pl.reason}`,
+            `[iptv-login] m3u_register PLAYLIST_FALLBACK_FAIL after=${failStatus} server=${fullBase} reason=${pl.reason} attempts=${summary}`,
           );
         }
       }
 
       if (!r.ok) {
         await logEvent({ server: fullBase, username, success: false, reason: `m3u_register:${r.reason}`, ua, ip });
-        const { code, message } = classifyReason(r.reason);
+        let { code, message } = classifyReason(r.reason);
+        // Caso clássico: /player_api.php deu 404 vazio E o fallback de playlist
+        // também não achou nada válido. A DNS está viva mas não expõe nem
+        // Xtream nem M3U nesse caminho — provável URL incompleta.
+        if (
+          playlistFallbackDebug?.tried &&
+          /^HTTP 404$/i.test(r.reason)
+        ) {
+          message =
+            "A DNS respondeu, mas não encontramos endpoints Xtream (/player_api.php) nem M3U (/get.php, /playlist) válidos nesse endereço. Verifique se a URL M3U está completa (com porta e caminho corretos) ou peça uma nova ao seu provedor.";
+        }
         const hint = maybeOriginSuspectHint((r as { status?: number }).status, (r as { body?: string }).body);
         const rawBody = String((r as { body?: string }).body ?? "");
         const bodyPreview = rawBody.slice(0, 300);
@@ -884,6 +959,7 @@ Deno.serve(async (req) => {
           looksLikeHtml: /^\s*<(!doctype|html|head|body)/i.test(rawBody),
           looksLikeM3u: /^\s*#extm3u/i.test(rawBody),
           reason: r.reason,
+          ...(playlistFallbackDebug ? { playlistFallback: playlistFallbackDebug } : {}),
         };
         console.log(
           `[iptv-login] m3u_register FAIL host=${fullBase} reason=${r.reason} status=${debug.httpStatus} ct=${debug.contentType} preview=${bodyPreview.slice(0, 120).replace(/\s+/g, " ")}`,
