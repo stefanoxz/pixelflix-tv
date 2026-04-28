@@ -1724,6 +1724,61 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     setRetryNonce((n) => n + 1);
   };
 
+  /**
+   * Retoma reprodução de stream MP4 progressivo a partir do botão
+   * "Retomar de onde parou". Usa a posição salva e zera o contador
+   * para dar uma nova chance ao usuário.
+   */
+  const handleResumeFromLastPosition = () => {
+    if (!src) return;
+    pushLog({
+      source: "diag",
+      level: "info",
+      label: "manual_resume",
+      details: `pos=${Math.round(lastKnownPositionRef.current)}s`,
+    });
+    recoveryAttemptsRef.current = 0;
+    recoveryInFlightRef.current = false;
+    setError(null);
+    retryCountRef.current = 0;
+    setLoading(true);
+    setRetryNonce((n) => n + 1);
+  };
+
+  /**
+   * Auto-recuperação silenciosa para streams MP4 progressivos quando o
+   * servidor encerra a conexão. Salva a posição, mostra um toast discreto
+   * e força re-setup do player. Retorna true se a recuperação foi disparada.
+   */
+  const triggerProgressiveRecovery = (reason: string): boolean => {
+    if (!isProgressiveStream) return false;
+    if (recoveryInFlightRef.current) return true; // já estamos recuperando
+    if (recoveryAttemptsRef.current >= MAX_PROGRESSIVE_RECOVERIES) return false;
+
+    const v = videoRef.current;
+    const pos = v && Number.isFinite(v.currentTime) ? v.currentTime : lastKnownPositionRef.current;
+    if (pos > 0) lastKnownPositionRef.current = pos;
+    // Faz o próximo setup retomar do ponto salvo (sobrescreve initialTime).
+    const seekTarget = Math.max(0, lastKnownPositionRef.current - 2);
+    initialTimeRef.current = seekTarget;
+    initialSeekDoneRef.current = false;
+
+    recoveryAttemptsRef.current += 1;
+    recoveryInFlightRef.current = true;
+    pushLog({
+      source: "diag",
+      level: "warn",
+      label: "auto_recovery",
+      details: `attempt ${recoveryAttemptsRef.current}/${MAX_PROGRESSIVE_RECOVERIES} — resume@${Math.round(seekTarget)}s — ${reason}`,
+    });
+    try { toast("Reconectando…", { duration: 2500 }); } catch { /* noop */ }
+    setLoading(true);
+    retryCountRef.current = 0;
+    setRetryNonce((n) => n + 1);
+    return true;
+  };
+
+
   const handleEngineChange = (next: PlaybackEngine) => {
     if (next === engine) return;
     if (next === "hls" || next === "mpegts") setPreferredEngine(rawUrl ?? src, next);
