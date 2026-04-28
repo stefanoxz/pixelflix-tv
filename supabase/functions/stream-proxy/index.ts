@@ -58,7 +58,9 @@ const EXP_SKEW_MS = 2_000;
 // token's own lifetime are not falsely rejected.
 const NONCE_REPLAY_WINDOW_MS = 30_000;
 // Per-segment upstream timeout when streaming bytes through the edge.
-const SEGMENT_FETCH_TIMEOUT_MS = 8_000;
+// 12s dá margem pra painéis IPTV lentos (BR/intercontinental) sem deixar
+// requests pendurados eternamente. Antes era 8s e estourava muito.
+const SEGMENT_FETCH_TIMEOUT_MS = 12_000;
 // Cap concurrent streamed segments per client IP /24 to avoid abuse.
 const MAX_STREAM_CONCURRENCY_PER_IP = 6;
 
