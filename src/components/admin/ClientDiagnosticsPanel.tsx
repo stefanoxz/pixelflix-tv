@@ -6,7 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { RefreshCw, Wifi, MapPin, Clock, AlertTriangle } from "lucide-react";
+import { RefreshCw, Wifi, MapPin, Clock, AlertTriangle, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+const NETWORK_QUALITY_HINT =
+  "Classificação do navegador baseada em latência e velocidade. '4g' = boa conexão (inclui Wi-Fi e fibra). Não indica o tipo físico do link (móvel vs Wi-Fi).";
 
 interface DiagRow {
   id: string;
@@ -225,7 +229,19 @@ export default function ClientDiagnosticsPanel() {
                 <th className="py-2 pr-3 font-medium">Duração</th>
                 <th className="py-2 pr-3 font-medium">Provedor</th>
                 <th className="py-2 pr-3 font-medium">Local</th>
-                <th className="py-2 pr-3 font-medium">Conexão</th>
+                <th className="py-2 pr-3 font-medium">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center gap-1 cursor-help">
+                          Qualidade da rede
+                          <Info className="h-3 w-3 text-muted-foreground" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs text-xs">{NETWORK_QUALITY_HINT}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </th>
                 <th className="py-2 pr-3 font-medium">Veloc.</th>
                 <th className="py-2 pr-3 font-medium">RTT</th>
                 <th className="py-2 pr-3 font-medium">Speed</th>
@@ -283,7 +299,20 @@ export default function ClientDiagnosticsPanel() {
                 <Field label="Fuso" value={selected.timezone} />
                 <Field label="Idioma" value={selected.language} />
                 <Field label="Tela" value={selected.screen} />
-                <Field label="Conexão" value={selected.effective_type} />
+                <Field
+                  label="Qualidade da rede"
+                  value={selected.effective_type}
+                  icon={
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-3 w-3 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs text-xs">{NETWORK_QUALITY_HINT}</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  }
+                />
                 <Field label="Downlink" value={selected.downlink_mbps != null ? `${selected.downlink_mbps} Mbps` : null} />
                 <Field label="RTT" value={selected.rtt_ms != null ? `${selected.rtt_ms} ms` : null} />
                 <Field label="Speed probe" value={selected.speed_kbps != null ? `${selected.speed_kbps} KB/s` : null} />
