@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { ExternalLink, Play } from "lucide-react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { ChevronLeft, ChevronRight, ExternalLink, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   isExternalOnly,
