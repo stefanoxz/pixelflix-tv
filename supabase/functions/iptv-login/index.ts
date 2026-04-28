@@ -1065,6 +1065,8 @@ Deno.serve(async (req) => {
       lastStatus = (r as { status?: number }).status;
       lastBody = (r as { body?: string }).body ?? "";
       await logEvent({ server: row.server_url, username, success: false, reason: r.reason, ua, ip });
+      // Detecção automática de DNS bloqueado (não bloqueia o fluxo, é best-effort)
+      void recordPotentialBlock(admin, row.server_url, r.reason, ip);
     }
 
     const { code, message } = classifyReason(lastReason);
