@@ -1742,14 +1742,13 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [copyTarget, src]);
 
-  // Quando o player desmonta (usuário fechou e voltou ao menu), marca a
-  // sessão como ociosa para o painel de monitoramento e habilita o
-  // auto-kick por inatividade após 60min.
+  // Quando o player desmonta (usuário fechou e voltou ao menu), apenas
+  // libera os recursos. NÃO marcamos a sessão como `idle` — isso apagaria
+  // o último conteúdo assistido e quebraria o ranking de tempo total.
+  // A sessão será naturalmente removida por `evict_idle_sessions` após
+  // 60min sem heartbeat.
   useEffect(() => () => {
     teardown();
-    reportStreamEvent("session_heartbeat", {
-      meta: { content_kind: "idle", content_title: null, content_id: null },
-    });
   }, []);
 
   const handleCopy = async () => {
