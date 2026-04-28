@@ -594,6 +594,124 @@ async function markServerFailure(
   }
 }
 
+/**
+ * Detecção automática de DNS com bloqueio anti-datacenter.
+ * Registra a falha em blocked_dns_failures e, se atingir threshold
+ * (5 falhas em 24h de 2+ IPs distintos), promove o servidor pra
+ * blocked_dns_servers com status='suggested' (esperando revisão admin).
+ *
+ * Só dispara quando o erro é classificado como padrão anti-datacenter:
+ * - timeout total
+ * - connection reset by peer
+ * - connection refused (em todas as variantes)
+ * NÃO dispara em 401, 5xx, DNS error puro ou WAF.
+ */
+const ANTI_DC_PATTERNS = /timeout|timed out|deadline|connection reset|reset by peer|os error 104|econnreset|connection refused|os error 111|econnrefused|no route to host|ehostunreach/i;
+const NON_BLOCK_PATTERNS = /credenc|invalid|auth=0|unauthor|401|http\s*5\d\d|getaddrinfo|nxdomain|enotfound|name resolution|cloudflare|just a moment|attention required|tls|ssl|certificate|handshake/i;
+
+function classifyForBlockDetection(reason: string): string | null {
+  const r = (reason || "").toLowerCase();
+  if (NON_BLOCK_PATTERNS.test(r)) return null;
+  if (/timeout|timed out|deadline|i\/o timeout/.test(r)) return "timeout";
+  if (/connection reset|reset by peer|os error 104|econnreset/.test(r)) return "reset";
+  if (/connection refused|os error 111|econnrefused/.test(r)) return "refused";
+  if (/no route to host|ehostunreach/.test(r)) return "unreachable";
+  return null;
+}
+
+async function hashIp(ip: string): Promise<string> {
+  try {
+    const buf = new TextEncoder().encode(`bdns:${ip}`);
+    const hash = await crypto.subtle.digest("SHA-256", buf);
+    return Array.from(new Uint8Array(hash)).slice(0, 8).map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return ip.slice(0, 16);
+  }
+}
+
+async function recordPotentialBlock(
+  admin: any,
+  serverUrl: string,
+  reason: string,
+  ip: string | undefined,
+): Promise<void> {
+  const errorKind = classifyForBlockDetection(reason);
+  if (!errorKind) return;
+  const normalized = normalizeServer(serverUrl);
+  const ipHash = ip ? await hashIp(ip) : null;
+
+  try {
+    // 1. Registra a falha
+    await admin.from("blocked_dns_failures").insert({
+      server_url: normalized,
+      error_kind: errorKind,
+      ip_hash: ipHash,
+    });
+
+    // 2. Verifica se já está cadastrado e está dismissed (descarte permanente)
+    const { data: existing } = await admin
+      .from("blocked_dns_servers")
+      .select("id, status, failure_count")
+      .eq("server_url", normalized)
+      .maybeSingle();
+    if (existing?.status === "dismissed") return; // descarte permanente
+
+    // 3. Conta falhas dos últimos 24h
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: failures } = await admin
+      .from("blocked_dns_failures")
+      .select("ip_hash, error_kind, created_at")
+      .eq("server_url", normalized)
+      .gte("created_at", since24h);
+
+    const totalFailures = failures?.length ?? 0;
+    const distinctIps = new Set((failures ?? []).map((f: any) => f.ip_hash).filter(Boolean));
+
+    // Threshold conservador: 5 falhas em 24h de 2+ IPs distintos
+    const THRESHOLD_COUNT = 5;
+    const THRESHOLD_IPS = 2;
+    if (totalFailures < THRESHOLD_COUNT || distinctIps.size < THRESHOLD_IPS) return;
+
+    const now = new Date().toISOString();
+    const evidence = {
+      detected_at: now,
+      sample_errors: Array.from(new Set((failures ?? []).map((f: any) => f.error_kind))),
+      total_failures_24h: totalFailures,
+      distinct_ips_24h: distinctIps.size,
+      last_reason: reason.slice(0, 200),
+    };
+
+    if (existing?.id) {
+      // Atualiza contadores (suggested ou confirmed)
+      await admin
+        .from("blocked_dns_servers")
+        .update({
+          failure_count: totalFailures,
+          distinct_ip_count: distinctIps.size,
+          last_detected_at: now,
+          evidence,
+        })
+        .eq("id", existing.id);
+    } else {
+      // Cria nova entrada como sugestão
+      await admin.from("blocked_dns_servers").insert({
+        server_url: normalized,
+        status: "suggested",
+        block_type: "anti_datacenter",
+        failure_count: totalFailures,
+        distinct_ip_count: distinctIps.size,
+        first_detected_at: now,
+        last_detected_at: now,
+        evidence,
+        notes: "Detectado automaticamente (5+ falhas em 24h de IPs distintos).",
+      });
+      console.log(`[iptv-login] blocked-dns auto-suggested: ${normalized} (${totalFailures} falhas, ${distinctIps.size} IPs)`);
+    }
+  } catch (err) {
+    console.warn("[iptv-login] recordPotentialBlock failed", (err as Error).message);
+  }
+}
+
 Deno.serve(async (req) => {
   let corsHeaders: Record<string, string> = {};
 
