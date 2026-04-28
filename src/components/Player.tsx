@@ -2050,15 +2050,17 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         </div>
       )}
 
-      {/* Custom controls bar — top-right (skip ±10s, speed, report) */}
+      {/* Custom controls bar — top-right (skip ±10s, speed, report)
+          Agrupados num único "pill" com glassmorphism coeso para parecer
+          uma barra de ferramentas única em vez de botões soltos. */}
       {showVideo && !error && (
-        <div className="pointer-events-auto absolute top-3 right-3 z-20 flex items-center gap-1.5">
+        <div className="pointer-events-auto absolute top-3 right-3 z-20 flex items-center gap-0.5 rounded-full border border-white/10 bg-black/55 px-1.5 py-1 backdrop-blur-md shadow-[0_8px_24px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/5">
           {!isLive && (
             <>
               <Button
-                variant="secondary"
+                variant="ghost"
                 size="icon"
-                className="h-9 w-9 bg-black/60 hover:bg-black/80 backdrop-blur border-0 text-white"
+                className="h-8 w-8 rounded-full text-white/90 hover:bg-white/10 hover:text-white"
                 onClick={() => skipBy(-10)}
                 title="Voltar 10 segundos (←)"
                 aria-label="Voltar 10 segundos"
@@ -2066,27 +2068,28 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
                 <Rewind className="h-4 w-4" />
               </Button>
               <Button
-                variant="secondary"
+                variant="ghost"
                 size="icon"
-                className="h-9 w-9 bg-black/60 hover:bg-black/80 backdrop-blur border-0 text-white"
+                className="h-8 w-8 rounded-full text-white/90 hover:bg-white/10 hover:text-white"
                 onClick={() => skipBy(10)}
                 title="Avançar 10 segundos (→)"
                 aria-label="Avançar 10 segundos"
               >
                 <FastForward className="h-4 w-4" />
               </Button>
+              <span className="mx-0.5 h-5 w-px bg-white/10" aria-hidden />
             </>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="secondary"
+                variant="ghost"
                 size="sm"
-                className="h-9 px-2.5 bg-black/60 hover:bg-black/80 backdrop-blur border-0 text-white gap-1.5 tabular-nums"
+                className="h-8 px-2 rounded-full text-white/90 hover:bg-white/10 hover:text-white gap-1 tabular-nums"
                 title="Velocidade de reprodução"
               >
                 <Gauge className="h-3.5 w-3.5" />
-                {playbackRate}x
+                <span className="text-xs font-semibold">{playbackRate}x</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[120px]">
@@ -2105,10 +2108,11 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+          <span className="mx-0.5 h-5 w-px bg-white/10" aria-hidden />
           <Button
-            variant="secondary"
+            variant="ghost"
             size="icon"
-            className="h-9 w-9 bg-black/60 hover:bg-destructive/80 backdrop-blur border-0 text-white"
+            className="h-8 w-8 rounded-full text-white/90 hover:bg-destructive/80 hover:text-white"
             onClick={() => setReportOpen(true)}
             title="Reportar problema"
             aria-label="Reportar problema"
@@ -2117,9 +2121,9 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           </Button>
           {onClose && (
             <Button
-              variant="secondary"
+              variant="ghost"
               size="icon"
-              className="h-9 w-9 bg-black/60 hover:bg-black/80 backdrop-blur border-0 text-white"
+              className="h-8 w-8 rounded-full text-white/90 hover:bg-white/10 hover:text-white"
               onClick={onClose}
               title="Fechar (Esc)"
               aria-label="Fechar player"
@@ -2130,31 +2134,40 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         </div>
       )}
 
-      {/* Diagnostic card — small, non-blocking, bottom-right */}
+      {/* Diagnostic card — small, non-blocking, bottom-right.
+          Mesma linguagem visual da toolbar (pill glass) com dot pulsante. */}
       <div
         className={cn(
-          "pointer-events-none absolute bottom-3 right-3 z-20 max-w-[260px] rounded-md border px-2.5 py-1.5 backdrop-blur-md shadow-lg text-[11px] leading-tight",
+          "pointer-events-none absolute bottom-3 right-3 z-20 max-w-[260px] rounded-full border border-white/10 px-3 py-1.5 backdrop-blur-md shadow-[0_8px_24px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/5 text-[11px] leading-tight",
           statusTone[status],
         )}
         role="status"
         aria-live="polite"
       >
-        <div className="flex items-center gap-1.5 font-semibold">
-          <Activity className="h-3 w-3" />
+        <div className="flex items-center gap-2 font-semibold">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-current opacity-60 animate-ping" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
+          </span>
           <span>{STATUS_LABEL[status]}</span>
         </div>
         {lastReason && (
-          <div className="mt-0.5 truncate opacity-80" title={lastReason}>
+          <div className="mt-0.5 truncate opacity-80 pl-4" title={lastReason}>
             {lastReason}
           </div>
         )}
       </div>
 
       {loading && !error && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black animate-fade-in">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-[11px] uppercase tracking-[0.2em] text-white/70">Conectando…</p>
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-gradient-to-b from-black via-black to-black/95 animate-fade-in">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative">
+              <div className="absolute inset-0 rounded-full bg-primary/20 blur-2xl animate-pulse" aria-hidden />
+              <Loader2 className="relative h-10 w-10 animate-spin text-primary" />
+            </div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-white/60 font-medium">
+              Conectando
+            </p>
           </div>
         </div>
       )}
