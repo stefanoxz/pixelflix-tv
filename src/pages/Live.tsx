@@ -259,6 +259,8 @@ const Live = () => {
         creds={creds}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+        sort={categorySort}
+        onSortChange={setCategorySort}
       />
     </div>
   );
