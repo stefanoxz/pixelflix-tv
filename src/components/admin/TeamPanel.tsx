@@ -355,6 +355,63 @@ export default function TeamPanel() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Trocar senha */}
+      <Dialog open={!!passwordTarget} onOpenChange={(o) => !o && !savingPassword && setPasswordTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {passwordTarget?.is_self ? "Trocar minha senha" : "Trocar senha do membro"}
+            </DialogTitle>
+            <DialogDescription>
+              {passwordTarget?.is_self ? (
+                <>Defina uma nova senha para a sua conta administrativa.</>
+              ) : (
+                <>
+                  Definir nova senha para{" "}
+                  <strong className="text-foreground">{passwordTarget?.email ?? "este membro"}</strong>.
+                  Ele(a) precisará usar essa senha no próximo login — comunique por canal seguro.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-password" className="text-xs">Nova senha (mín. 8 caracteres)</Label>
+              <Input
+                id="new-password"
+                type="password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                disabled={savingPassword}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password" className="text-xs">Confirmar nova senha</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={savingPassword}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPasswordTarget(null)} disabled={savingPassword}>
+              Cancelar
+            </Button>
+            <Button onClick={submitPassword} disabled={savingPassword}>
+              {savingPassword
+                ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                : <KeyRound className="h-4 w-4 mr-2" />}
+              Salvar senha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Histórico de auditoria */}
       <Dialog open={auditOpen} onOpenChange={setAuditOpen}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
