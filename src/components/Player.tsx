@@ -105,6 +105,8 @@ type PlayerError = {
   external?: boolean;
   /** Show "Trocar canal" action and dedicated empty-stream messaging. */
   noData?: boolean;
+  /** Show prominent "Retomar de onde parou" button (progressive stream recovery). */
+  canResume?: boolean;
 };
 
 type DiagnosticStatus =
