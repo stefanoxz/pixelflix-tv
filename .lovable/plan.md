@@ -1,26 +1,24 @@
-# Renomear card "Conexão" e adicionar tooltip explicativo
-
-## Contexto
-
-O valor `4g` exibido no painel admin não significa "dados móveis 4G". Ele vem da Web API `navigator.connection.effectiveType`, que classifica qualquer conexão em 4 buckets de qualidade (`slow-2g`, `2g`, `3g`, `4g`). Wi-Fi, fibra, cabo e 5G aparecem todos como `4g`. O label atual induz ao erro.
+# Remover painel de depuração do AdminLogin
 
 ## O que muda
 
-No painel `ClientDiagnosticsPanel` (admin), onde hoje aparece "Conexão: 4g":
+Em `src/pages/AdminLogin.tsx`:
 
-1. **Renomear o label** de "Conexão" para **"Qualidade da rede"**.
-2. **Adicionar um ícone de info (`?` ou `ⓘ`)** ao lado do label com um tooltip explicando:
-   > "Classificação do navegador baseada em latência e velocidade. '4g' = boa conexão (inclui Wi-Fi e fibra). Não indica o tipo físico do link."
-3. **Manter o valor cru** (`4g`, `3g`, etc.) — apenas o rótulo e o tooltip mudam.
+1. **Remover o card "Painel de depuração"** que aparece embaixo do formulário de login do admin (botão expansível com ícone de bug, log de eventos, e o botão "Rodar diagnóstico").
+2. **Remover toda a lógica relacionada**:
+   - Tipo `DebugEntry`
+   - Funções `maskEmail()` e `runDiagnostics()`
+   - Estados `debugOpen` e `debugLog`
+   - Função `pushDebug()` e todas as chamadas dela espalhadas em `handleSignIn`, `handleSignUp`, `handleForgotPassword` e no `useEffect` inicial.
+3. **Limpar imports** não usados: `Bug`, `ChevronDown`, `ChevronUp`.
 
-Nada de heurística, nada de inferir Wi-Fi/móvel. Mudança puramente cosmética + educativa.
+## O que NÃO muda
 
-## Arquivos afetados
+- O `lastError` e o card vermelho de erro detalhado **continuam** — útil pro usuário entender falhas de login.
+- `describeAuthError()` continua, traduzindo erros do auth pra mensagens amigáveis.
+- `console.warn` em caso de erro continua (silencioso, só pra debug do operador).
+- Fluxo de signin/signup/forgot password fica idêntico — só sai a instrumentação visual.
 
-- `src/components/admin/ClientDiagnosticsPanel.tsx` — trocar label e adicionar `<Tooltip>` (componente já existe em `src/components/ui/tooltip.tsx`).
+## Arquivo afetado
 
-## Fora do escopo
-
-- Não vamos alterar a coleta no `clientDiagnostics.ts`.
-- Não vamos alterar o backend (`client-diagnostic` edge function nem a tabela `client_diagnostics`).
-- Não vamos tentar inferir tipo de conexão (Wi-Fi vs móvel) — fica pra uma próxima se você quiser.
+- `src/pages/AdminLogin.tsx`
