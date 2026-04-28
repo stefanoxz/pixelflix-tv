@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ReportProblemDialog, type ReportSnapshot } from "@/components/ReportProblemDialog";
+import { QualityBadge } from "@/components/QualityBadge";
 import { markIncompatible, hostFromUrl } from "@/lib/incompatibleContent";
 
 /**
@@ -1888,6 +1889,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
           playsInline
           poster={poster}
         />
+      )}
+
+      {showVideo && !error && (
+        <QualityBadge videoRef={videoRef} hlsRef={hlsRef} />
       )}
 
       {title && !error && (
