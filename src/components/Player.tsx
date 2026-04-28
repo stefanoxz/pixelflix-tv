@@ -105,6 +105,8 @@ type PlayerError = {
   external?: boolean;
   /** Show "Trocar canal" action and dedicated empty-stream messaging. */
   noData?: boolean;
+  /** Show prominent "Retomar de onde parou" button (progressive stream recovery). */
+  canResume?: boolean;
 };
 
 type DiagnosticStatus =
@@ -370,6 +372,28 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const playbackStartedRef = useRef(false);
   const manifestReadyRef = useRef(false);
   const lastReasonRef = useRef<string | null>(null);
+
+  // ===== Auto-recovery para streams MP4 progressivos =====
+  // Servidores Xtream costumam fechar conexão TCP de VOD progressivo após
+  // alguns minutos. Quando isso acontece, a gente retoma silenciosamente
+  // do mesmo ponto sem mostrar erro. Limite de 2 tentativas por sessão
+  // pra não entrar em loop se o servidor estiver de fato fora do ar.
+  const PROGRESSIVE_EXTS = new Set(["mp4", "mkv", "avi", "mov", "webm", "m4v"]);
+  const MAX_PROGRESSIVE_RECOVERIES = 2;
+  const PLAYING_STABLE_RESET_MS = 30_000;
+  const recoveryAttemptsRef = useRef(0);
+  const recoveryInFlightRef = useRef(false);
+  const lastKnownPositionRef = useRef<number>(0);
+  const playingStableTimerRef = useRef<number | null>(null);
+  const isProgressiveStream = useMemo(() => {
+    if (isLiveXtreamUrl(rawUrl ?? src ?? null)) return false;
+    const ext = (containerExt || "").toLowerCase().replace(/^\./, "");
+    if (ext && PROGRESSIVE_EXTS.has(ext)) return true;
+    // fallback: detecta pela URL quando containerExt não veio
+    const urlToCheck = (src ?? rawUrl ?? "").toLowerCase();
+    return /\.(mp4|mkv|avi|mov|webm|m4v)(\?|$)/.test(urlToCheck);
+  }, [containerExt, src, rawUrl]);
+
 
   const [error, setError] = useState<PlayerError | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1447,7 +1471,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       // Mid-stream stall: arm the stall timeout
       if (stallTimeoutRef.current === null) {
         stallTimeoutRef.current = window.setTimeout(() => {
-          updateStatus("stall_timeout", lastReasonRef.current || "BUFFER_STALLED_ERROR");
+          const reason = lastReasonRef.current || "BUFFER_STALLED_ERROR";
+          // Tenta auto-recuperação silenciosa antes de marcar como erro.
+          if (triggerProgressiveRecovery(reason)) return;
+          updateStatus("stall_timeout", reason);
           pushLog({
             source: "diag",
             level: "error",
@@ -1472,6 +1499,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       }
       if (stallTimeoutRef.current === null) {
         stallTimeoutRef.current = window.setTimeout(() => {
+          if (triggerProgressiveRecovery("BUFFER_STALLED_ERROR")) return;
           updateStatus("stall_timeout", "BUFFER_STALLED_ERROR");
           pushLog({
             source: "diag",
@@ -1487,6 +1515,24 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         }, STALL_TIMEOUT_MS);
       }
     };
+    const armPlayingStableTimer = () => {
+      if (playingStableTimerRef.current !== null) {
+        window.clearTimeout(playingStableTimerRef.current);
+      }
+      playingStableTimerRef.current = window.setTimeout(() => {
+        if (recoveryAttemptsRef.current > 0) {
+          pushLog({
+            source: "diag",
+            level: "info",
+            label: "recovery_counter_reset",
+            details: `${Math.round(PLAYING_STABLE_RESET_MS / 1000)}s estáveis`,
+          });
+        }
+        recoveryAttemptsRef.current = 0;
+        recoveryInFlightRef.current = false;
+        playingStableTimerRef.current = null;
+      }, PLAYING_STABLE_RESET_MS);
+    };
     const onPlaying = () => {
       const wasFirst = !playbackStartedRef.current;
       playbackStartedRef.current = true;
@@ -1494,6 +1540,9 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       clearBootstrapTimeout();
       clearStallTimeout();
       clearLoadeddataWatchdog();
+      // Marca recovery como concluído assim que voltamos a tocar.
+      recoveryInFlightRef.current = false;
+      armPlayingStableTimer();
       if (wasFirst) {
         firstFrameAtRef.current = performance.now();
         const ttff = setupStartRef.current ? Math.round(firstFrameAtRef.current - setupStartRef.current) : 0;
@@ -1537,16 +1586,36 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       lastReasonRef.current = reason;
       setLastReason(reason);
       pushLog({ source: "video", level: "error", label: "error", details: reason });
+
+      // Auto-recuperação silenciosa para MP4 progressivo com erro de pipeline
+      // (servidor cortou conexão TCP). Codec errors NÃO entram aqui.
+      const isPipelineRead = !isCodec && (code === 2 || /PIPELINE_ERROR_READ|FFmpegDemuxer|data source/i.test(msg ?? ""));
+      if (isPipelineRead && triggerProgressiveRecovery(reason)) {
+        return;
+      }
+
       updateStatus(isCodec ? "codec_incompatible" : "stream_error", reason);
       setRootCauseOnce(isCodec ? "codec_incompatible" : "stream_error", reason);
-      setError({
-        title: isCodec ? "Codec incompatível" : "Não foi possível reproduzir",
-        description: isCodec
-          ? "Este canal usa um codec (provavelmente HEVC/4K) que o navegador não decodifica. Abra no VLC para assistir."
-          : "Este conteúdo pode estar offline, em formato incompatível ou bloqueado pelo servidor.",
-        copyUrl: copyTarget,
-        external: isCodec,
-      });
+
+      // Fallback amigável para streams progressivos quando esgotamos as tentativas.
+      const isProgressivePipeline = isPipelineRead && isProgressiveStream;
+      if (isProgressivePipeline) {
+        setError({
+          title: "Conexão com o servidor encerrada",
+          description: "O servidor de streaming pausou a transmissão deste arquivo. Você pode retomar de onde parou.",
+          copyUrl: copyTarget,
+          canResume: true,
+        });
+      } else {
+        setError({
+          title: isCodec ? "Codec incompatível" : "Não foi possível reproduzir",
+          description: isCodec
+            ? "Este canal usa um codec (provavelmente HEVC/4K) que o navegador não decodifica. Abra no VLC para assistir."
+            : "Este conteúdo pode estar offline, em formato incompatível ou bloqueado pelo servidor.",
+          copyUrl: copyTarget,
+          external: isCodec,
+        });
+      }
       setLoading(false);
       clearBootstrapTimeout();
       clearStallTimeout();
@@ -1598,9 +1667,13 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     // martelar localStorage. timeupdate dispara ~4x/s no Chrome.
     let lastProgressAt = 0;
     const onTimeUpdateProgress = () => {
+      const ct = video.currentTime;
+      // Track posição em tempo real para auto-recovery (sem throttle).
+      if (Number.isFinite(ct) && ct > 0) {
+        lastKnownPositionRef.current = ct;
+      }
       const now = performance.now();
       if (now - lastProgressAt < 5000) return;
-      const ct = video.currentTime;
       const dur = video.duration;
       if (!Number.isFinite(ct) || !Number.isFinite(dur) || dur <= 0) return;
       lastProgressAt = now;
@@ -1645,6 +1718,10 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       video.removeEventListener("stalled", onStalled);
       video.removeEventListener("error", onError);
       video.removeEventListener("ended", onEndedNative);
+      if (playingStableTimerRef.current !== null) {
+        window.clearTimeout(playingStableTimerRef.current);
+        playingStableTimerRef.current = null;
+      }
       // Salva uma última vez ao desmontar (usuário fechou o player).
       // Guarda contra o caso de o vídeo já ter sido limpo (src=""):
       // currentTime cai para 0 e gravaríamos lixo por cima do progresso real.
@@ -1700,6 +1777,61 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     setRetryNonce((n) => n + 1);
   };
 
+  /**
+   * Retoma reprodução de stream MP4 progressivo a partir do botão
+   * "Retomar de onde parou". Usa a posição salva e zera o contador
+   * para dar uma nova chance ao usuário.
+   */
+  const handleResumeFromLastPosition = () => {
+    if (!src) return;
+    pushLog({
+      source: "diag",
+      level: "info",
+      label: "manual_resume",
+      details: `pos=${Math.round(lastKnownPositionRef.current)}s`,
+    });
+    recoveryAttemptsRef.current = 0;
+    recoveryInFlightRef.current = false;
+    setError(null);
+    retryCountRef.current = 0;
+    setLoading(true);
+    setRetryNonce((n) => n + 1);
+  };
+
+  /**
+   * Auto-recuperação silenciosa para streams MP4 progressivos quando o
+   * servidor encerra a conexão. Salva a posição, mostra um toast discreto
+   * e força re-setup do player. Retorna true se a recuperação foi disparada.
+   */
+  const triggerProgressiveRecovery = (reason: string): boolean => {
+    if (!isProgressiveStream) return false;
+    if (recoveryInFlightRef.current) return true; // já estamos recuperando
+    if (recoveryAttemptsRef.current >= MAX_PROGRESSIVE_RECOVERIES) return false;
+
+    const v = videoRef.current;
+    const pos = v && Number.isFinite(v.currentTime) ? v.currentTime : lastKnownPositionRef.current;
+    if (pos > 0) lastKnownPositionRef.current = pos;
+    // Faz o próximo setup retomar do ponto salvo (sobrescreve initialTime).
+    const seekTarget = Math.max(0, lastKnownPositionRef.current - 2);
+    initialTimeRef.current = seekTarget;
+    initialSeekDoneRef.current = false;
+
+    recoveryAttemptsRef.current += 1;
+    recoveryInFlightRef.current = true;
+    pushLog({
+      source: "diag",
+      level: "warn",
+      label: "auto_recovery",
+      details: `attempt ${recoveryAttemptsRef.current}/${MAX_PROGRESSIVE_RECOVERIES} — resume@${Math.round(seekTarget)}s — ${reason}`,
+    });
+    try { toast("Reconectando…", { duration: 2500 }); } catch { /* noop */ }
+    setLoading(true);
+    retryCountRef.current = 0;
+    setRetryNonce((n) => n + 1);
+    return true;
+  };
+
+
   const handleEngineChange = (next: PlaybackEngine) => {
     if (next === engine) return;
     if (next === "hls" || next === "mpegts") setPreferredEngine(rawUrl ?? src, next);
@@ -1722,6 +1854,14 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   useEffect(() => {
     setPlaybackRateState(1);
     if (videoRef.current) videoRef.current.playbackRate = 1;
+    // Reseta o contador de auto-recovery — novo conteúdo merece tentativas frescas.
+    recoveryAttemptsRef.current = 0;
+    recoveryInFlightRef.current = false;
+    lastKnownPositionRef.current = 0;
+    if (playingStableTimerRef.current !== null) {
+      window.clearTimeout(playingStableTimerRef.current);
+      playingStableTimerRef.current = null;
+    }
   }, [src]);
 
   // Aplica rate sempre que o vídeo (re)cria ou o estado muda.
@@ -2021,10 +2161,12 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
             <div
               className={cn(
                 "mx-auto h-14 w-14 rounded-full flex items-center justify-center",
-                error.noData ? "bg-yellow-500/15" : "bg-destructive/15",
+                error.noData || error.canResume ? "bg-yellow-500/15" : "bg-destructive/15",
               )}
             >
-              {error.noData ? (
+              {error.canResume ? (
+                <RefreshCw className="h-7 w-7 text-yellow-400" />
+              ) : error.noData ? (
                 <VideoOff className="h-7 w-7 text-yellow-400" />
               ) : (
                 <AlertTriangle className="h-7 w-7 text-destructive" />
@@ -2037,14 +2179,29 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
               {error.description && (
                 <p className="mt-1 text-sm text-muted-foreground">{error.description}</p>
               )}
-              {!error.noData && (
+              {!error.noData && !error.canResume && (
                 <p className="mt-2 text-xs text-muted-foreground">
                   Copie o link e abra no VLC, MX Player ou outro player externo.
                 </p>
               )}
             </div>
             <div className="flex flex-wrap items-center justify-center gap-2">
-              {error.noData ? (
+              {error.canResume ? (
+                <>
+                  <Button onClick={handleResumeFromLastPosition} variant="default" size="sm" className="gap-2">
+                    <RefreshCw className="h-4 w-4" />
+                    Retomar de onde parou
+                  </Button>
+                  <Button onClick={handleClose} variant="outline" size="sm" className="gap-2">
+                    <X className="h-4 w-4" />
+                    Voltar
+                  </Button>
+                  <Button onClick={handleCopy} variant="ghost" size="sm" className="gap-2">
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {copied ? "Copiado" : "Copiar link"}
+                  </Button>
+                </>
+              ) : error.noData ? (
                 <>
                   <Button onClick={handleRetry} variant="default" size="sm" className="gap-2">
                     <RefreshCw className="h-4 w-4" />
