@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, RefreshCw, UserPlus, Trash2, ShieldCheck, Shield, History } from "lucide-react";
+import { Loader2, RefreshCw, UserPlus, Trash2, ShieldCheck, Shield, History, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { invokeAdminApi } from "@/lib/adminApi";
+import { invokeAdminApi, setTeamPassword } from "@/lib/adminApi";
 import AuditLogPanel from "@/components/admin/AuditLogPanel";
 
 type TeamRole = "admin" | "moderator";
@@ -69,6 +69,43 @@ export default function TeamPanel() {
 
   const [confirmRemove, setConfirmRemove] = useState<TeamMember | null>(null);
   const [auditOpen, setAuditOpen] = useState(false);
+
+  const [passwordTarget, setPasswordTarget] = useState<TeamMember | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  const openPasswordDialog = (member: TeamMember) => {
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordTarget(member);
+  };
+
+  const submitPassword = async () => {
+    if (!passwordTarget) return;
+    if (newPassword.length < 8) {
+      toast.error("Senha precisa ter ao menos 8 caracteres");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("As senhas não coincidem");
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await setTeamPassword(passwordTarget.user_id, newPassword);
+      toast.success(
+        passwordTarget.is_self
+          ? "Sua senha foi atualizada"
+          : `Senha de ${passwordTarget.email ?? "usuário"} atualizada`,
+      );
+      setPasswordTarget(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao atualizar senha");
+    } finally {
+      setSavingPassword(false);
+    }
+  };
 
   const fetchTeam = useCallback(async () => {
     setLoading(true);
