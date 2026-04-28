@@ -507,6 +507,44 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ProbeResponse | null>(null);
 
+function buildClientSection(c: ClientProbeResult): string {
+  const sub = "─".repeat(55);
+  const lines: string[] = [];
+  lines.push("");
+  lines.push(sub);
+  lines.push("TESTE CLIENT-SIDE (do seu navegador / IP residencial)");
+  lines.push(sub);
+  lines.push(`Executado em      : ${c.ran_at}`);
+  lines.push(`Resultado         : ${c.any_reachable ? "✅ Servidor ALCANÇÁVEL do seu IP" : "❌ Servidor INACESSÍVEL também do seu IP"}`);
+  c.attempts.forEach((a, i) => {
+    lines.push(`  [${i + 1}] ${a.variant}`);
+    lines.push(`      Estado    : ${a.state === "reachable" ? "✅ acessível" : "❌ inacessível"} (${a.latency_ms}ms)`);
+    lines.push(`      Detalhe   : ${a.detail}`);
+  });
+  return lines.join("\n");
+}
+
+function buildComparisonVerdict(backend: ProbeResponse, client: ClientProbeResult): string {
+  const backendOk = !!backend.best_variant;
+  const clientOk = client.any_reachable;
+  if (!backendOk && clientOk) {
+    return "🎯 BLOQUEIO ANTI-DATACENTER CONFIRMADO\n  • Backend (datacenter) NÃO conseguiu acessar o servidor\n  • Seu navegador (IP residencial) ALCANÇOU o servidor\n  • Conclusão: o painel está vivo, mas filtra ranges de cloud/datacenter\n  • Solução: usar proxy em IP residencial brasileiro, ou pedir à revenda whitelist do nosso IP de backend";
+  }
+  if (backendOk && !clientOk) {
+    return "⚠️ Inverso: backend acessa mas seu navegador não. Pode ser problema de DNS/rede local do seu lado, firewall corporativo ou ISP bloqueando.";
+  }
+  if (!backendOk && !clientOk) {
+    return "❌ Servidor inacessível DE QUALQUER ORIGEM (backend e seu IP). Provavelmente está realmente offline, derrubado, ou domínio expirado/removido.";
+  }
+  return "✅ Servidor acessível tanto do backend quanto do seu navegador. Sem indicação de bloqueio por origem.";
+}
+
+export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }: Props) {
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<ProbeResponse | null>(null);
+  const [clientLoading, setClientLoading] = useState(false);
+  const [clientData, setClientData] = useState<ClientProbeResult | null>(null);
+
   const runProbe = async () => {
     if (!serverUrl) return;
     setLoading(true);
@@ -526,9 +564,35 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
     }
   };
 
+  const runClientTest = async () => {
+    if (!serverUrl) return;
+    setClientLoading(true);
+    setClientData(null);
+    try {
+      const res = await runClientProbe(serverUrl);
+      setClientData(res);
+      if (res.any_reachable && data && !data.best_variant) {
+        toast.success("Bloqueio anti-datacenter confirmado: servidor responde ao seu IP");
+      } else if (res.any_reachable) {
+        toast.success("Servidor alcançável do seu navegador");
+      } else {
+        toast.error("Servidor inacessível também do seu navegador");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro no teste client-side";
+      toast.error(msg);
+    } finally {
+      setClientLoading(false);
+    }
+  };
+
   const handleCopyReport = async () => {
     if (!data) return;
-    const text = buildReport(data, serverLabel);
+    let text = buildReport(data, serverLabel);
+    if (clientData) {
+      text += "\n" + buildClientSection(clientData);
+      text += "\n\n─── VEREDITO COMPARATIVO ───\n" + buildComparisonVerdict(data, clientData);
+    }
     try {
       await navigator.clipboard.writeText(text);
       toast.success("Relatório copiado para a área de transferência");
@@ -539,7 +603,11 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
 
   const handleDownloadReport = () => {
     if (!data) return;
-    const text = buildReport(data, serverLabel);
+    let text = buildReport(data, serverLabel);
+    if (clientData) {
+      text += "\n" + buildClientSection(clientData);
+      text += "\n\n─── VEREDITO COMPARATIVO ───\n" + buildComparisonVerdict(data, clientData);
+    }
     let host = "servidor";
     try {
       host = new URL(data.normalized).hostname.replace(/[^a-z0-9.-]/gi, "_");
@@ -564,8 +632,10 @@ export function ServerProbeDialog({ open, onOpenChange, serverUrl, serverLabel }
   useEffect(() => {
     if (open && serverUrl) {
       runProbe();
+      setClientData(null);
     } else if (!open) {
       setData(null);
+      setClientData(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, serverUrl]);
