@@ -1,100 +1,99 @@
-# Plano: Botão "Exportar Relatório de Diagnóstico"
+## Ação 4 — Recomendação automática + email pronto no relatório
 
-## Objetivo
+Hoje o relatório copiável traz diagnóstico técnico, mas o admin/revendedor ainda precisa **interpretar** e **redigir manualmente** o que cobrar do fornecedor. Vou adicionar uma seção final pronta-pra-colar com:
 
-Permitir que, após sondar uma DNS no painel admin (Servidores → ícone de "probe"), você gere um **relatório formatado** com timestamp, endpoint, status HTTP e diagnóstico legível, e envie pra revenda em 1 clique (copiar pra área de transferência ou baixar `.txt`).
+1. **Veredito de ação** (1 linha): o que fazer agora
+2. **Para quem reclamar**: fornecedor do painel, revenda, ou usuário final
+3. **Email/mensagem pronta** em português, adaptado ao tipo de bloqueio detectado
+4. **Aviso interno pros revendedores** quando o servidor é incompatível com apps web
 
-## Onde fica
+Tudo gerado a partir do que o sistema já detecta (`detectBlockKind`, `buildComparisonVerdict`). Zero mudança no backend.
 
-No diálogo **`ServerProbeDialog`** que já existe em `src/components/admin/ServerProbeDialog.tsx`. Aproveitamos a sondagem que ele já faz (testa 4 variantes da URL: HTTP/HTTPS, com/sem `/c/`) e formatamos o resultado.
+### Como vai aparecer no relatório (.txt e copiar)
 
-## Como o relatório vai ficar
-
-Texto puro (Markdown leve), pronto pra colar em WhatsApp/Telegram/email:
+Adicionado **depois** do "VEREDITO COMPARATIVO" atual, uma nova seção:
 
 ```text
-═══════════════════════════════════════════════
-RELATÓRIO DE DIAGNÓSTICO DE SERVIDOR IPTV
-═══════════════════════════════════════════════
+───────────────────────────────────────────────────────
+RECOMENDAÇÃO AUTOMÁTICA
+───────────────────────────────────────────────────────
 
-Data/Hora do teste : 28/04/2026 00:45:12 (UTC-3)
-Servidor testado   : http://fogwekl.top
-Origem do teste    : Backend Lovable Cloud
-                     (datacenter, IPv4)
+Ação sugerida    : Contatar fornecedor do painel para liberar whitelist
+Responsável      : Dono/admin do painel bkpac.cc
+Prioridade       : Alta — painel inacessível para todos os usuários web
+Aviso revendas   : ⚠️ Este servidor NÃO funciona em apps web (datacenter blocked).
+                   Recomende aos revendedores que o substituam ou aguardem
+                   liberação do whitelist antes de cadastrar novos clientes.
 
-─── RESULTADO RESUMIDO ────────────────────────
-Status geral       : ❌ FORA DO AR
-Variantes testadas : 4
-Melhor resposta    : nenhuma respondeu OK
+─── MENSAGEM PRONTA PARA O FORNECEDOR ───
 
-─── DETALHAMENTO POR VARIANTE ─────────────────
+Olá,
 
-[1] http://fogwekl.top/player_api.php
-    HTTP Status   : 444
-    Latência      : 308 ms
-    Xtream válido : não
-    Erro          : —
-    Diagnóstico   : Conta suspensa (Cloudflare 444)
-    Resposta      : "This account has been suspended"
+Identificamos que o servidor http://bkpac.cc está bloqueando ativamente
+conexões originadas de IPs de datacenter/cloud, mas aceita conexões de
+IPs residenciais brasileiros normalmente.
 
-[2] http://fogwekl.top/c/player_api.php
-    HTTP Status   : 444
-    Latência      : 295 ms
-    ...
+Evidência técnica:
+  • Backend (cloud): TCP RST imediato em ~219ms na porta 80
+  • Navegador residencial: pacote completo aceito em ~224ms na mesma porta
+  • Demais portas (443, 2052, 2082, 2095, 8080, 8880): fechadas
 
-[3] https://fogwekl.top/player_api.php
-    HTTP Status   : 444
-    ...
+Isso impede que o painel funcione em qualquer aplicativo web hospedado
+em nuvem (Vercel, AWS, Cloudflare, Supabase, etc.).
 
-[4] https://fogwekl.top/c/player_api.php
-    HTTP Status   : 444
-    ...
+Solicitamos uma das opções:
+  1. Adicionar nosso range de IPs à whitelist do firewall
+  2. Desativar a regra anti-datacenter para o endpoint /player_api.php
+  3. Confirmar se há um endpoint/proxy alternativo para integrações
 
-─── INTERPRETAÇÃO ─────────────────────────────
-O painel respondeu com HTTP 444 ("account suspended")
-em todas as variantes. Isso indica que a conta na
-hospedagem do painel foi suspensa/desativada na
-origem. Não é problema de bloqueio de IP, firewall
-ou credencial — o servidor está retornando essa
-mensagem para qualquer requisição de qualquer IP.
+Relatório técnico completo em anexo.
 
-Por favor verificar:
-  • Status da conta de hospedagem do painel
-  • Possível bloqueio por denúncia/abuso
-  • Necessidade de migrar para nova URL/DNS
-
-═══════════════════════════════════════════════
-Gerado por: Webplayer Admin
-ID do teste: 7f3c2a91-...
-═══════════════════════════════════════════════
+Atenciosamente,
+[Seu nome]
+═══════════════════════════════════════════════════════
 ```
 
-## Mudanças no código
+### Como o sistema decide o conteúdo
 
-### 1. `src/components/admin/ServerProbeDialog.tsx`
-- Adicionar 2 botões no rodapé do diálogo, ao lado do "Testar novamente":
-  - **"Copiar relatório"** → copia o texto formatado pro clipboard, mostra toast "Relatório copiado"
-  - **"Baixar .txt"** → baixa arquivo `diagnostico-{host}-{timestamp}.txt`
-- Criar função `buildReport(response: ProbeResponse)` que gera o texto acima
-- Criar função `interpretResults(response)` que escreve o parágrafo de "Interpretação" baseado nos status HTTP encontrados:
-  - Todos `444` + body "account suspended" → "Conta suspensa na origem"
-  - Todos `404` → "Painel respondeu mas endpoint Xtream não existe / DNS bloqueando nosso IP"
-  - Todos `Connection reset` → "Servidor cortando conexão (provável bloqueio de IP de datacenter)"
-  - Todos `timeout` → "Servidor não respondeu no prazo (offline ou rede sobrecarregada)"
-  - Algum `auth=1` → "Servidor OK, credenciais válidas"
-  - Algum `200` mas sem `auth` → "Servidor OK mas resposta não-Xtream (não é um painel IPTV padrão)"
-  - Misto → lista cada caso
+A função nova `buildRecommendation(backend, client)` retorna `{action, target, priority, resellerWarning, message}` baseado em:
 
-### 2. Sem mudanças no backend
-A função `check-server` (Edge) já retorna tudo que precisamos. Não vou tocar nela.
+| Cenário detectado | Ação sugerida | Para quem | Tem email? |
+|---|---|---|---|
+| `🎯 Bloqueio anti-datacenter confirmado` | Pedir whitelist do range cloud | Fornecedor do painel | Sim, com latência comparativa |
+| `waf_block` / `ddos_protection` (CF Challenge) | Desativar challenge no /player_api.php | Fornecedor do painel | Sim |
+| `ip_block_403` / `ip_block_404_nginx` unânime | Whitelist de IP | Fornecedor | Sim |
+| `geoblock` unânime | Liberar país do datacenter | Fornecedor | Sim |
+| `rate_limit` unânime | Aumentar limite por IP | Fornecedor | Sim |
+| `suspended` unânime | Hospedagem caiu, migrar URL | Revenda (não tem como o cliente resolver) | Mensagem interna |
+| `expired_account` unânime | Renovar assinatura | Usuário final / revenda | Mensagem ao usuário |
+| `xtream_invalid_creds` unânime | Conferir login/senha | Usuário final | Mensagem ao usuário |
+| `dns_error` unânime | Domínio expirado/removido | Fornecedor (provavelmente offline definitivo) | Mensagem informativa |
+| `default_landing` unânime | DNS apontando errado | Fornecedor | Sim |
+| `xtream_ok` em alguma variante | Usar URL correta detectada | Nenhum — é só configurar | Sem email |
+| Qualquer outro / misto | "Diagnóstico inconclusivo, ver detalhamento" | — | Sem email |
 
-## O que NÃO vou fazer
+### UI no diálogo
 
-- Não vou criar nova tabela no banco — relatório é gerado on-the-fly, não fica salvo
-- Não vou criar nova edge function
-- Não vou mexer nas outras abas do admin
-- Não vou adicionar envio automático por email/WhatsApp (você copia e cola onde quiser)
+Acima dos botões "Copiar relatório" / "Baixar .txt", aparece um **card destacado** com:
 
-## Resultado esperado
+- Ícone + título da ação (ex: "🎯 Pedir whitelist ao fornecedor")
+- Linha resumo (1 frase)
+- Botão **"Copiar mensagem para fornecedor"** que copia só o email pronto (sem o relatório técnico) — útil quando o admin quer mandar pelo WhatsApp/Telegram do dono do painel
+- Aviso laranja se `resellerWarning` existir (alertando pra não cadastrar mais clientes nesse painel)
 
-Você abre **Admin → Servidores**, clica no ícone "Sondar" da DNS problemática (`bkpac.cc`, `fogwekl.top`, etc.), espera o teste rodar (~3-8s), e clica em **"Copiar relatório"**. Cola direto no chat com a revenda. Eles veem timestamp + status HTTP + interpretação técnica em português, sem precisar abrir DevTools ou explicar nada.
+O card só aparece quando há recomendação acionável (não aparece pra `xtream_ok`).
+
+### Detalhes técnicos
+
+- Tudo client-side em `src/components/admin/ServerProbeDialog.tsx` — sem migração, sem edge function nova
+- Nova função pura `buildRecommendation(d: ProbeResponse, c: ClientProbeResult | null)` retornando `RecommendationResult | null`
+- Email template usa `serverLabel`, `serverUrl`, latências do backend e (se disponível) do client probe — tudo já no estado do componente
+- `handleCopyReport` e `handleDownloadReport` passam a anexar a seção "RECOMENDAÇÃO AUTOMÁTICA" quando aplicável
+- Novo handler `handleCopyMessageOnly` pra copiar só o email
+- Pra `🎯 Bloqueio anti-datacenter confirmado` o template usa as latências reais (`backend.results[0].latency_ms` vs `client.attempts[0].latency_ms`) pra dar evidência concreta no email
+
+### Fora do escopo (para próximas iterações)
+
+- Buscar IP de saída do backend dinamicamente para incluir no email (Ação D da conversa anterior — pode ser separada)
+- Salvar histórico (Ação 3) — escopo separado
+- Marcar servidor como bloqueado na tabela (Ação 2) — escopo separado
