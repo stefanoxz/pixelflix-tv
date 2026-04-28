@@ -47,12 +47,12 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal, 
   const activeKey = active || seasons[0];
 
   return (
-    <div className="pt-2 space-y-5">
-      <div className="space-y-2 pb-3 border-b border-border/40">
-        <p className="text-base font-semibold text-foreground/80">
-          Temporadas
-        </p>
-        <div className="flex flex-wrap gap-2.5">
+    <div className="pt-1 space-y-4">
+      <div className="border-b border-border/40">
+        <div
+          className="flex gap-1 overflow-x-auto whitespace-nowrap -mx-1 px-1 scrollbar-thin"
+          style={{ scrollbarWidth: "thin" }}
+        >
           {seasons.map((sk) => {
             const isActive = activeKey === sk;
             return (
@@ -60,20 +60,26 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal, 
                 key={sk}
                 onClick={() => setActive(sk)}
                 className={cn(
-                  "px-5 py-2.5 rounded-lg text-base font-bold transition-smooth border",
+                  "relative px-3 md:px-4 py-2.5 text-sm md:text-base font-semibold transition-smooth shrink-0 focus:outline-none",
                   isActive
-                    ? "bg-primary text-primary-foreground border-primary scale-105 shadow-[0_0_0_3px_hsl(var(--primary)/0.25)]"
-                    : "bg-secondary/60 text-foreground/80 border-border/60 hover:bg-secondary hover:border-primary/40",
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground/80",
                 )}
               >
-                T{sk}
+                Temporada {sk}
+                <span
+                  className={cn(
+                    "absolute left-2 right-2 -bottom-px h-[3px] rounded-t-sm transition-all",
+                    isActive ? "bg-primary opacity-100" : "opacity-0",
+                  )}
+                />
               </button>
             );
           })}
         </div>
       </div>
 
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 max-h-[55vh] overflow-y-auto pr-1">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 max-h-[55vh] md:max-h-[45vh] overflow-y-auto pr-1">
         {current.map((ep) => {
           const ext = ep.container_extension;
           const external = isExternalOnly(ext, ep.direct_source);
