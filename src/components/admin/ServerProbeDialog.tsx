@@ -394,9 +394,19 @@ function buildReport(d: ProbeResponse, label: string | null | undefined): string
     if (r.auth !== null && r.auth !== undefined) lines.push(`    auth=         : ${r.auth}`);
     if (r.error) lines.push(`    Erro técnico  : ${r.error.length > 200 ? r.error.slice(0, 200) + "…" : r.error}`);
     lines.push(`    Diagnóstico   : ${diagnoseVariant(r)}`);
+    if (r.headers && Object.keys(r.headers).length > 0) {
+      const interesting = ["server", "cf-ray", "cf-mitigated", "cf-cache-status", "x-powered-by", "retry-after", "x-ratelimit-remaining", "x-sucuri-id", "via", "location"];
+      const hdrs = interesting
+        .map((k) => {
+          const v = h(r, k);
+          return v ? `${k}: ${v.length > 80 ? v.slice(0, 80) + "…" : v}` : null;
+        })
+        .filter(Boolean);
+      if (hdrs.length > 0) lines.push(`    Headers       : ${hdrs.join(" | ")}`);
+    }
     if (r.body_preview) {
-      const preview = r.body_preview.length > 150 ? r.body_preview.slice(0, 150) + "…" : r.body_preview;
-      lines.push(`    Resposta      : "${preview.replace(/\n/g, " ")}"`);
+      const preview = r.body_preview.length > 200 ? r.body_preview.slice(0, 200) + "…" : r.body_preview;
+      lines.push(`    Resposta      : "${preview.replace(/\s+/g, " ").trim()}"`);
     }
   });
   lines.push("");
