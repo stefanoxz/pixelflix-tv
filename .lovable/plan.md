@@ -1,88 +1,59 @@
-# Episódios em grade lado a lado, responsiva
+# Refinar tela inicial (Destaques) no desktop
 
-## Objetivo
+## Diagnóstico do que está incomodando
+Olhando a captura enviada (1347×853, layout `md+`):
+1. **Hero ocupa quase toda a dobra** (`h-[68vh]` no md, `min-h-[460px]`) — em telas widescreen baixas (≈800–900px de altura), só o herói aparece, gerando a sensação de "tela vazia".
+2. **Texto descritivo genérico** ("Descubra milhares de filmes...") repete o que o pôster já comunica e empurra os botões pra baixo.
+3. **Quick stats (Canais ao Vivo / Filmes / Séries)** ficam abaixo da dobra, com ícones de apenas 40×40px (`h-10 w-10`) e tipografia de stat menor — parecem secundários quando deveriam ser **atalhos primários**.
+4. **Mobile e tablet estão bem dimensionados** — qualquer ajuste precisa ser escopado por breakpoint pra não quebrá-los.
 
-Trocar a lista vertical de episódios (1 por linha, com still horizontal de 36×20) por uma **grade de cards** que se adapta:
+## O que vou mudar (somente desktop ≥ md, mobile intocado)
 
-- Mobile (<640px): **2 colunas**
-- Tablet (≥640px): **2-3 colunas**
-- Desktop (≥1024px): **3-4 colunas**
+### 1) Hero mais compacto e cheio
+Arquivo: `src/pages/Highlights.tsx` — `<section>` do hero (linhas ~201–383)
 
-Cada card mantém: still 16:9 no topo, número + título embaixo, sinopse em 2 linhas, badge de formato, botão Play (ou ExternalLink quando externo).
+- **Altura**: trocar `md:h-[68vh] md:min-h-[460px]` por `md:h-[58vh] lg:h-[60vh] md:min-h-[420px] md:max-h-[640px]`. Mantém `h-[55vh] min-h-[380px]` no mobile.
+- **Remover o parágrafo genérico** "Descubra milhares de filmes..." apenas no desktop (mantém no mobile, onde ainda preenche bem). Implementação: envolver o `<p>` em `className="... md:hidden"`.
+- **Padding inferior** do hero: reduzir `md:pb-12` → `md:pb-8` para aproximar os atalhos rápidos da dobra.
 
-## Mudança
+### 2) Atalhos rápidos com mais peso visual no desktop
+Arquivo: `src/pages/Highlights.tsx` — `<section className="grid grid-cols-3 ...">` (linhas ~390–419)
 
-Arquivo único: **`src/components/library/SeriesEpisodesPanel.tsx`** — substituir o `space-y-2.5` (lista vertical) por uma `grid` responsiva e remontar cada item como **card vertical**.
+Reescrever o card mantendo a mesma estrutura semântica, mas escalando ícone, número e adicionando uma label de ação no md+:
 
-### Novo layout do card
+- Ícone container: `h-9 w-9 md:h-14 md:w-14 lg:h-16 lg:w-16` (era `md:h-10 md:w-10`) com `rounded-xl` e ícone interno `h-4 w-4 md:h-7 md:w-7 lg:h-8 lg:w-8`.
+- Número: `text-2xl md:text-4xl lg:text-5xl` (era `md:text-3xl`).
+- Label: `text-xs md:text-base` + uma micro-label "Explorar →" em `md:` que substitui a setinha do canto superior por um CTA mais explícito.
+- Padding do card: `p-4 md:p-7 lg:p-8` (era `md:p-6`).
+- Adicionar gap maior entre cards no desktop: `gap-3 md:gap-5`.
+
+Isso deixa cada atalho ≈40% mais "presente" no desktop sem aumentar nada no mobile (mesmo `h-9 w-9`, `text-2xl`, `p-4`, `gap-3`).
+
+### 3) Ajuste fino de respiro
+- Reduzir o `space-y-12` do container principal para `space-y-10 md:space-y-8` — fecha o "buraco" entre hero e stats no desktop, mantém respiro confortável no mobile.
+
+## Resumo visual antes/depois (desktop ~1347×853)
 
 ```text
-┌────────────────────┐
-│                    │  still 16:9 (cobre largura)
-│      [▶ play]      │  badge MP4 sobreposto canto sup. dir.
-│                    │
-├────────────────────┤
-│ 1. Título do ep    │  título: 1 linha, truncate
-│ Sinopse curta em   │  plot: 2 linhas, line-clamp-2
-│ duas linhas no     │
-│ máximo aqui...     │
-└────────────────────┘
+ANTES                              DEPOIS
+┌──────────────────────────┐      ┌──────────────────────────┐
+│  Header                  │      │  Header                  │
+├──────────────────────────┤      ├──────────────────────────┤
+│                          │      │                          │
+│      HERO 68vh           │      │      HERO 58vh           │
+│   (texto longo + dots)   │      │   (sem parágrafo extra)  │
+│                          │      │                          │
+│                          │      ├──────────────────────────┤
+└──────────────────────────┘      │ ⬛ 245     ⬛ 12k    ⬛ 8k │
+   ↓ (scroll necessário)          │ Canais    Filmes   Séries│
+   ⬜ 245  ⬜ 12k  ⬜ 8k            │ Explorar→ Explorar→ ...  │
+                                  └──────────────────────────┘
 ```
 
-- Card inteiro é o botão Play (ou abre o link externo).
-- Hover: leve `scale-[1.02]` + borda `primary/40` (transição suave).
-- Episódios externos: ícone ExternalLink no canto sup. esquerdo do still em vez do botão flutuante separado.
+## Arquivos afetados
+- `src/pages/Highlights.tsx` (único arquivo) — alterações isoladas em três blocos: `<section>` do hero, parágrafo descritivo, `<section>` dos quick stats, e `space-y` do container.
 
-### Container
-
-```tsx
-<div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 max-h-[55vh] overflow-y-auto pr-1">
-  {current.map((ep) => ( ... ))}
-</div>
-```
-
-### Card
-
-```tsx
-<button
-  type="button"
-  onClick={() => (external ? onCopyExternal(ep) : onPlay(ep))}
-  className="group flex flex-col text-left rounded-lg overflow-hidden bg-card border border-border/40 hover:border-primary/40 hover:bg-secondary/40 transition-smooth"
->
-  <div className="relative aspect-video w-full bg-secondary overflow-hidden">
-    {displayStill ? (
-      <SafeImage ... className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
-    ) : (
-      <div className="h-full w-full flex items-center justify-center">
-        <Play className="h-8 w-8 text-muted-foreground" />
-      </div>
-    )}
-    {/* badge formato */}
-    <span className={cn("absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded border", toneClasses[badge.tone])}>
-      {badge.label}
-    </span>
-    {/* play / external indicator no canto inferior direito */}
-    <div className="absolute bottom-2 right-2 h-9 w-9 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-      {external ? <ExternalLink className="h-4 w-4" /> : <Play className="h-4 w-4 fill-current" />}
-    </div>
-  </div>
-  <div className="p-3 space-y-1 min-w-0">
-    <p className="text-sm font-semibold text-foreground truncate">
-      {ep.episode_num}. {displayTitle}
-    </p>
-    {displayPlot && (
-      <p className="text-xs text-muted-foreground line-clamp-2 leading-snug">
-        {displayPlot}
-      </p>
-    )}
-  </div>
-</button>
-```
-
-O `Tooltip` separado para externos some — o botão do card já trata o clique. (Mantém o `TooltipProvider` removido só desse componente, sem outros impactos.)
-
-## Resultado
-
-- No celular o usuário enxerga 2 episódios por linha (em vez de 1), reduzindo scroll.
-- Em desktop a grade aproveita melhor o espaço horizontal disponível no diálogo.
-- Sem mudança em SeriesDetailsDialog, hooks, dados ou playback.
+## Garantias de não-regressão mobile/tablet
+- Todos os tamanhos novos (`md:h-14`, `md:text-4xl`, `md:p-7`, `md:hidden`, etc.) usam o prefixo `md:` ou maior — nada abaixo de 768px é alterado.
+- O hero rotativo, mini-pôsteres laterais, dots e CTAs continuam idênticos em comportamento.
+- `ContinueWatchingRail`, `Filmes populares` e `Séries em alta` ficam intactos.
