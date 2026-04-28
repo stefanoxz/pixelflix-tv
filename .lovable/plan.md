@@ -1,37 +1,50 @@
-## Diagnóstico
+Plano para tratar melhor este caso de HTTP 404 no login M3U
 
-O erro indica que o login via URL M3U chegou até a função de login, mas o servidor extraído da URL (`http://anverif.top`) respondeu **HTTP 404** no endpoint Xtream testado (`/player_api.php`). Hoje o fluxo trata esse 404 como falha definitiva e para imediatamente.
+O fallback anterior já está sendo chamado, mas os logs mostram que ele também falhou:
 
-Em painéis IPTV, isso pode acontecer por dois motivos comuns:
+```text
+m3u_register PLAYLIST_FALLBACK_FAIL after=404 server=http://anverif.top reason=playlist-fallback-failed
+m3u_register FAIL host=http://anverif.top reason=HTTP 404 status=404 ct=null preview=
+```
 
-1. A DNS existe, mas o Xtream API não está disponível exatamente na variante testada.
-2. A URL M3U funciona em `/get.php?...type=m3u_plus`, mesmo quando `/player_api.php` retorna 404.
+Isso significa que o backend tentou `/player_api.php` e depois `/get.php`, mas não encontrou uma playlist M3U válida nesse host base. Vou melhorar o fluxo para diagnosticar e cobrir mais variantes reais de painéis IPTV.
 
-## Plano de correção
+Implementação proposta
 
-1. **Ampliar o fallback do login M3U**
-   - No `m3u_register`, quando o `/player_api.php` retornar `404`, tentar também o fallback de playlist em `/get.php?username=...&password=...&type=m3u_plus&output=ts`.
-   - Hoje esse fallback só roda para `200 não JSON` ou `401`; será expandido para `404`.
+1. Melhorar o fallback de playlist no `iptv-login`
+   - Fazer `tryPlaylistFallback` retornar detalhes da melhor falha encontrada: status HTTP, content-type, variante testada e prévia do corpo.
+   - Testar variações adicionais comuns do endpoint de playlist:
+     - `/get.php?username=...&password=...&type=m3u_plus&output=ts`
+     - `/get.php?username=...&password=...&type=m3u_plus`
+     - `/get.php?username=...&password=...&type=m3u`
+     - `/playlist/{username}/{password}/m3u_plus`
+   - Continuar aceitando sucesso somente quando a resposta for uma playlist real (`#EXTM3U`), para não auto-cadastrar DNS inválida.
 
-2. **Melhorar classificação do erro 404 vazio**
-   - Mapear `HTTP 404` sem corpo como `SERVER_UNREACHABLE` com mensagem mais clara: DNS/endpoint não parece ser um painel Xtream válido ou está desatualizado.
-   - Manter os detalhes técnicos no toast para diagnóstico.
+2. Preservar o erro do fallback no retorno técnico
+   - Quando `/player_api.php` retornar 404 e o fallback também falhar, devolver no `debug` também um campo como `playlistFallback` contendo:
+     - endpoint/variante tentada
+     - status retornado
+     - content-type
+     - motivo da falha
+     - bodyPreview
+   - Assim, o botão “Copiar detalhes” mostrará se o `/get.php` também está dando 404, 403, HTML, vazio etc.
 
-3. **Preservar segurança do auto-cadastro**
-   - A DNS só será auto-cadastrada se um dos testes autenticar de verdade:
-     - `player_api.php` retornar `user_info.auth=1`, ou
-     - `get.php` retornar uma playlist válida começando com `#EXTM3U`.
-   - Um 404 sozinho nunca cadastra a DNS.
+3. Melhorar a mensagem para o usuário/admin
+   - Se tanto `player_api.php` quanto `get.php`/`playlist/...` derem 404 vazio, manter como `SERVER_UNREACHABLE`, mas com mensagem mais direta:
+     - “A DNS respondeu, mas não possui endpoints Xtream/M3U válidos nesse endereço. Verifique se a URL M3U completa está atualizada ou se há porta/caminho específico.”
+   - Isso evita parecer erro genérico quando, na prática, o domínio `http://anverif.top` sozinho não expõe os endpoints esperados.
 
-4. **Atualizar logs para facilitar suporte**
-   - Registrar no log quando o fallback de playlist foi tentado após 404.
-   - Isso diferencia “DNS offline/desatualizada” de “painel sem Xtream API mas playlist válida”.
+4. Validar que o auto-cadastro continua seguro
+   - Auto-cadastrar em `allowed_servers` apenas se:
+     - Xtream API autenticar com `auth=1`, ou
+     - fallback retornar playlist real iniciando com `#EXTM3U`.
+   - Não cadastrar quando houver 404 vazio, HTML, erro de bloqueio ou resposta sem playlist.
 
-## Arquivos a alterar
+Arquivos envolvidos
 
 - `supabase/functions/iptv-login/index.ts`
+  - Ajustar `tryPlaylistFallback`, retorno de erro e `debug` no modo `m3u_register`.
 
-## Resultado esperado
+Observação importante
 
-- Se a URL M3U for válida mas o painel não responder em `/player_api.php`, o app ainda tenta `/get.php` antes de falhar.
-- Se `anverif.top` realmente estiver retornando 404 também no M3U, o usuário verá um erro mais claro indicando DNS/endpoint inválido ou desatualizado.
+Se `anverif.top` realmente não tiver `/player_api.php`, `/get.php` nem `/playlist/...` disponíveis na porta informada, o login ainda vai falhar corretamente. A correção vai garantir que o sistema tente os formatos mais comuns e retorne um diagnóstico preciso para saber se falta porta, caminho específico, DNS atualizada ou se o provedor bloqueia o acesso pelo backend.

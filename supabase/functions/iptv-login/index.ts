@@ -522,20 +522,61 @@ async function tryPlaylistFallback(
   password: string,
 ): Promise<
   | { ok: true; data: any; usedVariant: string }
-  | { ok: false; reason: string; bodyPreview?: string }
+  | {
+      ok: false;
+      reason: string;
+      attempts: Array<{
+        variant: string;
+        endpoint: string;
+        status?: number;
+        contentType?: string | null;
+        bodyPreview?: string;
+        error?: string;
+      }>;
+    }
 > {
   const variants = buildVariants(serverBase, "fast");
+  // Endpoints de playlist mais comuns em painéis Xtream/clones. Cada base
+  // (http/https/porta) é combinada com cada endpoint.
+  const endpoints = (u: string, p: string) => [
+    `/get.php?username=${u}&password=${p}&type=m3u_plus&output=ts`,
+    `/get.php?username=${u}&password=${p}&type=m3u_plus`,
+    `/get.php?username=${u}&password=${p}&type=m3u`,
+    `/playlist/${u}/${p}/m3u_plus`,
+  ];
+  const u = encodeURIComponent(username);
+  const p = encodeURIComponent(password);
+  const attempts: Array<{
+    variant: string;
+    endpoint: string;
+    status?: number;
+    contentType?: string | null;
+    bodyPreview?: string;
+    error?: string;
+  }> = [];
+
   for (const base of variants) {
-    const url = `${base}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`;
-    const r = await fetchOnce(url, PRIMARY_UA);
-    if ("error" in r) continue;
-    const { res, body } = r;
-    if (!res.ok) continue;
-    const trimmed = (body ?? "").trimStart();
-    if (!trimmed.startsWith("#EXTM3U")) {
-      // Guardamos preview só do primeiro candidato para retorno em erro.
-      continue;
-    }
+    for (const ep of endpoints(u, p)) {
+      const url = `${base}${ep}`;
+      const r = await fetchOnce(url, PRIMARY_UA);
+      if ("error" in r) {
+        attempts.push({ variant: base, endpoint: ep, error: r.error });
+        // Erro de transporte para esta base — pula os demais endpoints dela.
+        break;
+      }
+      const { res, body } = r;
+      const contentType = res.headers.get("content-type");
+      const trimmed = (body ?? "").trimStart();
+      if (!res.ok || !trimmed.startsWith("#EXTM3U")) {
+        attempts.push({
+          variant: base,
+          endpoint: ep,
+          status: res.status,
+          contentType,
+          bodyPreview: trimmed.slice(0, 160),
+        });
+        continue;
+      }
     // Sucesso — montamos resposta no formato esperado pelo cliente.
     return {
       ok: true,
