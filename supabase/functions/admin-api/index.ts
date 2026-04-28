@@ -304,7 +304,7 @@ Deno.serve(async (req) => {
           recent_errors: (recentErrors.data ?? []).map((e: { id: string; anon_user_id: string | null; event_type: string; ip: string | null; meta: Record<string, unknown> | null; created_at: string }) => ({ id: e.id, anon_user_id: e.anon_user_id, event_type: e.event_type, ip_masked: maskIp(e.ip), meta: e.meta, created_at: e.created_at })),
           top_rejected_ips: Array.from(ipCounts.entries()).map(([ip, count]) => ({ ip_masked: maskIp(ip), count })).sort((a, b) => b.count - a.count).slice(0, 10),
         },
-        top_consumers: Array.from(usageMap.values()).map((r) => ({ ...r, iptv_username: nameMap.get(r.anon_user_id) || "" })).sort((a, b) => b.requests - a.requests).slice(0, 20),
+        top_consumers: Array.from(usageMap.values()).map((r) => ({ ...r, iptv_username: nameMap.get(r.anon_user_id) || "", server_host: serverMap.get(r.anon_user_id) || "" })).sort((a, b) => b.requests - a.requests).slice(0, 20),
       });
     }
 
