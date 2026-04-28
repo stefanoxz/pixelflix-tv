@@ -1533,27 +1533,27 @@ const Admin = () => {
                               </span>
                             </div>
                             <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                              <span>{s.unique_users} usuários</span>
-                              <span className="text-success">{s.success_count} ok</span>
-                              <span className="text-destructive">{s.fail_count} falhas</span>
+                              <span className="whitespace-nowrap">{s.unique_users} usuários</span>
+                              <span className="whitespace-nowrap text-success">{s.success_count} ok</span>
+                              <span className="whitespace-nowrap text-destructive">{s.fail_count} falhas</span>
                               {s.last_seen ? (
-                                <span>último uso há {formatRelative(s.last_seen)}</span>
+                                <span className="whitespace-nowrap">último uso há {formatRelative(s.last_seen)}</span>
                               ) : (
-                                <span className="italic">nunca usado</span>
+                                <span className="italic whitespace-nowrap">nunca usado</span>
                               )}
-                              {s.notes && <span>• {s.notes}</span>}
+                              {s.notes && <span className="whitespace-nowrap">• {s.notes}</span>}
                             </div>
                             {(() => {
                               const h = health[s.server_url];
                               if (!h) {
                                 return (
-                                  <div className="text-xs text-muted-foreground mt-1">
+                                  <div className="text-xs text-muted-foreground">
                                     Verificando ping…
                                   </div>
                                 );
                               }
                               return (
-                                <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                                   {(() => {
                                     const b = stateBadge(h.state);
                                     return (
