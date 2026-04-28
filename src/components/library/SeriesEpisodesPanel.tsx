@@ -109,80 +109,109 @@ export function SeriesEpisodesPanel({ episodesBySeason, onPlay, onCopyExternal, 
         </div>
       </div>
 
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 max-h-[55vh] md:max-h-[45vh] overflow-y-auto pr-1">
-        {current.map((ep) => {
-          const ext = ep.container_extension;
-          const external = isExternalOnly(ext, ep.direct_source);
-          const badge = getFormatBadge(ext, ep.direct_source);
-          // Pure display overlay — never replaces the playable Episode object.
-          const epNum = Number(ep.episode_num);
-          const ov = activeOverlay && Number.isFinite(epNum)
-            ? activeOverlay.get(epNum)
-            : null;
-          // TMDB sometimes returns generic placeholders like "Episódio N" with
-          // empty overview — treat those as misses and prefer the server data.
-          const ovName = ov?.name?.trim() || "";
-          const ovIsPlaceholder =
-            !!ovName && /^epis(ó|o)dio\s*\d+$/i.test(ovName);
-          const displayTitle = ovName && !ovIsPlaceholder ? ovName : ep.title;
-          const displayPlot = ov?.overview?.trim() || ep.info?.plot;
-          const displayStill = ep.info?.movie_image || ov?.still || null;
-          return (
-            <button
-              key={ep.id}
-              type="button"
-              onClick={() => (external ? onCopyExternal(ep) : onPlay(ep))}
-              title={external ? "Copiar link para player externo" : undefined}
-              className="group flex flex-col text-left rounded-lg overflow-hidden bg-card border border-border/40 hover:border-primary/40 hover:bg-secondary/40 transition-smooth"
-            >
-              <div className="relative aspect-video w-full bg-secondary overflow-hidden">
-                {displayStill ? (
-                  <SafeImage
-                    src={
-                      ep.info?.movie_image
-                        ? proxyImageUrl(displayStill, { w: 480, h: 270, q: 75 })
-                        : displayStill
-                    }
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center">
-                    <Play className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                )}
-                <span
-                  title={badge.tooltip}
-                  className={cn(
-                    "absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded border tracking-wide backdrop-blur-sm",
-                    toneClasses[badge.tone],
-                  )}
-                >
-                  {badge.label}
-                </span>
-                <div className="absolute bottom-2 right-2 h-9 w-9 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
-                  {external ? (
-                    <ExternalLink className="h-4 w-4" />
+      <div className="relative group/track">
+        <button
+          type="button"
+          onClick={() => scrollByAmount(-1)}
+          aria-label="Episódios anteriores"
+          className={cn(
+            "hidden md:flex absolute left-1 top-[42%] -translate-y-1/2 z-10 h-11 w-11 items-center justify-center rounded-full bg-background/90 border border-border/60 text-foreground shadow-lg backdrop-blur transition-all hover:bg-background hover:scale-105",
+            canPrev ? "opacity-0 group-hover/track:opacity-100" : "opacity-0 pointer-events-none",
+          )}
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => scrollByAmount(1)}
+          aria-label="Próximos episódios"
+          className={cn(
+            "hidden md:flex absolute right-1 top-[42%] -translate-y-1/2 z-10 h-11 w-11 items-center justify-center rounded-full bg-background/90 border border-border/60 text-foreground shadow-lg backdrop-blur transition-all hover:bg-background hover:scale-105",
+            canNext ? "opacity-0 group-hover/track:opacity-100" : "opacity-0 pointer-events-none",
+          )}
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+
+        <div
+          ref={trackRef}
+          className="flex gap-3 md:gap-4 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory scroll-smooth"
+          style={{ scrollbarWidth: "thin" }}
+        >
+          {current.map((ep) => {
+            const ext = ep.container_extension;
+            const external = isExternalOnly(ext, ep.direct_source);
+            const badge = getFormatBadge(ext, ep.direct_source);
+            const epNum = Number(ep.episode_num);
+            const ov = activeOverlay && Number.isFinite(epNum)
+              ? activeOverlay.get(epNum)
+              : null;
+            const ovName = ov?.name?.trim() || "";
+            const ovIsPlaceholder =
+              !!ovName && /^epis(ó|o)dio\s*\d+$/i.test(ovName);
+            const displayTitle = ovName && !ovIsPlaceholder ? ovName : ep.title;
+            const displayPlot = ov?.overview?.trim() || ep.info?.plot;
+            const displayStill = ep.info?.movie_image || ov?.still || null;
+            const epLabel = `E${String(ep.episode_num).padStart(2, "0")}`;
+            return (
+              <button
+                key={ep.id}
+                type="button"
+                onClick={() => (external ? onCopyExternal(ep) : onPlay(ep))}
+                title={
+                  external
+                    ? "Copiar link para player externo"
+                    : displayPlot || `${epLabel} · ${displayTitle}`
+                }
+                className="group shrink-0 snap-start flex flex-col text-left rounded-lg overflow-hidden bg-card border border-border/40 hover:border-primary/50 hover:bg-secondary/40 transition-smooth w-56 md:w-64 lg:w-72 xl:w-80"
+              >
+                <div className="relative aspect-video w-full bg-secondary overflow-hidden">
+                  {displayStill ? (
+                    <SafeImage
+                      src={
+                        ep.info?.movie_image
+                          ? proxyImageUrl(displayStill, { w: 480, h: 270, q: 75 })
+                          : displayStill
+                      }
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
                   ) : (
-                    <Play className="h-4 w-4 fill-current" />
+                    <div className="h-full w-full flex items-center justify-center">
+                      <Play className="h-8 w-8 text-muted-foreground" />
+                    </div>
                   )}
+                  <span className="absolute top-2 left-2 text-[11px] font-bold px-2 py-0.5 rounded bg-black/70 text-white tracking-wide backdrop-blur-sm">
+                    {epLabel}
+                  </span>
+                  <span
+                    title={badge.tooltip}
+                    className={cn(
+                      "absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded border tracking-wide backdrop-blur-sm",
+                      toneClasses[badge.tone],
+                    )}
+                  >
+                    {badge.label}
+                  </span>
+                  <div className="absolute bottom-2 right-2 h-9 w-9 rounded-full bg-primary/90 text-primary-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                    {external ? (
+                      <ExternalLink className="h-4 w-4" />
+                    ) : (
+                      <Play className="h-4 w-4 fill-current" />
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="p-3 space-y-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">
-                  {ep.episode_num}. {displayTitle}
-                </p>
-                {displayPlot && (
-                  <p className="text-xs text-muted-foreground line-clamp-2 leading-snug">
-                    {displayPlot}
+                <div className="px-3 py-2.5 min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">
+                    {displayTitle}
                   </p>
-                )}
-              </div>
-            </button>
-          );
-        })}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
