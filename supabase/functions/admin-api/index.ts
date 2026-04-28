@@ -65,6 +65,7 @@ const ADMIN_ONLY_ACTIONS = new Set([
   "add_team_member",
   "update_team_role",
   "remove_team_member",
+  "set_team_password",
   "list_audit_log",
   "cleanup_table",
   "evict_idle_now",
