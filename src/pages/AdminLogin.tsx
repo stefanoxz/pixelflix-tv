@@ -13,8 +13,6 @@ function describeAuthError(msg: string): string {
   const m = msg.toLowerCase();
   if (m.includes("invalid login credentials"))
     return "E-mail ou senha incorretos. A conta existe, mas a senha não bateu.";
-  if (m.includes("email not confirmed"))
-    return "E-mail ainda não confirmado. Verifique sua caixa de entrada.";
   if (m.includes("database error querying schema"))
     return "Erro de schema no banco de auth (linhas com NULL em colunas de token).";
   if (m.includes("user not found"))
@@ -98,7 +96,6 @@ const AdminLogin = () => {
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: `${window.location.origin}/admin` },
       });
       if (error) throw error;
       // Faz logout: cadastro recente fica pendente até admin aprovar.
