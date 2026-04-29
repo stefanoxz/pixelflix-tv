@@ -877,68 +877,13 @@ async function logBrowserLoginEvent(
 export async function iptvLogin(
   creds: IptvCredentials
 ): Promise<LoginResponse & { server_url?: string }> {
+  // SEGURANÇA: o login NUNCA mais é tentado direto pelo navegador.
+  // Antes, o cliente fazia GET em `https://<dns>/player_api.php?username=&password=`
+  // para várias DNS, o que vazava credenciais no F12/console e gerava CORS
+  // para todas as DNS autorizadas. Agora todo o login passa pela edge function
+  // do nosso backend; o navegador só vê uma chamada para `iptv-login`.
   const startedAt = Date.now();
-
-  // 1) Pré-validar allowlist na edge (só lê o banco, não toca no painel).
-  let candidates: string[] = [];
-  try {
-    const validation = await invokeFn<{ allowed: boolean; candidates?: string[]; error?: string }>(
-      "iptv-login",
-      { mode: "validate", server: creds.server },
-      "login",
-    );
-    if (!validation.allowed) {
-      throw new Error(validation.error || "DNS não autorizada");
-    }
-    candidates = validation.candidates ?? [];
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Falha na validação";
-    if (/dns não autorizada|não autorizad|não tem acesso/i.test(msg)) {
-      throw new Error(msg);
-    }
-    console.warn("[iptv] validate failed, falling back to edge login", msg);
-    return iptvLoginViaEdge(creds, startedAt, "validate_failed");
-  }
-
-  if (candidates.length === 0) {
-    throw new Error("Nenhuma DNS autorizada disponível");
-  }
-
-  // 2) Tentar cada candidato direto pelo navegador.
-  let lastTransportFail: BrowserLoginFail | null = null;
-  for (const base of candidates) {
-    const r = await tryBrowserLogin(base, creds.username, creds.password);
-    if (r.ok === true) {
-      const durationMs = Date.now() - startedAt;
-      console.log("[iptv] method: browser", { server: r.matchedBase, durationMs });
-      void logBrowserLoginEvent(r.matchedBase, creds.username, true, "browser_login_ok");
-      return { ...r.data, server_url: r.matchedBase };
-    }
-
-    // Falha terminal: servidor respondeu (auth_failed / server_response).
-    // Não tem por que tentar a edge — daria a mesma resposta.
-    if (isTerminalBrowserFail(r)) {
-      const message = messageForTerminalFail(r);
-      console.log("[iptv] method: browser", {
-        server: base,
-        result: "terminal_fail",
-        reason: r.reason,
-        detail: r.detail,
-      });
-      void logBrowserLoginEvent(base, creds.username, false, `${r.reason}:${r.detail ?? ""}`);
-      throw new Error(message);
-    }
-
-    // Transporte (CORS / timeout / rede) ou mixed_content → guarda e tenta próximo.
-    lastTransportFail = r;
-  }
-
-  // 3) Fallback: edge function. Só chega aqui se TODOS os candidatos falharam
-  //    por transporte (CORS / network / timeout / mixed-content).
-  const reason = lastTransportFail?.reason ?? "all_failed";
-  const detail = lastTransportFail?.detail;
-  console.log("[iptv] method: edge", { trigger: reason, detail });
-  return iptvLoginViaEdge(creds, startedAt, reason);
+  return iptvLoginViaEdge(creds, startedAt, "edge_only");
 }
 
 /**
