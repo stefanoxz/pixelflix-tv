@@ -113,6 +113,37 @@ const Login = () => {
     }
   };
 
+  /**
+   * Botão "Testar grátis": busca credenciais de demo cadastradas pelo admin
+   * (edge function pública `demo-creds`) e roda o fluxo de login normal.
+   */
+  const handleTestLogin = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("demo-creds", {
+        method: "GET",
+      });
+      const payload = data as
+        | { enabled?: boolean; server_url?: string; username?: string; password?: string }
+        | null;
+      if (error || !payload?.enabled || !payload.username || !payload.password) {
+        toast.info("Modo teste indisponível no momento", {
+          description: "O administrador ainda não liberou credenciais de teste. Tente novamente mais tarde.",
+        });
+        setLoading(false);
+        return;
+      }
+      // performLogin já cuida do setLoading(false) no finally.
+      await performLogin(payload.server_url || undefined, payload.username, payload.password);
+    } catch (e) {
+      toast.error("Modo teste indisponível", {
+        description: e instanceof Error ? e.message : "Tente novamente em instantes",
+      });
+      setLoading(false);
+    }
+  };
+
   const handleSubmitCreds = async (e: FormEvent) => {
     e.preventDefault();
     const result = credsSchema.safeParse({ username, password });
