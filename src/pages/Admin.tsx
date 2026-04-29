@@ -43,6 +43,7 @@ import PendingSignupsPanel from "@/components/admin/PendingSignupsPanel";
 import TeamPanel from "@/components/admin/TeamPanel";
 import StatsPanel from "@/components/admin/StatsPanel";
 import MaintenancePanel from "@/components/admin/MaintenancePanel";
+import DemoCredentialsPanel from "@/components/admin/DemoCredentialsPanel";
 import BlockedDnsPanel from "@/components/admin/BlockedDnsPanel";
 import UserDetailDialog from "@/components/admin/UserDetailDialog";
 import StreamEventsPanel from "@/components/admin/StreamEventsPanel";
@@ -487,7 +488,7 @@ const Admin = () => {
   // Se o moderador cair em uma aba admin-only, manda pro dashboard.
   useEffect(() => {
     if (roleLoading) return;
-    const adminOnlyTabs = new Set(["servers", "pending-signups", "team", "maintenance"]);
+    const adminOnlyTabs = new Set(["servers", "pending-signups", "team", "maintenance", "demo-creds"]);
     if (isModerator && !isAdmin && adminOnlyTabs.has(tab)) {
       setTab("dashboard");
     }
@@ -882,6 +883,10 @@ const Admin = () => {
 
           <TabsContent value="maintenance" className="space-y-6 mt-0">
             <MaintenancePanel />
+          </TabsContent>
+
+          <TabsContent value="demo-creds" className="space-y-6 mt-0">
+            <DemoCredentialsPanel />
           </TabsContent>
 
           <TabsContent value="stats" className="space-y-6 mt-0">
