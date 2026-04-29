@@ -1853,10 +1853,15 @@ const Admin = () => {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover esta DNS?</AlertDialogTitle>
+            <AlertDialogTitle>Apagar esta DNS definitivamente?</AlertDialogTitle>
             <AlertDialogDescription>
-              Os usuários conectados a <strong className="font-mono">{confirmRemoveServer}</strong> não conseguirão mais logar.
-              As sessões já abertas continuam até expirar.
+              A DNS <strong className="font-mono">{confirmRemoveServer}</strong> será removida da allowlist e
+              também serão apagados os registros associados (tentativas de login, sugestões de bloqueio,
+              falhas e diagnósticos dessa DNS). Os usuários que usavam essa DNS não conseguirão mais entrar
+              e a DNS deixará de aparecer em listas de pendência ou erro.
+              <span className="block mt-2 text-xs text-muted-foreground">
+                Esta ação é definitiva. Para usar a DNS novamente, é preciso cadastrá-la de novo.
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1865,7 +1870,7 @@ const Admin = () => {
               onClick={() => confirmRemoveServer && removeServer(confirmRemoveServer)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Remover DNS
+              Apagar definitivamente
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
