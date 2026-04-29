@@ -65,6 +65,7 @@ const Login = () => {
   const { setSession } = useIptv();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [serverDns, setServerDns] = useState("");
   const [m3uUrl, setM3uUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
