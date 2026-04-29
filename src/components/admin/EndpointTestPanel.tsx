@@ -30,6 +30,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeAdminApi } from "@/lib/adminApi";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { parseM3uUrl } from "@/lib/parseM3uUrl";
@@ -97,6 +98,7 @@ interface TestResult {
 
 interface Props {
   allowedServers: { server_url: string; label?: string | null }[];
+  onServerApplied?: (url: string) => void;
 }
 
 const PROBE_LABELS: Record<string, string> = {
@@ -395,7 +397,7 @@ interface ResolveResult {
   proxy_configured: boolean;
 }
 
-export function EndpointTestPanel({ allowedServers }: Props) {
+export function EndpointTestPanel({ allowedServers, onServerApplied }: Props) {
   const [pasteUrl, setPasteUrl] = useState("");
   const [serverUrl, setServerUrl] = useState("");
   const [path, setPath] = useState("/player_api.php");
@@ -409,6 +411,7 @@ export function EndpointTestPanel({ allowedServers }: Props) {
   const [result, setResult] = useState<TestResult | null>(null);
   const [resolving, setResolving] = useState(false);
   const [resolveResult, setResolveResult] = useState<ResolveResult | null>(null);
+  const [applyingCandidate, setApplyingCandidate] = useState<string | null>(null);
 
   const applyPastedUrl = (raw?: string) => {
     const input = (raw ?? pasteUrl).trim();
@@ -517,10 +520,31 @@ export function EndpointTestPanel({ allowedServers }: Props) {
     }
   };
 
-  const applyCandidate = (base: string) => {
-    setServerUrl(base);
-    setResolveResult(null);
-    toast.success("URL aplicada — clique em 'Executar diagnóstico' para revalidar.");
+  const applyCandidate = async (base: string) => {
+    if (applyingCandidate) return;
+    setApplyingCandidate(base);
+    let host = base;
+    try { host = new URL(base).host; } catch { /* noop */ }
+    try {
+      const res = await invokeAdminApi<{ ok: true; server_url: string; warning?: string | null }>(
+        "allow_server",
+        {
+          server_url: base,
+          label: host,
+          notes: "Aplicado via diagnóstico automático",
+        },
+      );
+      setServerUrl(base);
+      setResolveResult(null);
+      toast.success(`DNS ${host} salvo como servidor autorizado.`);
+      if (res?.warning) toast.warning(res.warning);
+      onServerApplied?.(base);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha ao aplicar candidato";
+      toast.error(msg);
+    } finally {
+      setApplyingCandidate(null);
+    }
   };
 
   const copyReport = async () => {
@@ -801,9 +825,19 @@ export function EndpointTestPanel({ allowedServers }: Props) {
                           variant={isBest ? "default" : "outline"}
                           className="h-6 px-2 text-[10px]"
                           onClick={() => applyCandidate(c.base)}
+                          disabled={applyingCandidate !== null}
                         >
-                          Aplicar
-                          <ArrowRight className="h-3 w-3 ml-1" />
+                          {applyingCandidate === c.base ? (
+                            <>
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              Aplicando…
+                            </>
+                          ) : (
+                            <>
+                              Aplicar
+                              <ArrowRight className="h-3 w-3 ml-1" />
+                            </>
+                          )}
                         </Button>
                       </div>
                     );
