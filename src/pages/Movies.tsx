@@ -325,12 +325,12 @@ const Movies = () => {
       />
 
       <MovieDetailsDialog
-        open={!!openMovie}
+        open={!!openMovie && !playing}
         onOpenChange={(o) => {
-          // Ignora pedidos de fechar enquanto o player estiver aberto.
-          // Evita que eventos de foco/escape do PlayerOverlay (portal irmão
-          // no <body>) façam o Radix Dialog fechar o detalhe por baixo.
-          if (!o && playing) return;
+          // Enquanto o player está aberto, ignoramos qualquer pedido de mudança
+          // do dialog (ele fica desmontado nesse intervalo). Quando o player
+          // fecha, `openMovie` ainda está setado e o dialog reabre sozinho.
+          if (playing) return;
           if (!o) setOpenMovie(null);
         }}
         movie={openMovie}

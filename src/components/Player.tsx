@@ -58,6 +58,7 @@ import {
   type StreamMode,
 } from "@/services/iptv";
 import { useIptv } from "@/context/IptvContext";
+import { usePlayerLogsEnabled } from "@/hooks/usePlayerLogsEnabled";
 import { cn } from "@/lib/utils";
 
 interface PlayerProps {
@@ -448,6 +449,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const setupStartRef = useRef(0);
   const firstFrameAtRef = useRef<number | null>(null);
   const manifestParsedAtRef = useRef<number | null>(null);
+  // Painel só aparece para admins que ativaram o toggle em /admin.
+  const playerLogsAvailable = usePlayerLogsEnabled();
   const logsPanelOpenRef = useRef(false);
   const [logsPanelOpen, setLogsPanelOpen] = useState<boolean>(() => {
     try { return localStorage.getItem("player.logsPanel.open") === "1"; }
@@ -461,6 +464,13 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     try { localStorage.setItem("player.logsPanel.open", logsPanelOpen ? "1" : "0"); }
     catch { /* noop */ }
   }, [logsPanelOpen]);
+
+  // Se o admin desativou o toggle (ou o usuário não é admin), garante
+  // que o painel feche imediatamente — assim o `logsPanelOpen` antigo
+  // do localStorage não vaza.
+  useEffect(() => {
+    if (!playerLogsAvailable && logsPanelOpen) setLogsPanelOpen(false);
+  }, [playerLogsAvailable, logsPanelOpen]);
 
   /**
    * Captura um snapshot leve do `<video>` para anexar a logs. Tudo é
@@ -2283,9 +2293,9 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         </div>
       )}
 
-      {/* Logs panel toggle — bottom-left (mesma linguagem visual da toolbar).
-          Escondido durante loading para deixar o overlay limpo (igual referência). */}
-      {!loading && !error && (
+      {/* Logs panel toggle — bottom-left. Disponível APENAS para admins
+          que ativaram o toggle em /admin → Manutenção. */}
+      {!loading && !error && playerLogsAvailable && (
         <button
           type="button"
           onClick={() => setLogsPanelOpen((o) => !o)}
@@ -2303,8 +2313,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         </button>
       )}
 
-      {/* Logs panel — right side overlay */}
-      {logsPanelOpen && (
+      {/* Logs panel — right side overlay (admin-only) */}
+      {playerLogsAvailable && logsPanelOpen && (
         <div
           className="pointer-events-auto absolute top-3 right-3 bottom-14 z-30 w-[360px] max-w-[calc(100%-1.5rem)] flex flex-col rounded-md border bg-background/95 backdrop-blur-md shadow-xl text-foreground"
           role="dialog"

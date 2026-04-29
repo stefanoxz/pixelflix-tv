@@ -13,8 +13,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { invokeAdminApi } from "@/lib/adminApi";
-import { Database, Trash2, RefreshCw, Activity, AlertTriangle, Clock } from "lucide-react";
+import {
+  getPlayerLogsEnabled,
+  setPlayerLogsEnabled,
+} from "@/hooks/usePlayerLogsEnabled";
+import { Database, Trash2, RefreshCw, Activity, AlertTriangle, Clock, Terminal } from "lucide-react";
 
 interface TableStat {
   table: string;
@@ -51,6 +57,17 @@ export default function MaintenancePanel() {
   const [evictBusy, setEvictBusy] = useState(false);
   const [confirm, setConfirm] = useState<TableStat | null>(null);
   const [confirmEvict, setConfirmEvict] = useState(false);
+  const [playerLogs, setPlayerLogs] = useState<boolean>(() => getPlayerLogsEnabled());
+
+  const togglePlayerLogs = (next: boolean) => {
+    setPlayerLogs(next);
+    setPlayerLogsEnabled(next);
+    toast.success(
+      next
+        ? "Painel 'Logs do player' ativado para sua sessão"
+        : "Painel 'Logs do player' desativado",
+    );
+  };
 
   const refresh = async () => {
     setLoading(true);
@@ -136,6 +153,35 @@ export default function MaintenancePanel() {
           <p className="text-xs text-muted-foreground mt-1">incluindo expirados</p>
         </Card>
       </div>
+
+      {/* Diagnóstico pessoal — só visível pra admin */}
+      <Card className="p-6 bg-gradient-card border-border/50">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-lg text-primary bg-primary/10 flex items-center justify-center shrink-0">
+              <Terminal className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">Logs do player (sua sessão)</h2>
+              <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
+                Mostra um botão "Logs" sobre o player de vídeo com causa raiz, motor (HLS/MPEG-TS),
+                upstream e tempos de bootstrap. Só você vê — usuários comuns nunca veem esse painel.
+                A telemetria é coletada de qualquer jeito; isso aqui só liga/desliga o overlay visual.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="player-logs-toggle" className="text-sm">
+              {playerLogs ? "Ativo" : "Desligado"}
+            </Label>
+            <Switch
+              id="player-logs-toggle"
+              checked={playerLogs}
+              onCheckedChange={togglePlayerLogs}
+            />
+          </div>
+        </div>
+      </Card>
 
       {/* Ações rápidas */}
       <Card className="p-6 bg-gradient-card border-border/50">
