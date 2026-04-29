@@ -341,15 +341,16 @@ export default function BlockedDnsPanel() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover do catálogo?</AlertDialogTitle>
+            <AlertDialogTitle>Apagar definitivamente do catálogo?</AlertDialogTitle>
             <AlertDialogDescription>
-              O DNS <strong>{deleteTarget?.server_url}</strong> será removido da lista. Se
-              voltar a falhar, poderá ser sugerido novamente.
+              O DNS <strong>{deleteTarget?.server_url}</strong> será removido do catálogo de DNS bloqueados
+              e as falhas registradas dessa DNS também serão apagadas. Esta ação é definitiva — para voltar
+              a aparecer, a DNS precisaria gerar novas falhas no futuro.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirmed}>Remover</AlertDialogAction>
+            <AlertDialogAction onClick={handleDeleteConfirmed}>Apagar definitivamente</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
