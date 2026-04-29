@@ -58,6 +58,7 @@ import {
   type StreamMode,
 } from "@/services/iptv";
 import { useIptv } from "@/context/IptvContext";
+import { usePlayerLogsEnabled } from "@/hooks/usePlayerLogsEnabled";
 import { cn } from "@/lib/utils";
 
 interface PlayerProps {
