@@ -16,7 +16,7 @@ interface Props {
  * Comportamento:
  * - Backdrop preto edge-to-edge (sem padding externo) — mais imersivo.
  * - Vídeo dimensionado pela altura disponível, preservando 16:9.
- * - ESC fecha; clique no backdrop fora do quadro também fecha.
+ * - ESC fecha. Clique fora NÃO fecha (evita fechar sem querer).
  * - Trava o scroll do `<body>` enquanto está aberto.
  * - Devolve o foco ao gatilho anterior ao fechar.
  *
@@ -62,15 +62,9 @@ export function PlayerOverlay({ open, onClose, children }: Props) {
 
   if (!open) return null;
 
-  const handleBackdropMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Só fecha se o clique iniciou no backdrop (e não bubbling de dentro do quadro).
-    if (e.target === e.currentTarget) onClose();
-  };
-
   return createPortal(
     <div
       className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex items-center justify-center animate-fade-in"
-      onMouseDown={handleBackdropMouseDown}
       aria-modal="true"
       role="dialog"
     >
