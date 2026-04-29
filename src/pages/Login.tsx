@@ -1,6 +1,6 @@
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, KeyRound, UserIcon, Link2, AlertCircle, Server } from "lucide-react";
+import { Loader2, KeyRound, UserIcon, Link2, AlertCircle } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,11 +36,6 @@ const credsSchema = z.object({
     .string()
     .min(1, { message: "Informe a senha" })
     .max(200, { message: "Senha muito longa (máx. 200)" }),
-  server: z
-    .string()
-    .trim()
-    .max(300, { message: "DNS muito longa (máx. 300)" })
-    .optional(),
 });
 
 const m3uSchema = z
@@ -57,7 +52,6 @@ type FieldErrors = {
   username?: string;
   password?: string;
   m3u?: string;
-  server?: string;
 };
 
 const Login = () => {
@@ -65,7 +59,6 @@ const Login = () => {
   const { setSession } = useIptv();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [serverDns, setServerDns] = useState("");
   const [m3uUrl, setM3uUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -122,12 +115,7 @@ const Login = () => {
 
   const handleSubmitCreds = async (e: FormEvent) => {
     e.preventDefault();
-    const trimmedServer = serverDns.trim();
-    const result = credsSchema.safeParse({
-      username,
-      password,
-      server: trimmedServer ? trimmedServer : undefined,
-    });
+    const result = credsSchema.safeParse({ username, password });
     if (!result.success) {
       const fieldErrors: FieldErrors = {};
       for (const issue of result.error.issues) {
@@ -136,7 +124,6 @@ const Login = () => {
       }
       setErrors(fieldErrors);
       const firstInvalid =
-        (fieldErrors.server && "server") ||
         (fieldErrors.username && "username") ||
         (fieldErrors.password && "password");
       if (firstInvalid) {
@@ -145,7 +132,7 @@ const Login = () => {
       return;
     }
     setErrors({});
-    await performLogin(result.data.server, result.data.username, result.data.password);
+    await performLogin(undefined, result.data.username, result.data.password);
   };
 
   const handleSubmitM3u = async (e: FormEvent) => {
@@ -331,43 +318,6 @@ const Login = () => {
           <TabsContent value="creds">
             <form onSubmit={handleSubmitCreds} className="space-y-4" noValidate>
               <div className="space-y-2">
-                <Label htmlFor="server" className="text-xs flex items-center justify-between">
-                  <span>DNS / Servidor <span className="text-muted-foreground font-normal">(opcional)</span></span>
-                </Label>
-                <div className="relative">
-                  <Server className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="server"
-                    placeholder="ex.: servidor.com ou http://servidor.com:8080"
-                    value={serverDns}
-                    onChange={(e) => {
-                      setServerDns(e.target.value);
-                      if (errors.server) setErrors((p) => ({ ...p, server: undefined }));
-                    }}
-                    className={cn(
-                      "pl-10 bg-secondary/50 border-border/50 h-11",
-                      errors.server && "border-destructive focus-visible:ring-destructive",
-                    )}
-                    autoComplete="off"
-                    spellCheck={false}
-                    maxLength={300}
-                    aria-invalid={!!errors.server}
-                    aria-describedby={errors.server ? "server-error" : "server-hint"}
-                  />
-                </div>
-                {errors.server ? (
-                  <p id="server-error" className="text-xs text-destructive flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    {errors.server}
-                  </p>
-                ) : (
-                  <p id="server-hint" className="text-[11px] text-muted-foreground">
-                    Se souber sua DNS, informe para entrar mais rápido. Se deixar em branco, tentamos pelo seu histórico.
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
                 <Label htmlFor="username" className="text-xs">Usuário</Label>
                 <div className="relative">
                   <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -403,8 +353,8 @@ const Login = () => {
                   <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="password"
-                    type="password"
-                    placeholder="••••••••"
+                    type="text"
+                    placeholder="sua senha"
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
@@ -414,7 +364,8 @@ const Login = () => {
                       "pl-10 bg-secondary/50 border-border/50 h-11",
                       errors.password && "border-destructive focus-visible:ring-destructive",
                     )}
-                    autoComplete="current-password"
+                    autoComplete="off"
+                    spellCheck={false}
                     maxLength={200}
                     aria-invalid={!!errors.password}
                     aria-describedby={errors.password ? "password-error" : undefined}
