@@ -525,10 +525,35 @@ Deno.serve(async (req) => {
     if (action === "remove_server") {
       const url = normalizeServer(String(payload?.server_url ?? ""));
       if (!url) return bad("URL do servidor é obrigatória");
-      const { error } = await admin.from("allowed_servers").delete().eq("server_url", url);
-      if (error) { console.error(error.message); return internalError(); }
-      await logAudit(user.id, user.email, "remove_server", { metadata: { server_url: url } });
-      return ok({ ok: true });
+
+      // Apagar definitivamente: além da allowlist, limpa TODOS os registros
+      // associados a essa DNS para que ela não volte a aparecer como pendente,
+      // bloqueada ou em estatísticas/erros após a remoção.
+      const cleanup = await Promise.allSettled([
+        admin.from("allowed_servers").delete().eq("server_url", url),
+        admin.from("blocked_dns_servers").delete().eq("server_url", url),
+        admin.from("blocked_dns_failures").delete().eq("server_url", url),
+        admin.from("login_events").delete().eq("server_url", url),
+        admin.from("client_diagnostics").delete().eq("server_url", url),
+        admin.from("active_sessions").delete().eq("server_url", url),
+      ]);
+
+      const cleanupSummary: Record<string, string> = {};
+      cleanup.forEach((r, i) => {
+        const name = ["allowed_servers", "blocked_dns_servers", "blocked_dns_failures", "login_events", "client_diagnostics", "active_sessions"][i];
+        if (r.status === "rejected") {
+          cleanupSummary[name] = `error: ${(r.reason as Error)?.message ?? "unknown"}`;
+        } else if ((r.value as { error?: { message?: string } } | null)?.error) {
+          cleanupSummary[name] = `error: ${(r.value as { error: { message: string } }).error.message}`;
+        } else {
+          cleanupSummary[name] = "ok";
+        }
+      });
+
+      await logAudit(user.id, user.email, "remove_server", {
+        metadata: { server_url: url, cleanup: cleanupSummary, mode: "definitive_delete" },
+      });
+      return ok({ ok: true, cleanup: cleanupSummary });
     }
 
     // ---------- MONITORING ----------
