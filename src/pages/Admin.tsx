@@ -650,10 +650,10 @@ const Admin = () => {
   const removeServer = async (server_url: string) => {
     try {
       await callAdmin("remove_server", { server_url });
-      toast.success("DNS removida");
+      toast.success("DNS apagada definitivamente");
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao remover");
+      toast.error(err instanceof Error ? err.message : "Erro ao apagar");
     } finally {
       setConfirmRemoveServer(null);
     }
