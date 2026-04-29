@@ -2147,7 +2147,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       {/* Diagnostic card — small, non-blocking, bottom-right.
           Mesma linguagem visual da toolbar (pill glass) com dot pulsante.
           Escondido durante loading (overlay central já comunica estado). */}
-      {!loading && !error && (
+      {playerLogsAvailable && !loading && !error && (
         <div
           className={cn(
             "pointer-events-none absolute bottom-3 right-3 z-20 max-w-[260px] rounded-full border border-white/10 px-3 py-1.5 backdrop-blur-md shadow-[0_8px_24px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/5 text-[11px] leading-tight",
