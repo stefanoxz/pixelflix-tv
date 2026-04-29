@@ -449,6 +449,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
   const setupStartRef = useRef(0);
   const firstFrameAtRef = useRef<number | null>(null);
   const manifestParsedAtRef = useRef<number | null>(null);
+  // Painel só aparece para admins que ativaram o toggle em /admin.
+  const playerLogsAvailable = usePlayerLogsEnabled();
   const logsPanelOpenRef = useRef(false);
   const [logsPanelOpen, setLogsPanelOpen] = useState<boolean>(() => {
     try { return localStorage.getItem("player.logsPanel.open") === "1"; }
@@ -462,6 +464,13 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
     try { localStorage.setItem("player.logsPanel.open", logsPanelOpen ? "1" : "0"); }
     catch { /* noop */ }
   }, [logsPanelOpen]);
+
+  // Se o admin desativou o toggle (ou o usuário não é admin), garante
+  // que o painel feche imediatamente — assim o `logsPanelOpen` antigo
+  // do localStorage não vaza.
+  useEffect(() => {
+    if (!playerLogsAvailable && logsPanelOpen) setLogsPanelOpen(false);
+  }, [playerLogsAvailable, logsPanelOpen]);
 
   /**
    * Captura um snapshot leve do `<video>` para anexar a logs. Tudo é
