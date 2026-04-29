@@ -894,6 +894,7 @@ const Admin = () => {
                 server_url: s.server_url,
                 label: s.label,
               }))}
+              onServerApplied={() => { void refresh(); }}
             />
           </TabsContent>
 
