@@ -1,6 +1,6 @@
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, KeyRound, UserIcon, Link2, AlertCircle } from "lucide-react";
+import { Loader2, KeyRound, UserIcon, Link2, AlertCircle, FlaskConical } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -109,6 +109,37 @@ const Login = () => {
     } catch (err) {
       handleLoginError(err);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Botão "Testar grátis": busca credenciais de demo cadastradas pelo admin
+   * (edge function pública `demo-creds`) e roda o fluxo de login normal.
+   */
+  const handleTestLogin = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("demo-creds", {
+        method: "GET",
+      });
+      const payload = data as
+        | { enabled?: boolean; server_url?: string; username?: string; password?: string }
+        | null;
+      if (error || !payload?.enabled || !payload.username || !payload.password) {
+        toast.info("Modo teste indisponível no momento", {
+          description: "O administrador ainda não liberou credenciais de teste. Tente novamente mais tarde.",
+        });
+        setLoading(false);
+        return;
+      }
+      // performLogin já cuida do setLoading(false) no finally.
+      await performLogin(payload.server_url || undefined, payload.username, payload.password);
+    } catch (e) {
+      toast.error("Modo teste indisponível", {
+        description: e instanceof Error ? e.message : "Tente novamente em instantes",
+      });
       setLoading(false);
     }
   };
@@ -451,13 +482,35 @@ const Login = () => {
           </TabsContent>
         </Tabs>
 
-        <div className="mt-6 pt-6 border-t border-border/50 text-center">
-          <button
-            onClick={() => navigate("/admin/login")}
-            className="text-xs text-muted-foreground hover:text-primary transition-smooth"
+        <div className="mt-6 pt-6 border-t border-border/50 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-border/50" />
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">ou</span>
+            <div className="flex-1 h-px bg-border/50" />
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleTestLogin}
+            disabled={loading}
+            className="w-full h-11 border-primary/40 hover:bg-primary/10 hover:border-primary/60 font-medium"
           >
-            Acesso administrador →
-          </button>
+            <FlaskConical className="h-4 w-4 mr-2 text-primary" />
+            Testar grátis
+          </Button>
+          <p className="text-[11px] text-center text-muted-foreground -mt-2">
+            Entrar com a conta de demonstração — sem precisar digitar nada
+          </p>
+
+          <div className="text-center pt-1">
+            <button
+              onClick={() => navigate("/admin/login")}
+              className="text-xs text-muted-foreground hover:text-primary transition-smooth"
+            >
+              Acesso administrador →
+            </button>
+          </div>
         </div>
       </Card>
     </div>

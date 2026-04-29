@@ -46,6 +46,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { id: "client-diagnostics", label: "Diagnóstico de clientes", shortLabel: "Clientes", icon: Stethoscope, adminOnly: false },
   { id: "pending-signups", label: "Novos cadastros", shortLabel: "Cadastros", icon: UserPlus, adminOnly: true },
   { id: "team", label: "Equipe e permissões", shortLabel: "Equipe", icon: ShieldCheck, adminOnly: true },
+  { id: "demo-creds", label: "Acesso teste (login)", shortLabel: "Teste", icon: FlaskConical, adminOnly: true },
   { id: "maintenance", label: "Manutenção", shortLabel: "Manut.", icon: Wrench, adminOnly: true },
 ];
 

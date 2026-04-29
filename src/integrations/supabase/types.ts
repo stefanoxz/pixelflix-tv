@@ -298,6 +298,36 @@ export type Database = {
           },
         ]
       }
+      demo_credentials: {
+        Row: {
+          enabled: boolean
+          password: string
+          server_url: string
+          singleton: boolean
+          updated_at: string
+          updated_by: string | null
+          username: string
+        }
+        Insert: {
+          enabled?: boolean
+          password?: string
+          server_url?: string
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
+          username?: string
+        }
+        Update: {
+          enabled?: boolean
+          password?: string
+          server_url?: string
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
+          username?: string
+        }
+        Relationships: []
+      }
       login_events: {
         Row: {
           created_at: string
