@@ -331,6 +331,43 @@ const Login = () => {
           <TabsContent value="creds">
             <form onSubmit={handleSubmitCreds} className="space-y-4" noValidate>
               <div className="space-y-2">
+                <Label htmlFor="server" className="text-xs flex items-center justify-between">
+                  <span>DNS / Servidor <span className="text-muted-foreground font-normal">(opcional)</span></span>
+                </Label>
+                <div className="relative">
+                  <Server className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="server"
+                    placeholder="ex.: servidor.com ou http://servidor.com:8080"
+                    value={serverDns}
+                    onChange={(e) => {
+                      setServerDns(e.target.value);
+                      if (errors.server) setErrors((p) => ({ ...p, server: undefined }));
+                    }}
+                    className={cn(
+                      "pl-10 bg-secondary/50 border-border/50 h-11",
+                      errors.server && "border-destructive focus-visible:ring-destructive",
+                    )}
+                    autoComplete="off"
+                    spellCheck={false}
+                    maxLength={300}
+                    aria-invalid={!!errors.server}
+                    aria-describedby={errors.server ? "server-error" : "server-hint"}
+                  />
+                </div>
+                {errors.server ? (
+                  <p id="server-error" className="text-xs text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {errors.server}
+                  </p>
+                ) : (
+                  <p id="server-hint" className="text-[11px] text-muted-foreground">
+                    Se souber sua DNS, informe para entrar mais rápido. Se deixar em branco, tentamos pelo seu histórico.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="username" className="text-xs">Usuário</Label>
                 <div className="relative">
                   <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
