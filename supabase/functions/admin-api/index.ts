@@ -525,10 +525,35 @@ Deno.serve(async (req) => {
     if (action === "remove_server") {
       const url = normalizeServer(String(payload?.server_url ?? ""));
       if (!url) return bad("URL do servidor é obrigatória");
-      const { error } = await admin.from("allowed_servers").delete().eq("server_url", url);
-      if (error) { console.error(error.message); return internalError(); }
-      await logAudit(user.id, user.email, "remove_server", { metadata: { server_url: url } });
-      return ok({ ok: true });
+
+      // Apagar definitivamente: além da allowlist, limpa TODOS os registros
+      // associados a essa DNS para que ela não volte a aparecer como pendente,
+      // bloqueada ou em estatísticas/erros após a remoção.
+      const cleanup = await Promise.allSettled([
+        admin.from("allowed_servers").delete().eq("server_url", url),
+        admin.from("blocked_dns_servers").delete().eq("server_url", url),
+        admin.from("blocked_dns_failures").delete().eq("server_url", url),
+        admin.from("login_events").delete().eq("server_url", url),
+        admin.from("client_diagnostics").delete().eq("server_url", url),
+        admin.from("active_sessions").delete().eq("server_url", url),
+      ]);
+
+      const cleanupSummary: Record<string, string> = {};
+      cleanup.forEach((r, i) => {
+        const name = ["allowed_servers", "blocked_dns_servers", "blocked_dns_failures", "login_events", "client_diagnostics", "active_sessions"][i];
+        if (r.status === "rejected") {
+          cleanupSummary[name] = `error: ${(r.reason as Error)?.message ?? "unknown"}`;
+        } else if ((r.value as { error?: { message?: string } } | null)?.error) {
+          cleanupSummary[name] = `error: ${(r.value as { error: { message: string } }).error.message}`;
+        } else {
+          cleanupSummary[name] = "ok";
+        }
+      });
+
+      await logAudit(user.id, user.email, "remove_server", {
+        metadata: { server_url: url, cleanup: cleanupSummary, mode: "definitive_delete" },
+      });
+      return ok({ ok: true, cleanup: cleanupSummary });
     }
 
     // ---------- MONITORING ----------
@@ -2500,12 +2525,20 @@ Deno.serve(async (req) => {
     if (action === "blocked_dns_delete") {
       const id = String(payload?.id ?? "");
       if (!id) return bad("ID obrigatório");
+      // Buscar URL antes de deletar para também limpar falhas associadas e
+      // evitar que a mesma DNS volte como sugestão imediatamente.
+      const { data: row } = await admin
+        .from("blocked_dns_servers").select("server_url").eq("id", id).maybeSingle();
       const { error } = await admin.from("blocked_dns_servers").delete().eq("id", id);
       if (error) {
         console.error("[admin-api] blocked_dns_delete", error.message);
         return bad(error.message);
       }
-      await logAudit(user.id, user.email, "blocked_dns_delete", { metadata: { id } });
+      const serverUrl = (row as { server_url?: string } | null)?.server_url ?? null;
+      if (serverUrl) {
+        await admin.from("blocked_dns_failures").delete().eq("server_url", serverUrl);
+      }
+      await logAudit(user.id, user.email, "blocked_dns_delete", { metadata: { id, server_url: serverUrl } });
       return ok({ id });
     }
 

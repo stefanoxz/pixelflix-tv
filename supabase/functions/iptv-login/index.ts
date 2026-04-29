@@ -1134,6 +1134,45 @@ Deno.serve(async (req) => {
       candidateRows = [match];
     } else {
       candidateRows = allRows;
+      // Quando o cliente NÃO informou DNS, priorizamos as DNS em que esse
+      // mesmo usuário já logou com sucesso recentemente. Isso reduz drasticamente
+      // a chance de o login "varrer" várias DNS antes de achar a correta.
+      try {
+        const sinceIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: history } = await admin
+          .from("login_events")
+          .select("server_url, created_at, success")
+          .eq("username", username)
+          .eq("success", true)
+          .gte("created_at", sinceIso)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        const seen = new Set<string>();
+        const order: string[] = [];
+        for (const ev of (history ?? []) as { server_url: string }[]) {
+          const norm = normalizeServer(ev.server_url);
+          if (!seen.has(norm)) {
+            seen.add(norm);
+            order.push(norm);
+          }
+        }
+        if (order.length > 0) {
+          const rank = new Map<string, number>();
+          order.forEach((u, i) => rank.set(u, i));
+          candidateRows = [...allRows].sort((a, b) => {
+            const ra = rank.has(a.server_url) ? rank.get(a.server_url)! : Number.MAX_SAFE_INTEGER;
+            const rb = rank.has(b.server_url) ? rank.get(b.server_url)! : Number.MAX_SAFE_INTEGER;
+            if (ra !== rb) return ra - rb;
+            // Empate: DNS saudável (sem cooldown e com last_working_at) primeiro
+            const ah = a.unreachable_until && new Date(a.unreachable_until).getTime() > Date.now() ? 1 : 0;
+            const bh = b.unreachable_until && new Date(b.unreachable_until).getTime() > Date.now() ? 1 : 0;
+            return ah - bh;
+          });
+          console.log(`[iptv-login] candidate ordering by user history: top=${candidateRows[0]?.server_url}`);
+        }
+      } catch (err) {
+        console.warn("[iptv-login] history sort failed", (err as Error).message);
+      }
     }
 
     // Try each candidate server until one authenticates
