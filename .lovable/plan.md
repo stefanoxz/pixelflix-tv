@@ -1,62 +1,49 @@
-# Ajustes no Player (4 itens)
+## Problema
 
-## 1) Logs do player → só admin, com toggle
+Mesmo depois de mover os logs para um toggle de admin, ainda aparece um **chip flutuante no canto inferior direito do player** (com o ponto pulsante) mostrando coisas como:
 
-**Hoje:** o painel "Logs do player" (Causa / Método / Upstream / Motor / HLS-MPEG-TS-EXTERNO / tempos) aparece pra qualquer usuário, controlado por `localStorage["player.logsPanel.open"]`. O botão de abrir o painel fica nos controles do player (`Player.tsx` linhas 2291-2330).
+- `Reprodução iniciada — mediaError/bufferStalledError`
+- `Conectando…`
+- `Stall timeout`
 
-**Mudança:**
-- O botão de abrir o painel só renderiza se `useAdminRole()` retornar admin **E** o admin tiver ativado o toggle "Mostrar logs do player na minha sessão".
-- Toggle novo na página `/admin` (no `MaintenancePanel.tsx` ou um cartão novo "Diagnóstico pessoal"): switch que grava `localStorage["admin.playerLogs.enabled"] = "1"`.
-- Usuário comum: botão e painel **somem completamente** da UI. A coleta interna de logs continua funcionando (alimenta `stream_events` pra telemetria) — só o overlay deixa de aparecer.
-- Limpa também `localStorage["player.logsPanel.open"]` na primeira carga em sessões não-admin (pra quem já tinha ativado antes).
+Esse chip é o "Diagnostic card" do `src/components/Player.tsx` (linhas 2150–2172) e está renderizado incondicionalmente — ele não é o painel de logs grande, é um segundo elemento de diagnóstico que escapou da limpeza anterior.
 
-**Arquivos:** `src/components/Player.tsx`, `src/components/admin/MaintenancePanel.tsx` (ou novo `AdminDiagnosticsToggle.tsx`), `src/pages/Admin.tsx`.
+## Solução
 
-## 2) Auto-fallback HLS → MPEG-TS
+Tratar o chip de diagnóstico igual ao painel de logs: **só aparece para admins que ativaram o toggle** "Mostrar logs do player" em `/admin → Manutenção`. Usuário comum nunca vê.
 
-**Hoje:** já existe um auto-switch (`engineAutoSwitchedRef` em `Player.tsx:366` e `:788-811`), mas **só dispara em canais ao vivo Xtream** e numa janela específica (após bootstrap_timeout). Pra filmes/séries não roda.
+A coleta interna do status (`updateStatus`, telemetria, auto-fallback HLS→MPEG-TS) **continua funcionando normalmente** — só a UI do chip é escondida.
 
-**Mudança (modo "primeira falha apenas"):**
-- Generalizar o auto-switch pra qualquer kind (live + vod + series), **ainda guardado por `engineAutoSwitchedRef`** pra rodar no máximo uma vez por sessão de play.
-- Triggers de fallback HLS→MPEG-TS:
-  - Erro fatal de manifesto HLS (já capturado em `HLS.Events.ERROR` com `type === networkError` e `details === manifestLoadError/manifestParsingError`)
-  - Stall longo (>20s sem frames novos — já existe `HLS_STALL_LIMIT_MS`)
-  - Bootstrap timeout (já existe, 12s)
-- Após troca pra MPEG-TS, se ele também falhar (já tem watchdog de 8s e fallback interno `.ts → .m3u8`), mostra erro definitivo "Não foi possível reproduzir. Tente outro motor ou abra externamente." e **para** — sem ficar trocando em loop.
-- Persistir a preferência só por sessão (não em `localStorage` global) pra não comprometer o próximo play se foi um erro pontual.
+## Mudança de código
 
-**Arquivo:** `src/components/Player.tsx`.
+Arquivo: `src/components/Player.tsx`
 
-## 3) ESC fechar player em Filmes
+No bloco que renderiza o "Diagnostic card" (~linha 2150), trocar:
 
-**Causa raiz:** Em Filmes, o `MovieDetailsDialog` (Radix Dialog) **continua aberto atrás** do `PlayerOverlay` (comentário em `Movies.tsx:190` confirma). O Radix captura o ESC primeiro e tenta fechar a si mesmo — mas o `PlayerOverlay` tem um guard que **não** fecha se houver outro dialog `[data-state="open"]` aberto (`PlayerOverlay.tsx:50-55`). Em Séries, o details dialog fecha antes do play, então não tem conflito.
+```tsx
+{!loading && !error && (
+  <div className={cn("...", statusTone[status])} role="status" ...>
+    ...
+  </div>
+)}
+```
 
-**Mudança:** Em `Movies.tsx`, fechar o `MovieDetailsDialog` ao disparar play (igual Séries faz). O dialog reabre quando o player fecha (já tem essa lógica de manter o item selecionado pra continuar exibindo).
+Por:
 
-**Arquivo:** `src/pages/Movies.tsx`.
+```tsx
+{playerLogsAvailable && !loading && !error && (
+  <div className={cn("...", statusTone[status])} role="status" ...>
+    ...
+  </div>
+)}
+```
 
-## 4) Clique fora do player NÃO deve fechar (em Séries e Filmes)
+(O hook `playerLogsAvailable = usePlayerLogsEnabled()` já está importado e usado na linha 453.)
 
-**Causa raiz:** O `PlayerOverlay` fecha no `mouseDown` do backdrop (`PlayerOverlay.tsx:65-68`). Em Filmes isso não acontece porque o `MovieDetailsDialog` cobre o backdrop — mas isso vai mudar com o item 3, então o clique-fora começaria a fechar em Filmes também.
+## Resultado
 
-**Mudança:** Remover o `handleBackdropMouseDown` do `PlayerOverlay`. Fechar passa a ser apenas via:
-- Tecla **ESC**
-- Botão **X** dentro dos controles do Player
-- Botão "Pressione Esc para fechar" no canto superior esquerdo (que já existe)
+- **Usuário comum**: player limpo, sem nenhum chip de status no canto. Só vê o conteúdo, a barra de controles (skip, velocidade, report) e o badge de qualidade.
+- **Admin com toggle ativo**: continua vendo o chip + o painel de logs como hoje.
+- **Toast "Reconectando…"** (linha 1841) é mantido porque é uma mensagem de UX legítima quando há reconexão real, não um log técnico.
 
-Isso resolve o pedido em Séries e mantém consistência com Filmes.
-
-**Arquivo:** `src/components/PlayerOverlay.tsx`.
-
----
-
-## Resumo dos arquivos editados
-- `src/components/Player.tsx` — gating do painel de logs por admin+toggle, auto-fallback generalizado
-- `src/components/PlayerOverlay.tsx` — remover fechamento por clique-fora
-- `src/pages/Movies.tsx` — fechar `MovieDetailsDialog` ao iniciar play (corrige ESC)
-- `src/pages/Admin.tsx` + `src/components/admin/MaintenancePanel.tsx` — toggle "Mostrar logs do player na minha sessão"
-
-## Compatibilidade
-- Sem mudanças de banco, sem edge function, sem migração.
-- Telemetria (`stream_events`) continua funcionando idêntica — só some o overlay visual.
-- Usuários que tinham o painel aberto: ele simplesmente some no próximo play (ou na próxima carga, se não-admin).
+Sem mudança de comportamento, sem risco de quebrar player, ESC, fallback automático ou telemetria.
