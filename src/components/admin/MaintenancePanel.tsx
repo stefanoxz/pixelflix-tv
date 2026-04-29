@@ -13,8 +13,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { invokeAdminApi } from "@/lib/adminApi";
-import { Database, Trash2, RefreshCw, Activity, AlertTriangle, Clock } from "lucide-react";
+import {
+  getPlayerLogsEnabled,
+  setPlayerLogsEnabled,
+} from "@/hooks/usePlayerLogsEnabled";
+import { Database, Trash2, RefreshCw, Activity, AlertTriangle, Clock, Terminal } from "lucide-react";
 
 interface TableStat {
   table: string;
