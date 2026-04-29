@@ -36,6 +36,11 @@ const credsSchema = z.object({
     .string()
     .min(1, { message: "Informe a senha" })
     .max(200, { message: "Senha muito longa (máx. 200)" }),
+  server: z
+    .string()
+    .trim()
+    .max(300, { message: "DNS muito longa (máx. 300)" })
+    .optional(),
 });
 
 const m3uSchema = z
@@ -52,6 +57,7 @@ type FieldErrors = {
   username?: string;
   password?: string;
   m3u?: string;
+  server?: string;
 };
 
 const Login = () => {
