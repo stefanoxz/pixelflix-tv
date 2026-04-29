@@ -2525,12 +2525,20 @@ Deno.serve(async (req) => {
     if (action === "blocked_dns_delete") {
       const id = String(payload?.id ?? "");
       if (!id) return bad("ID obrigatório");
+      // Buscar URL antes de deletar para também limpar falhas associadas e
+      // evitar que a mesma DNS volte como sugestão imediatamente.
+      const { data: row } = await admin
+        .from("blocked_dns_servers").select("server_url").eq("id", id).maybeSingle();
       const { error } = await admin.from("blocked_dns_servers").delete().eq("id", id);
       if (error) {
         console.error("[admin-api] blocked_dns_delete", error.message);
         return bad(error.message);
       }
-      await logAudit(user.id, user.email, "blocked_dns_delete", { metadata: { id } });
+      const serverUrl = (row as { server_url?: string } | null)?.server_url ?? null;
+      if (serverUrl) {
+        await admin.from("blocked_dns_failures").delete().eq("server_url", serverUrl);
+      }
+      await logAudit(user.id, user.email, "blocked_dns_delete", { metadata: { id, server_url: serverUrl } });
       return ok({ id });
     }
 
