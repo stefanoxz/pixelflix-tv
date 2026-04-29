@@ -397,7 +397,7 @@ interface ResolveResult {
   proxy_configured: boolean;
 }
 
-export function EndpointTestPanel({ allowedServers }: Props) {
+export function EndpointTestPanel({ allowedServers, onServerApplied }: Props) {
   const [pasteUrl, setPasteUrl] = useState("");
   const [serverUrl, setServerUrl] = useState("");
   const [path, setPath] = useState("/player_api.php");
@@ -411,6 +411,7 @@ export function EndpointTestPanel({ allowedServers }: Props) {
   const [result, setResult] = useState<TestResult | null>(null);
   const [resolving, setResolving] = useState(false);
   const [resolveResult, setResolveResult] = useState<ResolveResult | null>(null);
+  const [applyingCandidate, setApplyingCandidate] = useState<string | null>(null);
 
   const applyPastedUrl = (raw?: string) => {
     const input = (raw ?? pasteUrl).trim();
