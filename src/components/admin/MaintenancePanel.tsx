@@ -57,6 +57,17 @@ export default function MaintenancePanel() {
   const [evictBusy, setEvictBusy] = useState(false);
   const [confirm, setConfirm] = useState<TableStat | null>(null);
   const [confirmEvict, setConfirmEvict] = useState(false);
+  const [playerLogs, setPlayerLogs] = useState<boolean>(() => getPlayerLogsEnabled());
+
+  const togglePlayerLogs = (next: boolean) => {
+    setPlayerLogs(next);
+    setPlayerLogsEnabled(next);
+    toast.success(
+      next
+        ? "Painel 'Logs do player' ativado para sua sessão"
+        : "Painel 'Logs do player' desativado",
+    );
+  };
 
   const refresh = async () => {
     setLoading(true);
