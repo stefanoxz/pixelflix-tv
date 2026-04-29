@@ -2293,9 +2293,9 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         </div>
       )}
 
-      {/* Logs panel toggle — bottom-left (mesma linguagem visual da toolbar).
-          Escondido durante loading para deixar o overlay limpo (igual referência). */}
-      {!loading && !error && (
+      {/* Logs panel toggle — bottom-left. Disponível APENAS para admins
+          que ativaram o toggle em /admin → Manutenção. */}
+      {!loading && !error && playerLogsAvailable && (
         <button
           type="button"
           onClick={() => setLogsPanelOpen((o) => !o)}
@@ -2313,8 +2313,8 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
         </button>
       )}
 
-      {/* Logs panel — right side overlay */}
-      {logsPanelOpen && (
+      {/* Logs panel — right side overlay (admin-only) */}
+      {playerLogsAvailable && logsPanelOpen && (
         <div
           className="pointer-events-auto absolute top-3 right-3 bottom-14 z-30 w-[360px] max-w-[calc(100%-1.5rem)] flex flex-col rounded-md border bg-background/95 backdrop-blur-md shadow-xl text-foreground"
           role="dialog"
