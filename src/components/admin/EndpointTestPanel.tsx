@@ -825,9 +825,19 @@ export function EndpointTestPanel({ allowedServers, onServerApplied }: Props) {
                           variant={isBest ? "default" : "outline"}
                           className="h-6 px-2 text-[10px]"
                           onClick={() => applyCandidate(c.base)}
+                          disabled={applyingCandidate !== null}
                         >
-                          Aplicar
-                          <ArrowRight className="h-3 w-3 ml-1" />
+                          {applyingCandidate === c.base ? (
+                            <>
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              Aplicando…
+                            </>
+                          ) : (
+                            <>
+                              Aplicar
+                              <ArrowRight className="h-3 w-3 ml-1" />
+                            </>
+                          )}
                         </Button>
                       </div>
                     );
