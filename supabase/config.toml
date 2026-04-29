@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.client-diagnostic]
 verify_jwt = false
+
+[functions.demo-creds]
+verify_jwt = false
