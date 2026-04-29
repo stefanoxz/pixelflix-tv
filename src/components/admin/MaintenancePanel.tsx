@@ -154,6 +154,35 @@ export default function MaintenancePanel() {
         </Card>
       </div>
 
+      {/* Diagnóstico pessoal — só visível pra admin */}
+      <Card className="p-6 bg-gradient-card border-border/50">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-lg text-primary bg-primary/10 flex items-center justify-center shrink-0">
+              <Terminal className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">Logs do player (sua sessão)</h2>
+              <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
+                Mostra um botão "Logs" sobre o player de vídeo com causa raiz, motor (HLS/MPEG-TS),
+                upstream e tempos de bootstrap. Só você vê — usuários comuns nunca veem esse painel.
+                A telemetria é coletada de qualquer jeito; isso aqui só liga/desliga o overlay visual.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="player-logs-toggle" className="text-sm">
+              {playerLogs ? "Ativo" : "Desligado"}
+            </Label>
+            <Switch
+              id="player-logs-toggle"
+              checked={playerLogs}
+              onCheckedChange={togglePlayerLogs}
+            />
+          </div>
+        </div>
+      </Card>
+
       {/* Ações rápidas */}
       <Card className="p-6 bg-gradient-card border-border/50">
         <div className="flex items-start justify-between gap-3 flex-wrap">
