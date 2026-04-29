@@ -847,6 +847,7 @@ const Admin = () => {
                 : tab === "pending-signups" ? "Cadastros aguardando sua aprovação para acessar o painel admin"
                 : tab === "team" ? "Gerencie quem tem acesso ao painel e veja o histórico de ações"
                 : tab === "maintenance" ? "Limpeza de logs antigos, encerramento de sessões ociosas e status das tabelas"
+                : tab === "demo-creds" ? "Credenciais IPTV usadas pelo botão 'Testar grátis' na tela de login"
                 : "Cadastre as DNS autorizadas. Sem cadastro prévio, o cliente não consegue logar."}
             </p>
           </div>
