@@ -98,6 +98,7 @@ interface TestResult {
 
 interface Props {
   allowedServers: { server_url: string; label?: string | null }[];
+  onServerApplied?: (url: string) => void;
 }
 
 const PROBE_LABELS: Record<string, string> = {
