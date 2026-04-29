@@ -520,10 +520,31 @@ export function EndpointTestPanel({ allowedServers, onServerApplied }: Props) {
     }
   };
 
-  const applyCandidate = (base: string) => {
-    setServerUrl(base);
-    setResolveResult(null);
-    toast.success("URL aplicada — clique em 'Executar diagnóstico' para revalidar.");
+  const applyCandidate = async (base: string) => {
+    if (applyingCandidate) return;
+    setApplyingCandidate(base);
+    let host = base;
+    try { host = new URL(base).host; } catch { /* noop */ }
+    try {
+      const res = await invokeAdminApi<{ ok: true; server_url: string; warning?: string | null }>(
+        "allow_server",
+        {
+          server_url: base,
+          label: host,
+          notes: "Aplicado via diagnóstico automático",
+        },
+      );
+      setServerUrl(base);
+      setResolveResult(null);
+      toast.success(`DNS ${host} salvo como servidor autorizado.`);
+      if (res?.warning) toast.warning(res.warning);
+      onServerApplied?.(base);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha ao aplicar candidato";
+      toast.error(msg);
+    } finally {
+      setApplyingCandidate(null);
+    }
   };
 
   const copyReport = async () => {
