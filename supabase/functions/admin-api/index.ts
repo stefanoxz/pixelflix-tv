@@ -2609,6 +2609,73 @@ Deno.serve(async (req) => {
       return ok(data);
     }
 
+    // ==========================================================
+    // DEMO CREDENTIALS — credenciais de teste para botão da tela de login
+    // ==========================================================
+    if (action === "demo_credentials_get") {
+      const { data, error } = await admin
+        .from("demo_credentials")
+        .select("server_url, username, password, enabled, updated_at, updated_by")
+        .eq("singleton", true)
+        .maybeSingle();
+      if (error) {
+        console.error("[admin-api] demo_credentials_get", error.message);
+        return internalError();
+      }
+      return ok(
+        data ?? {
+          server_url: "",
+          username: "",
+          password: "",
+          enabled: false,
+          updated_at: null,
+          updated_by: null,
+        },
+      );
+    }
+
+    if (action === "demo_credentials_update") {
+      const server_url = String(payload?.server_url ?? "").trim();
+      const username = String(payload?.username ?? "").trim();
+      const password = String(payload?.password ?? "");
+      const enabled = Boolean(payload?.enabled);
+
+      if (username.length > 200 || password.length > 400 || server_url.length > 500) {
+        return bad("Campos muito longos");
+      }
+      if (enabled && (!username || !password)) {
+        return bad("Para ativar, informe usuário e senha");
+      }
+
+      const normalizedServer = server_url ? normalizeServer(server_url) : "";
+
+      const { data, error } = await admin
+        .from("demo_credentials")
+        .upsert(
+          {
+            singleton: true,
+            server_url: normalizedServer,
+            username,
+            password,
+            enabled,
+            updated_at: new Date().toISOString(),
+            updated_by: user.id,
+          },
+          { onConflict: "singleton" },
+        )
+        .select("server_url, username, password, enabled, updated_at, updated_by")
+        .single();
+
+      if (error) {
+        console.error("[admin-api] demo_credentials_update", error.message);
+        return bad(error.message);
+      }
+      await logAudit(user.id, user.email, "demo_credentials_update", {
+        metadata: { enabled, server: normalizedServer, username },
+      });
+      return ok(data);
+    }
+
     return bad("Ação inválida");
   } catch (e) {
     console.error("[admin-api] unhandled", e);
