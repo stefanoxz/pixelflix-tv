@@ -122,7 +122,12 @@ const Login = () => {
 
   const handleSubmitCreds = async (e: FormEvent) => {
     e.preventDefault();
-    const result = credsSchema.safeParse({ username, password });
+    const trimmedServer = serverDns.trim();
+    const result = credsSchema.safeParse({
+      username,
+      password,
+      server: trimmedServer ? trimmedServer : undefined,
+    });
     if (!result.success) {
       const fieldErrors: FieldErrors = {};
       for (const issue of result.error.issues) {
@@ -130,15 +135,17 @@ const Login = () => {
         if (key && !fieldErrors[key]) fieldErrors[key] = issue.message;
       }
       setErrors(fieldErrors);
-      // Foca o primeiro campo inválido pra acessibilidade.
-      const firstInvalid = (fieldErrors.username && "username") || (fieldErrors.password && "password");
+      const firstInvalid =
+        (fieldErrors.server && "server") ||
+        (fieldErrors.username && "username") ||
+        (fieldErrors.password && "password");
       if (firstInvalid) {
         document.getElementById(firstInvalid)?.focus();
       }
       return;
     }
     setErrors({});
-    await performLogin(undefined, result.data.username, result.data.password);
+    await performLogin(result.data.server, result.data.username, result.data.password);
   };
 
   const handleSubmitM3u = async (e: FormEvent) => {
