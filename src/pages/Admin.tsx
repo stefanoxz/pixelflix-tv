@@ -1692,7 +1692,7 @@ const Admin = () => {
                               onClick={() => setConfirmRemoveServer(s.server_url)}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
-                              Remover
+                              Apagar
                             </Button>
                           </div>
                         </div>
