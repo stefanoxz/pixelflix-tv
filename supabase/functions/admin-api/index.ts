@@ -76,6 +76,7 @@ const ADMIN_ONLY_ACTIONS = new Set([
   "blocked_dns_confirm",
   "blocked_dns_dismiss",
   "blocked_dns_reactivate",
+  "demo_credentials_update",
 ]);
 
 // Tabelas permitidas para limpeza manual via UI. Cada uma mapeia a uma RPC
