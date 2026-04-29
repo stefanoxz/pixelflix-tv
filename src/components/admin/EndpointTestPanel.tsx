@@ -30,6 +30,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeAdminApi } from "@/lib/adminApi";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { parseM3uUrl } from "@/lib/parseM3uUrl";
