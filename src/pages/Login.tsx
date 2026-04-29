@@ -482,13 +482,35 @@ const Login = () => {
           </TabsContent>
         </Tabs>
 
-        <div className="mt-6 pt-6 border-t border-border/50 text-center">
-          <button
-            onClick={() => navigate("/admin/login")}
-            className="text-xs text-muted-foreground hover:text-primary transition-smooth"
+        <div className="mt-6 pt-6 border-t border-border/50 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-border/50" />
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">ou</span>
+            <div className="flex-1 h-px bg-border/50" />
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleTestLogin}
+            disabled={loading}
+            className="w-full h-11 border-primary/40 hover:bg-primary/10 hover:border-primary/60 font-medium"
           >
-            Acesso administrador →
-          </button>
+            <FlaskConical className="h-4 w-4 mr-2 text-primary" />
+            Testar grátis
+          </Button>
+          <p className="text-[11px] text-center text-muted-foreground -mt-2">
+            Entrar com a conta de demonstração — sem precisar digitar nada
+          </p>
+
+          <div className="text-center pt-1">
+            <button
+              onClick={() => navigate("/admin/login")}
+              className="text-xs text-muted-foreground hover:text-primary transition-smooth"
+            >
+              Acesso administrador →
+            </button>
+          </div>
         </div>
       </Card>
     </div>
