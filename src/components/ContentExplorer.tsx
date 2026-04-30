@@ -30,7 +30,7 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
   // React Query for streams
   const { data: items = [], isLoading: itemsLoading } = useQuery({
     queryKey: ['streams', type],
-    queryFn: () => contentActions.getStreams(type),
+    queryFn: () => xtreamService.getStreams(type),
     select: (data) => data.map(s => ({
       ...s,
       id: String(s.stream_id || s.series_id),
