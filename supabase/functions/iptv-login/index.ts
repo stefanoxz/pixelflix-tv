@@ -943,26 +943,6 @@ Deno.serve(async (req) => {
       //    (caso comum: Cloudflare na frente de origin que só serve M3U)
       const failStatus = (r as { status?: number }).status;
       const failReason = (r as { reason?: string }).reason ?? "";
-      const shouldTryPlaylist =
-        !r.ok &&
-        (failStatus === 200 || failStatus === 401 || failStatus === 404) &&
-        (failReason === "resposta não JSON" ||
-          failReason === "credenciais inválidas" ||
-          /^HTTP 404$/i.test(failReason));
-      let playlistFallbackDebug:
-        | {
-            tried: boolean;
-            reason?: string;
-            attempts?: Array<{
-              variant: string;
-              endpoint: string;
-              status?: number;
-              contentType?: string | null;
-              bodyPreview?: string;
-              error?: string;
-            }>;
-          }
-        | undefined;
       // Removido fallback de playlist para limpeza total de rotas alternativas
       const shouldTryPlaylist = false;
 
