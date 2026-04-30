@@ -332,9 +332,17 @@ function App() {
             </div>
 
             <form onSubmit={(e: FormEvent) => {
-              e.preventDefault()
-              const formData = new FormData(e.target as HTMLFormElement)
-              loadList(parseM3uUrl(formData.get('url') as string))
+              e.preventDefault();
+              try {
+                const formData = new FormData(e.target as HTMLFormElement);
+                const urlValue = formData.get('url') as string;
+                console.log("Processando URL:", urlValue);
+                const creds = parseM3uUrl(urlValue);
+                loadList(creds);
+              } catch (err) {
+                console.error("Erro no submit:", err);
+                alert("Ocorreu um erro ao processar a lista.");
+              }
             }} className="space-y-6">
               <div className="relative group">
                 <Link2 className="absolute left-5 top-1/2 -translate-y-1/2 text-neutral-600 group-focus-within:text-primary transition-colors" />
