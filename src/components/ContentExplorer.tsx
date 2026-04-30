@@ -38,9 +38,9 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
       }
       return data.map(s => ({
         ...s,
-        id: String(s.stream_id || s.series_id || s.id),
-        name: s.name || s.title || 'Sem Nome',
-        icon: s.stream_icon || s.cover || s.stream_icon,
+        id: String(s.stream_id || s.series_id || (s as any).id),
+        name: s.name || (s as any).title || 'Sem Nome',
+        icon: s.stream_icon || s.cover || (s as any).stream_icon,
         rating: s.rating || 'N/A',
         year: s.year || '2024',
         duration: type === 'live' ? 'AO VIVO' : s.duration || 'N/A'
