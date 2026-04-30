@@ -14,10 +14,16 @@ export interface Stream {
   num: number;
   name: string;
   stream_type: 'live' | 'movie' | 'series';
-  stream_id: string;
-  stream_icon: string;
+  stream_id?: string;
+  series_id?: string;
+  stream_icon?: string;
+  cover?: string;
   category_id: string;
   added: string;
+  rating?: string;
+  year?: string;
+  duration?: string;
+  synopsis?: string;
 }
 
 export interface UserInfo {
