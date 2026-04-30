@@ -943,7 +943,7 @@ Deno.serve(async (req) => {
       //    (caso comum: Cloudflare na frente de origin que só serve M3U)
       const failStatus = (r as { status?: number }).status;
       const failReason = (r as { reason?: string }).reason ?? "";
-      // Removido fallback de playlist para limpeza total de rotas alternativas
+      const playlistFallbackDebug: any = undefined;
       const shouldTryPlaylist = false;
 
 
