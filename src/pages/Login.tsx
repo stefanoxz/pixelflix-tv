@@ -62,6 +62,13 @@ const Login = () => {
   const [m3uUrl, setM3uUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
+  const isUnmounted = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isUnmounted.current = true;
+    };
+  }, []);
 
   /** Núcleo do login: recebe creds já parseadas e roda o fluxo padrão. */
   const performLogin = async (
