@@ -17,22 +17,41 @@ export class XtreamService {
   private async fetchAction(action: string, params: Record<string, string> = {}) {
     if (!this.credentials) throw new Error('No credentials set');
 
-    const { data, error } = await supabase.functions.invoke('xtream-proxy', {
-      body: {
-        url: this.credentials.url,
+    try {
+      const { data, error } = await supabase.functions.invoke('xtream-proxy', {
+        body: {
+          url: this.credentials.url,
+          username: this.credentials.username,
+          password: this.credentials.password,
+          action,
+          ...params,
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.error) {
+        throw new Error(data.error);
+      }
+
+      return data;
+    } catch (err) {
+      console.warn('Proxy failed, attempting direct call as fallback:', err);
+      
+      // Fallback: Direct call if proxy fails (might hit CORS but better than nothing)
+      const searchParams = new URLSearchParams({
         username: this.credentials.username,
         password: this.credentials.password,
         action,
         ...params,
-      },
-    });
+      });
 
-    if (error) {
-      console.error('Error calling xtream-proxy:', error);
-      throw error;
+      const response = await fetch(`${this.credentials.url}/player_api.php?${searchParams.toString()}`);
+      if (!response.ok) throw new Error('Network response was not ok');
+      return response.json();
     }
-
-    return data;
   }
 
   async authenticate(): Promise<{ user_info: UserInfo }> {
