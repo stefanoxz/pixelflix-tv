@@ -425,6 +425,7 @@ async function attemptLogin(
   password: string,
   serverRow: { id?: string; last_working_variant?: string | null; consecutive_failures?: number; unreachable_until?: string | null } | null,
   admin: any,
+  clientIp?: string,
 ) {
   // Cooldown removido — toda DNS é tentada de fato a cada login.
 
