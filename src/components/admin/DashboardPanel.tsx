@@ -56,13 +56,13 @@ export function DashboardPanel({ stats, events, pending, setTab }: DashboardPane
           </div>
           <div className="space-y-3">
             {!events.length ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">Nenhum evento recente.</p>
+              <p className="text-xs text-muted-foreground py-4 text-center">Nenhum login recente.</p>
             ) : (
               events.slice(0, 5).map((e, i) => (
                 <div key={i} className="flex items-start justify-between gap-3 text-xs border-b border-border/30 pb-2 last:border-0 last:pb-0">
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate">{e.event_type}</p>
-                    <p className="text-muted-foreground truncate">{e.username || "Sistema"}</p>
+                    <p className="font-medium truncate">{e.success ? "Login com sucesso" : "Falha no login"}</p>
+                    <p className="text-muted-foreground truncate">{e.username || "Sistema"} • {e.server_url}</p>
                   </div>
                   <span className="text-[10px] text-muted-foreground shrink-0">{formatRelative(e.created_at)}</span>
                 </div>
@@ -82,7 +82,7 @@ export function DashboardPanel({ stats, events, pending, setTab }: DashboardPane
               {pending.slice(0, 3).map((p, i) => (
                 <div key={i} className="flex items-center justify-between gap-3 text-xs border-b border-border/30 pb-2 last:border-0 last:pb-0">
                   <span className="font-mono truncate flex-1">{p.server_url}</span>
-                  <Button variant="outline" size="xs" className="h-6 text-[10px]" onClick={() => setTab("servers")}>Revisar</Button>
+                  <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => setTab("servers")}>Revisar</Button>
                 </div>
               ))}
             </div>
