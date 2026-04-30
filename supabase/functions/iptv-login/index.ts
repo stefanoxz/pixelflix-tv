@@ -920,6 +920,8 @@ Deno.serve(async (req) => {
         }
       } catch (err) {
         console.warn("[iptv-login] m3u_register: lookup failed", err);
+      }
+
       if (!existingRow && isBlockNewDns) {
         console.log(`[iptv-login] registration blocked by setting: ${normalizedInput}`);
         return errorResponse(
