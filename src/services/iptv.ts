@@ -1287,6 +1287,16 @@ function pickDirectSource(direct?: string): string | null {
   return trimmed;
 }
 
+/**
+ * Constrói a URL final para reprodução de um canal ao vivo.
+ * Prioriza o `directSource` (URL absoluta do provedor) se disponível,
+ * caso contrário, monta a URL no padrão Xtream (/live/user/pass/id.m3u8).
+ * 
+ * @param creds - Credenciais da sessão IPTV (username, password, server).
+ * @param streamId - ID numérico do canal no servidor.
+ * @param directSource - URL direta opcional fornecida pelo servidor.
+ * @returns URL completa para o player.
+ */
 export function buildLiveStreamUrl(
   creds: IptvCredentials,
   streamId: number,
@@ -1297,6 +1307,15 @@ export function buildLiveStreamUrl(
   return `${serverBase(creds)}/live/${creds.username}/${creds.password}/${streamId}.m3u8`;
 }
 
+/**
+ * Constrói a URL para reprodução de um filme (VOD).
+ * 
+ * @param creds - Credenciais da sessão.
+ * @param streamId - ID do filme.
+ * @param ext - Extensão do arquivo (ex: mp4, mkv).
+ * @param directSource - URL direta opcional.
+ * @returns URL completa para o stream do filme.
+ */
 export function buildVodStreamUrl(
   creds: IptvCredentials,
   streamId: number,
@@ -1308,6 +1327,15 @@ export function buildVodStreamUrl(
   return `${serverBase(creds)}/movie/${creds.username}/${creds.password}/${streamId}.${ext}`;
 }
 
+/**
+ * Constrói a URL para um episódio específico de uma série.
+ * 
+ * @param creds - Credenciais da sessão.
+ * @param episodeId - ID único do episódio.
+ * @param ext - Extensão do vídeo.
+ * @param directSource - URL direta opcional.
+ * @returns URL completa para o episódio.
+ */
 export function buildSeriesEpisodeUrl(
   creds: IptvCredentials,
   episodeId: string | number,
