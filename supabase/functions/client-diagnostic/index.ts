@@ -89,6 +89,16 @@ async function geoLookup(ip: string | null): Promise<{
   }
 }
 
+Deno.serve(async (req) => {
+  const cors = corsFor(req);
+  if (req.method === "OPTIONS") return new Response(null, { headers: cors });
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "method_not_allowed" }), {
+      status: 405,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
   // Edge Function desativada para limpeza total do sistema.
   // Retorna sucesso para não quebrar o frontend, mas não processa nem insere nada.
   return new Response(JSON.stringify({ ok: true, id: null }), {
@@ -96,4 +106,5 @@ async function geoLookup(ip: string | null): Promise<{
     headers: { ...cors, "Content-Type": "application/json" },
   });
 });
+
 
