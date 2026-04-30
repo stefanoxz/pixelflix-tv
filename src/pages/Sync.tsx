@@ -144,7 +144,11 @@ const Sync = () => {
       // Forçar atualização do QueryClient para garantir que os dados sejam marcados como frescos
       await queryClient.invalidateQueries();
       setAllDone(true);
-      setTimeout(() => navigate("/", { replace: true }), 600);
+      // Aguarda o próximo frame para garantir que o estado allDone foi processado
+      // antes de disparar a navegação que desmonta o componente.
+      requestAnimationFrame(() => {
+        setTimeout(() => navigate("/", { replace: true }), 600);
+      });
     }
   };
 
