@@ -36,8 +36,9 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { id: "dashboard", label: "Dashboard", shortLabel: "Início", icon: TrendingUp, adminOnly: false, primaryMobile: true },
   { id: "users", label: "Usuários", shortLabel: "Usuários", icon: Users, adminOnly: false, primaryMobile: true },
   { id: "servers", label: "DNS / Servidores", shortLabel: "DNS", icon: Server, adminOnly: true, primaryMobile: true },
-  { id: "endpoint-test", label: "Testar endpoint", shortLabel: "Endpoint", icon: FlaskConical, adminOnly: false, primaryMobile: true },
-  { id: "team", label: "Equipe e permissões", shortLabel: "Equipe", icon: ShieldCheck, adminOnly: true, primaryMobile: true },
+  { id: "stats", label: "Estatísticas", shortLabel: "Stats", icon: BarChart3, adminOnly: true, primaryMobile: true },
+  { id: "endpoint-test", label: "Testar endpoint", shortLabel: "Endpoint", icon: FlaskConical, adminOnly: false },
+  { id: "team", label: "Equipe e permissões", shortLabel: "Equipe", icon: ShieldCheck, adminOnly: true },
   { id: "maintenance", label: "Manutenção", shortLabel: "Manut.", icon: Wrench, adminOnly: true },
 ];
 

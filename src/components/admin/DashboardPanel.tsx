@@ -48,7 +48,47 @@ export function DashboardPanel({ stats, events, pending, setTab }: DashboardPane
         })}
       </div>
 
-      {/* Painéis de eventos desativados */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="p-5 bg-gradient-card border-border/50">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="h-4 w-4 text-primary" />
+            <h3 className="font-semibold text-sm">Últimos eventos</h3>
+          </div>
+          <div className="space-y-3">
+            {!events.length ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">Nenhum login recente.</p>
+            ) : (
+              events.slice(0, 5).map((e, i) => (
+                <div key={i} className="flex items-start justify-between gap-3 text-xs border-b border-border/30 pb-2 last:border-0 last:pb-0">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">{e.success ? "Login com sucesso" : "Falha no login"}</p>
+                    <p className="text-muted-foreground truncate">{e.username || "Sistema"} • {e.server_url}</p>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{formatRelative(e.created_at)}</span>
+                </div>
+              ))
+            )}
+          </div>
+          <Button variant="link" size="sm" className="w-full mt-2 text-xs h-auto py-0" onClick={() => setTab("users")}>Ver usuários</Button>
+        </Card>
+
+        {pending.length > 0 && (
+          <Card className="p-5 bg-gradient-card border-border/50">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="h-4 w-4 text-warning" />
+              <h3 className="font-semibold text-sm">DNS aguardando</h3>
+            </div>
+            <div className="space-y-3">
+              {pending.slice(0, 3).map((p, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 text-xs border-b border-border/30 pb-2 last:border-0 last:pb-0">
+                  <span className="font-mono truncate flex-1">{p.server_url}</span>
+                  <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => setTab("servers")}>Revisar</Button>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
     </div>
 
   );
