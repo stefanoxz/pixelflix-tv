@@ -1,4 +1,4 @@
-import { useState, FormEvent, useEffect, useRef } from 'react'
+import { useState, FormEvent, useEffect, useRef, useMemo } from 'react'
 import { Play, Search, Link2, Loader2, ArrowLeft, Menu, X, ChevronRight, Tv, Settings, Globe, Shield, Zap, Monitor } from 'lucide-react'
 import Hls from 'hls.js'
 import { parseM3uUrl, fetchM3u, parseM3uToData } from './services/iptv'
@@ -7,50 +7,92 @@ import { Stream, Category } from './types/iptv'
 const Player = ({ stream, onBack }: { stream: Stream, onBack: () => void }) => {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
-    if (!videoRef.current || !stream.direct_source) return
-    const video = videoRef.current
+    let hls: Hls | null = null;
+    const video = videoRef.current;
+    if (!video || !stream.direct_source) return;
     
     const initPlayer = () => {
+      setLoading(true);
+      setError(false);
+
       if (Hls.isSupported()) {
-        const hls = new Hls({ enableWorker: true })
-        hls.loadSource(stream.direct_source!)
-        hls.attachMedia(video)
+        hls = new Hls({ 
+          enableWorker: true,
+          manifestLoadingTimeOut: 10000,
+          fragLoadingTimeOut: 20000
+        });
+        hls.loadSource(stream.direct_source!);
+        hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          setLoading(false)
-          video.play().catch(() => {})
-        })
-        return () => hls.destroy()
+          setLoading(false);
+          video.play().catch(() => {});
+        });
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data.fatal) {
+            console.error("HLS Fatal Error:", data);
+            setError(true);
+            setLoading(false);
+          }
+        });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = stream.direct_source!
-        video.addEventListener('loadedmetadata', () => {
-          setLoading(false)
-          video.play().catch(() => {})
-        })
+        video.src = stream.direct_source!;
+        const onLoaded = () => {
+          setLoading(false);
+          video.play().catch(() => {});
+        };
+        const onError = () => {
+          setError(true);
+          setLoading(false);
+        };
+        video.addEventListener('loadedmetadata', onLoaded);
+        video.addEventListener('error', onError);
+        return () => {
+          video.removeEventListener('loadedmetadata', onLoaded);
+          video.removeEventListener('error', onError);
+        };
       }
-    }
+    };
     
-    return initPlayer()
-  }, [stream])
+    const cleanup = initPlayer();
+    return () => {
+      if (hls) hls.destroy();
+      if (cleanup) cleanup();
+    };
+  }, [stream]);
+
+  if (error) return (
+    <div className="fixed inset-0 z-[300] bg-black flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300">
+      <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
+        <Tv className="w-12 h-12 text-red-500" />
+      </div>
+      <h2 className="text-2xl font-black text-white tracking-tighter mb-2">Ops! Falha na Reprodução</h2>
+      <p className="text-neutral-500 mb-8 max-w-xs">O link deste canal pode estar offline ou é incompatível com o navegador.</p>
+      <button onClick={onBack} className="h-14 px-8 bg-white/5 border border-white/10 rounded-2xl font-bold hover:bg-white/10 transition-all">
+        Voltar para a Lista
+      </button>
+    </div>
+  )
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center animate-in fade-in duration-300">
-      <button onClick={onBack} className="absolute top-6 left-6 z-10 p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full transition-all text-white">
+    <div className="fixed inset-0 z-[300] bg-black flex flex-col items-center justify-center animate-in fade-in duration-300">
+      <button onClick={onBack} className="absolute top-6 left-6 z-[310] p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full transition-all text-white">
         <ArrowLeft className="w-6 h-6" />
       </button>
       
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-0">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-[305]">
           <Loader2 className="w-12 h-12 text-primary animate-spin" />
         </div>
       )}
 
       <video ref={videoRef} className="w-full h-full object-contain" controls autoPlay playsInline />
       
-      <div className="absolute bottom-12 left-0 right-0 p-8 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none">
+      <div className="absolute bottom-12 left-0 right-0 p-8 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none z-[305]">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-black text-white mb-2">{stream.name}</h2>
+          <h2 className="text-3xl font-black text-white mb-2 tracking-tighter">{stream.name}</h2>
           <span className="px-3 py-1 bg-primary/20 border border-primary/30 text-primary text-xs font-bold rounded-full uppercase tracking-widest">
             {stream.category_id}
           </span>
@@ -73,23 +115,25 @@ function App() {
   useEffect(() => {
     const saved = localStorage.getItem('last_list')
     if (saved) {
-      try { loadList(JSON.parse(saved)) } catch (e) {}
+      try {
+        const creds = JSON.parse(saved);
+        if (creds && creds.username) loadList(creds);
+      } catch (e) {}
     }
   }, [])
 
   const loadList = async (creds: any) => {
-    if (!creds) {
-      alert("Por favor, insira uma URL M3U válida (ex: http://servidor.com/get.php?username=...)");
+    if (!creds || !creds.server) {
+      alert("Por favor, insira uma URL M3U válida.");
       return;
     }
     setLoading(true);
     try {
-      console.log("Iniciando sincronização da lista...");
       const m3u = await fetchM3u(creds);
       const { streams: s, categories: c } = parseM3uToData(m3u);
       
       if (s.length === 0) {
-        alert("A lista foi carregada, mas não encontramos nenhum canal. Verifique se o usuário/senha estão corretos.");
+        alert("A lista foi carregada, mas nenhum canal foi encontrado.");
         return;
       }
 
@@ -97,30 +141,29 @@ function App() {
       setCategories([{ category_id: 'Todos', category_name: 'Todos' }, ...c]);
       setIsLoginOpen(false);
       localStorage.setItem('last_list', JSON.stringify(creds));
-      console.log("Lista carregada com sucesso:", s.length, "canais.");
-    } catch (e) { 
-      console.error("Erro no loadList:", e);
-      alert("Erro ao conectar com o servidor IPTV. Isso pode ser um bloqueio de CORS ou o servidor está offline."); 
+    } catch (e: any) { 
+      alert(e.message || "Erro ao conectar com o servidor IPTV."); 
     } finally { 
       setLoading(false); 
     }
   }
 
-  const filtered = streams.filter(s => 
+  const filtered = useMemo(() => streams.filter(s => 
     (activeCategory === 'Todos' || s.category_id === activeCategory) &&
     s.name.toLowerCase().includes(search.toLowerCase())
-  )
+  ), [streams, activeCategory, search]);
 
   const handleLogout = () => {
-    if(confirm('Deseja sair do WebPlayer?')) {
-      setStreams([])
-      localStorage.removeItem('last_list')
+    if(window.confirm('Deseja sair do WebPlayer?')) {
+      setActiveStream(null);
+      setStreams([]);
+      localStorage.removeItem('last_list');
     }
   }
 
   if (streams.length > 0) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex text-neutral-300 font-sans">
+      <div className="min-h-screen bg-neutral-950 flex text-neutral-300 font-sans selection:bg-primary/20">
         {/* Sidebar Desktop */}
         <aside className="w-72 border-r border-white/5 bg-neutral-900/20 backdrop-blur-xl hidden lg:flex flex-col h-screen sticky top-0 overflow-hidden">
           <div className="p-8 border-b border-white/5">
@@ -131,12 +174,15 @@ function App() {
               Super<span className="text-primary">Tech</span>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto px-4 py-6 space-y-1">
+          <div className="flex-1 overflow-y-auto px-4 py-6 space-y-1 custom-scrollbar">
             <h3 className="px-4 text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] mb-4">Categorias</h3>
             {categories.map(c => (
               <button 
                 key={c.category_id}
-                onClick={() => setActiveCategory(c.category_id)}
+                onClick={() => {
+                  setActiveCategory(c.category_id);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
                 className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 group ${activeCategory === c.category_id ? 'bg-primary text-white shadow-glow' : 'hover:bg-white/5 hover:text-white'}`}
               >
                 <span className="text-sm font-bold truncate">{c.category_name}</span>
@@ -148,7 +194,7 @@ function App() {
 
         {/* Mobile Menu Overlay */}
         {isMobileMenuOpen && (
-          <div className="fixed inset-0 z-[150] lg:hidden animate-in fade-in duration-300">
+          <div className="fixed inset-0 z-[200] lg:hidden animate-in fade-in duration-300">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setIsMobileMenuOpen(false)} />
             <div className="absolute top-0 bottom-0 left-0 w-80 bg-neutral-900 border-r border-white/10 p-8 overflow-y-auto animate-in slide-in-from-left duration-500">
               <div className="flex justify-between items-center mb-8">
@@ -173,9 +219,9 @@ function App() {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0">
-          <header className="px-6 h-24 border-b border-white/5 flex items-center gap-6 sticky top-0 bg-neutral-950/80 backdrop-blur-xl z-50">
-            <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 text-neutral-400">
+        <main className="flex-1 min-w-0 flex flex-col h-screen">
+          <header className="px-6 h-24 border-b border-white/5 flex items-center gap-6 sticky top-0 bg-neutral-950/80 backdrop-blur-xl z-50 shrink-0">
+            <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 text-neutral-400 hover:text-white transition-colors">
               <Menu className="w-6 h-6" />
             </button>
             <div className="flex-1 max-w-2xl relative group">
@@ -186,12 +232,12 @@ function App() {
                 className="w-full bg-white/5 border border-white/5 rounded-2xl py-3 pl-12 pr-4 text-white placeholder:text-neutral-600 focus:bg-white/10 focus:border-primary/50 transition-all outline-none"
               />
             </div>
-            <button onClick={handleLogout} className="px-6 h-12 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all text-xs font-black uppercase tracking-widest text-neutral-400 hover:text-white">
+            <button onClick={handleLogout} className="px-6 h-12 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all text-xs font-black uppercase tracking-widest text-neutral-400 hover:text-white shrink-0">
               Sair
             </button>
           </header>
           
-          <div className="p-8">
+          <div className="p-8 overflow-y-auto flex-1 custom-scrollbar">
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h1 className="text-3xl font-black text-white tracking-tighter">{activeCategory}</h1>
@@ -199,7 +245,7 @@ function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-8 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-8 gap-6 pb-20">
               {filtered.map(s => (
                 <button 
                   key={s.stream_id} 
@@ -213,13 +259,12 @@ function App() {
                         src={s.stream_icon} 
                         className="w-full h-full object-contain p-6 relative z-10 group-hover:scale-110 transition-transform duration-500" 
                         loading="lazy" 
+                        onError={(e) => (e.currentTarget.style.display = 'none')}
                       />
                     )}
-                    {!s.stream_icon && (
-                      <div className="w-full h-full flex items-center justify-center relative z-10 text-neutral-700">
-                        <Tv className="w-12 h-12" />
-                      </div>
-                    )}
+                    <div className="absolute inset-0 flex items-center justify-center z-[5] text-neutral-700">
+                      <Tv className="w-12 h-12" />
+                    </div>
                     <div className="absolute inset-0 bg-neutral-950/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300 z-20">
                       <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center shadow-glow animate-in zoom-in duration-300">
                         <Play className="fill-current w-6 h-6 text-white ml-1" />
@@ -253,7 +298,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col relative overflow-hidden">
-      {/* Background Decor - Adicionado pointer-events-none para não bloquear cliques */}
+      {/* Background Decor */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[50vh] bg-gradient-to-b from-primary/10 via-background to-transparent pointer-events-none z-0" />
       <div className="absolute top-1/4 right-0 w-[500px] h-[500px] bg-primary/10 blur-[120px] rounded-full pointer-events-none z-0" />
       <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-indigo-500/5 blur-[100px] rounded-full pointer-events-none z-0" />
@@ -288,10 +333,7 @@ function App() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom duration-1000 delay-300">
             <button 
-              onClick={() => {
-                console.log("Abrindo modal de login...");
-                setIsLoginOpen(true);
-              }} 
+              onClick={() => setIsLoginOpen(true)} 
               className="w-full sm:w-auto px-10 h-16 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-glow flex items-center justify-center gap-3"
             >
               Acessar Player <ChevronRight className="w-5 h-5" />
@@ -330,7 +372,7 @@ function App() {
       {isLoginOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300">
           <div className="bg-neutral-900 border border-white/5 p-10 rounded-[48px] w-full max-w-xl space-y-8 shadow-2xl relative">
-            <button onClick={() => setIsLoginOpen(false)} className="absolute top-8 right-8 text-neutral-500 hover:text-white"><X /></button>
+            <button onClick={() => setIsLoginOpen(false)} className="absolute top-8 right-8 text-neutral-500 hover:text-white transition-colors z-10"><X /></button>
             
             <div className="space-y-2">
               <h2 className="text-4xl font-black text-white tracking-tighter">Entrar no <span className="text-primary italic">Cloud</span></h2>
@@ -342,26 +384,27 @@ function App() {
               try {
                 const formData = new FormData(e.target as HTMLFormElement);
                 const urlValue = formData.get('url') as string;
-                console.log("Processando URL:", urlValue);
+                if (!urlValue) return;
                 const creds = parseM3uUrl(urlValue);
                 loadList(creds);
               } catch (err) {
-                console.error("Erro no submit:", err);
-                alert("Ocorreu um erro ao processar a lista.");
+                console.error("Submit error:", err);
+                alert("Ocorreu um erro inesperado.");
               }
             }} className="space-y-6">
               <div className="relative group">
-                <Link2 className="absolute left-5 top-1/2 -translate-y-1/2 text-neutral-600 group-focus-within:text-primary transition-colors" />
+                <Link2 className="absolute left-5 top-1/2 -translate-y-1/2 text-neutral-600 group-focus-within:text-primary transition-colors pointer-events-none" />
                 <input 
                   name="url" 
                   autoFocus
                   placeholder="http://safawe.space/get.php?username=..." 
                   className="w-full bg-black border border-white/5 rounded-[24px] py-6 pl-14 pr-6 text-white placeholder:text-neutral-700 focus:border-primary/50 transition-all outline-none" 
+                  required
                 />
               </div>
               <button 
                 disabled={loading} 
-                className="w-full h-20 bg-primary text-white rounded-[24px] font-black uppercase tracking-[0.2em] shadow-glow flex items-center justify-center gap-3 disabled:opacity-50"
+                className="w-full h-20 bg-primary text-white rounded-[24px] font-black uppercase tracking-[0.2em] shadow-glow flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? <Loader2 className="animate-spin" /> : 'Sincronizar Lista'}
               </button>
