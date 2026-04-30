@@ -92,7 +92,15 @@ const Admin = () => {
 
   const allowServer = async (server_url: string, label?: string, notes?: string) => {
     try {
-      await invokeAdminApi("allow_server", { server_url, label, notes });
+      const normalized = server_url.trim();
+      if (!normalized) throw new Error("URL é obrigatória");
+      
+      await invokeAdminApi("allow_server", { 
+        server_url: normalized, 
+        label: label?.trim() || null, 
+        notes: notes?.trim() || null 
+      });
+      
       toast.success(editingServer ? "DNS atualizada" : "DNS autorizada");
       setAddOpen(false);
       setEditingServer(null);
@@ -127,6 +135,14 @@ const Admin = () => {
     } finally {
       setConfirmUnblockUser(null);
     }
+  };
+
+  const handleEditServer = (s: AllowedServer) => {
+    setEditingServer(s);
+    setNewUrl(s.server_url);
+    setNewLabel(s.label ?? "");
+    setNewNotes(s.notes ?? "");
+    setAddOpen(true);
   };
 
   const evictSession = async (anon_user_id: string) => {
@@ -205,7 +221,7 @@ const Admin = () => {
               <AdminServersPanel 
                 allowed={allowed} pending={pending} health={health} search={search} onSearchChange={setSearch} 
                 onCheckAll={() => checkAllServers(true)} onAdd={() => setAddOpen(true)} onProbe={setProbeServer} 
-                onEdit={(s) => { setEditingServer(s); setNewUrl(s.server_url); setNewLabel(s.label ?? ""); setNewNotes(s.notes ?? ""); setAddOpen(true); }} 
+                onEdit={handleEditServer} 
                 onRemove={setConfirmRemoveServer} onAuthorizePending={(url) => { setNewUrl(url); setAddOpen(true); }} healthLoading={healthLoading} 
               />
             </TabsContent>
@@ -223,7 +239,7 @@ const Admin = () => {
         </Tabs>
       </main>
 
-      <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) { setEditingServer(null); setNewUrl(""); setNewLabel(""); setNewNotes(""); } }}>
+      <Dialog open={addOpen} onOpenChange={(o) => { if (!o) { setAddOpen(false); setEditingServer(null); setNewUrl(""); setNewLabel(""); setNewNotes(""); } else { setAddOpen(true); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editingServer ? "Editar DNS" : "Cadastrar DNS"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
