@@ -28,8 +28,8 @@ const MAX_INPUT_LEN = 2000;
 
 /** Extrai a primeira sequência que pareça uma URL no input. */
 function extractFirstUrl(raw: string): string | null {
-  // 1) URL absoluta com protocolo
-  const withProto = raw.match(/https?:\/\/[^\s"'<>]+/i);
+  // 1) URL absoluta com protocolo - agora aceita mais caracteres em query strings
+  const withProto = raw.match(/https?:\/\/[^\s"'<>|]+(?:\?[^\s"'<>|]*)?/i);
   if (withProto) return withProto[0];
 
   // 2) host[:port]/path — assume http://
@@ -114,8 +114,8 @@ export function parseM3uUrl(input: string): M3uCredentials | null {
     try {
       const username = decodeURIComponent(legacy[1]).trim();
       const password = decodeURIComponent(legacy[2]);
-      // heurística: usuário/senha Xtream costumam ser alfanuméricos (não conter "." ou "/")
-      if (username && password && !/[./\\@:]/.test(username)) {
+      // heurística: usuário/senha Xtream costumam ser alfanuméricos
+      if (username && password && !/[\\@:]/.test(username)) {
         return { server, username, password, path: "/player_api.php" };
       }
     } catch {
