@@ -11,6 +11,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import AdminProtectedRoute from "@/components/AdminProtectedRoute";
 import { InstallAppDialog } from "@/components/InstallAppDialog";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Login from "./pages/Login";
 
 // Sync continua lazy. Para evitar o flash do Suspense na transição
