@@ -12,25 +12,26 @@ display: none !important;
   :root {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
-    --card: 240 10% 6%;
+    --card: 240 10% 4.5%;
     --card-foreground: 0 0% 98%;
     --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 263.4 70% 50.4%;
+    --primary: 263.4 75% 55%;
     --primary-foreground: 210 40% 98%;
     --secondary: 240 4.8% 12%;
     --secondary-foreground: 0 0% 98%;
     --muted: 240 4.8% 12%;
-    --muted-foreground: 240 5% 64.9%;
+    --muted-foreground: 240 5% 70%;
     --accent: 240 4.8% 15%;
     --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 4.8% 15%;
-    --input: 240 4.8% 15%;
-    --ring: 263.4 70% 50.4%;
-    --radius: 0.75rem;
+    --border: 240 4.8% 18%;
+    --input: 240 4.8% 18%;
+    --ring: 263.4 75% 55%;
+    --radius: 1rem;
   }
+
 }
 
 @layer base {
@@ -62,16 +63,25 @@ display: none !important;
   }
 
   .bg-gradient-card {
-    @apply bg-gradient-to-b from-secondary/30 to-background/90;
+    @apply bg-gradient-to-b from-secondary/40 to-background/95;
+  }
+
+  .glass {
+    @apply bg-background/40 backdrop-blur-md border border-white/10;
+  }
+
+  .glass-card {
+    @apply bg-card/60 backdrop-blur-lg border border-white/5;
   }
 
   .shadow-glow {
-    @apply shadow-[0_0_20px_-5px_rgba(139,92,246,0.3)];
+    @apply shadow-[0_0_25px_-5px_rgba(139,92,246,0.4)];
   }
 
   .hero-title {
-    @apply text-4xl md:text-5xl lg:text-7xl font-black tracking-tight leading-[0.95] drop-shadow-2xl;
+    @apply text-4xl md:text-5xl lg:text-7xl font-black tracking-tight leading-[1.1] drop-shadow-2xl;
   }
+
 
   .tap-feedback {
     @apply active:scale-95 transition-transform duration-100;

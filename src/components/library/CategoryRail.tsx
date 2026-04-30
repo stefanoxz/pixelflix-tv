@@ -41,13 +41,16 @@ export function CategoryRail({ categories, active, onChange, className }: Props)
             onClick={() => onChange(cat.id)}
             data-active={isActive}
             className={cn(
-              "group flex items-center gap-2.5 px-4 py-2.5 text-sm transition-smooth text-left border-l-2",
+              "group flex items-center gap-3 px-5 py-3 text-[13px] transition-all duration-300 text-left relative",
               isActive
-                ? "border-primary bg-primary/10 text-foreground font-medium"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/40",
+                ? "text-primary font-bold bg-primary/10"
+                : "text-muted-foreground hover:text-foreground hover:bg-white/5",
             )}
+
           >
+            {isActive && <div className="absolute inset-y-1.5 left-0 w-1 bg-primary rounded-r-full shadow-[0_0_12px_hsl(var(--primary))]" />}
             <span
+
               className={cn(
                 "shrink-0",
                 isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground",

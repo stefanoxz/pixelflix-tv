@@ -324,24 +324,28 @@ const Login = () => {
         }}
       />
 
-      <Card className="relative w-full max-w-md p-8 bg-card/70 backdrop-blur-xl border-border/40 shadow-[0_24px_80px_-12px_hsl(222_50%_2%/0.9)] ring-1 ring-white/5 animate-scale-in">
-        <div className="text-center mb-6">
-          <img
-            src={logoSuperTech}
-            alt="SuperTech"
-            width={80}
-            height={80}
-            {...({ fetchpriority: "high" } as Record<string, string>)}
-            decoding="async"
-            className="mx-auto h-20 w-20 object-contain mb-3 drop-shadow-[0_0_28px_hsl(var(--primary)/0.55)] animate-float"
-          />
-          <h1 className="text-3xl font-bold tracking-tight">
+      <Card className="relative w-full max-w-md p-8 glass-card shadow-[0_32px_100px_-16px_hsl(222_50%_2%/1)] ring-1 ring-white/10 animate-scale-in">
+        <div className="text-center mb-10">
+          <div className="relative inline-block mb-4">
+            <div className="absolute inset-0 bg-primary/30 blur-2xl rounded-full scale-125" />
+            <img
+              src={logoSuperTech}
+              alt="SuperTech Logo"
+              width={88}
+              height={88}
+              {...({ fetchpriority: "high" } as Record<string, string>)}
+              decoding="async"
+              className="relative h-24 w-24 object-contain drop-shadow-[0_0_28px_hsl(var(--primary)/0.6)] animate-float"
+            />
+          </div>
+          <h1 className="text-4xl font-black tracking-tight mb-2">
             Super<span className="text-gradient">Tech</span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-2">
-            Entre com seu usuário ou cole a URL M3U
+          <p className="text-sm text-muted-foreground max-w-[280px] mx-auto">
+            Sua central de entretenimento definitiva, em qualquer lugar.
           </p>
         </div>
+
 
         <Tabs defaultValue="creds" className="w-full">
           <TabsList className="grid grid-cols-2 mb-6 bg-secondary/50">

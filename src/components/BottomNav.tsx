@@ -30,8 +30,9 @@ export function BottomNav() {
       aria-label="Navegação principal"
       className={cn(
         "md:hidden fixed bottom-0 inset-x-0 z-40",
-        "bg-background/90 backdrop-blur-xl border-t border-border/50",
+        "bg-background/80 backdrop-blur-2xl border-t border-white/10 shadow-[0_-8px_30px_rgba(0,0,0,0.5)]",
         "pb-[env(safe-area-inset-bottom)]",
+
       )}
     >
       <ul className="grid grid-cols-5 h-16">

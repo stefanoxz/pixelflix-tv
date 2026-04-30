@@ -180,22 +180,26 @@ const Sync = () => {
       <div className="absolute inset-0 bg-gradient-glow opacity-60" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,hsl(214_100%_56%/0.15),transparent_50%)]" />
 
-      <Card className="relative w-full max-w-md p-8 bg-gradient-card border-border/50 shadow-card animate-scale-in">
-        <div className="text-center mb-6">
-          <img
-            src={logoSuperTech}
-            alt="SuperTech"
-            width={80}
-            height={80}
-            className="mx-auto h-20 w-20 object-contain mb-3 drop-shadow-[0_0_24px_hsl(var(--primary)/0.45)]"
-          />
-          <h1 className="text-2xl font-bold tracking-tight">
-            Sincronizando seu <span className="text-gradient">conteúdo</span>
+      <Card className="relative w-full max-w-md p-8 glass-card border-white/5 shadow-2xl animate-scale-in">
+        <div className="text-center mb-10">
+          <div className="relative inline-block mb-4">
+            <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full scale-125" />
+            <img
+              src={logoSuperTech}
+              alt="SuperTech Logo"
+              width={80}
+              height={80}
+              className="relative h-20 w-20 object-contain drop-shadow-[0_0_24px_hsl(var(--primary)/0.5)]"
+            />
+          </div>
+          <h1 className="text-3xl font-black tracking-tight mb-2">
+            Sincronizando <span className="text-gradient">Catálogo</span>
           </h1>
-          <p className="text-xs text-muted-foreground mt-2">
-            Carregando catálogo para navegação instantânea
+          <p className="text-xs text-muted-foreground">
+            Otimizando sua experiência para navegação instantânea
           </p>
         </div>
+
 
         <div className="mb-6">
           <Progress value={progress} className="h-2" />

@@ -113,13 +113,14 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
         onFocus={hoverHandler}
         data-active={active}
         className={cn(
-          "block w-full aspect-[2/3] rounded-lg overflow-hidden bg-secondary/60 relative",
-          "transition-all duration-300 ease-out",
-          "hover:ring-2 hover:ring-primary/70 hover:-translate-y-1 hover:shadow-[0_12px_32px_-8px_hsl(var(--primary)/0.5)]",
-          "active:scale-[0.97]",
+          "block w-full aspect-[2/3] rounded-2xl overflow-hidden bg-card/60 relative",
+          "transition-all duration-500 ease-out",
+          "hover:ring-2 hover:ring-primary/60 hover:-translate-y-2 hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,1)]",
+          "active:scale-[0.96]",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-          active && "ring-2 ring-primary shadow-[0_0_24px_-4px_hsl(var(--primary)/0.6)]",
+          active && "ring-2 ring-primary shadow-[0_0_32px_-4px_hsl(var(--primary)/0.7)] z-10",
         )}
+
         aria-label={item.title}
       >
         {/* Skeleton shimmer atrás da imagem — some quando carrega.
@@ -233,13 +234,14 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
             onToggleFavorite();
           }}
           className={cn(
-            "absolute top-1 right-1 h-9 w-9 md:h-7 md:w-7 rounded-full flex items-center justify-center",
-            "bg-black/60 backdrop-blur-sm text-white",
+            "absolute top-2 right-2 h-9 w-9 md:h-8 md:w-8 rounded-full flex items-center justify-center",
+            "bg-black/40 backdrop-blur-xl border border-white/10 text-white shadow-lg",
             // Em desktop: aparece no hover. Em mobile: sempre visível (touch sem hover).
             "md:opacity-0 md:group-hover:opacity-100 focus:opacity-100",
-            "transition-all duration-200 hover:scale-110 hover:bg-black/80 active:scale-95",
-            isFavorite && "md:opacity-100",
+            "transition-all duration-300 hover:scale-110 hover:bg-black/60 active:scale-90",
+            isFavorite && "md:opacity-100 bg-primary/20 border-primary/30",
           )}
+
           aria-label={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
         >
           <Heart className={cn("h-4 w-4 md:h-3.5 md:w-3.5", isFavorite && "fill-primary text-primary")} />

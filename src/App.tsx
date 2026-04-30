@@ -54,12 +54,18 @@ const RouteFallback = () => (
 );
 
 const WithChrome = ({ children }: { children: React.ReactNode }) => (
-  <>
+  <div className="relative min-h-screen">
+    {/* Global background effects */}
+    <div className="fixed inset-0 bg-background -z-50" />
+    <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_0%,hsl(var(--primary)/0.08),transparent_50%)] -z-40" />
+    <div className="fixed inset-0 bg-[radial-gradient(circle_at_100%_100%,hsl(var(--primary)/0.05),transparent_40%)] -z-40" />
+    
     <Header />
-    <main className="pb-bottom-nav">{children}</main>
+    <main className="pb-bottom-nav relative z-0">{children}</main>
     <BottomNav />
-  </>
+  </div>
 );
+
 
 const App = () => (
   <ErrorBoundary>

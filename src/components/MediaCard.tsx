@@ -56,14 +56,15 @@ export const MediaCard = memo(forwardRef<HTMLButtonElement, MediaCardProps>(
         ref={ref}
         onClick={onClick}
         className={cn(
-          "group relative overflow-hidden rounded-xl bg-gradient-card text-left",
-          "transition-all duration-500 cubic-bezier(0.25, 1, 0.5, 1)",
-          "hover:-translate-y-2 hover:shadow-[0_22px_50px_-12px_rgba(0,0,0,0.8)] hover:z-10",
+          "group relative overflow-hidden rounded-2xl bg-card text-left",
+          "transition-all duration-500 ease-out",
+          "hover:-translate-y-2 hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.9)] hover:ring-1 hover:ring-white/20",
           "active:scale-95",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4 focus-visible:ring-offset-background",
           aspect === "poster" ? "aspect-[2/3]" : "aspect-video"
         )}
       >
+
         {cover ? (
           <SafeImage
             src={proxyImageUrl(cover)}

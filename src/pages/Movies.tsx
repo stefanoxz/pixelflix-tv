@@ -278,9 +278,10 @@ const Movies = () => {
         className="grid gap-3 md:gap-4 grid-cols-1 lg:grid-cols-[240px,minmax(0,1fr)] lg:h-[calc(100vh-7rem)] lg:[height:calc(100dvh-7rem)] lg:min-h-[520px] min-h-[60vh]"
       >
         <aside
-          className="hidden lg:flex flex-col rounded-xl border border-border/40 bg-card/30 backdrop-blur overflow-hidden"
+          className="hidden lg:flex flex-col rounded-2xl glass-card overflow-hidden"
           aria-label="Categorias"
         >
+
           <CategoryRail
             categories={railCategories}
             active={activeCategory}

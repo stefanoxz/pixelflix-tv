@@ -207,9 +207,9 @@ export function PosterGrid({
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center gap-2 pb-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <div className="flex items-center gap-3 pb-5">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <Input
             ref={searchInputRef}
             value={search}
@@ -221,9 +221,11 @@ export function PosterGrid({
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
-            className="pl-10 bg-secondary/40 border-border/40 h-9"
+            className="pl-11 h-11 glass-card border-white/5 focus:ring-primary/40 focus:border-primary/40 transition-all rounded-xl"
+            aria-label={searchPlaceholder}
           />
         </div>
+
         {/* Indicador discreto de refetch (background) — útil quando há cache
             mas a query está revalidando. Sem repintar a grade. */}
         {isLoading && items.length > 0 && (
@@ -262,7 +264,7 @@ export function PosterGrid({
         <div
           ref={containerRef}
           onScroll={onScroll}
-          className="flex-1 overflow-y-auto pr-1 -mr-1"
+          className="flex-1 overflow-y-auto pr-2 -mr-2 scrollbar-thin"
           // contain layout pra evitar que mudanças internas reflowem o pai.
           style={{ contain: "strict" } as React.CSSProperties}
         >

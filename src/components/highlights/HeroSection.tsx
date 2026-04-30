@@ -79,9 +79,10 @@ export const HeroSection = memo(({
             <p className="text-[10px] md:text-sm text-muted-foreground/70 md:text-muted-foreground/90 font-bold tracking-[0.2em] uppercase" aria-live="polite">
               {greeting}{displayName ? `, ${displayName}` : ""}
             </p>
-            <span className="inline-flex items-center gap-2 rounded-full bg-primary/20 border border-primary/30 px-3 py-1 text-[11px] font-bold text-primary backdrop-blur-md shadow-sm">
+            <span className="inline-flex items-center gap-2 rounded-full bg-primary/20 border border-primary/30 px-4 py-1.5 text-[11px] font-bold text-primary backdrop-blur-xl shadow-lg shadow-primary/10">
               ✨ Destaque do Dia {featured?.kind === "series" ? "· Série" : featured?.kind === "movie" ? "· Filme" : ""}
             </span>
+
           </div>
           
           <h1 className="hero-title">
@@ -117,22 +118,23 @@ export const HeroSection = memo(({
             <Button
               size="lg"
               onClick={() => featured && openFeatured(featured)}
-              className="w-full sm:w-auto bg-gradient-primary hover:opacity-100 hover:scale-[1.03] hover:shadow-[0_0_32px_-4px_hsl(var(--primary)/0.6)] shadow-glow gap-2 transition-all duration-200 font-semibold tap-feedback"
+              className="w-full sm:w-auto h-12 px-8 bg-gradient-primary hover:opacity-100 hover:scale-[1.03] hover:shadow-[0_0_32px_-4px_hsl(var(--primary)/0.6)] shadow-glow gap-2.5 transition-all duration-300 font-bold tap-feedback rounded-xl"
               disabled={!featured}
             >
-              <Play className="h-4 w-4 fill-current" />
+              <Play className="h-5 w-5 fill-current" />
               Assistir agora
             </Button>
             <Button
               size="lg"
               variant="secondary"
               onClick={() => featured && openFeatured(featured)}
-              className="w-full sm:w-auto gap-2 backdrop-blur bg-secondary/70 hover:bg-secondary tap-feedback"
+              className="w-full sm:w-auto h-12 px-8 gap-2.5 backdrop-blur-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-300 font-semibold tap-feedback rounded-xl"
               disabled={!featured}
             >
-              <Info className="h-4 w-4" />
+              <Info className="h-5 w-5" />
               Mais informações
             </Button>
+
           </div>
 
           {featuredQueue.length > 1 && (

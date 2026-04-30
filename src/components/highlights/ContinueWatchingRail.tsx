@@ -73,12 +73,13 @@ export function ContinueWatchingRail() {
                 type="button"
                 onClick={handleOpen}
                 className={cn(
-                  "block w-full aspect-video rounded-lg overflow-hidden bg-secondary/60 relative",
-                  "transition-all duration-300 ease-out",
-                  "hover:ring-2 hover:ring-primary/70 hover:-translate-y-1 hover:shadow-[0_12px_32px_-8px_hsl(var(--primary)/0.5)]",
-                  "active:scale-[0.97]",
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  "block w-full aspect-video rounded-xl overflow-hidden bg-card/60 relative border border-white/5",
+                  "transition-all duration-500 ease-out",
+                  "hover:ring-2 hover:ring-primary/60 hover:-translate-y-1.5 hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,1)]",
+                  "active:scale-[0.96]",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                 )}
+
                 aria-label={`Continuar ${title}`}
               >
                 {entry.poster ? (
@@ -127,11 +128,12 @@ export function ContinueWatchingRail() {
                 }}
                 aria-label="Remover de continue assistindo"
                 className={cn(
-                  "absolute top-1.5 right-1.5 h-7 w-7 rounded-full flex items-center justify-center",
-                  "bg-black/70 backdrop-blur-sm text-white",
+                  "absolute top-2 right-2 h-8 w-8 rounded-full flex items-center justify-center",
+                  "bg-black/40 backdrop-blur-xl border border-white/10 text-white shadow-lg",
                   "md:opacity-0 md:group-hover:opacity-100 focus:opacity-100",
-                  "transition-all duration-200 hover:scale-110 hover:bg-black/90 active:scale-95",
+                  "transition-all duration-300 hover:scale-110 hover:bg-black/60 active:scale-90",
                 )}
+
               >
                 <X className="h-3.5 w-3.5" />
               </button>
