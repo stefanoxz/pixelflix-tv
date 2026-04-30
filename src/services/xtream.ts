@@ -17,40 +17,31 @@ export class XtreamService {
   private async fetchAction(action: string, params: Record<string, string> = {}) {
     if (!this.credentials) throw new Error('No credentials set');
 
+    const searchParams = new URLSearchParams({
+      username: this.credentials.username,
+      password: this.credentials.password,
+      action,
+      ...params,
+    });
+
+    const url = `${this.credentials.url}/player_api.php?${searchParams.toString()}`;
+    
+    // Direct call with an external proxy service to bypass CORS
+    // since Supabase Edge Functions are being blocked by your IPTV server
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+
     try {
-      const { data, error } = await supabase.functions.invoke('xtream-proxy', {
-        body: {
-          url: this.credentials.url,
-          username: this.credentials.username,
-          password: this.credentials.password,
-          action,
-          ...params,
-        },
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      if (data && data.error) {
-        throw new Error(data.error);
-      }
-
-      return data;
-    } catch (err) {
-      console.warn('Proxy failed, attempting direct call as fallback:', err);
-      
-      // Fallback: Direct call if proxy fails (might hit CORS but better than nothing)
-      const searchParams = new URLSearchParams({
-        username: this.credentials.username,
-        password: this.credentials.password,
-        action,
-        ...params,
-      });
-
-      const response = await fetch(`${this.credentials.url}/player_api.php?${searchParams.toString()}`);
+      const response = await fetch(proxyUrl);
       if (!response.ok) throw new Error('Network response was not ok');
-      return response.json();
+      const data = await response.json();
+      
+      // AllOrigins returns the content in a 'contents' field as a string
+      return JSON.parse(data.contents);
+    } catch (err) {
+      console.warn('External proxy failed, attempting direct call:', err);
+      const directResponse = await fetch(url);
+      if (!directResponse.ok) throw new Error('Direct call failed');
+      return directResponse.json();
     }
   }
 
@@ -76,9 +67,6 @@ export class XtreamService {
   getStreamUrl(streamId: string, extension: string = 'm3u8', type: 'live' | 'movie' | 'series' = 'live'): string {
     if (!this.credentials) return '';
     const prefix = type === 'live' ? '' : type === 'movie' ? 'movie/' : 'series/';
-    // Stream URLs are usually direct and don't require the proxy if the server allows it,
-    // but the video player might also face CORS if we are not careful.
-    // For now, keep it direct as stream URLs often have their own redirection logic.
     return `${this.credentials.url}/${prefix}${this.credentials.username}/${this.credentials.password}/${streamId}.${extension}`;
   }
 }
