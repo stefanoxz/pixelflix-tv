@@ -127,7 +127,32 @@ export interface EpgEntry {
 export type StreamMode = "redirect" | "stream";
 export type InvokeKind = "login" | "token" | "data" | "event";
 
-const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+// =============================================================================
+// Hybrid Connectivity Helper
+// =============================================================================
+
+/**
+ * Tenta realizar o fetch diretamente do navegador (IP residencial).
+ */
+async function tryBrowserFetch<T>(url: string, fallback: () => Promise<T>): Promise<T> {
+  try {
+    const res = await fetch(url, { 
+      method: "GET", 
+      credentials: "omit",
+      cache: "no-store",
+      signal: AbortSignal.timeout(6000) 
+    });
+    
+    if (res.ok) {
+      const text = await res.text();
+      return JSON.parse(text) as T;
+    }
+    throw new Error(`HTTP ${res.status}`);
+  } catch (e) {
+    // Falha silenciosa: cai para a Edge Function
+    return fallback();
+  }
+}
 
 // =============================================================================
 // Utils & Connectivity
@@ -195,15 +220,19 @@ export async function invokeSafe<T>(name: string, body: any, kind: InvokeKind = 
 }
 
 export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> {
-  const r = await invokeSafe<LoginResponse>("iptv-login", { ...creds, mode: "login" }, "login");
-  if (!r.ok) throw new IptvLoginError((r as any).error, (r as any).code, (r as any).extra?.debug);
-  return r.data;
+  const loginUrl = `${creds.server}/player_api.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}`;
+  
+  return tryBrowserFetch<LoginResponse>(loginUrl, async () => {
+    const r = await invokeSafe<LoginResponse>("iptv-login", { ...creds, mode: "login" }, "login");
+    if (r.ok) return r.data;
+    throw new IptvLoginError((r as any).error, (r as any).code, (r as any).extra?.debug);
+  });
 }
 
 export async function iptvLoginM3u(creds: IptvCredentials): Promise<LoginResponse & { auto_registered?: boolean }> {
   const r = await invokeSafe<LoginResponse & { auto_registered?: boolean }>("iptv-login", { ...creds, mode: "m3u_register" }, "login");
-  if (!r.ok) throw new IptvLoginError((r as any).error, (r as any).code, (r as any).extra?.debug);
-  return r.data;
+  if (r.ok) return r.data;
+  throw new IptvLoginError((r as any).error, (r as any).code, (r as any).extra?.debug);
 }
 
 export async function fetchAllowedServers(): Promise<string[]> {
@@ -234,9 +263,19 @@ export function resolveStreamBase(serverInfo?: ServerInfo | null, fallback?: str
 // =============================================================================
 
 export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra: any = {}): Promise<T> {
-  const { data, error } = await supabase.functions.invoke("iptv-categories", { body: { ...creds, action, ...extra } });
-  if (error) throw error;
-  return data as T;
+  const params = new URLSearchParams({
+    username: creds.username,
+    password: creds.password,
+    action,
+    ...extra
+  });
+  const directUrl = `${creds.server}/player_api.php?${params.toString()}`;
+
+  return tryBrowserFetch<T>(directUrl, async () => {
+    const { data, error } = await supabase.functions.invoke("iptv-categories", { body: { ...creds, action, ...extra } });
+    if (error) throw error;
+    return data as T;
+  });
 }
 
 export const getLiveCategories = (c: IptvCredentials) => iptvFetch<Category[]>(c, "get_live_categories");
@@ -387,7 +426,8 @@ export function getFormatBadge(ext?: string, url?: string | null) {
 
 export function getStreamType(ext?: string, url?: string): any {
   const strategy = getPlaybackStrategy(ext, url);
-  return strategy.mode === "internal" ? strategy.type : "native";
+  if (strategy.mode === "internal") return strategy.type;
+  return "native";
 }
 
 export function isExternalOnly(ext?: string, url?: string | null): boolean {

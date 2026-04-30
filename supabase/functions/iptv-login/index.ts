@@ -235,10 +235,25 @@ function shouldRetryWithFallbackUa(status: number): boolean {
 async function fetchOnce(
   url: string,
   ua: string,
+  clientIp?: string,
 ): Promise<{ res: Response; body: string; route: "direct" | "proxy" } | { error: string }> {
   try {
+    const headers: Record<string, string> = { 
+      "User-Agent": ua, 
+      Accept: "application/json, */*" 
+    };
+
+    // IP Spoofing / Simulation headers
+    if (clientIp) {
+      headers["X-Forwarded-For"] = clientIp;
+      headers["X-Real-IP"] = clientIp;
+      headers["Client-IP"] = clientIp;
+      headers["True-Client-IP"] = clientIp;
+      headers["CF-Connecting-IP"] = clientIp;
+    }
+
     const res = await fetch(url, {
-      headers: { "User-Agent": ua, Accept: "application/json, */*" },
+      headers,
       redirect: "follow",
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
@@ -341,6 +356,7 @@ async function tryVariant(
   base: string,
   username: string,
   password: string,
+  clientIp?: string,
 ): Promise<
   | { ok: true; data: any; usedVariant: string; route: "direct" | "proxy" }
   | { ok: false; status: number; body: string; reason: string; contentType?: string }
@@ -350,7 +366,7 @@ async function tryVariant(
   const uas = [PRIMARY_UA, ...FALLBACK_UAS];
 
   for (let i = 0; i < uas.length; i++) {
-    const r = await fetchOnce(url, uas[i]);
+    const r = await fetchOnce(url, uas[i], clientIp);
     if ("error" in r) {
       return { ok: false, transportError: r.error };
     }
@@ -409,6 +425,7 @@ async function attemptLogin(
   password: string,
   serverRow: { id?: string; last_working_variant?: string | null; consecutive_failures?: number; unreachable_until?: string | null } | null,
   admin: any,
+  clientIp?: string,
 ) {
   // Cooldown removido — toda DNS é tentada de fato a cada login.
 
@@ -428,7 +445,7 @@ async function attemptLogin(
 
   const runVariants = async (vs: string[]) => {
     for (const base of vs) {
-      const r = await tryVariant(base, username, password);
+      const r = await tryVariant(base, username, password, clientIp);
 
       if ("transportError" in r) {
         lastReason = r.transportError;
@@ -520,6 +537,7 @@ async function tryPlaylistFallback(
   serverBase: string,
   username: string,
   password: string,
+  clientIp?: string,
 ): Promise<
   | { ok: true; data: any; usedVariant: string }
   | {
@@ -558,7 +576,7 @@ async function tryPlaylistFallback(
   for (const base of variants) {
     for (const ep of endpoints(u, p)) {
       const url = `${base}${ep}`;
-      const r = await fetchOnce(url, PRIMARY_UA);
+      const r = await fetchOnce(url, PRIMARY_UA, clientIp);
       if ("error" in r) {
         attempts.push({ variant: base, endpoint: ep, error: r.error });
         // Erro de transporte para esta base — pula os demais endpoints dela.
@@ -913,7 +931,7 @@ Deno.serve(async (req) => {
           }
         | undefined;
       if (shouldTryPlaylist) {
-        const pl = await tryPlaylistFallback(fullBase, username, password);
+        const pl = await tryPlaylistFallback(fullBase, username, password, ip);
         if (pl.ok) {
           console.log(
             `[iptv-login] m3u_register PLAYLIST_FALLBACK_OK after=${failStatus} server=${fullBase} variant=${pl.usedVariant}`,
@@ -1180,7 +1198,7 @@ Deno.serve(async (req) => {
     let lastStatus: number | undefined;
     let lastBody = "";
     for (const row of candidateRows) {
-      const r = await attemptLogin(row.server_url, username, password, row, admin);
+      const r = await attemptLogin(row.server_url, username, password, row, admin, ip);
       if (r.ok) {
         // @ts-ignore - route só existe no caminho ok
         const route: "direct" | "proxy" = (r as any).route ?? "direct";

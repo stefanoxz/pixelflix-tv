@@ -98,7 +98,7 @@ const COLLECTION_ACTIONS = new Set([
   "get_series",
 ]);
 
-async function fetchWithRetries(url: string, attemptsPerUa = 1): Promise<
+async function fetchWithRetries(url: string, clientIp?: string, attemptsPerUa = 1): Promise<
   | { ok: true; data: unknown }
   | { ok: false; status: number; reason: string; softNotFound?: boolean }
 > {
@@ -108,8 +108,21 @@ async function fetchWithRetries(url: string, attemptsPerUa = 1): Promise<
   for (const ua of USER_AGENTS) {
     for (let attempt = 0; attempt < attemptsPerUa; attempt++) {
       try {
+        const headers: Record<string, string> = { 
+          "User-Agent": ua, 
+          Accept: "application/json, */*" 
+        };
+
+        if (clientIp) {
+          headers["X-Forwarded-For"] = clientIp;
+          headers["X-Real-IP"] = clientIp;
+          headers["Client-IP"] = clientIp;
+          headers["True-Client-IP"] = clientIp;
+          headers["CF-Connecting-IP"] = clientIp;
+        }
+
         const res = await fetch(url, {
-          headers: { "User-Agent": ua, Accept: "application/json, */*" },
+          headers,
           redirect: "follow",
         });
 
@@ -154,6 +167,10 @@ async function fetchWithRetries(url: string, attemptsPerUa = 1): Promise<
 
 Deno.serve(async (req) => {
   const corsHeaders = corsFor(req);
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("cf-connecting-ip") ||
+    undefined;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   // Exige sessão Supabase válida (anônima ou autenticada). Sem isso, qualquer
@@ -203,12 +220,12 @@ Deno.serve(async (req) => {
     // Retry com backoff quando o painel devolve MAX_CONNECTIONS.
     // Conexões "fantasma" do próprio painel costumam liberar em poucos segundos,
     // mas painéis mais lentos podem precisar de até ~10s.
-    let result = await fetchWithRetries(url);
+    let result = await fetchWithRetries(url, ip);
     if (!result.ok && result.reason === "MAX_CONNECTIONS") {
       const delays = [2000, 4000, 8000];
       for (const delay of delays) {
         await new Promise((r) => setTimeout(r, delay));
-        result = await fetchWithRetries(url);
+        result = await fetchWithRetries(url, ip);
         if (result.ok || result.reason !== "MAX_CONNECTIONS") break;
       }
     }
