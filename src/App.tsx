@@ -80,7 +80,7 @@ function App() {
       setIsLoginOpen(false)
       localStorage.setItem('last_list', JSON.stringify(creds))
     } catch (e) {
-      alert("Erro ao carregar lista. Verifique a URL ou se o servidor suporta acesso direto.")
+      alert("Erro ao carregar lista. Isso pode ocorrer por bloqueio de CORS do servidor IPTV ou URL inválida. Verifique o link e tente novamente.")
     } finally {
       setLoading(false)
     }
