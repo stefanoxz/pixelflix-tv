@@ -264,7 +264,7 @@ export function PosterGrid({
         <div
           ref={containerRef}
           onScroll={onScroll}
-          className="flex-1 overflow-y-auto pr-1 -mr-1"
+          className="flex-1 overflow-y-auto pr-2 -mr-2 scrollbar-thin"
           // contain layout pra evitar que mudanças internas reflowem o pai.
           style={{ contain: "strict" } as React.CSSProperties}
         >
