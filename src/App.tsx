@@ -16,11 +16,12 @@ function App() {
   const [isLoginOpen, setIsLoginOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounce(search, 300)
 
   const filtered = useMemo(() => streams.filter(s => 
     (activeCategory === 'Todos' || s.category_id === activeCategory) &&
-    s.name.toLowerCase().includes(search.toLowerCase())
-  ), [streams, activeCategory, search]);
+    s.name.toLowerCase().includes(debouncedSearch.toLowerCase())
+  ), [streams, activeCategory, debouncedSearch]);
 
   const handleLogin = async (url: string) => {
     const creds = parseM3uUrl(url)
