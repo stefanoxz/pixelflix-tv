@@ -13,70 +13,82 @@ export const Dashboard = ({ onLogout, onNavigate }: DashboardProps) => {
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col font-sans">
+    <div className="min-h-screen bg-[#050505] text-white flex flex-col font-sans selection:bg-white/10">
+      {/* Dynamic Background */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 right-0 w-[60%] h-[40%] bg-blue-600/5 blur-[120px] rounded-full" />
+        <div className="absolute bottom-0 left-0 w-[60%] h-[40%] bg-purple-600/5 blur-[120px] rounded-full" />
+      </div>
+
       {/* Header */}
-      <header className="px-8 py-6 flex items-center justify-between border-b border-white/5 bg-[#050505]/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="flex items-center gap-8">
-          <h1 className="text-2xl font-black tracking-[0.2em]">BLACK</h1>
-          <nav className="hidden md:flex items-center gap-6">
-            <button className="text-zinc-400 hover:text-white transition-colors text-sm font-bold tracking-widest uppercase">Home</button>
-            <button className="text-zinc-400 hover:text-white transition-colors text-sm font-bold tracking-widest uppercase">Favoritos</button>
+      <header className="px-6 md:px-12 py-8 flex items-center justify-between border-b border-white/5 bg-black/60 backdrop-blur-xl sticky top-0 z-50">
+        <div className="flex items-center gap-12">
+          <div className="group cursor-pointer">
+            <h1 className="text-3xl font-black tracking-[0.3em] group-hover:text-zinc-300 transition-colors">BLACK</h1>
+            <div className="h-1 w-0 group-hover:w-full bg-white transition-all duration-500 rounded-full" />
+          </div>
+          <nav className="hidden lg:flex items-center gap-10">
+            <button className="text-zinc-500 hover:text-white transition-all text-[11px] font-black tracking-[0.3em] uppercase relative after:content-[''] after:absolute after:-bottom-2 after:left-0 after:w-0 hover:after:w-full after:h-0.5 after:bg-white after:transition-all">Início</button>
+            <button className="text-zinc-500 hover:text-white transition-all text-[11px] font-black tracking-[0.3em] uppercase relative after:content-[''] after:absolute after:-bottom-2 after:left-0 after:w-0 hover:after:w-full after:h-0.5 after:bg-white after:transition-all">Minha Lista</button>
+            <button className="text-zinc-500 hover:text-white transition-all text-[11px] font-black tracking-[0.3em] uppercase relative after:content-[''] after:absolute after:-bottom-2 after:left-0 after:w-0 hover:after:w-full after:h-0.5 after:bg-white after:transition-all">Novidades</button>
           </nav>
         </div>
 
-        <div className="flex items-center gap-4">
-          <button className="p-2.5 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-zinc-400 hover:text-white">
-            <Search size={20} />
-          </button>
-          <button className="p-2.5 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-zinc-400 hover:text-white">
-            <Settings size={20} />
-          </button>
-          <div className="h-8 w-[1px] bg-white/10 mx-2" />
+        <div className="flex items-center gap-6">
+          <div className="hidden md:flex items-center bg-white/5 border border-white/5 rounded-2xl px-4 py-2 group focus-within:border-white/20 transition-all">
+            <Search size={18} className="text-zinc-500 group-focus-within:text-white" />
+            <input type="text" placeholder="Buscar título..." className="bg-transparent border-none outline-none px-3 text-sm font-medium w-48 placeholder:text-zinc-700" />
+          </div>
+          <div className="h-8 w-[1px] bg-white/10 hidden md:block" />
           <button 
             onClick={onLogout}
-            className="flex items-center gap-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-widest border border-red-500/20"
+            className="group flex items-center gap-3 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-2xl transition-all font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-red-900/20 active:scale-95"
           >
-            Sair
-            <LogOut size={16} />
+            Sair do Sistema
+            <LogOut size={16} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
       </header>
 
       {/* Hero / Welcome */}
-      <main className="flex-1 p-8 max-w-7xl mx-auto w-full">
-        <div className="mb-12">
-          <h2 className="text-zinc-500 text-sm font-bold tracking-[0.3em] uppercase mb-2">Bem-vindo de volta</h2>
-          <h3 className="text-4xl font-black">O que vamos assistir hoje?</h3>
+      <main className="flex-1 p-6 md:p-12 max-w-[1600px] mx-auto w-full relative">
+        <div className="mb-16">
+          <h2 className="text-zinc-600 text-[11px] font-black tracking-[0.5em] uppercase mb-4 animate-in fade-in slide-in-from-left duration-700">Explorar catálogo</h2>
+          <h3 className="text-5xl md:text-7xl font-black tracking-tighter leading-none animate-in fade-in slide-in-from-bottom duration-1000">Sua jornada começa aqui.</h3>
         </div>
 
         {/* Categories Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {menuItems.map((item) => (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+          {menuItems.map((item, idx) => (
             <button
               key={item.id}
               onClick={() => onNavigate(item.id as any)}
-              className="group relative aspect-[4/5] md:aspect-[3/4] rounded-[40px] overflow-hidden transition-all hover:scale-[1.02] hover:shadow-2xl hover:shadow-white/5 active:scale-[0.98]"
+              className="group relative aspect-[16/10] lg:aspect-[3/4] rounded-[56px] overflow-hidden transition-all duration-700 hover:scale-[1.03] hover:shadow-[0_40px_80px_rgba(0,0,0,0.5)] active:scale-95"
+              style={{ animationDelay: `${idx * 150}ms` }}
             >
-              <div className={`absolute inset-0 bg-gradient-to-br ${item.color} opacity-80`} />
-              <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
+              <div className={`absolute inset-0 bg-gradient-to-br ${item.color} opacity-90 transition-transform duration-700 group-hover:scale-110`} />
+              <div className="absolute inset-0 bg-black/40 group-hover:bg-black/10 transition-colors duration-500" />
               
-              <div className="absolute inset-0 p-10 flex flex-col justify-between items-start text-left">
-                <div className="p-4 rounded-3xl bg-white/10 backdrop-blur-md border border-white/20">
-                  <item.icon size={32} />
+              <div className="absolute inset-0 p-12 flex flex-col justify-between items-start text-left z-10">
+                <div className="p-5 rounded-[28px] bg-white/10 backdrop-blur-2xl border border-white/20 shadow-xl group-hover:rotate-12 transition-transform duration-500">
+                  <item.icon size={36} strokeWidth={2.5} />
                 </div>
                 
-                <div>
-                  <span className="text-xs font-bold tracking-[0.3em] opacity-70 mb-2 block">{item.count} TÍTULOS</span>
-                  <h4 className="text-3xl font-black leading-tight">{item.label}</h4>
-                  <div className="mt-4 flex items-center gap-2 text-xs font-bold tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity translate-y-2 group-hover:translate-y-0 duration-300">
-                    Acessar agora
-                    <ArrowRight size={14} className="ml-1" />
+                <div className="space-y-4">
+                  <span className="text-[10px] font-black tracking-[0.5em] opacity-60 mb-2 block animate-pulse">{item.count} DISPONÍVEIS</span>
+                  <h4 className="text-4xl font-black leading-none tracking-tight">{item.label}</h4>
+                  <div className="flex items-center gap-3 text-[10px] font-black tracking-[0.3em] uppercase opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0 duration-500">
+                    <span className="bg-white text-black px-4 py-2 rounded-full shadow-lg">Entrar agora</span>
+                    <div className="w-10 h-10 rounded-full border border-white/30 flex items-center justify-center">
+                      <ArrowRight size={14} />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Decorative light effect */}
-              <div className="absolute -top-[20%] -right-[20%] w-[60%] h-[60%] bg-white/10 blur-[60px] rounded-full group-hover:bg-white/20 transition-all" />
+              {/* Advanced glass effect */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-white/10 blur-[80px] rounded-full group-hover:bg-white/20 transition-all duration-1000" />
             </button>
           ))}
         </div>

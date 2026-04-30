@@ -158,30 +158,41 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
           ))}
         </aside>
 
-        <main className="flex-1 overflow-y-auto p-6 md:p-10 custom-scrollbar bg-gradient-to-br from-black to-[#050505]">
-          <div className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 md:gap-8" : "space-y-4 max-w-5xl"}>
+        <main className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar bg-gradient-to-br from-black to-[#080808] relative">
+          {/* Subtle noise pattern */}
+          <div className="fixed inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-linen.png')] opacity-[0.05] pointer-events-none" />
+
+          <div className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-8 md:gap-10" : "space-y-6 max-w-6xl mx-auto"}>
             {filteredItems.map(item => {
               const isFav = favorites.some((f: any) => String(f.stream_id) === item.id);
               return viewMode === 'grid' ? (
-                <div key={item.id} className="group flex flex-col">
-                  <div onClick={() => setSelectedItem(item)} className="cursor-pointer relative aspect-[2/3] rounded-[32px] overflow-hidden bg-[#111] border border-white/5 transition-all duration-500 group-hover:scale-[1.05] group-hover:shadow-2xl group-hover:shadow-white/5 group-hover:border-white/20">
-                    <img src={item.icon} alt={item.name} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-700 group-hover:scale-110" onError={(e) => {(e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x600/111111/FFFFFF?text=SEM+CAPA';}} />
-                    <div className="absolute top-4 right-4 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg border border-white/10 flex items-center gap-1.5">
-                      <Star size={10} className="text-yellow-500 fill-yellow-500" />
-                      <span className="text-[10px] font-black">{item.rating}</span>
+                <div key={item.id} className="group flex flex-col animate-in fade-in zoom-in-95 duration-700">
+                  <div onClick={() => setSelectedItem(item)} className="cursor-pointer relative aspect-[2/3] rounded-[40px] overflow-hidden bg-zinc-900 border border-white/5 transition-all duration-700 group-hover:-translate-y-3 group-hover:shadow-[0_30px_60px_rgba(0,0,0,0.8)] group-hover:border-white/20 ring-1 ring-white/0 group-hover:ring-white/10">
+                    <img src={item.icon} alt={item.name} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-1000 group-hover:scale-110" onError={(e) => {(e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x600/111111/FFFFFF?text=SEM+CAPA';}} />
+                    
+                    {/* Badge Rating */}
+                    <div className="absolute top-5 right-5 px-3 py-1.5 bg-black/60 backdrop-blur-xl rounded-2xl border border-white/10 flex items-center gap-2 shadow-2xl">
+                      <Star size={12} className="text-yellow-500 fill-yellow-500" />
+                      <span className="text-[11px] font-black tracking-tighter">{item.rating}</span>
                     </div>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500 flex flex-col justify-end p-6">
-                      <button onClick={(e) => { e.stopPropagation(); handlePlay(item); }} className="w-full bg-white text-black h-12 rounded-2xl flex items-center justify-center hover:bg-zinc-200 transition-all transform translate-y-4 group-hover:translate-y-0 duration-500 shadow-2xl">
-                        <Play size={20} fill="currentColor" />
+
+                    {/* Overlay Action */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500 flex flex-col justify-end p-8">
+                      <button onClick={(e) => { e.stopPropagation(); handlePlay(item); }} className="w-full bg-white text-black h-14 rounded-3xl flex items-center justify-center hover:bg-zinc-200 transition-all transform translate-y-6 group-hover:translate-y-0 duration-500 shadow-[0_20px_40px_rgba(255,255,255,0.1)]">
+                        <Play size={24} fill="currentColor" className="ml-1" />
                       </button>
                     </div>
                   </div>
-                  <div className="mt-5 px-1">
-                    <h4 className="text-sm font-bold truncate group-hover:text-white transition-colors">{item.name}</h4>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{item.year}</p>
-                      <button onClick={(e) => { e.stopPropagation(); toggleFavoriteMutation.mutate(item); }} className={`p-1.5 rounded-lg transition-colors ${isFav ? 'text-red-500' : 'text-zinc-600 hover:text-white'}`}>
-                        <Heart size={14} fill={isFav ? 'currentColor' : 'none'} />
+                  
+                  <div className="mt-6 px-2 space-y-1">
+                    <h4 className="text-[13px] font-black truncate text-zinc-300 group-hover:text-white transition-colors tracking-tight uppercase">{item.name}</h4>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-zinc-600 font-black tracking-[0.2em]">{item.year}</span>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); toggleFavoriteMutation.mutate(item); }} 
+                        className={`p-2 rounded-xl transition-all ${isFav ? 'text-red-500 bg-red-500/10' : 'text-zinc-700 hover:text-white hover:bg-white/5'}`}
+                      >
+                        <Heart size={16} fill={isFav ? 'currentColor' : 'none'} strokeWidth={2.5} />
                       </button>
                     </div>
                   </div>
