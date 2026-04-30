@@ -2,14 +2,19 @@ import { useState } from 'react';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { ContentExplorer } from './components/ContentExplorer';
+import { AdminPanel } from './components/AdminPanel';
 
-type View = 'login' | 'dashboard' | 'live' | 'movie' | 'series' | 'settings';
+type View = 'login' | 'dashboard' | 'live' | 'movie' | 'series' | 'settings' | 'admin';
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('login');
 
   const handleLogin = () => {
     setCurrentView('dashboard');
+  };
+
+  const handleAdminLogin = () => {
+    setCurrentView('admin');
   };
 
   const handleLogout = () => {
@@ -22,7 +27,12 @@ function App() {
 
   return (
     <>
-      {currentView === 'login' && <Login onLogin={handleLogin} />}
+      {currentView === 'login' && (
+        <Login 
+          onLogin={handleLogin} 
+          onAdminLogin={handleAdminLogin}
+        />
+      )}
       
       {currentView === 'dashboard' && (
         <Dashboard 
@@ -38,10 +48,14 @@ function App() {
         />
       )}
 
+      {currentView === 'admin' && (
+        <AdminPanel onBack={() => setCurrentView('login')} />
+      )}
+
       {currentView === 'settings' && (
         <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-8 text-center">
           <h2 className="text-4xl font-black mb-4 uppercase tracking-widest">Configurações</h2>
-          <p className="text-zinc-500 mb-8 max-w-md">Painel de configurações em desenvolvimento.</p>
+          <p className="text-zinc-500 mb-8 max-w-md">Painel de configurações do usuário em desenvolvimento.</p>
           <button 
             onClick={() => setCurrentView('dashboard')}
             className="px-8 py-4 bg-white text-black font-black rounded-2xl hover:bg-zinc-200 transition-all"
