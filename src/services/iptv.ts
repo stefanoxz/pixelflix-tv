@@ -234,9 +234,19 @@ export function resolveStreamBase(serverInfo?: ServerInfo | null, fallback?: str
 // =============================================================================
 
 export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra: any = {}): Promise<T> {
-  const { data, error } = await supabase.functions.invoke("iptv-categories", { body: { ...creds, action, ...extra } });
-  if (error) throw error;
-  return data as T;
+  const params = new URLSearchParams({
+    username: creds.username,
+    password: creds.password,
+    action,
+    ...extra
+  });
+  const directUrl = `${creds.server}/player_api.php?${params.toString()}`;
+
+  return tryBrowserFetch<T>(directUrl, async () => {
+    const { data, error } = await supabase.functions.invoke("iptv-categories", { body: { ...creds, action, ...extra } });
+    if (error) throw error;
+    return data as T;
+  });
 }
 
 export const getLiveCategories = (c: IptvCredentials) => iptvFetch<Category[]>(c, "get_live_categories");
