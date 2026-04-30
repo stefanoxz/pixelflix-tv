@@ -366,7 +366,7 @@ async function tryVariant(
   const uas = [PRIMARY_UA, ...FALLBACK_UAS];
 
   for (let i = 0; i < uas.length; i++) {
-    const r = await fetchOnce(url, uas[i]);
+    const r = await fetchOnce(url, uas[i], clientIp);
     if ("error" in r) {
       return { ok: false, transportError: r.error };
     }
