@@ -26,22 +26,24 @@ export class XtreamService {
 
     const url = `${this.credentials.url}/player_api.php?${searchParams.toString()}`;
     
-    // Direct call with an external proxy service to bypass CORS
-    // since Supabase Edge Functions are being blocked by your IPTV server
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    // Alternative CORS Proxy (Corsproxy.io is often more stable for IPTV responses)
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
 
     try {
       const response = await fetch(proxyUrl);
       if (!response.ok) throw new Error('Network response was not ok');
-      const data = await response.json();
-      
-      // AllOrigins returns the content in a 'contents' field as a string
-      return JSON.parse(data.contents);
+      return await response.json();
     } catch (err) {
-      console.warn('External proxy failed, attempting direct call:', err);
-      const directResponse = await fetch(url);
-      if (!directResponse.ok) throw new Error('Direct call failed');
-      return directResponse.json();
+      console.warn('Corsproxy failed, attempting AllOrigins fallback:', err);
+      try {
+        const allOriginsUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+        const aoResponse = await fetch(allOriginsUrl);
+        const aoData = await aoResponse.json();
+        return JSON.parse(aoData.contents);
+      } catch (aoErr) {
+        console.error('All proxies failed:', aoErr);
+        throw aoErr;
+      }
     }
   }
 
