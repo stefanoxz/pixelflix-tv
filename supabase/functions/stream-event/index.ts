@@ -87,93 +87,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const auth = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
-    if (!auth) return softFail("missing_token");
-
-    const userId = extractUserIdFromJwt(auth);
-    if (!userId) return softFail("invalid_token");
-
-    let body: { event_type?: string; url?: string; meta?: Record<string, unknown> };
-    try {
-      body = await req.json();
-    } catch {
-      return softFail("invalid_body");
-    }
-
-    const evType = String(body.event_type || "");
-    if (!ALLOWED_EVENTS.has(evType)) return softFail("invalid_event_type");
-
-    const ip = clientIp(req);
-    const ua = req.headers.get("user-agent") || "";
-
-    // Heartbeat: caminho rápido — atualiza last_seen_at e (se vier no meta)
-    // o conteúdo que o usuário está assistindo. Se o conteúdo mudou,
-    // reinicia o `content_started_at` para podermos exibir "assistindo há X".
-    if (evType === "session_heartbeat") {
-      try {
-        const meta = (body.meta ?? {}) as Record<string, unknown>;
-        const allowedKinds = new Set(["live", "movie", "episode", "idle"]);
-        const rawKind = typeof meta.content_kind === "string" ? meta.content_kind : null;
-        const kind = rawKind && allowedKinds.has(rawKind) ? rawKind : null;
-        const title = typeof meta.content_title === "string"
-          ? meta.content_title.slice(0, 200)
-          : null;
-        const cid = typeof meta.content_id === "string"
-          ? meta.content_id.slice(0, 80)
-          : (typeof meta.content_id === "number" ? String(meta.content_id) : null);
-
-        const admin = getAdmin();
-        const nowIso = new Date().toISOString();
-        const baseUpdate: Record<string, unknown> = {
-          last_seen_at: nowIso,
-          ip,
-          ua_hash: await uaHash(ua),
-        };
-
-        if (kind !== null) {
-          // Lê estado atual para detectar mudança de conteúdo.
-          const { data: cur } = await admin
-            .from("active_sessions")
-            .select("content_id, content_kind")
-            .eq("anon_user_id", userId)
-            .maybeSingle();
-          const changed = !cur ||
-            (cur as { content_id: string | null }).content_id !== cid ||
-            (cur as { content_kind: string | null }).content_kind !== kind;
-          baseUpdate.content_kind = kind;
-          baseUpdate.content_title = title;
-          baseUpdate.content_id = cid;
-          if (changed) baseUpdate.content_started_at = nowIso;
-        }
-
-        // Upsert (não update): se a linha foi evicted ou ainda não criada
-        // pelo stream-token, garantimos que o heartbeat não se perde.
-        baseUpdate.anon_user_id = userId;
-        await admin.from("active_sessions").upsert(baseUpdate, { onConflict: "anon_user_id" });
-      } catch (e) {
-        console.error("[stream-event] heartbeat update failed", e);
-        return softFail("heartbeat_persist_failed");
-      }
-      return okResponse();
-    }
-
-    try {
-      await getAdmin().from("stream_events").insert({
-        anon_user_id: userId,
-        event_type: evType,
-        ip,
-        ua_hash: await uaHash(ua),
-        url_hash: body.url ? await urlHash(body.url) : null,
-        meta: body.meta ?? null,
-      });
-    } catch (e) {
-      console.error("[stream-event] insert failed", e);
-      return softFail("event_persist_failed");
-    }
-
+    // Edge Function desativada para limpeza total do sistema.
+    // Retorna sucesso para não quebrar o frontend, mas não processa nada.
     return okResponse();
   } catch (e) {
-    console.error("[stream-event] unhandled", e);
-    return softFail("internal_error");
+    return okResponse();
   }
 });
+
