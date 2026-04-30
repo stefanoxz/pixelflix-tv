@@ -1,0 +1,256 @@
+import { supabase } from "@/integrations/supabase/client";
+import {
+  reportDiagnostic,
+  runQuickSpeedProbe,
+  classifyOutcome,
+} from "@/lib/clientDiagnostics";
+
+export interface IptvCredentials {
+  server?: string;
+  username: string;
+  password: string;
+  streamBase?: string;
+}
+
+export interface UserInfo {
+  username: string;
+  status: string;
+  exp_date: string | null;
+  is_trial: string;
+  active_cons: string;
+  max_connections: string;
+  created_at: string | null;
+}
+
+export interface ServerInfo {
+  url: string;
+  port: string;
+  https_port: string;
+  server_protocol: string;
+}
+
+export interface LoginResponse {
+  user_info: UserInfo;
+  server_info: ServerInfo;
+  allowed_servers?: string[];
+  at_connection_limit?: boolean;
+}
+
+export interface Category {
+  category_id: string;
+  category_name: string;
+  parent_id: number;
+}
+
+export interface LiveStream {
+  num: number;
+  name: string;
+  stream_type: string;
+  stream_id: number;
+  stream_icon: string;
+  epg_channel_id: string | null;
+  added: string;
+  category_id: string;
+  custom_sid: string;
+  tv_archive: number;
+  direct_source: string;
+  tv_archive_duration: number;
+}
+
+export interface VodStream {
+  num: number;
+  name: string;
+  stream_type: string;
+  stream_id: number;
+  stream_icon: string;
+  rating: string;
+  rating_5based: number;
+  added: string;
+  category_id: string;
+  container_extension: string;
+  custom_sid: string;
+  direct_source: string;
+}
+
+export interface Series {
+  num: number;
+  name: string;
+  series_id: number;
+  cover: string;
+  plot: string;
+  cast: string;
+  director: string;
+  genre: string;
+  releaseDate: string;
+  last_modified: string;
+  rating: string;
+  rating_5based: number;
+  category_id: string;
+}
+
+const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+
+export const connectivityConfig = {
+  failureWindowMs: 10_000,
+  failuresToOffline: 3,
+  successesToOnline: 2,
+  cooldownMs: 4_000,
+  reconnectWindowMs: 1_500,
+  reconnectSpacingMs: 200,
+  reconnectConcurrency: 1,
+  normalConcurrency: 1,
+  timeoutLogin: 12_000,
+  timeoutToken: 5_000,
+  timeoutData: 20_000,
+  retriesLogin: 3,
+  retriesToken: 1,
+  retriesData: 2,
+};
+
+export function setConnectivityConfig(partial: Partial<typeof connectivityConfig>) {
+  Object.assign(connectivityConfig, partial);
+}
+
+export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> {
+  const { data, error } = await supabase.functions.invoke("iptv-login", {
+    body: { server: creds.server, username: creds.username, password: creds.password },
+  });
+  if (error || !data?.success) {
+    throw new Error(data?.error || "Falha ao conectar ao servidor");
+  }
+  return data;
+}
+
+export async function iptvLoginM3u(creds: IptvCredentials): Promise<LoginResponse & { auto_registered?: boolean }> {
+  const { data, error } = await supabase.functions.invoke("iptv-login", {
+    body: { mode: "m3u_register", server: creds.server, username: creds.username, password: creds.password },
+  });
+  if (error || !data?.success) {
+    throw new Error(data?.error || "Falha ao processar URL M3U");
+  }
+  return data;
+}
+
+export async function fetchAllowedServers(): Promise<string[]> {
+  const { data, error } = await supabase.functions.invoke("iptv-login", {
+    body: { mode: "validate" },
+  });
+  if (error || !data?.allowed) return [];
+  return data.candidates || [];
+}
+
+export function isHostAllowed(host: string, allowed: string[]): boolean {
+  const normalized = host.toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  return allowed.some((a) => a.toLowerCase().includes(normalized));
+}
+
+export function resolveStreamBase(serverInfo: ServerInfo, serverUrl: string, allowed?: string[]): string {
+  return serverUrl.replace(/\/+$/, "");
+}
+
+export async function getLiveCategories(creds: IptvCredentials): Promise<Category[]> {
+  return await iptvFetch(creds, "get_live_categories");
+}
+
+export async function getLiveStreams(creds: IptvCredentials, categoryId?: string): Promise<LiveStream[]> {
+  return await iptvFetch(creds, "get_live_streams", categoryId ? { category_id: categoryId } : {});
+}
+
+export async function getVodCategories(creds: IptvCredentials): Promise<Category[]> {
+  return await iptvFetch(creds, "get_vod_categories");
+}
+
+export async function getVodStreams(creds: IptvCredentials, categoryId?: string): Promise<VodStream[]> {
+  return await iptvFetch(creds, "get_vod_streams", categoryId ? { category_id: categoryId } : {});
+}
+
+export async function getSeriesCategories(creds: IptvCredentials): Promise<Category[]> {
+  return await iptvFetch(creds, "get_series_categories");
+}
+
+export async function getSeries(creds: IptvCredentials, categoryId?: string): Promise<Series[]> {
+  return await iptvFetch(creds, "get_series", categoryId ? { category_id: categoryId } : {});
+}
+
+export async function getSeriesInfo(creds: IptvCredentials, seriesId: number): Promise<any> {
+  return await iptvFetch(creds, "get_series_info", { series_id: seriesId });
+}
+
+export async function getVodInfo(creds: IptvCredentials, streamId: number): Promise<any> {
+  return await iptvFetch(creds, "get_vod_info", { vod_id: streamId });
+}
+
+export async function iptvFetch(creds: IptvCredentials, action: string, params: Record<string, any> = {}): Promise<any> {
+  const url = `${creds.streamBase}/player_api.php?username=${creds.username}&password=${creds.password}&action=${action}`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Falha na requisição ao servidor");
+  return await response.json();
+}
+
+export function proxyImageUrl(url: string, opts?: { w?: number; h?: number; q?: number }): string {
+  if (!url) return "";
+  return url;
+}
+
+export async function requestStreamToken(opts: { url?: string | null; kind: string; iptvUsername?: string; mode: string }): Promise<{ url: string }> {
+  const { data, error } = await supabase.functions.invoke("stream-token", {
+    body: { url: opts.url, kind: opts.kind, mode: opts.mode },
+  });
+  if (error || !data?.url) throw new Error("Falha ao obter token de stream");
+  return { url: data.url };
+}
+
+export async function reportStreamEvent(type: string, meta: any) {
+  await supabase.functions.invoke("stream-proxy", {
+    body: { mode: "log", type, ...meta },
+  }).catch(() => {});
+}
+
+export function getPlaybackStrategy(ext?: string, url?: string): { mode: "internal" | "external" | "error"; reason?: string; type?: "hls" | "native" } {
+  const e = (ext || "").toLowerCase().replace(/^\./, "");
+  if (["m3u8", "ts"].includes(e)) return { mode: "internal", type: "hls" };
+  if (["mp4", "mkv", "avi", "mov", "webm"].includes(e)) return { mode: "internal", type: "native" };
+  return { mode: "external", reason: "Formato não suportado" };
+}
+
+export function isValidStreamUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url);
+}
+
+export function normalizeExt(ext?: string): string {
+  return ext ? ext.replace(/^\./, "").toLowerCase() : "";
+}
+
+export function getHostProxyMode(url?: string | null): "redirect" | "stream" {
+  return "redirect";
+}
+
+export function markHostProxyRequired(url: string, reason: string): boolean {
+  return false;
+}
+
+export function clearHostProxyMode(url: string) {}
+
+export function getFormatBadge(ext?: string): string | null {
+  const e = normalizeExt(ext);
+  if (e === "m3u8") return "HLS";
+  if (e === "mp4") return "MP4";
+  return null;
+}
+
+export function getStreamType(url: string): "live" | "vod" {
+  return url.includes("/live/") ? "live" : "vod";
+}
+
+export function isExternalOnly(ext?: string): boolean {
+  return false;
+}
+
+export function getShortEpg(creds: IptvCredentials, streamId: number): Promise<any> {
+  return Promise.resolve([]);
+}
+
+export function getTelemetrySnapshot() { return {}; }
+export function isRealOnline() { return true; }
+export function subscribeConnectivity(cb: (online: boolean) => void) { return () => {}; }
+export function getQueueStats() { return { active: 0, pending: 0 }; }
