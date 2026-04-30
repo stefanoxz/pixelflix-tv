@@ -223,8 +223,10 @@ export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra
       });
       
       if (error) {
-        console.error(`[iptv-fetch] Error fetching ${action}:`, error);
-        throw new IptvApiError(`Falha ao carregar ${action}: ${error.message}`);
+        console.error(`[iptv-fetch] Edge function error for ${action}:`, error);
+        // Fallback final: se a Edge Function falhou (provável bloqueio de IP/Datacenter),
+        // tentamos via proxy público de CORS como última esperança.
+        return tryPublicProxyFetch<T>(directUrl, action);
       }
       
       if (data?.success === false) {
@@ -234,10 +236,33 @@ export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra
       return data as T;
     } catch (e: any) {
       if (e instanceof IptvApiError) throw e;
-      throw new IptvApiError(e.message || `Erro de rede ao carregar ${action}`);
+      // Se deu erro de rede na Edge Function, tenta o proxy público
+      try {
+        return await tryPublicProxyFetch<T>(directUrl, action);
+      } catch {
+        throw new IptvApiError(e.message || `Erro de rede ao carregar ${action}`);
+      }
     }
   });
 }
+
+/**
+ * Fallback de última instância usando um proxy de CORS público.
+ * Usado apenas quando o fetch direto E a Edge Function falham (bloqueios de IP).
+ */
+async function tryPublicProxyFetch<T>(url: string, action: string): Promise<T> {
+  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+  try {
+    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+    const text = await res.text();
+    return JSON.parse(text) as T;
+  } catch (e) {
+    console.error(`[iptv-fetch] Public proxy also failed for ${action}:`, e);
+    throw new IptvApiError(`O servidor IPTV está bloqueando conexões e o modo de segurança falhou. Verifique sua conexão.`);
+  }
+}
+
 
 export const getLiveCategories = (c: IptvCredentials) => iptvFetch<Category[]>(c, "get_live_categories");
 export const getLiveStreams = (c: IptvCredentials) => iptvFetch<LiveStream[]>(c, "get_live_streams");
