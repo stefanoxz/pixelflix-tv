@@ -65,7 +65,6 @@ export class XtreamService {
 
     throw new Error(`All proxies failed for ${action}`);
   }
-  }
 
   async authenticate(): Promise<{ user_info: UserInfo }> {
     const data = await this.fetchAction('');
