@@ -255,8 +255,8 @@ export function resolveStreamBase(serverInfo?: ServerInfo | null, fallback?: str
 
 export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra: any = {}): Promise<T> {
   let server = creds.server || "";
-  if (server.startsWith("https://")) {
-    server = server.replace(/^https:\/\//i, "http://");
+  if (server) {
+    server = server.replace(/^https?:\/\//i, "http://");
   }
 
   const params = new URLSearchParams({
