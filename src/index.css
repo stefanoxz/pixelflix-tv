@@ -91,27 +91,28 @@
 
 @layer utilities {
   .text-gradient {
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary via-purple-400 to-indigo-400 font-extrabold tracking-tight;
   }
-  .bg-gradient-primary { background: var(--gradient-primary); }
-  .bg-gradient-hero { background: var(--gradient-hero); }
-  .scrollbar-hide { scrollbar-width: none; -ms-overflow-style: none; }
-  .scrollbar-hide::-webkit-scrollbar { display: none; }
-  .bg-gradient-card { background: var(--gradient-card); }
-  .bg-gradient-glow { background: var(--gradient-glow); }
-  .shadow-glow { box-shadow: var(--shadow-glow); }
-  .shadow-card { box-shadow: var(--shadow-card); }
-  .shadow-hover { box-shadow: var(--shadow-hover); }
-  .transition-smooth { transition: var(--transition-smooth); }
-  .transition-bounce { transition: var(--transition-bounce); }
+  
+  .bg-gradient-primary {
+    @apply bg-gradient-to-br from-primary via-purple-600 to-indigo-600;
+  }
 
-  /* Hierarquia tipográfica padronizada */
-  .page-title { @apply text-xl md:text-2xl font-bold tracking-tight; }
-  .section-title { @apply text-lg md:text-xl font-semibold tracking-tight; }
-  .hero-title { @apply text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight leading-tight; }
+  .bg-gradient-card {
+    @apply bg-gradient-to-b from-secondary/30 to-background/90;
+  }
+
+  .shadow-glow {
+    @apply shadow-[0_0_20px_-5px_rgba(139,92,246,0.3)];
+  }
+
+  .hero-title {
+    @apply text-4xl md:text-5xl lg:text-7xl font-black tracking-tight leading-[0.95] drop-shadow-2xl;
+  }
+
+  .tap-feedback {
+    @apply active:scale-95 transition-transform duration-100;
+  }
 
   /* Underline animado pra nav (estilo iOS/Apple TV) */
   .nav-link {
