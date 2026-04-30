@@ -130,9 +130,10 @@ function App() {
   )
 
   const handleLogout = () => {
-    if(confirm('Deseja sair do WebPlayer?')) {
-      setStreams([])
-      localStorage.removeItem('last_list')
+    if(window.confirm('Deseja sair do WebPlayer?')) {
+      setActiveStream(null);
+      setStreams([]);
+      localStorage.removeItem('last_list');
     }
   }
 
