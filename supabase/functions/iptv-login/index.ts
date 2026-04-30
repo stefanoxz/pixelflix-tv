@@ -36,6 +36,15 @@ const FALLBACK_UAS = [
   "IPTVSmarters/1.0",
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   "Lavf/58.76.100",
+  "IPTV Smarters Pro/2.2.1 (Android/9; SM-G960F)",
+  "OttPlayer/2.0.0 (Linux; Tizen 4.0; Samsung SmartTV)",
+  "GSE Smart IPTV/7.4 (iPhone; iOS 15.1; Scale/3.00)",
+  "Perfect Player/1.5.9.1",
+  "Xtream-Player/3.0",
+  "XCIPTV/4.0",
+  "AppleCoreMedia/1.0.0.19B88 (iPhone; iPhone OS 15_1; en_us)",
+  "TiviMate/4.7.0 (Android/11; Sony TV)",
+  "Player/4.0 (Linux;Android 11) SmartersPlayer/4.0",
 ];
 
 // Timeout agressivo em cada fetch — sockets pendurados são a maior fonte
