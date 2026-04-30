@@ -75,9 +75,11 @@ async function getAllowedServers(): Promise<string[]> {
 }
 
 const USER_AGENTS = [
-  "VLC/3.0.20 LibVLC/3.0.20",
   "IPTVSmarters/1.0",
+  "VLC/3.0.20 LibVLC/3.0.20",
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Lavf/58.76.100",
+  "IPTV Smarters Pro/2.2.1 (Android/9; SM-G960F)",
 ];
 
 const TRANSIENT_STATUSES = new Set([408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 530]);
@@ -130,6 +132,13 @@ async function fetchWithRetries(url: string, clientIp?: string, attemptsPerUa = 
           lastStatus = res.status;
           lastReason = `HTTP ${res.status}`;
           await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+          continue;
+        }
+
+        if (res.status === 403) {
+          // Se for 403, tenta o próximo User-Agent antes de desistir
+          lastStatus = 403;
+          lastReason = "HTTP 403";
           continue;
         }
 
