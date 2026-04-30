@@ -1,5 +1,12 @@
 import type { HealthState, HealthReason } from "@/types/admin";
 
+export function failPctClass(pct: number): string {
+  if (pct >= 80) return "text-destructive";
+  if (pct >= 30) return "text-warning";
+  return "text-success";
+}
+
+
 export function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.round(diff / 60000);
