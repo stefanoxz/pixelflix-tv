@@ -18,7 +18,7 @@ export const getSettings = async () => {
   return data;
 };
 
-export const updateSettings = async (id: string, updates: { dns_url?: string; admin_password?: string }) => {
+export const updateSettings = async (id: string, updates: { dns_url?: string; admin_password?: string; site_logo?: string; primary_color?: string }) => {
   const { data, error } = await supabase
     .from('settings')
     .update(updates)
