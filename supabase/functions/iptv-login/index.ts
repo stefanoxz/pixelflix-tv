@@ -1056,14 +1056,8 @@ Deno.serve(async (req) => {
 
       // @ts-ignore - route existe no caminho ok
       const route: "direct" | "proxy" = (r as any).route ?? "direct";
-      await logEvent({
-        server: normalizedUsed,
-        username,
-        success: true,
-        reason: autoRegistered ? "m3u_auto_register" : `m3u_login route=${route}`,
-        ua,
-        ip,
-      });
+      // Removido log de eventos de registro
+
       console.log(`[iptv-login] M3U_REGISTER server=${normalizedUsed} route=${route} auto_registered=${autoRegistered}`);
       return jsonResponse(
         200,
@@ -1145,8 +1139,9 @@ Deno.serve(async (req) => {
     const allowedList = allRows.map((r) => r.server_url);
 
     if (allowedList.length === 0) {
-      await logEvent({ server: server ?? "-", username, success: false, reason: "nenhuma DNS cadastrada", ua, ip });
+      // Removido log de eventos
       return errorResponse("NOT_ALLOWED", NO_ACCESS_MSG, corsHeaders);
+
     }
 
     // If client sent a server, validate it's in allowlist; otherwise try all allowed servers
@@ -1160,8 +1155,9 @@ Deno.serve(async (req) => {
         (r) => r.server_url === normalized || hostKey(r.server_url) === inputHost,
       );
       if (!match) {
-        await logEvent({ server: fullBase, username, success: false, reason: "DNS não autorizada", ua, ip });
+        // Removido log de eventos
         return errorResponse("NOT_ALLOWED", NO_ACCESS_MSG, corsHeaders);
+
       }
       candidateRows = [match];
     } else {
@@ -1216,7 +1212,7 @@ Deno.serve(async (req) => {
       if (r.ok) {
         // @ts-ignore - route só existe no caminho ok
         const route: "direct" | "proxy" = (r as any).route ?? "direct";
-        await logEvent({ server: row.server_url, username, success: true, reason: `route=${route}`, ua, ip });
+        // Removido log de eventos de sucesso
         console.log(`[iptv-login] SUCCESS server=${row.server_url} route=${route}`);
         return jsonResponse(
           200,
