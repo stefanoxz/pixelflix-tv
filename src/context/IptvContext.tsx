@@ -1,14 +1,29 @@
-import { useEffect, useState, ReactNode } from "react";
-import {
-  IptvContext,
-  IPTV_STORAGE_KEY,
-  type IptvSession,
-} from "./iptv-context";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { queryClient } from "@/main";
 import { toast } from "sonner";
+import type { IptvCredentials, ServerInfo, UserInfo } from "@/types/iptv";
 
-export { useIptv } from "./useIptv";
+export interface IptvSession {
+  creds: IptvCredentials;
+  userInfo: UserInfo;
+  serverInfo?: ServerInfo;
+}
+
+export interface IptvContextValue {
+  session: IptvSession | null;
+  setSession: (s: IptvSession | null) => void;
+  logout: () => void;
+}
+
+const IPTV_STORAGE_KEY = "iptv_session";
+const IptvContext = createContext<IptvContextValue | undefined>(undefined);
+
+export function useIptv() {
+  const ctx = useContext(IptvContext);
+  if (!ctx) throw new Error("useIptv must be used within IptvProvider");
+  return ctx;
+}
 
 export function IptvProvider({ children }: { children: ReactNode }) {
   const [session, setSessionState] = useState<IptvSession | null>(() => {
@@ -28,22 +43,15 @@ export function IptvProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setSession(null);
-    // Also drop the Supabase anon session so stream-token stops working.
     supabase.auth.signOut().catch(() => {});
   };
 
-  // Boot-time revalidation: só roda quando há sessão salva e em
-  // `requestIdleCallback` para não competir com o paint inicial. O
-  // `services/iptv.ts` (1.873 linhas) é carregado via dynamic import —
-  // fica fora do bundle inicial do /login.
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
 
     const run = async () => {
-      const { fetchAllowedServers, isHostAllowed } = await import(
-        "@/services/iptv"
-      );
+      const { fetchAllowedServers, isHostAllowed } = await import("@/services/iptv");
       const allowed = await fetchAllowedServers();
       if (cancelled || allowed.length === 0) return;
 
@@ -60,10 +68,6 @@ export function IptvProvider({ children }: { children: ReactNode }) {
       }
 
       if (!streamBaseOk) {
-        console.warn("[iptv] streamBase fora da allowlist, reescrevendo", {
-          old: streamBase,
-          new: server,
-        });
         toast.info("DNS de mídia atualizada automaticamente.");
         setSession({
           ...session,
@@ -72,29 +76,15 @@ export function IptvProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const w = window as Window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
-    let idleId: number | undefined;
-    let timeoutId: number | undefined;
-    if (typeof w.requestIdleCallback === "function") {
-      idleId = w.requestIdleCallback(() => {
-        run();
-      }, { timeout: 2500 });
+    const w = window as any;
+    if (w.requestIdleCallback) {
+      w.requestIdleCallback(() => run(), { timeout: 2500 });
     } else {
-      timeoutId = window.setTimeout(run, 800);
+      setTimeout(run, 800);
     }
 
-    return () => {
-      cancelled = true;
-      if (idleId !== undefined && typeof w.cancelIdleCallback === "function") {
-        w.cancelIdleCallback(idleId);
-      }
-      if (timeoutId !== undefined) clearTimeout(timeoutId);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => { cancelled = true; };
+  }, [session]);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
@@ -106,9 +96,6 @@ export function IptvProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // Não pré-carrega catálogo no boot: alguns painéis IPTV contam cada request
-  // como tela ativa e bloqueiam a conta com MAX_CONNECTIONS. O carregamento
-  // fica centralizado no /sync e nas páginas abertas pelo usuário.
   useEffect(() => {
     if (!session?.creds) queryClient.clear();
   }, [session?.creds]);
