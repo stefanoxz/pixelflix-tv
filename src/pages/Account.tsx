@@ -260,7 +260,7 @@ const Account = () => {
         </Card>
       )}
 
-      <Card className="p-6 md:p-8 bg-gradient-card border-border/40 shadow-card overflow-hidden relative">
+      <Card className="p-6 md:p-8 glass-card border-white/5 shadow-2xl overflow-hidden relative">
         {/* Glow decorativo */}
         <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-primary/15 blur-3xl" />
 
