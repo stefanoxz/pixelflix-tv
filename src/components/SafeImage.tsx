@@ -1,4 +1,4 @@
-import { ImgHTMLAttributes, useEffect, useState } from "react";
+import { ImgHTMLAttributes, useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,8 +23,16 @@ export function SafeImage({
   ...rest
 }: Props) {
   const [errored, setErrored] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
 
-  // Reseta o estado se a `src` mudar (ex.: novo item no carrossel).
+  // Check if image is already loaded (for cached images)
+  useEffect(() => {
+    if (imgRef.current?.complete) {
+      if (imgRef.current.naturalWidth === 0) {
+        setErrored(true);
+      }
+    }
+  }, [src]);
   useEffect(() => {
     setErrored(false);
   }, [src]);
@@ -34,6 +42,7 @@ export function SafeImage({
   return (
     <img
       {...rest}
+      ref={imgRef}
       src={src}
       className={cn(className, errored && onErrorMode === "fade" && "opacity-20")}
       onError={(e) => {

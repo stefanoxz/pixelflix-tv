@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Play, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SafeImage } from "@/components/SafeImage";
@@ -59,8 +59,8 @@ export const HeroSection = memo(({
         <SafeImage
           key={`${item.kind}-${item.id}`}
           src={proxyImageUrl(item.cover)}
-          alt=""
-          aria-hidden
+          alt={`Destaque: ${item.title}`}
+          aria-hidden={i !== activeIdx}
           className={cn(
             "absolute inset-0 h-full w-full object-cover transition-all duration-1000",
             i === activeIdx
@@ -125,14 +125,18 @@ export const HeroSection = memo(({
               Assistir agora
             </Button>
             <Button
+              asChild
               size="lg"
               variant="secondary"
-              onClick={() => featured && openFeatured(featured)}
               className="w-full sm:w-auto h-12 px-8 gap-2.5 backdrop-blur-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-300 font-semibold tap-feedback rounded-xl"
-              disabled={!featured}
             >
-              <Info className="h-5 w-5" />
-              Mais informações
+              <Link 
+                to={featured?.kind === "movie" ? "/movies" : "/series"} 
+                state={{ openId: featured?.id }}
+              >
+                <Info className="h-5 w-5" />
+                Mais informações
+              </Link>
             </Button>
 
           </div>
@@ -181,8 +185,7 @@ export const HeroSection = memo(({
                       >
                         <SafeImage
                           src={proxyImageUrl(item.cover)}
-                          alt=""
-                          aria-hidden
+                          alt={`Miniatura de ${item.title}`}
                           loading="lazy"
                           className="absolute inset-0 h-full w-full object-cover"
                         />
