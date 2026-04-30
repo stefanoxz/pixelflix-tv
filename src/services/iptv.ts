@@ -1602,6 +1602,30 @@ export async function requestStreamToken(params: {
   iptvUsername?: string;
   mode?: StreamMode;
 }): Promise<{ url: string; expires_at: number }> {
+  // --- CLIENT-SIDE DNS/BYPASS ATTEMPT ---
+  // Antes de pedir o token pro Edge (EUA), se o modo for 'redirect', tentamos
+  // verificar se a URL original é acessível diretamente pelo navegador (Brasil).
+  // Se for, devolvemos a URL original como "token" para usar o IP residencial.
+  const isDirectCandidate = !params.mode || params.mode === "redirect";
+  if (isDirectCandidate && typeof window !== "undefined") {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 1500);
+      const res = await fetch(params.url, { 
+        method: "HEAD", 
+        mode: "no-cors", 
+        signal: ctrl.signal 
+      }).catch(() => null);
+      clearTimeout(t);
+      
+      // Se o fetch não-CORS passou, o navegador consegue chegar no DNS/IP.
+      if (res) {
+        console.log("[iptv] client-side bypass success for:", params.url);
+        return { url: params.url, expires_at: Math.floor(Date.now() / 1000) + 3600 };
+      }
+    } catch { /* fallback to edge */ }
+  }
+
   const key = tokenCacheKey(params);
   const cached = tokenCache.get(key);
   if (cached) {
