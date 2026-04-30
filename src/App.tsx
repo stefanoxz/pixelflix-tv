@@ -1,196 +1,56 @@
-import { useState, FormEvent, useEffect, useRef, useMemo } from 'react'
-import { Play, Search, Link2, Loader2, ArrowLeft, Menu, X, ChevronRight, Tv, Settings, Globe, Shield, Zap, Monitor } from 'lucide-react'
-import Hls from 'hls.js'
-import { parseM3uUrl, fetchM3u, parseM3uToData } from './services/iptv'
-import { Stream, Category } from './types/iptv'
-
-const Player = ({ stream, onBack }: { stream: Stream, onBack: () => void }) => {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-
-  useEffect(() => {
-    let hls: Hls | null = null;
-    const video = videoRef.current;
-    if (!video || !stream.direct_source) return;
-    
-    const initPlayer = () => {
-      setLoading(true);
-      setError(false);
-
-      if (Hls.isSupported()) {
-        hls = new Hls({ 
-          enableWorker: true,
-          manifestLoadingTimeOut: 10000,
-          fragLoadingTimeOut: 20000
-        });
-        hls.loadSource(stream.direct_source!);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          setLoading(false);
-          video.play().catch(() => {});
-        });
-        hls.on(Hls.Events.ERROR, (_, data) => {
-          if (data.fatal) {
-            console.error("HLS Fatal Error:", data);
-            setError(true);
-            setLoading(false);
-          }
-        });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = stream.direct_source!;
-        const onLoaded = () => {
-          setLoading(false);
-          video.play().catch(() => {});
-        };
-        const onError = () => {
-          setError(true);
-          setLoading(false);
-        };
-        video.addEventListener('loadedmetadata', onLoaded);
-        video.addEventListener('error', onError);
-        return () => {
-          video.removeEventListener('loadedmetadata', onLoaded);
-          video.removeEventListener('error', onError);
-        };
-      }
-    };
-    
-    const cleanup = initPlayer();
-    return () => {
-      if (hls) hls.destroy();
-      if (cleanup) cleanup();
-    };
-  }, [stream]);
-
-  if (error) return (
-    <div className="fixed inset-0 z-[400] bg-black flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300">
-      <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
-        <Tv className="w-12 h-12 text-red-500" />
-      </div>
-      <h2 className="text-2xl font-black text-white tracking-tighter mb-2">Ops! Falha na Reprodução</h2>
-      <p className="text-neutral-500 mb-8 max-w-xs">O link deste canal pode estar offline ou é incompatível com o navegador.</p>
-      <button onClick={onBack} className="h-14 px-8 bg-white/5 border border-white/10 rounded-2xl font-bold hover:bg-white/10 transition-all">
-        Voltar para a Lista
-      </button>
-    </div>
-  )
-
-  return (
-    <div className="fixed inset-0 z-[400] bg-black flex flex-col items-center justify-center animate-in fade-in duration-300">
-      <button onClick={onBack} className="absolute top-6 left-6 z-[410] p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full transition-all text-white">
-        <ArrowLeft className="w-6 h-6" />
-      </button>
-      
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-[405]">
-          <Loader2 className="w-12 h-12 text-primary animate-spin" />
-        </div>
-      )}
-
-      <video ref={videoRef} className="w-full h-full object-contain" controls autoPlay playsInline />
-      
-      <div className="absolute bottom-12 left-0 right-0 p-8 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none z-[405]">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-black text-white mb-2 tracking-tighter">{stream.name}</h2>
-          <span className="px-3 py-1 bg-primary/20 border border-primary/30 text-primary text-xs font-bold rounded-full uppercase tracking-widest">
-            {stream.category_id}
-          </span>
-        </div>
-      </div>
-    </div>
-  )
-}
+import { useState, useMemo } from 'react'
+import { Search, Menu, X, Play, Zap, Shield, Monitor, ChevronRight } from 'lucide-react'
+import { parseM3uUrl } from './services/iptv'
+import { Stream } from './types/iptv'
+import { useIPTV } from './hooks/useIPTV'
+import { Player } from './components/Player'
+import { Sidebar } from './components/Sidebar'
+import { ChannelGrid } from './components/ChannelGrid'
+import { LoginModal } from './components/LoginModal'
 
 function App() {
-  const [streams, setStreams] = useState<Stream[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
+  const { streams, categories, loading, error, loadList, logout } = useIPTV()
   const [activeCategory, setActiveCategory] = useState<string>('Todos')
   const [activeStream, setActiveStream] = useState<Stream | null>(null)
   const [isLoginOpen, setIsLoginOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    const saved = localStorage.getItem('last_list')
-    if (saved) {
-      try {
-        const creds = JSON.parse(saved);
-        if (creds && creds.username) loadList(creds);
-      } catch (e) {}
-    }
-  }, [])
-
-  const loadList = async (creds: any) => {
-    if (!creds || !creds.server) {
-      alert("Por favor, insira uma URL M3U válida.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const m3u = await fetchM3u(creds);
-      const { streams: s, categories: c } = parseM3uToData(m3u);
-      
-      if (s.length === 0) {
-        alert("A lista foi carregada, mas nenhum canal foi encontrado.");
-        return;
-      }
-
-      setStreams(s);
-      setCategories([{ category_id: 'Todos', category_name: 'Todos' }, ...c]);
-      setIsLoginOpen(false);
-      localStorage.setItem('last_list', JSON.stringify(creds));
-    } catch (e: any) { 
-      alert(e.message || "Erro ao conectar com o servidor IPTV."); 
-    } finally { 
-      setLoading(false); 
-    }
-  }
 
   const filtered = useMemo(() => streams.filter(s => 
     (activeCategory === 'Todos' || s.category_id === activeCategory) &&
     s.name.toLowerCase().includes(search.toLowerCase())
   ), [streams, activeCategory, search]);
 
+  const handleLogin = async (url: string) => {
+    const creds = parseM3uUrl(url)
+    if (creds) {
+      const success = await loadList(creds)
+      if (success) setIsLoginOpen(false)
+    } else {
+      alert("URL M3U inválida.")
+    }
+  }
+
   const handleLogout = () => {
     if(window.confirm('Deseja sair do WebPlayer?')) {
-      setActiveStream(null);
-      setStreams([]);
-      localStorage.removeItem('last_list');
+      setActiveStream(null)
+      logout()
     }
+  }
+
+  const handleDemo = () => {
+    const demoUrl = "http://safawe.space/get.php?username=406850266&password=823833547&type=m3u_plus&output=ts"
+    handleLogin(demoUrl)
   }
 
   if (streams.length > 0) {
     return (
       <div className="min-h-screen bg-neutral-950 flex text-neutral-300 font-sans selection:bg-primary/20">
-        {/* Sidebar Desktop */}
-        <aside className="w-72 border-r border-white/5 bg-neutral-900/20 backdrop-blur-xl hidden lg:flex flex-col h-screen sticky top-0 overflow-hidden">
-          <div className="p-8 border-b border-white/5">
-            <div className="flex items-center gap-3 text-white font-black text-2xl tracking-tighter">
-              <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-glow">
-                <Play className="w-6 h-6 text-white fill-current" />
-              </div>
-              Super<span className="text-primary">Tech</span>
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto px-4 py-6 space-y-1 custom-scrollbar">
-            <h3 className="px-4 text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] mb-4">Categorias</h3>
-            {categories.map(c => (
-              <button 
-                key={c.category_id}
-                onClick={() => {
-                  setActiveCategory(c.category_id);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 group ${activeCategory === c.category_id ? 'bg-primary text-white shadow-glow' : 'hover:bg-white/5 hover:text-white'}`}
-              >
-                <span className="text-sm font-bold truncate">{c.category_name}</span>
-                <ChevronRight className={`w-4 h-4 transition-transform ${activeCategory === c.category_id ? 'translate-x-0' : '-translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0'}`} />
-              </button>
-            ))}
-          </div>
-        </aside>
+        <Sidebar 
+          categories={categories} 
+          activeCategory={activeCategory} 
+          onSelectCategory={setActiveCategory} 
+        />
 
         {/* Mobile Menu Overlay */}
         {isMobileMenuOpen && (
@@ -201,7 +61,7 @@ function App() {
                 <div className="flex items-center gap-3 text-white font-black text-2xl tracking-tighter">
                   <Play className="w-6 h-6 text-primary fill-current" /> SuperTech
                 </div>
-                <X onClick={() => setIsMobileMenuOpen(false)} className="text-neutral-500" />
+                <X onClick={() => setIsMobileMenuOpen(false)} className="text-neutral-500 cursor-pointer" />
               </div>
               <div className="space-y-1">
                 {categories.map(c => (
@@ -245,49 +105,11 @@ function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-8 gap-6 pb-20">
-              {filtered.map(s => (
-                <button 
-                  key={s.stream_id} 
-                  onClick={() => setActiveStream(s)} 
-                  className="group flex flex-col gap-3 text-left transition-all duration-500"
-                >
-                  <div className="aspect-video bg-neutral-900 rounded-3xl border border-white/5 group-hover:border-primary group-hover:shadow-glow transition-all overflow-hidden relative shadow-2xl">
-                    <div className="absolute inset-0 bg-neutral-800 animate-pulse z-0" />
-                    {s.stream_icon && (
-                      <img 
-                        src={s.stream_icon} 
-                        className="w-full h-full object-contain p-6 relative z-10 group-hover:scale-110 transition-transform duration-500" 
-                        loading="lazy" 
-                        onError={(e) => (e.currentTarget.style.display = 'none')}
-                      />
-                    )}
-                    <div className="absolute inset-0 flex items-center justify-center z-[5] text-neutral-700">
-                      <Tv className="w-12 h-12" />
-                    </div>
-                    <div className="absolute inset-0 bg-neutral-950/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300 z-20">
-                      <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center shadow-glow animate-in zoom-in duration-300">
-                        <Play className="fill-current w-6 h-6 text-white ml-1" />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="px-2">
-                    <div className="text-sm font-black text-neutral-400 group-hover:text-white truncate transition-colors">{s.name}</div>
-                    <div className="text-[10px] font-black text-neutral-600 uppercase tracking-widest mt-1">{s.category_id}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            
-            {filtered.length === 0 && (
-              <div className="py-32 flex flex-col items-center justify-center text-center space-y-4">
-                <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center border border-white/5">
-                  <Search className="w-8 h-8 text-neutral-600" />
-                </div>
-                <h3 className="text-xl font-bold text-white tracking-tight">Nenhum canal encontrado</h3>
-                <p className="text-neutral-600 max-w-xs">Tente ajustar sua busca ou mudar de categoria.</p>
-              </div>
-            )}
+            <ChannelGrid 
+              channels={filtered} 
+              onSelectChannel={setActiveStream} 
+              activeCategory={activeCategory}
+            />
           </div>
         </main>
         
@@ -308,10 +130,7 @@ function App() {
           <Play className="w-7 h-7 text-primary fill-current" /> SuperTech
         </div>
         <button 
-          onClick={() => {
-            console.log("Clicou no botão Entrar da Header");
-            setIsLoginOpen(true);
-          }}
+          onClick={() => setIsLoginOpen(true)}
           className="px-6 h-12 rounded-2xl bg-primary text-white font-black uppercase text-xs tracking-widest shadow-glow hover:scale-105 active:scale-95 transition-all z-[110] relative cursor-pointer"
         >
           Entrar
@@ -336,20 +155,13 @@ function App() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom duration-1000 delay-300 relative z-[60]">
             <button 
-              onClick={() => {
-                console.log("Hero: Acessar Player clicado");
-                setIsLoginOpen(true);
-              }} 
+              onClick={() => setIsLoginOpen(true)} 
               className="w-full sm:w-auto px-10 h-16 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-glow flex items-center justify-center gap-3 cursor-pointer relative z-[70]"
             >
               Acessar Player <ChevronRight className="w-5 h-5" />
             </button>
             <button 
-              onClick={() => {
-                console.log("Hero: Ver Demo clicado");
-                const demoUrl = "http://safawe.space/get.php?username=406850266&password=823833547&type=m3u_plus&output=ts";
-                loadList(parseM3uUrl(demoUrl));
-              }}
+              onClick={handleDemo}
               className="w-full sm:w-auto px-10 h-16 bg-white/5 border border-white/5 hover:bg-white/10 active:scale-95 rounded-2xl font-black uppercase tracking-widest text-neutral-400 transition-all cursor-pointer relative z-[70]"
             >
               Ver Demo
@@ -376,48 +188,16 @@ function App() {
         </div>
       </main>
 
-      {isLoginOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="bg-neutral-900 border border-white/5 p-10 rounded-[48px] w-full max-w-xl space-y-8 shadow-2xl relative">
-            <button onClick={() => setIsLoginOpen(false)} className="absolute top-8 right-8 text-neutral-500 hover:text-white transition-colors z-10 cursor-pointer"><X /></button>
-            
-            <div className="space-y-2">
-              <h2 className="text-4xl font-black text-white tracking-tighter">Entrar no <span className="text-primary italic">Cloud</span></h2>
-              <p className="text-neutral-500 font-medium">Insira o endereço completo da sua playlist M3U.</p>
-            </div>
-
-            <form onSubmit={(e: FormEvent) => {
-              e.preventDefault();
-              try {
-                const formData = new FormData(e.target as HTMLFormElement);
-                const urlValue = formData.get('url') as string;
-                if (!urlValue) return;
-                const creds = parseM3uUrl(urlValue);
-                loadList(creds);
-              } catch (err) {
-                console.error("Submit error:", err);
-                alert("Ocorreu um erro inesperado.");
-              }
-            }} className="space-y-6">
-              <div className="relative group">
-                <Link2 className="absolute left-5 top-1/2 -translate-y-1/2 text-neutral-600 group-focus-within:text-primary transition-colors pointer-events-none" />
-                <input 
-                  name="url" 
-                  autoFocus
-                  placeholder="http://safawe.space/get.php?username=..." 
-                  className="w-full bg-black border border-white/5 rounded-[24px] py-6 pl-14 pr-6 text-white placeholder:text-neutral-700 focus:border-primary/50 transition-all outline-none" 
-                  required
-                />
-              </div>
-              <button 
-                disabled={loading} 
-                className="w-full h-20 bg-primary text-white rounded-[24px] font-black uppercase tracking-[0.2em] shadow-glow flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                {loading ? <Loader2 className="animate-spin" /> : 'Sincronizar Lista'}
-              </button>
-            </form>
-            <p className="text-center text-[10px] font-black text-neutral-700 uppercase tracking-widest">Tecnologia SuperTech de Sincronização em Nuvem</p>
-          </div>
+      <LoginModal 
+        isOpen={isLoginOpen} 
+        onClose={() => setIsLoginOpen(false)} 
+        onLogin={handleLogin} 
+        loading={loading}
+      />
+      
+      {error && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[300] bg-red-500 text-white px-6 py-3 rounded-2xl font-bold shadow-2xl animate-in slide-in-from-bottom duration-300">
+          {error}
         </div>
       )}
     </div>
