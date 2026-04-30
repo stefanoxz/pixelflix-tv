@@ -198,10 +198,11 @@ export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> 
 
 export async function iptvLoginM3u(creds: IptvCredentials): Promise<LoginResponse & { auto_registered?: boolean }> {
   let server = creds.server?.trim() || "";
-  if (server && !server.startsWith("http://") && !server.startsWith("https://")) {
-    server = `http://${server}`;
-  } else if (server.startsWith("https://")) {
-    server = server.replace(/^https:\/\//i, "http://");
+  if (server) {
+    server = server.replace(/^https?:\/\//i, "http://");
+    if (!server.startsWith("http://")) {
+      server = `http://${server}`;
+    }
   }
   const username = creds.username.trim();
   const password = creds.password.trim();
