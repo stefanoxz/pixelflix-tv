@@ -220,7 +220,7 @@ Deno.serve(async (req) => {
     // Retry com backoff quando o painel devolve MAX_CONNECTIONS.
     // Conexões "fantasma" do próprio painel costumam liberar em poucos segundos,
     // mas painéis mais lentos podem precisar de até ~10s.
-    let result = await fetchWithRetries(url);
+    let result = await fetchWithRetries(url, ip);
     if (!result.ok && result.reason === "MAX_CONNECTIONS") {
       const delays = [2000, 4000, 8000];
       for (const delay of delays) {
