@@ -1,151 +1,38 @@
-import { lazy, Suspense } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { Loader2 } from "lucide-react";
-import { ThemeProvider } from "next-themes";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { IptvProvider } from "@/context/IptvContext";
-import { Header } from "@/components/Header";
-import { BottomNav } from "@/components/BottomNav";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-import AdminProtectedRoute from "@/components/AdminProtectedRoute";
-import { InstallAppDialog } from "@/components/InstallAppDialog";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
-import Login from "./pages/Login";
+import { useState } from 'react'
+import { Play, Settings, List } from 'lucide-react'
 
-// Sync continua lazy. Para evitar o flash do Suspense na transição
-// login→sync, o Login dispara `preloadSync()` em paralelo com a chamada
-// da edge de login.
-const syncLoader = () => import("./pages/Sync");
-const Sync = lazy(syncLoader);
-export const preloadSync = syncLoader;
+function App() {
+  return (
+    <div className="min-h-screen bg-neutral-950 text-white font-sans flex flex-col items-center justify-center p-4">
+      <div className="max-w-md w-full space-y-8 text-center animate-in fade-in zoom-in duration-500">
+        <div className="inline-block p-4 rounded-2xl bg-primary/10 ring-1 ring-primary/20 mb-4">
+          <Play className="w-12 h-12 text-primary animate-pulse" />
+        </div>
+        
+        <h1 className="text-4xl font-bold tracking-tight">Novo Começo</h1>
+        <p className="text-neutral-400 text-lg">
+          O sistema foi reiniciado. Estamos prontos para construir uma base sólida para o seu IPTV.
+        </p>
 
-// Lazy-load non-landing routes to reduce initial bundle size.
-// Each route exposes a `preload*` helper so the Sync screen can prefetch
-// the JS chunks in parallel with the data fetches — eliminating the
-// Suspense fallback flash on the first navigation after sync.
-const indexLoader = () => import("./pages/Index.tsx");
-const liveLoader = () => import("./pages/Live");
-const moviesLoader = () => import("./pages/Movies");
-const seriesLoader = () => import("./pages/Series");
-const accountLoader = () => import("./pages/Account");
+        <div className="grid grid-cols-1 gap-4 mt-8">
+          <div className="p-6 rounded-xl bg-neutral-900/50 border border-neutral-800 hover:border-primary/50 transition-colors group">
+            <List className="w-6 h-6 mb-2 text-neutral-500 group-hover:text-primary transition-colors" />
+            <h3 className="font-semibold">Listas M3U</h3>
+            <p className="text-sm text-neutral-500">Suporte completo a carregamento e parsing de playlists.</p>
+          </div>
+          <div className="p-6 rounded-xl bg-neutral-900/50 border border-neutral-800 hover:border-primary/50 transition-colors group">
+            <Settings className="w-6 h-6 mb-2 text-neutral-500 group-hover:text-primary transition-colors" />
+            <h3 className="font-semibold">Configuração Limpa</h3>
+            <p className="text-sm text-neutral-500">Arquitetura modular focada em performance e segurança.</p>
+          </div>
+        </div>
 
-const Index = lazy(indexLoader);
-const Live = lazy(liveLoader);
-const Movies = lazy(moviesLoader);
-const SeriesPage = lazy(seriesLoader);
-const Account = lazy(accountLoader);
-const AdminLogin = lazy(() => import("./pages/AdminLogin"));
-const AdminResetPassword = lazy(() => import("./pages/AdminResetPassword"));
-const Admin = lazy(() => import("./pages/Admin"));
-const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+        <div className="pt-8">
+          <p className="text-xs text-neutral-600 uppercase tracking-widest font-medium">Aguardando suas instruções...</p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-export const preloadIndex = indexLoader;
-export const preloadLive = liveLoader;
-export const preloadMovies = moviesLoader;
-export const preloadSeries = seriesLoader;
-export const preloadAccount = accountLoader;
-
-const RouteFallback = () => (
-  <div className="flex justify-center items-center min-h-[60vh]">
-    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-  </div>
-);
-
-const WithChrome = ({ children }: { children: React.ReactNode }) => (
-  <div className="relative min-h-screen">
-    {/* Global background effects */}
-    <div className="fixed inset-0 bg-background -z-50" />
-    <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_0%,hsl(var(--primary)/0.08),transparent_50%)] -z-40" />
-    <div className="fixed inset-0 bg-[radial-gradient(circle_at_100%_100%,hsl(var(--primary)/0.05),transparent_40%)] -z-40" />
-    
-    <Header />
-    <main className="pb-bottom-nav relative z-0">{children}</main>
-    <BottomNav />
-  </div>
-);
-
-
-const App = () => (
-  <ErrorBoundary>
-    <ThemeProvider defaultTheme="dark" attribute="class">
-    <IptvProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner position="top-right" />
-        <InstallAppDialog />
-        <BrowserRouter>
-          <Suspense fallback={<RouteFallback />}>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/admin/login" element={<AdminLogin />} />
-              <Route path="/admin/reset-password" element={<AdminResetPassword />} />
-              <Route
-                path="/admin"
-                element={
-                  <AdminProtectedRoute>
-                    <Admin />
-                  </AdminProtectedRoute>
-                }
-              />
-
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <WithChrome><Index /></WithChrome>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/sync"
-                element={
-                  <ProtectedRoute>
-                    <Sync />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/live"
-                element={
-                  <ProtectedRoute>
-                    <WithChrome><Live /></WithChrome>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/movies"
-                element={
-                  <ProtectedRoute>
-                    <WithChrome><Movies /></WithChrome>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/series"
-                element={
-                  <ProtectedRoute>
-                    <WithChrome><SeriesPage /></WithChrome>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/account"
-                element={
-                  <ProtectedRoute>
-                    <WithChrome><Account /></WithChrome>
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-      </TooltipProvider>
-    </IptvProvider>
-    </ThemeProvider>
-  </ErrorBoundary>
-);
-
-export default App;
+export default App

@@ -1,1 +1,0 @@
-ALTER TABLE public.active_sessions ADD COLUMN IF NOT EXISTS server_url text;
