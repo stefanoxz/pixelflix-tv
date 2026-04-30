@@ -1198,7 +1198,7 @@ Deno.serve(async (req) => {
     let lastStatus: number | undefined;
     let lastBody = "";
     for (const row of candidateRows) {
-      const r = await attemptLogin(row.server_url, username, password, row, admin);
+      const r = await attemptLogin(row.server_url, username, password, row, admin, ip);
       if (r.ok) {
         // @ts-ignore - route só existe no caminho ok
         const route: "direct" | "proxy" = (r as any).route ?? "direct";
