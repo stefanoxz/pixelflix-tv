@@ -3,6 +3,7 @@ import { Search, Menu, X, Play, Zap, Shield, Monitor, ChevronRight } from 'lucid
 import { parseM3uUrl } from './services/iptv'
 import { Stream } from './types/iptv'
 import { useIPTV } from './hooks/useIPTV'
+import { useDebounce } from './hooks/useDebounce'
 import { Player } from './components/Player'
 import { Sidebar } from './components/Sidebar'
 import { ChannelGrid } from './components/ChannelGrid'
