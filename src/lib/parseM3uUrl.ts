@@ -30,7 +30,8 @@ const MAX_INPUT_LEN = 2000;
 function extractFirstUrl(raw: string): string | null {
   // 1) URL absoluta com protocolo - agora aceita mais caracteres em query strings
   const withProto = raw.match(/https?:\/\/[^\s"'<>|]+(?:\?[^\s"'<>|]*)?/i);
-  if (withProto) return withProto[0];
+  if (withProto) return withProto[0].trim();
+
 
   // 2) host[:port]/path — assume http://
   const hostPath = raw.match(
@@ -47,8 +48,9 @@ function extractFirstUrl(raw: string): string | null {
 
 export function parseM3uUrl(input: string): M3uCredentials | null {
   if (!input) return null;
-  const raw = input.trim().slice(0, MAX_INPUT_LEN);
+  const raw = input.trim().replace(/[\u200B-\u200D\uFEFF]/g, "").slice(0, MAX_INPUT_LEN);
   if (!raw) return null;
+
 
   const candidate = extractFirstUrl(raw);
   if (!candidate) return null;
