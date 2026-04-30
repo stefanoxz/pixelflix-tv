@@ -32,7 +32,7 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
           id: s.stream_id || s.series_id,
           name: s.name,
           icon: s.stream_icon || s.cover,
-          category: cats.find(c => c.category_id === s.category_id)?.category_name || 'Geral',
+          category: cats.find(c => String(c.category_id) === String(s.category_id))?.category_name || 'Geral',
           rating: s.rating || 'N/A',
           year: s.year || '2024',
           duration: type === 'live' ? 'AO VIVO' : s.duration || 'N/A'
