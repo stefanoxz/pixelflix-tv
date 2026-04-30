@@ -127,7 +127,32 @@ export interface EpgEntry {
 export type StreamMode = "redirect" | "stream";
 export type InvokeKind = "login" | "token" | "data" | "event";
 
-const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+// =============================================================================
+// Hybrid Connectivity Helper
+// =============================================================================
+
+/**
+ * Tenta realizar o fetch diretamente do navegador (IP residencial).
+ */
+async function tryBrowserFetch<T>(url: string, fallback: () => Promise<T>): Promise<T> {
+  try {
+    const res = await fetch(url, { 
+      method: "GET", 
+      credentials: "omit",
+      cache: "no-store",
+      signal: AbortSignal.timeout(6000) 
+    });
+    
+    if (res.ok) {
+      const text = await res.text();
+      return JSON.parse(text) as T;
+    }
+    throw new Error(`HTTP ${res.status}`);
+  } catch (e) {
+    // Falha silenciosa: cai para a Edge Function
+    return fallback();
+  }
+}
 
 // =============================================================================
 // Utils & Connectivity
@@ -179,28 +204,6 @@ export class IptvLoginError extends Error {
   constructor(message: string, public code: string, public debug: any) {
     super(message);
     this.name = "IptvLoginError";
-  }
-}
-
-/**
- * Tenta realizar o fetch diretamente do navegador (IP residencial).
- */
-async function tryBrowserFetch<T>(url: string, fallback: () => Promise<T>): Promise<T> {
-  try {
-    const res = await fetch(url, { 
-      method: "GET", 
-      credentials: "omit",
-      cache: "no-store",
-      signal: AbortSignal.timeout(6000) 
-    });
-    
-    if (res.ok) {
-      const text = await res.text();
-      return JSON.parse(text) as T;
-    }
-    throw new Error(`HTTP ${res.status}`);
-  } catch (e) {
-    return fallback();
   }
 }
 
@@ -423,7 +426,8 @@ export function getFormatBadge(ext?: string, url?: string | null) {
 
 export function getStreamType(ext?: string, url?: string): any {
   const strategy = getPlaybackStrategy(ext, url);
-  return strategy.mode === "internal" ? strategy.type : "native";
+  if (strategy.mode === "internal") return strategy.type;
+  return "native";
 }
 
 export function isExternalOnly(ext?: string, url?: string | null): boolean {
