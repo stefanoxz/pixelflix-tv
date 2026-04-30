@@ -64,20 +64,23 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4 font-sans selection:bg-purple-500/30 overflow-hidden">
-      {/* Background Gradient Effect */}
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4 font-sans selection:bg-purple-500/30 overflow-hidden relative">
+      {/* Background Gradient & Pattern */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-900/10 blur-[150px] rounded-full animate-pulse" />
-        <div className="absolute -top-[10%] -right-[10%] w-[400px] h-[400px] bg-blue-900/5 blur-[120px] rounded-full" />
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-purple-600/10 blur-[120px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-600/10 blur-[120px] rounded-full animate-pulse" style={{ animationDelay: '2s' }} />
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03]" />
       </div>
 
-      <main className="relative z-10 w-full max-w-[420px]">
-        <div className="bg-[#0A0A0A]/80 border border-white/5 rounded-[40px] p-8 md:p-12 shadow-2xl backdrop-blur-2xl">
-          <div className="flex flex-col items-center mb-10">
-            <h1 className="text-5xl font-black tracking-[0.25em] text-white mb-3">BLACK</h1>
-            <div className="h-1 w-12 bg-white/20 rounded-full" />
-            <p className="mt-4 text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">
-              {isAdminMode ? 'Painel Administrativo' : 'Player IPTV'}
+      <main className="relative z-10 w-full max-w-[440px]">
+        <div className="bg-[#0A0A0A]/40 border border-white/10 rounded-[48px] p-8 md:p-14 shadow-[0_0_100px_rgba(0,0,0,0.5)] backdrop-blur-3xl ring-1 ring-white/5">
+          <div className="flex flex-col items-center mb-12">
+            <div className="mb-6 p-4 bg-white/5 rounded-3xl border border-white/10 shadow-inner">
+              <h1 className="text-6xl font-black tracking-[0.3em] text-white leading-none select-none">BLACK</h1>
+            </div>
+            <div className="h-1.5 w-16 bg-gradient-to-r from-transparent via-white/40 to-transparent rounded-full" />
+            <p className="mt-6 text-[11px] font-black text-zinc-400 uppercase tracking-[0.5em] opacity-80">
+              {isAdminMode ? 'SISTEMA ADMINISTRATIVO' : 'CINEMA PARTICULAR'}
             </p>
           </div>
 
