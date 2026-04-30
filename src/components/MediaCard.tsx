@@ -1,4 +1,4 @@
-import { forwardRef, memo, useCallback, useMemo, type MouseEvent } from "react";
+import { forwardRef, memo, useCallback, useMemo, type MouseEvent, useEffect, useState } from "react";
 import { Heart, Play, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { proxyImageUrl } from "@/services/iptv";
@@ -51,6 +51,8 @@ export const MediaCard = memo(forwardRef<HTMLButtonElement, MediaCardProps>(
       onToggleFavorite?.();
     }, [onToggleFavorite]);
 
+    const [isLoaded, setIsLoaded] = useState(false);
+
     return (
       <button
         ref={ref}
@@ -66,15 +68,18 @@ export const MediaCard = memo(forwardRef<HTMLButtonElement, MediaCardProps>(
       >
 
         {cover ? (
-          <SafeImage
-            src={proxyImageUrl(cover)}
-            alt={title}
-            loading="lazy"
-            decoding="async"
-            width={aspect === "poster" ? 200 : 320}
-            height={aspect === "poster" ? 300 : 180}
-            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-110"
-          />
+          <div className={cn("absolute inset-0 transition-opacity duration-700", isLoaded ? "opacity-100" : "opacity-0")}>
+            <SafeImage
+              src={proxyImageUrl(cover)}
+              alt={`Capa de ${title}`}
+              loading="lazy"
+              decoding="async"
+              width={aspect === "poster" ? 200 : 320}
+              height={aspect === "poster" ? 300 : 180}
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-110"
+              onLoad={() => setIsLoaded(true)}
+            />
+          </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground p-4 text-center">
             {title}
