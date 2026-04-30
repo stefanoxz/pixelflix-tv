@@ -1,4 +1,4 @@
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2, KeyRound, UserIcon, Link2, AlertCircle, FlaskConical } from "lucide-react";
 import { z } from "zod";
@@ -62,6 +62,13 @@ const Login = () => {
   const [m3uUrl, setM3uUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
+  const isUnmounted = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isUnmounted.current = true;
+    };
+  }, []);
 
   /** Núcleo do login: recebe creds já parseadas e roda o fluxo padrão. */
   const performLogin = async (
@@ -107,9 +114,9 @@ const Login = () => {
       maybeWarnConnectionLimit(data);
       navigate("/sync");
     } catch (err) {
-      handleLoginError(err);
+      if (!isUnmounted.current) handleLoginError(err);
     } finally {
-      setLoading(false);
+      if (!isUnmounted.current) setLoading(false);
     }
   };
 
