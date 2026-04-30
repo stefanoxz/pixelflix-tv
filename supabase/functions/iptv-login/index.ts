@@ -308,37 +308,32 @@ function buildVariants(serverBase: string, phase: Phase): string[] {
 
   const candidates: string[] = [];
   // Default: assume HTTP se nada foi declarado (IPTV é majoritariamente HTTP).
-  const primary = originalScheme ?? "http";
-  const secondary = primary === "http" ? "https" : "http";
+  // Sempre use HTTP como primário conforme pedido pelo usuário
+  const primary = "http";
+  const secondary = "https";
 
   if (phase === "fast") {
-    // Schema PRIMÁRIO primeiro, em todas as portas razoáveis.
-    candidates.push(`${primary}://${hostPort}`);
+    // Tenta primeiro a URL como foi enviada, mas forçando HTTP se não houver porta
+    const baseWithProto = `${primary}://${hostPort}`;
+    candidates.push(baseWithProto);
+    
     if (!hasPort) {
-      if (primary === "http") {
-        candidates.push(`http://${host}:80`, `http://${host}:8080`);
-      } else {
-        candidates.push(`https://${host}:443`);
-      }
+      candidates.push(`http://${host}:80`, `http://${host}:8080`, `http://${host}:25461`);
     }
-    // Schema SECUNDÁRIO depois — só como alternativa.
-    candidates.push(`${secondary}://${hostPort}`);
+    
+    // Fallback HTTPS apenas se a original não responder nada
+    candidates.push(`https://${hostPort}`);
     if (!hasPort) {
-      if (secondary === "http") {
-        candidates.push(`http://${host}:80`, `http://${host}:8080`);
-      } else {
-        candidates.push(`https://${host}:443`);
-      }
+      candidates.push(`https://${host}:443`);
     }
   } else {
-    // FASE 2 — portas IPTV exóticas, no schema primário.
+    // FASE 2 — portas IPTV exóticas em HTTP
     if (!hasPort) {
-      const proto = primary;
       candidates.push(
-        `${proto}://${host}:2052`,
-        `${proto}://${host}:2082`,
-        `${proto}://${host}:8880`,
-        `${proto}://${host}:2095`,
+        `http://${host}:2052`,
+        `http://${host}:2082`,
+        `http://${host}:8880`,
+        `http://${host}:2095`,
       );
     }
   }
