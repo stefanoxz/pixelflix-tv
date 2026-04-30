@@ -25,23 +25,29 @@ export class XtreamService {
     });
 
     const url = `${this.credentials.url}/player_api.php?${searchParams.toString()}`;
-    
-    // Direct call with an external proxy service to bypass CORS
-    // since Supabase Edge Functions are being blocked by your IPTV server
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    console.log(`Fetching action: ${action} from ${url}`);
+
+    // IPTV servers often fail with some proxies. 
+    // Let's use a very reliable one for IPTV: thingproxy or a direct fetch if it's local/allowed
+    const proxyUrl = `https://thingproxy.freeboard.io/fetch/${url}`;
 
     try {
       const response = await fetch(proxyUrl);
-      if (!response.ok) throw new Error('Network response was not ok');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      
-      // AllOrigins returns the content in a 'contents' field as a string
-      return JSON.parse(data.contents);
+      console.log(`Data received for ${action}:`, data ? (Array.isArray(data) ? data.length : 'object') : 'null');
+      return data;
     } catch (err) {
-      console.warn('External proxy failed, attempting direct call:', err);
-      const directResponse = await fetch(url);
-      if (!directResponse.ok) throw new Error('Direct call failed');
-      return directResponse.json();
+      console.warn(`Proxy failed for ${action}, trying AllOrigins:`, err);
+      try {
+        const aoUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+        const aoRes = await fetch(aoUrl);
+        const aoData = await aoRes.json();
+        return JSON.parse(aoData.contents);
+      } catch (aoErr) {
+        console.error(`All proxies failed for ${action}:`, aoErr);
+        throw aoErr;
+      }
     }
   }
 

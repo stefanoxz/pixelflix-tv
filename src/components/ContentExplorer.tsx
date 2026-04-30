@@ -23,14 +23,14 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
   // React Query for categories
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', type],
-    queryFn: () => contentActions.getCategories(type),
+    queryFn: () => xtreamService.getCategories(type),
     select: (data) => [{ category_id: 'Todos', category_name: 'Todos' }, { category_id: 'Favoritos', category_name: '★ Meus Favoritos' }, ...data],
   });
 
   // React Query for streams
   const { data: items = [], isLoading: itemsLoading } = useQuery({
     queryKey: ['streams', type],
-    queryFn: () => contentActions.getStreams(type),
+    queryFn: () => xtreamService.getStreams(type),
     select: (data) => data.map(s => ({
       ...s,
       id: String(s.stream_id || s.series_id),
