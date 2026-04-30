@@ -31,16 +31,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ServerProbeDialog } from "@/components/admin/ServerProbeDialog";
 import { EndpointTestPanel } from "@/components/admin/EndpointTestPanel";
-import { UserReportsPanel } from "@/components/admin/UserReportsPanel";
-import ClientDiagnosticsPanel from "@/components/admin/ClientDiagnosticsPanel";
-import PendingSignupsPanel from "@/components/admin/PendingSignupsPanel";
+// Painéis de reporte desativados
+// import { UserReportsPanel } from "@/components/admin/UserReportsPanel";
+// import ClientDiagnosticsPanel from "@/components/admin/ClientDiagnosticsPanel";
+// import PendingSignupsPanel from "@/components/admin/PendingSignupsPanel";
+
 import TeamPanel from "@/components/admin/TeamPanel";
 import StatsPanel from "@/components/admin/StatsPanel";
 import MaintenancePanel from "@/components/admin/MaintenancePanel";
 import DemoCredentialsPanel from "@/components/admin/DemoCredentialsPanel";
-import BlockedDnsPanel from "@/components/admin/BlockedDnsPanel";
+// import BlockedDnsPanel from "@/components/admin/BlockedDnsPanel";
+
 import UserDetailDialog from "@/components/admin/UserDetailDialog";
-import StreamEventsPanel from "@/components/admin/StreamEventsPanel";
+// import StreamEventsPanel from "@/components/admin/StreamEventsPanel";
 import { visibleAdminNav, findNavItem } from "@/components/admin/adminNav";
 import AdminMobileTopBar from "@/components/admin/AdminMobileTopBar";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
@@ -50,8 +53,9 @@ import type { AllowedServer, MonitoringSession, MonitoringBlock } from "@/types/
 
 // Lazy loaded panels
 const DashboardPanel = lazy(() => import("@/components/admin/DashboardPanel").then(m => ({ default: m.DashboardPanel })));
-const MonitoringPanel = lazy(() => import("@/components/admin/MonitoringPanel").then(m => ({ default: m.MonitoringPanel })));
-const DnsErrorsPanel = lazy(() => import("@/components/admin/DnsErrorsPanel").then(m => ({ default: m.DnsErrorsPanel })));
+// const MonitoringPanel = lazy(() => import("@/components/admin/MonitoringPanel").then(m => ({ default: m.MonitoringPanel })));
+// const DnsErrorsPanel = lazy(() => import("@/components/admin/DnsErrorsPanel").then(m => ({ default: m.DnsErrorsPanel })));
+
 const AdminUsersPanel = lazy(() => import("@/components/admin/AdminUsersPanel").then(m => ({ default: m.AdminUsersPanel })));
 const AdminServersPanel = lazy(() => import("@/components/admin/AdminServersPanel").then(m => ({ default: m.AdminServersPanel })));
 
@@ -194,8 +198,8 @@ const Admin = () => {
         <Tabs value={tab} onValueChange={setTab}>
           <Suspense fallback={<AdminPanelFallback />}>
             <TabsContent value="dashboard"><DashboardPanel stats={stats} events={events} pending={pending} setTab={setTab} /></TabsContent>
-            <TabsContent value="monitoring"><MonitoringPanel monitoring={monitoring} topConsumers={topConsumers} onEvictSession={setConfirmEvictSession} onUnblockUser={setConfirmUnblockUser} /></TabsContent>
-            <TabsContent value="dns-errors"><DnsErrorsPanel dnsErrors={dnsErrors} hours={dnsErrorsHours} setHours={setDnsErrorsHours} onRefresh={refreshDnsErrors} /></TabsContent>
+            {/* Painéis de monitoramento desativados */}
+
             <TabsContent value="users"><AdminUsersPanel users={users} search={search} onSearchChange={setSearch} onUserDetail={setDetailUsername} /></TabsContent>
             <TabsContent value="servers">
               <AdminServersPanel 
@@ -206,16 +210,15 @@ const Admin = () => {
               />
             </TabsContent>
             
-            <TabsContent value="reports"><UserReportsPanel /></TabsContent>
+            {/* Reportes desativados */}
             <TabsContent value="team"><TeamPanel /></TabsContent>
             <TabsContent value="maintenance"><MaintenancePanel /></TabsContent>
             <TabsContent value="demo-creds"><DemoCredentialsPanel /></TabsContent>
-            <TabsContent value="stats"><StatsPanel /></TabsContent>
+            {/* Stats desativados */}
+
             <TabsContent value="endpoint-test"><EndpointTestPanel allowedServers={allowed.map((s) => ({ server_url: s.server_url, label: s.label }))} onServerApplied={refresh} /></TabsContent>
-            <TabsContent value="client-diagnostics"><ClientDiagnosticsPanel /></TabsContent>
-            <TabsContent value="pending-signups"><PendingSignupsPanel /></TabsContent>
-            <TabsContent value="blocked-dns"><BlockedDnsPanel /></TabsContent>
-            <TabsContent value="stream-events"><StreamEventsPanel /></TabsContent>
+            {/* Diagnósticos e eventos desativados */}
+
           </Suspense>
         </Tabs>
       </main>
