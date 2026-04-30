@@ -68,18 +68,22 @@ export async function invokeAdminApi<T>(
 
       if (error) {
         const details = await readFunctionError(error);
+        console.error(`[admin-api] Error in ${action}:`, details);
+        
         // 401 = sessão inválida/expirada — não retentar e usar erro tipado.
         if (details.status === 401) {
           throw new AdminApiSessionError(details.message || "Sessão expirada. Faça login novamente.");
         }
-        const e = new Error(details.message) as Error & FunctionErrorDetails;
+        
+        const e = new Error(details.message || "Falha na operação administrativa") as Error & FunctionErrorDetails;
         e.code = details.code;
         e.status = details.status;
         throw e;
       }
 
-      if ((data as { error?: string } | null)?.error) {
-        throw new Error((data as { error: string }).error);
+      const dataObj = data as { error?: string, success?: boolean } | null;
+      if (dataObj?.success === false || dataObj?.error) {
+        throw new Error(dataObj.error || "O servidor retornou um erro inesperado");
       }
 
       return data as T;
