@@ -318,7 +318,7 @@ function App() {
         </button>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center p-8 relative z-10">
+      <main className="flex-1 flex flex-col items-center justify-center p-8 relative z-50">
         <div className="max-w-3xl text-center space-y-12">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/20 rounded-full text-xs font-black text-primary uppercase tracking-[0.2em] animate-in fade-in slide-in-from-bottom duration-700">
             <Zap className="w-4 h-4 fill-current" /> O Futuro do Streaming é Web
