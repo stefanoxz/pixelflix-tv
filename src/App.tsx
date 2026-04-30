@@ -61,80 +61,82 @@ const WithChrome = ({ children }: { children: React.ReactNode }) => (
 );
 
 const App = () => (
-  <IptvProvider>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner position="top-right" theme="dark" />
-      <InstallAppDialog />
-      <BrowserRouter>
-        <Suspense fallback={<RouteFallback />}>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin/reset-password" element={<AdminResetPassword />} />
-            <Route
-              path="/admin"
-              element={
-                <AdminProtectedRoute>
-                  <Admin />
-                </AdminProtectedRoute>
-              }
-            />
+  <ThemeProvider defaultTheme="dark" attribute="class">
+    <IptvProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner position="top-right" />
+        <InstallAppDialog />
+        <BrowserRouter>
+          <Suspense fallback={<RouteFallback />}>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/admin/reset-password" element={<AdminResetPassword />} />
+              <Route
+                path="/admin"
+                element={
+                  <AdminProtectedRoute>
+                    <Admin />
+                  </AdminProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <WithChrome><Index /></WithChrome>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/sync"
-              element={
-                <ProtectedRoute>
-                  <Sync />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/live"
-              element={
-                <ProtectedRoute>
-                  <WithChrome><Live /></WithChrome>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/movies"
-              element={
-                <ProtectedRoute>
-                  <WithChrome><Movies /></WithChrome>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/series"
-              element={
-                <ProtectedRoute>
-                  <WithChrome><SeriesPage /></WithChrome>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/account"
-              element={
-                <ProtectedRoute>
-                  <WithChrome><Account /></WithChrome>
-                </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
-      </BrowserRouter>
-    </TooltipProvider>
-  </IptvProvider>
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <WithChrome><Index /></WithChrome>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/sync"
+                element={
+                  <ProtectedRoute>
+                    <Sync />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/live"
+                element={
+                  <ProtectedRoute>
+                    <WithChrome><Live /></WithChrome>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/movies"
+                element={
+                  <ProtectedRoute>
+                    <WithChrome><Movies /></WithChrome>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/series"
+                element={
+                  <ProtectedRoute>
+                    <WithChrome><SeriesPage /></WithChrome>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/account"
+                element={
+                  <ProtectedRoute>
+                    <WithChrome><Account /></WithChrome>
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </TooltipProvider>
+    </IptvProvider>
+  </ThemeProvider>
 );
 
 export default App;
