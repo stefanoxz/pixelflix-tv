@@ -62,7 +62,8 @@ const WithChrome = ({ children }: { children: React.ReactNode }) => (
 );
 
 const App = () => (
-  <ThemeProvider defaultTheme="dark" attribute="class">
+  <ErrorBoundary>
+    <ThemeProvider defaultTheme="dark" attribute="class">
     <IptvProvider>
       <TooltipProvider>
         <Toaster />
