@@ -87,15 +87,10 @@ export async function runQuickSpeedProbe(timeoutMs = 3000): Promise<number | nul
  * Envia diagnóstico ao backend. Best-effort: nunca lança.
  */
 export async function reportDiagnostic(report: ClientDiagnosticReport): Promise<void> {
-  try {
-    const base = collectClientDiagnostic();
-    const payload = { ...base, ...report };
-    await supabase.functions.invoke("client-diagnostic", { body: payload });
-  } catch (err) {
-    // Silencioso por design.
-    console.warn("[diagnostic] report failed", err);
-  }
+  // Desativado permanentemente para limpeza total do sistema
+  return;
 }
+
 
 /**
  * Classifica uma mensagem/erro de rede em um outcome amigável.
