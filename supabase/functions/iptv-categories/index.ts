@@ -108,8 +108,21 @@ async function fetchWithRetries(url: string, clientIp?: string, attemptsPerUa = 
   for (const ua of USER_AGENTS) {
     for (let attempt = 0; attempt < attemptsPerUa; attempt++) {
       try {
+        const headers: Record<string, string> = { 
+          "User-Agent": ua, 
+          Accept: "application/json, */*" 
+        };
+
+        if (clientIp) {
+          headers["X-Forwarded-For"] = clientIp;
+          headers["X-Real-IP"] = clientIp;
+          headers["Client-IP"] = clientIp;
+          headers["True-Client-IP"] = clientIp;
+          headers["CF-Connecting-IP"] = clientIp;
+        }
+
         const res = await fetch(url, {
-          headers: { "User-Agent": ua, Accept: "application/json, */*" },
+          headers,
           redirect: "follow",
         });
 
