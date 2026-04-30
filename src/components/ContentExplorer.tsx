@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ChevronLeft, Search, Grid, List as ListIcon, Play, Star, Info, X, Settings } from 'lucide-react';
+import { xtreamService } from '../services/xtream';
 
 interface ContentExplorerProps {
   type: 'live' | 'movie' | 'series';
@@ -12,24 +13,42 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data for demonstration - in a real app this would come from xtreamService
-  const categories = ['Todos', 'Favoritos', 'Documentários', 'Esportes', 'Notícias', 'Infantil', 'Entretenimento', 'Canais 4K'];
-  
-  const items = Array.from({ length: 24 }).map((_, i) => ({
-    id: `${type}-${i}`,
-    name: type === 'live' ? `CANAL ${i + 1} HD` : type === 'movie' ? `FILME ${i + 1} (2025)` : `SÉRIE ${i + 1}`,
-    icon: `https://picsum.photos/seed/${type}-${i}/400/600`,
-    category: categories[Math.floor(Math.random() * (categories.length - 2)) + 2],
-    rating: (Math.random() * 2 + 7).toFixed(1),
-    year: 2024 - Math.floor(Math.random() * 10),
-    duration: type === 'movie' ? '01h 45m' : type === 'live' ? 'AO VIVO' : '2 Temporadas',
-    synopsis: "Uma descrição detalhada sobre o conteúdo selecionado. Esta história envolve muita ação, drama e momentos inesquecíveis que prendem a atenção do espectador do início ao fim."
-  }));
+  useEffect(() => {
+    const loadContent = async () => {
+      setLoading(true);
+      try {
+        const [cats, streams] = await Promise.all([
+          xtreamService.getCategories(type),
+          xtreamService.getStreams(type)
+        ]);
+        
+        setCategories([{ category_id: 'Todos', category_name: 'Todos' }, ...cats]);
+        setItems(streams.map(s => ({
+          ...s,
+          id: s.stream_id || s.series_id,
+          name: s.name,
+          icon: s.stream_icon || s.cover,
+          category: cats.find(c => c.category_id === s.category_id)?.category_name || 'Geral',
+          rating: s.rating || 'N/A',
+          year: s.year || '2024',
+          duration: type === 'live' ? 'AO VIVO' : s.duration || 'N/A'
+        })));
+      } catch (error) {
+        console.error('Error loading content:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadContent();
+  }, [type]);
 
   const filteredItems = items.filter(item => 
     item.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-    (selectedCategory === 'Todos' || item.category === selectedCategory)
+    (selectedCategory === 'Todos' || item.category === selectedCategory || item.category_id === selectedCategory)
   );
 
   const title = type === 'live' ? 'Canais ao Vivo' : type === 'movie' ? 'Filmes' : 'Séries';
@@ -43,6 +62,15 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
     setSelectedItem(item);
     setIsPlaying(false);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
+        <div className="w-16 h-16 border-4 border-white/5 border-t-white rounded-full animate-spin" />
+        <p className="text-zinc-600 font-black uppercase tracking-[0.4em] text-xs">Sincronizando Conteúdo...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-white/10">
@@ -96,15 +124,15 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
           <h3 className="text-[9px] font-black text-zinc-600 tracking-[0.3em] uppercase px-4 mb-3">Categorias</h3>
           {categories.map(cat => (
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
+              key={cat.category_id}
+              onClick={() => setSelectedCategory(cat.category_id)}
               className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all ${
-                selectedCategory === cat 
+                selectedCategory === cat.category_id 
                 ? 'bg-white text-black shadow-lg shadow-white/5' 
                 : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
               }`}
             >
-              {cat}
+              {cat.category_name}
             </button>
           ))}
         </aside>
@@ -119,11 +147,20 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
                     onClick={() => handleInfo(item)}
                     className="cursor-pointer relative aspect-[2/3] rounded-[32px] overflow-hidden bg-[#111] border border-white/5 transition-all duration-500 group-hover:scale-[1.05] group-hover:shadow-2xl group-hover:shadow-white/5 group-hover:border-white/20"
                   >
-                    <img 
-                      src={item.icon} 
-                      alt={item.name}
-                      className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-700 group-hover:scale-110"
-                    />
+                    {item.icon ? (
+                      <img 
+                        src={item.icon} 
+                        alt={item.name}
+                        className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-700 group-hover:scale-110"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x600/111111/FFFFFF?text=SEM+CAPA';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-zinc-900 text-zinc-700 font-black text-center p-4">
+                        {item.name}
+                      </div>
+                    )}
                     
                     <div className="absolute top-4 right-4 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg border border-white/10 flex items-center gap-1.5">
                       <Star size={10} className="text-yellow-500 fill-yellow-500" />
@@ -159,7 +196,14 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
                   onClick={() => handleInfo(item)}
                 >
                   <div className="w-20 h-28 rounded-2xl overflow-hidden bg-zinc-900 flex-shrink-0 border border-white/5 shadow-xl">
-                    <img src={item.icon} alt={item.name} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-all" />
+                    <img 
+                      src={item.icon} 
+                      alt={item.name} 
+                      className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-all"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://via.placeholder.com/200x300/111111/FFFFFF?text=S/C';
+                      }}
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-1">
@@ -200,7 +244,13 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
             </button>
 
             <div className="w-full md:w-[40%] aspect-[3/4] md:aspect-auto">
-              <img src={selectedItem.icon} className="w-full h-full object-cover opacity-80" />
+              <img 
+                src={selectedItem.icon} 
+                className="w-full h-full object-cover opacity-80" 
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x900/111111/FFFFFF?text=SEM+CAPA';
+                }}
+              />
             </div>
 
             <div className="flex-1 p-8 md:p-12 flex flex-col justify-center">
@@ -218,7 +268,9 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
               <div className="space-y-6 mb-10">
                 <div className="space-y-2">
                   <h4 className="text-[10px] font-black text-zinc-600 tracking-[0.3em] uppercase">Sinopse</h4>
-                  <p className="text-zinc-400 text-sm leading-relaxed">{selectedItem.synopsis}</p>
+                  <p className="text-zinc-400 text-sm leading-relaxed">
+                    {selectedItem.synopsis || "Descrição não disponível para este título."}
+                  </p>
                 </div>
                 
                 <div className="flex gap-10">
@@ -272,10 +324,9 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
             <div className="w-full max-w-5xl aspect-video rounded-[40px] overflow-hidden border border-white/10 shadow-[0_0_100px_rgba(255,255,255,0.05)] bg-[#050505] flex items-center justify-center relative">
               <div className="flex flex-col items-center gap-6 animate-pulse">
                 <div className="w-20 h-20 rounded-full border-4 border-white/5 border-t-white animate-spin" />
-                <p className="text-zinc-600 font-black uppercase tracking-[0.4em] text-xs">Carregando Stream...</p>
+                <p className="text-zinc-600 font-black uppercase tracking-[0.4em] text-xs">Conectando ao Stream...</p>
               </div>
               
-              {/* Fake UI Overlay for Player */}
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all duration-500 flex flex-col justify-end p-10">
                 <div className="w-full space-y-8">
                   <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
@@ -285,9 +336,7 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
                     <div className="flex items-center gap-8">
                       <button className="text-white hover:scale-110 transition-transform"><Play size={28} fill="currentColor" /></button>
                       <div className="flex items-center gap-4 text-xs font-black tracking-widest text-zinc-400">
-                        <span>00:45:12</span>
-                        <span className="text-zinc-700">/</span>
-                        <span>02:28:00</span>
+                        <span>Carregando...</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-6">
@@ -297,12 +346,6 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
                   </div>
                 </div>
               </div>
-            </div>
-            
-            {/* Error Message similar to original */}
-            <div className="mt-12 text-center space-y-3 opacity-30">
-              <p className="text-red-500 font-black uppercase tracking-[0.3em] text-xs">Servidor não respondeu</p>
-              <p className="text-[10px] text-zinc-600 font-bold max-w-xs">Tempo esgotado ao tentar carregar o canal. Falha geral do stream.</p>
             </div>
           </div>
         </div>
