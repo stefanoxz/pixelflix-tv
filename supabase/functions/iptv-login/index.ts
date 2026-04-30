@@ -944,14 +944,14 @@ Deno.serve(async (req) => {
       const failStatus = (r as { status?: number }).status;
       const failReason = (r as { reason?: string }).reason ?? "";
       let playlistFallbackDebug: any = undefined;
-      const shouldTryPlaylist =
+      const shouldTryPlaylistInternal =
         !r.ok &&
         (failStatus === 200 || failStatus === 401 || failStatus === 404) &&
         (failReason === "resposta não JSON" ||
           failReason === "credenciais inválidas" ||
           /^HTTP 404$/i.test(failReason));
 
-      if (shouldTryPlaylist) {
+      if (shouldTryPlaylistInternal) {
         console.log(`[iptv-login] attempting playlist fallback for ${fullBase}`);
         const pr = await tryPlaylistFallback(fullBase, username, password, ip);
         if (pr.ok) {
