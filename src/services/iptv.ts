@@ -238,10 +238,10 @@ export function isHostAllowed(candidate: string | null | undefined, allowed?: st
 
 export function resolveStreamBase(serverInfo?: ServerInfo | null, fallback?: string, allowed?: string[] | null): string {
   if (serverInfo?.url && isHostAllowed(serverInfo.url, allowed)) {
-     const proto = (serverInfo.server_protocol || "http").toLowerCase();
-     const port = proto === "https" ? (serverInfo.https_port || serverInfo.port || "443") : (serverInfo.port || serverInfo.https_port || "80");
+     const proto = "http";
+     const port = serverInfo.port || serverInfo.https_port || "80";
      const host = serverInfo.url.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
-     return `${proto}://${host}:${port}`;
+     return `http://${host}:${port}`;
   }
   return (fallback || "").replace(/\/+$/, "");
 }
