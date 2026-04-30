@@ -83,10 +83,11 @@ const Login = () => {
       preloadSync();
       const iptv = await loadIptvClient();
       const data = await iptv.iptvLogin({
-        server: serverArg,
-        username: user,
-        password: pass,
+        server: serverArg?.trim(),
+        username: user.trim(),
+        password: pass.trim(),
       });
+
       const resolvedServer = data.server_url ?? serverArg ?? "";
       const streamBase = iptv.resolveStreamBase(
         data.server_info,
