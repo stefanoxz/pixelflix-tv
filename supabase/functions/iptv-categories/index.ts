@@ -98,7 +98,7 @@ const COLLECTION_ACTIONS = new Set([
   "get_series",
 ]);
 
-async function fetchWithRetries(url: string, attemptsPerUa = 1): Promise<
+async function fetchWithRetries(url: string, clientIp?: string, attemptsPerUa = 1): Promise<
   | { ok: true; data: unknown }
   | { ok: false; status: number; reason: string; softNotFound?: boolean }
 > {
