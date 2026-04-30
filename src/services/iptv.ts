@@ -327,7 +327,55 @@ async function tryPublicProxyFetch<T>(url: string, action: string): Promise<T> {
       if (action.includes("streams") || action === "get_series") return [] as unknown as T;
       
       throw new Error("O servidor retornou uma playlist M3U em vez de dados JSON.");
+}
+
+/**
+ * Utilitário básico para converter conteúdo M3U em objetos Xtream-like.
+ */
+function parseM3uToXtream(m3u: string, action: string): any {
+  if (action.includes("categories")) {
+    const categories = new Set<string>();
+    const matches = m3u.matchAll(/group-title="([^"]+)"/g);
+    for (const match of matches) {
+      categories.add(match[1]);
     }
+    return Array.from(categories).map((name, i) => ({
+      category_id: String(i + 1),
+      category_name: name,
+      parent_id: 0
+    }));
+  }
+  
+  if (action.includes("streams") || action === "get_series") {
+    const lines = m3u.split("\n");
+    const streams: any[] = [];
+    let currentItem: any = null;
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("#EXTINF:")) {
+        const nameMatch = trimmed.match(/,(.+)$/);
+        const iconMatch = trimmed.match(/tvg-logo="([^"]+)"/);
+        const catMatch = trimmed.match(/group-title="([^"]+)"/);
+        currentItem = {
+          name: nameMatch ? nameMatch[1] : "Canal",
+          stream_icon: iconMatch ? iconMatch[1] : "",
+          category_id: catMatch ? catMatch[1] : "0",
+          stream_id: streams.length + 1,
+          stream_type: action.includes("live") ? "live" : "movie"
+        };
+      } else if (trimmed.startsWith("http") && currentItem) {
+        currentItem.direct_source = trimmed;
+        streams.push(currentItem);
+        currentItem = null;
+      }
+    }
+    return streams;
+  }
+  
+  return [];
+}
+
 
     return JSON.parse(text) as T;
   } catch (e) {
