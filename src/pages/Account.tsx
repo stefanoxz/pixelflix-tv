@@ -368,7 +368,7 @@ const Account = () => {
 
         <div className="relative grid grid-cols-2 md:grid-cols-4 gap-3">
           {infoCards.map((c) => (
-            <div key={c.label} className="rounded-xl border border-border/40 bg-card/50 p-3 md:p-4">
+            <div key={c.label} className="rounded-2xl border border-white/5 bg-white/5 p-4 md:p-5 backdrop-blur-sm transition-all duration-300 hover:bg-white/10 hover:border-primary/20">
               <div className="flex items-center gap-2 text-muted-foreground mb-2">
                 <c.icon className="h-3.5 w-3.5" />
                 <p className="text-[10px] font-semibold uppercase tracking-wider truncate">{c.label}</p>
