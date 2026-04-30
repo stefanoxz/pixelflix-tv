@@ -109,7 +109,6 @@ const Highlights = () => {
       .sort((a, b) => (b.tmdb!.vote_average ?? 0) - (a.tmdb!.vote_average ?? 0));
 
     // Pegamos um top 24 e embaralhamos com seed do dia → 12 finais.
-    // Isso dá variedade entre dias mantendo qualidade.
     const top = enriched.slice(0, 24);
     const shuffled = seededShuffle(top, seed);
     return shuffled.slice(0, 12);

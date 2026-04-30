@@ -1,4 +1,4 @@
-import { forwardRef, type MouseEvent } from "react";
+import { forwardRef, memo, useCallback, useMemo, type MouseEvent } from "react";
 import { Heart, Play, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { proxyImageUrl } from "@/services/iptv";
@@ -17,7 +17,7 @@ interface MediaCardProps {
   onToggleFavorite?: () => void;
 }
 
-export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
+export const MediaCard = memo(forwardRef<HTMLButtonElement, MediaCardProps>(
   ({ title, cover, rating, tmdbRating, onClick, aspect = "poster", isFavorite, onToggleFavorite }, ref) => {
     // Prefer real TMDB rating (0-10) when we have a meaningful number of votes.
     const tmdbVotes = tmdbRating?.vote_count ?? 0;
@@ -26,7 +26,11 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
 
     // Fallback: provider rating in 0-5 scale. Hide the "5.0 default" that
     // the IPTV upstream returns for almost every entry — informs nothing.
-    const providerNum = typeof rating === "string" ? parseFloat(rating) : rating;
+    const providerNum = useMemo(() => {
+      if (typeof rating === "string") return parseFloat(rating);
+      return rating;
+    }, [rating]);
+
     const showProvider =
       !useTmdb &&
       providerNum != null &&
@@ -41,11 +45,11 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
         : null;
     const showFav = typeof onToggleFavorite === "function";
 
-    const handleFav = (e: MouseEvent) => {
+    const handleFav = useCallback((e: MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
       onToggleFavorite?.();
-    };
+    }, [onToggleFavorite]);
 
     return (
       <button
@@ -140,6 +144,6 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
       </button>
     );
   }
-);
+));
 
 MediaCard.displayName = "MediaCard";
