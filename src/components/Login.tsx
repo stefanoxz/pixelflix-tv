@@ -44,9 +44,14 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
       } else {
         if (username && password) {
           xtreamService.setCredentials({ url: dnsUrl, username, password });
-          // Simulating network delay
-          await new Promise(resolve => setTimeout(resolve, 800));
-          onLogin();
+          
+          try {
+            await xtreamService.authenticate();
+            onLogin();
+          } catch (authErr) {
+            console.error('Auth error:', authErr);
+            setError('Usuário ou senha inválidos no servidor IPTV');
+          }
         } else {
           setError('Preencha todos os campos');
         }
