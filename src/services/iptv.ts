@@ -180,21 +180,13 @@ export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> 
       if (r.ok) return r.data;
       
       const err = r as { ok: false; code: string; error: string; status?: number; extra?: any };
-      if (err.code === "SERVER_UNREACHABLE" || err.error?.includes("444")) {
-        return await tryPublicProxyFetch<LoginResponse>(loginUrl, "login");
-      }
-      
       throw new IptvLoginError(err.error, err.code, err.extra?.debug);
     } catch (e: any) {
-      if (e instanceof IptvLoginError) throw e;
-      try {
-        return await tryPublicProxyFetch<LoginResponse>(loginUrl, "login");
-      } catch {
-        throw e;
-      }
+      throw e;
     }
   });
 }
+
 
 
 export async function iptvLoginM3u(creds: IptvCredentials): Promise<LoginResponse & { auto_registered?: boolean }> {
@@ -265,7 +257,7 @@ export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra
       
       if (error) {
         console.error(`[iptv-fetch] Edge function error for ${action}:`, error);
-        return tryPublicProxyFetch<T>(directUrl, action);
+        throw new IptvApiError(`Falha ao carregar ${action}: ${error.message}`);
       }
       
       if (data?.success === false) {
@@ -275,14 +267,11 @@ export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra
       return data as T;
     } catch (e: any) {
       if (e instanceof IptvApiError) throw e;
-      try {
-        return await tryPublicProxyFetch<T>(directUrl, action);
-      } catch {
-        throw new IptvApiError(e.message || `Erro de rede ao carregar ${action}`);
-      }
+      throw new IptvApiError(e.message || `Erro de rede ao carregar ${action}`);
     }
   });
 }
+
 
 /**
  * Fallback de última instância usando um proxy de CORS público.

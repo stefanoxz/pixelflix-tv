@@ -963,28 +963,9 @@ Deno.serve(async (req) => {
             }>;
           }
         | undefined;
-      if (shouldTryPlaylist) {
-        const pl = await tryPlaylistFallback(fullBase, username, password, ip);
-        if (pl.ok) {
-          console.log(
-            `[iptv-login] m3u_register PLAYLIST_FALLBACK_OK after=${failStatus} server=${fullBase} variant=${pl.usedVariant}`,
-          );
-          r = { ok: true as const, data: pl.data, usedVariant: pl.usedVariant, route: "direct" } as any;
-        } else {
-          playlistFallbackDebug = {
-            tried: true,
-            reason: pl.reason,
-            attempts: pl.attempts,
-          };
-          const summary = (pl.attempts ?? [])
-            .slice(0, 4)
-            .map((a) => `${a.endpoint}=${a.status ?? a.error ?? "?"}`)
-            .join(" ");
-          console.log(
-            `[iptv-login] m3u_register PLAYLIST_FALLBACK_FAIL after=${failStatus} server=${fullBase} reason=${pl.reason} attempts=${summary}`,
-          );
-        }
-      }
+      // Removido fallback de playlist para limpeza total de rotas alternativas
+      const shouldTryPlaylist = false;
+
 
       if (!r.ok) {
         await logEvent({ server: fullBase, username, success: false, reason: `m3u_register:${r.reason}`, ua, ip });
@@ -1246,10 +1227,9 @@ Deno.serve(async (req) => {
       lastReason = r.reason;
       lastStatus = (r as { status?: number }).status;
       lastBody = (r as { body?: string }).body ?? "";
-      await logEvent({ server: row.server_url, username, success: false, reason: r.reason, ua, ip });
-      // Detecção automática de DNS bloqueado (não bloqueia o fluxo, é best-effort)
-      void recordPotentialBlock(admin, row.server_url, r.reason, ip);
+      // Removido registro automático de bloqueio e logs de histórico
     }
+
 
     const { code, message } = classifyReason(lastReason);
     const hint = maybeOriginSuspectHint(lastStatus, lastBody);

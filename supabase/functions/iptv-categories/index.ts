@@ -80,7 +80,7 @@ const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 ];
 
-const TRANSIENT_STATUSES = new Set([408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 530, 444]);
+const TRANSIENT_STATUSES = new Set([408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 530]);
 // Upstream "soft-not-found": painel respondeu mas o endpoint/conta sumiu.
 // Tratamos como resposta vazia para não quebrar a UI (evita blank screen).
 // 401/403: painel bloqueou a conta/IP nesse endpoint específico.
