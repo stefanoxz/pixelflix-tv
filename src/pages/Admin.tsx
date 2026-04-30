@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,14 +43,23 @@ import StreamEventsPanel from "@/components/admin/StreamEventsPanel";
 import { visibleAdminNav, findNavItem } from "@/components/admin/adminNav";
 import AdminMobileTopBar from "@/components/admin/AdminMobileTopBar";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
-import { LogOut, Shield, RefreshCw, X, Pencil, Trash2 } from "lucide-react";
+import { LogOut, Shield, RefreshCw, X, Pencil, Trash2, Loader2 } from "lucide-react";
 import { useAdminData } from "@/hooks/useAdminData";
-import { DashboardPanel } from "@/components/admin/DashboardPanel";
-import { MonitoringPanel } from "@/components/admin/MonitoringPanel";
-import { DnsErrorsPanel } from "@/components/admin/DnsErrorsPanel";
-import { AdminUsersPanel } from "@/components/admin/AdminUsersPanel";
-import { AdminServersPanel } from "@/components/admin/AdminServersPanel";
 import type { AllowedServer, MonitoringSession, MonitoringBlock } from "@/types/admin";
+
+// Lazy loaded panels
+const DashboardPanel = lazy(() => import("@/components/admin/DashboardPanel").then(m => ({ default: m.DashboardPanel })));
+const MonitoringPanel = lazy(() => import("@/components/admin/MonitoringPanel").then(m => ({ default: m.MonitoringPanel })));
+const DnsErrorsPanel = lazy(() => import("@/components/admin/DnsErrorsPanel").then(m => ({ default: m.DnsErrorsPanel })));
+const AdminUsersPanel = lazy(() => import("@/components/admin/AdminUsersPanel").then(m => ({ default: m.AdminUsersPanel })));
+const AdminServersPanel = lazy(() => import("@/components/admin/AdminServersPanel").then(m => ({ default: m.AdminServersPanel })));
+
+const AdminPanelFallback = () => (
+  <div className="flex items-center justify-center py-20">
+    <Loader2 className="h-8 w-8 animate-spin text-primary opacity-50" />
+  </div>
+);
+
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -173,29 +182,31 @@ const Admin = () => {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsContent value="dashboard"><DashboardPanel stats={stats} events={events} pending={pending} setTab={setTab} /></TabsContent>
-          <TabsContent value="monitoring"><MonitoringPanel monitoring={monitoring} topConsumers={topConsumers} onEvictSession={setConfirmEvictSession} onUnblockUser={setConfirmUnblockUser} /></TabsContent>
-          <TabsContent value="dns-errors"><DnsErrorsPanel dnsErrors={dnsErrors} hours={dnsErrorsHours} setHours={setDnsErrorsHours} onRefresh={refreshDnsErrors} /></TabsContent>
-          <TabsContent value="users"><AdminUsersPanel users={users} search={search} onSearchChange={setSearch} onUserDetail={setDetailUsername} /></TabsContent>
-          <TabsContent value="servers">
-            <AdminServersPanel 
-              allowed={allowed} pending={pending} health={health} search={search} onSearchChange={setSearch} 
-              onCheckAll={() => checkAllServers(true)} onAdd={() => setAddOpen(true)} onProbe={setProbeServer} 
-              onEdit={(s) => { setEditingServer(s); setNewUrl(s.server_url); setNewLabel(s.label ?? ""); setNewNotes(s.notes ?? ""); setAddOpen(true); }} 
-              onRemove={setConfirmRemoveServer} onAuthorizePending={(url) => { setNewUrl(url); setAddOpen(true); }} healthLoading={healthLoading} 
-            />
-          </TabsContent>
-          
-          <TabsContent value="reports"><UserReportsPanel /></TabsContent>
-          <TabsContent value="team"><TeamPanel /></TabsContent>
-          <TabsContent value="maintenance"><MaintenancePanel /></TabsContent>
-          <TabsContent value="demo-creds"><DemoCredentialsPanel /></TabsContent>
-          <TabsContent value="stats"><StatsPanel /></TabsContent>
-          <TabsContent value="endpoint-test"><EndpointTestPanel allowedServers={allowed.map((s) => ({ server_url: s.server_url, label: s.label }))} onServerApplied={refresh} /></TabsContent>
-          <TabsContent value="client-diagnostics"><ClientDiagnosticsPanel /></TabsContent>
-          <TabsContent value="pending-signups"><PendingSignupsPanel /></TabsContent>
-          <TabsContent value="blocked-dns"><BlockedDnsPanel /></TabsContent>
-          <TabsContent value="stream-events"><StreamEventsPanel /></TabsContent>
+          <Suspense fallback={<AdminPanelFallback />}>
+            <TabsContent value="dashboard"><DashboardPanel stats={stats} events={events} pending={pending} setTab={setTab} /></TabsContent>
+            <TabsContent value="monitoring"><MonitoringPanel monitoring={monitoring} topConsumers={topConsumers} onEvictSession={setConfirmEvictSession} onUnblockUser={setConfirmUnblockUser} /></TabsContent>
+            <TabsContent value="dns-errors"><DnsErrorsPanel dnsErrors={dnsErrors} hours={dnsErrorsHours} setHours={setDnsErrorsHours} onRefresh={refreshDnsErrors} /></TabsContent>
+            <TabsContent value="users"><AdminUsersPanel users={users} search={search} onSearchChange={setSearch} onUserDetail={setDetailUsername} /></TabsContent>
+            <TabsContent value="servers">
+              <AdminServersPanel 
+                allowed={allowed} pending={pending} health={health} search={search} onSearchChange={setSearch} 
+                onCheckAll={() => checkAllServers(true)} onAdd={() => setAddOpen(true)} onProbe={setProbeServer} 
+                onEdit={(s) => { setEditingServer(s); setNewUrl(s.server_url); setNewLabel(s.label ?? ""); setNewNotes(s.notes ?? ""); setAddOpen(true); }} 
+                onRemove={setConfirmRemoveServer} onAuthorizePending={(url) => { setNewUrl(url); setAddOpen(true); }} healthLoading={healthLoading} 
+              />
+            </TabsContent>
+            
+            <TabsContent value="reports"><UserReportsPanel /></TabsContent>
+            <TabsContent value="team"><TeamPanel /></TabsContent>
+            <TabsContent value="maintenance"><MaintenancePanel /></TabsContent>
+            <TabsContent value="demo-creds"><DemoCredentialsPanel /></TabsContent>
+            <TabsContent value="stats"><StatsPanel /></TabsContent>
+            <TabsContent value="endpoint-test"><EndpointTestPanel allowedServers={allowed.map((s) => ({ server_url: s.server_url, label: s.label }))} onServerApplied={refresh} /></TabsContent>
+            <TabsContent value="client-diagnostics"><ClientDiagnosticsPanel /></TabsContent>
+            <TabsContent value="pending-signups"><PendingSignupsPanel /></TabsContent>
+            <TabsContent value="blocked-dns"><BlockedDnsPanel /></TabsContent>
+            <TabsContent value="stream-events"><StreamEventsPanel /></TabsContent>
+          </Suspense>
         </Tabs>
       </main>
 
