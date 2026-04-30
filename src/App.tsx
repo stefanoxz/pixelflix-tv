@@ -296,7 +296,13 @@ function App() {
             >
               Acessar Player <ChevronRight className="w-5 h-5" />
             </button>
-            <button className="w-full sm:w-auto px-10 h-16 bg-white/5 border border-white/5 hover:bg-white/10 rounded-2xl font-black uppercase tracking-widest text-neutral-400 transition-all">
+            <button 
+              onClick={() => {
+                const demoUrl = "http://safawe.space/get.php?username=406850266&password=823833547&type=m3u_plus&output=ts";
+                loadList(parseM3uUrl(demoUrl));
+              }}
+              className="w-full sm:w-auto px-10 h-16 bg-white/5 border border-white/5 hover:bg-white/10 rounded-2xl font-black uppercase tracking-widest text-neutral-400 transition-all"
+            >
               Ver Demo
             </button>
           </div>
