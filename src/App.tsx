@@ -109,7 +109,7 @@ function App() {
             <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
               <Play className="w-6 h-6 text-primary-foreground fill-current" />
             </div>
-            <span className="text-xl font-bold">Web<span className="text-primary">Player</span></span>
+            <span className="text-xl font-bold">Super<span className="text-primary">Tech</span></span>
           </div>
           
           <div className="flex-1 max-w-xl mx-8 relative">
