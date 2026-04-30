@@ -88,32 +88,24 @@ const Sync = () => {
     setStatuses(Object.fromEntries(steps.map((s) => [s.key, "pending"])));
 
     // Pré-carrega os bundles JS das rotas em paralelo com os dados.
-    // Quando o sync terminar, o Suspense resolve sincronamente — sem flash de spinner.
     [preloadIndex, preloadLive, preloadMovies, preloadSeries, preloadAccount].forEach(
       (fn) => {
         try {
           fn();
         } catch {
-          /* ignore preload errors — a navegação fará o fetch normalmente */
+          /* ignore preload errors */
         }
       },
     );
 
     let anyError = false;
 
-    // Roda em SÉRIE (não paralelo) — muitos painéis Xtream contam cada
-    // requisição HTTP como uma "conexão ativa". Disparar live+vod+series
-    // ao mesmo tempo (6 chamadas) estoura facilmente o limite de 2 telas.
-    // Além disso, se um step falha com MAX_CONNECTIONS, esperamos alguns
-    // segundos para o painel liberar a conexão fantasma e tentamos de novo.
+    // Roda em SÉRIE para evitar limite de conexões.
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i];
       setStatuses((prev) => ({ ...prev, [step.key]: "loading" }));
 
       let lastErr: unknown = null;
-      // Backoff maior em MAX_CONNECTIONS: muitos painéis IPTV demoram
-      // 30–60s para liberar conexões fantasma. Tentativas rápidas seguidas
-      // mantêm a conta presa no limite.
       const attempts = [0, 8000, 20000];
       for (const wait of attempts) {
         if (wait) await new Promise((r) => setTimeout(r, wait));
@@ -124,7 +116,6 @@ const Sync = () => {
         } catch (e) {
           lastErr = e;
           const msg = e instanceof Error ? e.message : String(e);
-          // Só retenta em MAX_CONNECTIONS / 429. Outros erros falham rápido.
           if (!/MAX_CONNECTIONS|429|Limite de telas/i.test(msg)) break;
         }
       }
@@ -141,7 +132,7 @@ const Sync = () => {
         setStatuses((prev) => ({ ...prev, [step.key]: "done" }));
       }
 
-      // Pequena pausa entre steps para o painel "respirar".
+      // Pequena pausa entre steps.
       if (i < steps.length - 1) {
         await new Promise((r) => setTimeout(r, 1200));
       }
@@ -150,6 +141,8 @@ const Sync = () => {
     if (anyError) {
       setHasError(true);
     } else {
+      // Forçar atualização do QueryClient para garantir que os dados sejam marcados como frescos
+      await queryClient.invalidateQueries();
       setAllDone(true);
       setTimeout(() => navigate("/", { replace: true }), 600);
     }
