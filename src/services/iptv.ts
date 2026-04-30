@@ -213,22 +213,12 @@ export async function iptvLoginM3u(creds: IptvCredentials): Promise<LoginRespons
     if (r.ok) return r.data;
     
     const err = r as { ok: false; code: string; error: string; status?: number; extra?: any };
-    if (err.code === "SERVER_UNREACHABLE" || err.error?.includes("444")) {
-      const loginUrl = `${server}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`;
-      return await tryPublicProxyFetch<LoginResponse & { auto_registered?: boolean }>(loginUrl, "m3u_register");
-    }
-    
     throw new IptvLoginError(err.error, err.code, err.extra?.debug);
   } catch (e: any) {
-    if (e instanceof IptvLoginError) throw e;
-    try {
-      const loginUrl = `${server}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`;
-      return await tryPublicProxyFetch<LoginResponse & { auto_registered?: boolean }>(loginUrl, "m3u_register");
-    } catch {
-      throw e;
-    }
+    throw e;
   }
 }
+
 
 
 export async function fetchAllowedServers(): Promise<string[]> {
@@ -298,59 +288,13 @@ export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra
  * Fallback de última instância usando um proxy de CORS público.
  * Usado apenas quando o fetch direto E a Edge Function falham (bloqueios de IP).
  */
+/**
+ * Removido fallback de proxy público para limpeza total do sistema.
+ */
 async function tryPublicProxyFetch<T>(url: string, action: string): Promise<T> {
-  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-  try {
-    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
-    if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-    const text = await res.text();
-    const isM3u = text.trimStart().startsWith("#EXTM3U");
-    
-    if (isM3u) {
-      if (action === "login" || action === "m3u_register") {
-        const urlObj = new URL(url);
-        return {
-          user_info: {
-            username: urlObj.searchParams.get("username") || "user",
-            password: urlObj.searchParams.get("password") || "",
-            auth: 1,
-            status: "Active",
-            message: "playlist-mode",
-            is_trial: "0",
-            active_cons: "0",
-            max_connections: "0",
-            created_at: null,
-            exp_date: null,
-          },
-          server_info: {
-            url: urlObj.host,
-            port: urlObj.port || (urlObj.protocol === "https:" ? "443" : "80"),
-            https_port: urlObj.protocol === "https:" ? urlObj.port || "443" : "443",
-            server_protocol: urlObj.protocol.replace(":", ""),
-          },
-        } as unknown as T;
-      }
-      
-      if (action.includes("categories") || action.includes("streams") || action === "get_series") {
-        return parseM3uToXtream(text, action) as unknown as T;
-      }
-      
-      throw new Error("O servidor retornou uma playlist M3U em vez de dados JSON.");
-    }
-
-    return JSON.parse(text) as T;
-  } catch (e) {
-    if (!url.includes("get.php") && (action.includes("categories") || action.includes("streams") || action === "get_series")) {
-      const urlObj = new URL(url);
-      const m3uUrl = `${urlObj.origin}/get.php?username=${urlObj.searchParams.get("username")}&password=${urlObj.searchParams.get("password")}&type=m3u_plus&output=ts`;
-      console.log(`[iptv-fetch] Retrying via get.php proxy due to failure...`);
-      return tryPublicProxyFetch<T>(m3uUrl, action);
-    }
-    
-    console.error(`[iptv-fetch] Public proxy failed for ${action}:`, e);
-    throw new IptvApiError(`O servidor IPTV está bloqueando conexões. Verifique sua conexão ou tente outra rede.`);
-  }
+  throw new IptvApiError("Recurso de proxy desativado para segurança e conformidade.");
 }
+
 
 function parseM3uToXtream(m3u: string, action: string): any {
   if (action.includes("categories")) {
