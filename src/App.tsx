@@ -334,19 +334,23 @@ function App() {
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom duration-1000 delay-300">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom duration-1000 delay-300 relative z-[60]">
             <button 
-              onClick={() => setIsLoginOpen(true)} 
-              className="w-full sm:w-auto px-10 h-16 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-glow flex items-center justify-center gap-3"
+              onClick={() => {
+                console.log("Hero: Acessar Player clicado");
+                setIsLoginOpen(true);
+              }} 
+              className="w-full sm:w-auto px-10 h-16 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-glow flex items-center justify-center gap-3 cursor-pointer"
             >
               Acessar Player <ChevronRight className="w-5 h-5" />
             </button>
             <button 
               onClick={() => {
+                console.log("Hero: Ver Demo clicado");
                 const demoUrl = "http://safawe.space/get.php?username=406850266&password=823833547&type=m3u_plus&output=ts";
                 loadList(parseM3uUrl(demoUrl));
               }}
-              className="w-full sm:w-auto px-10 h-16 bg-white/5 border border-white/5 hover:bg-white/10 rounded-2xl font-black uppercase tracking-widest text-neutral-400 transition-all"
+              className="w-full sm:w-auto px-10 h-16 bg-white/5 border border-white/5 hover:bg-white/10 active:scale-95 rounded-2xl font-black uppercase tracking-widest text-neutral-400 transition-all cursor-pointer"
             >
               Ver Demo
             </button>
