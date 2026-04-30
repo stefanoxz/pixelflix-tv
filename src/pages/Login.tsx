@@ -114,9 +114,9 @@ const Login = () => {
       maybeWarnConnectionLimit(data);
       navigate("/sync");
     } catch (err) {
-      handleLoginError(err);
+      if (!isUnmounted.current) handleLoginError(err);
     } finally {
-      setLoading(false);
+      if (!isUnmounted.current) setLoading(false);
     }
   };
 
