@@ -100,7 +100,7 @@ const COLLECTION_ACTIONS = new Set([
   "get_series",
 ]);
 
-async function fetchWithRetries(url: string, clientIp?: string, attemptsPerUa = 1): Promise<
+async function fetchWithRetries(url: string, clientIp?: string): Promise<
   | { ok: true; data: unknown }
   | { ok: false; status: number; reason: string; softNotFound?: boolean }
 > {
@@ -108,73 +108,68 @@ async function fetchWithRetries(url: string, clientIp?: string, attemptsPerUa = 
   let lastReason = "Unknown error";
 
   for (const ua of USER_AGENTS) {
-    for (let attempt = 0; attempt < attemptsPerUa; attempt++) {
-      try {
-        const headers: Record<string, string> = { 
-          "User-Agent": ua, 
-          Accept: "application/json, */*" 
-        };
+    try {
+      const headers: Record<string, string> = { 
+        "User-Agent": ua, 
+        Accept: "application/json, */*" 
+      };
 
-        if (clientIp) {
-          headers["X-Forwarded-For"] = clientIp;
-          headers["X-Real-IP"] = clientIp;
-          headers["Client-IP"] = clientIp;
-          headers["True-Client-IP"] = clientIp;
-          headers["CF-Connecting-IP"] = clientIp;
-        }
+      if (clientIp) {
+        headers["X-Forwarded-For"] = clientIp;
+        headers["X-Real-IP"] = clientIp;
+        headers["Client-IP"] = clientIp;
+        headers["True-Client-IP"] = clientIp;
+        headers["CF-Connecting-IP"] = clientIp;
+      }
 
-        const res = await fetch(url, {
-          headers,
-          redirect: "follow",
-        });
+      const res = await fetch(url, {
+        headers,
+        redirect: "follow",
+        signal: AbortSignal.timeout(6000), // Timeout em cada UA individual
+      });
 
-        if (TRANSIENT_STATUSES.has(res.status)) {
-          lastStatus = res.status;
-          lastReason = `HTTP ${res.status}`;
-          await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
-          continue;
-        }
-
-        if (res.status === 403) {
-          // Se for 403, tenta o próximo User-Agent antes de desistir
-          lastStatus = 403;
-          lastReason = "HTTP 403";
-          continue;
-        }
-
-        if (SOFT_NOT_FOUND_STATUSES.has(res.status)) {
-          // Tenta ler o corpo: muitos painéis devolvem "LIMITE DE TELAS" /
-          // "MAX CONNECTIONS REACHED" com 401/403. Detectamos para
-          // sinalizar à UI em vez de devolver lista vazia silenciosa.
-          let bodyText = "";
-          try { bodyText = (await res.text()).slice(0, 200); } catch { /* ignore */ }
-          const upper = bodyText.toUpperCase();
-          // Detecta APENAS mensagens explícitas de limite de telas/conexões.
-          // Evita falsos positivos com strings genéricas (ex.: "ERRO DE CONEXÃO").
-          if (/LIMITE DE TELAS|MAX(IMUM)?[_ ]?CONNECTIONS?[_ ]?REACHED|TOO MANY CONNECTIONS|LIMITE DE CONEX[ÃA]O|CONNECTION[_ ]?LIMIT/.test(upper)) {
-            return { ok: false, status: 429, reason: "MAX_CONNECTIONS" };
-          }
-          return { ok: false, status: res.status, reason: `HTTP ${res.status}`, softNotFound: true };
-        }
-
-        if (!res.ok) {
-          lastStatus = res.status;
-          lastReason = `HTTP ${res.status}`;
-          continue; // Tenta próximo UA para qualquer erro HTTP não tratado
-        }
-
+      if (res.ok) {
         const text = await res.text();
         try {
           return { ok: true, data: JSON.parse(text) };
         } catch {
-          return { ok: false, status: 502, reason: "resposta não JSON" };
+          lastStatus = 502;
+          lastReason = "resposta não JSON";
+          // Se não é JSON, o UA pode estar recebendo um captcha ou HTML de bloqueio
+          continue;
         }
-      } catch (e) {
-        lastStatus = 502;
-        lastReason = e instanceof Error ? e.message : String(e);
       }
+
+      lastStatus = res.status;
+      lastReason = `HTTP ${res.status}`;
+
+      // Se for limite de telas, não adianta trocar UA
+      if (res.status === 401 || res.status === 403) {
+        let bodyText = "";
+        try { bodyText = (await res.text()).slice(0, 300); } catch { /* ignore */ }
+        const upper = bodyText.toUpperCase();
+        if (/LIMITE DE TELAS|MAX(IMUM)?[_ ]?CONNECTIONS?[_ ]?REACHED|TOO MANY CONNECTIONS|LIMITE DE CONEX[ÃA]O|CONNECTION[_ ]?LIMIT/.test(upper)) {
+          return { ok: false, status: 429, reason: "MAX_CONNECTIONS" };
+        }
+        // Se for erro de auth/bloqueio comum mas não for limite de telas, tenta outro UA
+        continue;
+      }
+
+      // 404/410/etc: tenta outro UA
+      continue;
+
+    } catch (e) {
+      lastStatus = 502;
+      lastReason = e instanceof Error ? e.message : String(e);
+      // Timeout ou erro de rede: tenta próximo UA
     }
   }
+  
+  // Se todos os UAs falharam, avalia se retorna "softNotFound" para manter a UI viva
+  if (SOFT_NOT_FOUND_STATUSES.has(lastStatus)) {
+    return { ok: false, status: lastStatus, reason: lastReason, softNotFound: true };
+  }
+
   return { ok: false, status: lastStatus || 502, reason: lastReason };
 }
 
