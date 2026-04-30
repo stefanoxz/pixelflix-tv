@@ -23,9 +23,10 @@ export async function fetchM3u(creds: IptvCredentials): Promise<string> {
   return await res.text();
 }
 
-export function parseM3uToStreams(m3u: string): Stream[] {
+export function parseM3uToData(m3u: string): { streams: Stream[], categories: Category[] } {
   const lines = m3u.split('\n');
   const streams: Stream[] = [];
+  const categoriesMap = new Map<string, string>();
   let current: Partial<Stream> = {};
 
   for (let line of lines) {
@@ -35,10 +36,13 @@ export function parseM3uToStreams(m3u: string): Stream[] {
       const iconMatch = line.match(/tvg-logo="([^"]+)"/);
       const catMatch = line.match(/group-title="([^"]+)"/);
       
+      const categoryName = catMatch ? catMatch[1] : 'Outros';
+      categoriesMap.set(categoryName, categoryName);
+
       current = {
         name: nameMatch ? nameMatch[1] : 'Canal Sem Nome',
         stream_icon: iconMatch ? iconMatch[1] : '',
-        category_id: catMatch ? catMatch[1] : '0',
+        category_id: categoryName,
         stream_id: streams.length + 1,
         stream_type: 'live'
       };
@@ -50,5 +54,11 @@ export function parseM3uToStreams(m3u: string): Stream[] {
       }
     }
   }
-  return streams;
+
+  const categories: Category[] = Array.from(categoriesMap.keys()).map(name => ({
+    category_id: name,
+    category_name: name
+  }));
+
+  return { streams, categories };
 }
