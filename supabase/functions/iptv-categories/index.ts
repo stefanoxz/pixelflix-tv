@@ -167,6 +167,10 @@ async function fetchWithRetries(url: string, clientIp?: string, attemptsPerUa = 
 
 Deno.serve(async (req) => {
   const corsHeaders = corsFor(req);
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("cf-connecting-ip") ||
+    undefined;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   // Exige sessão Supabase válida (anônima ou autenticada). Sem isso, qualquer
