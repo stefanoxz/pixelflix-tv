@@ -5,11 +5,9 @@ export class XtreamService {
   private credentials: XtreamCredentials | null = null;
 
   setCredentials(creds: XtreamCredentials) {
-    this.credentials = creds;
-  }
-
-  getCredentials() {
-    return this.credentials;
+    // Ensure URL doesn't have trailing slash
+    const formattedUrl = creds.url.replace(/\/$/, '');
+    this.credentials = { ...creds, url: formattedUrl };
   }
 
   private async fetchAction(action: string, params: Record<string, string> = {}) {
