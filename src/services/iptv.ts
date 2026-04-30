@@ -207,15 +207,52 @@ export class IptvLoginError extends Error {
   }
 }
 
-export async function invokeSafe<T>(name: string, body: any, kind: InvokeKind = "data"): Promise<{ ok: true, data: T } | { ok: false, code: string, error: string, status?: number, extra?: any }> {
+export class IptvApiError extends Error {
+  constructor(message: string, public status?: number) {
+    super(message);
+    this.name = "IptvApiError";
+  }
+}
+
+export async function invokeSafe<T>(
+  name: string,
+  body: any,
+  kind: InvokeKind = "data"
+): Promise<{ ok: true; data: T } | { ok: false; code: string; error: string; status?: number; extra?: any }> {
   try {
     const { data, error } = await supabase.functions.invoke(name, { body });
-    if (error) return { ok: false, code: "ERROR", error: error.message };
+
+    if (error) {
+      console.error(`[iptv-service] Edge function error (${name}):`, error);
+      return { 
+        ok: false, 
+        code: "FUNCTION_ERROR", 
+        error: error.message || "Ocorreu uma falha na comunicação com o servidor" 
+      };
+    }
+
     const d = data as any;
-    if (d?.success === false) return { ok: false, code: d.code || "ERROR", error: d.error || "Unknown error", extra: d };
+    if (d?.success === false) {
+      return { 
+        ok: false, 
+        code: d.code || "API_ERROR", 
+        error: d.error || "O servidor IPTV retornou uma resposta inesperada", 
+        extra: d 
+      };
+    }
+
+    if (data === null || data === undefined) {
+      return { ok: false, code: "EMPTY_RESPONSE", error: "O servidor não retornou dados" };
+    }
+
     return { ok: true, data: d };
   } catch (e: any) {
-    return { ok: false, code: "UNKNOWN", error: e.message };
+    console.error(`[iptv-service] Unknown error (${name}):`, e);
+    return { 
+      ok: false, 
+      code: "UNKNOWN", 
+      error: e.message || "Erro desconhecido ao processar requisição" 
+    };
   }
 }
 
@@ -272,9 +309,25 @@ export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra
   const directUrl = `${creds.server}/player_api.php?${params.toString()}`;
 
   return tryBrowserFetch<T>(directUrl, async () => {
-    const { data, error } = await supabase.functions.invoke("iptv-categories", { body: { ...creds, action, ...extra } });
-    if (error) throw error;
-    return data as T;
+    try {
+      const { data, error } = await supabase.functions.invoke("iptv-categories", { 
+        body: { ...creds, action, ...extra } 
+      });
+      
+      if (error) {
+        console.error(`[iptv-fetch] Error fetching ${action}:`, error);
+        throw new IptvApiError(`Falha ao carregar ${action}: ${error.message}`);
+      }
+      
+      if (data?.success === false) {
+        throw new IptvApiError(data.error || `Erro do servidor ao carregar ${action}`);
+      }
+
+      return data as T;
+    } catch (e: any) {
+      if (e instanceof IptvApiError) throw e;
+      throw new IptvApiError(e.message || `Erro de rede ao carregar ${action}`);
+    }
   });
 }
 
