@@ -458,5 +458,6 @@ export function normalizeExt(ext?: string): string {
 }
 
 export function reportStreamEvent(event: string, payload: any) {
-  supabase.functions.invoke("stream-events", { body: { event, ...payload } }).catch(() => {});
+  // Desativado permanentemente para limpeza total do sistema
 }
+
