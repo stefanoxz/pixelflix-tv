@@ -37,6 +37,13 @@ const Sync = () => {
   const { session } = useIptv();
   const queryClient = useQueryClient();
   const startedRef = useRef(false);
+  const isUnmounted = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isUnmounted.current = true;
+    };
+  }, []);
 
   const creds = session?.creds;
 
