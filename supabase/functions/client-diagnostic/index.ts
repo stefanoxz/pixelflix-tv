@@ -89,80 +89,11 @@ async function geoLookup(ip: string | null): Promise<{
   }
 }
 
-Deno.serve(async (req) => {
-  const cors = corsFor(req);
-  if (req.method === "OPTIONS") return new Response(null, { headers: cors });
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "method_not_allowed" }), {
-      status: 405,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  let body: any = null;
-  try {
-    body = await req.json();
-  } catch {
-    body = {};
-  }
-
-  const ip = clientIp(req);
-  const ua = pickStr(req.headers.get("user-agent") ?? "", 500);
-
-  const outcome = pickStr(body?.outcome, 30) ?? "unknown";
-  const validOutcomes = new Set(["success", "fail", "timeout", "abort", "unknown"]);
-  const finalOutcome = validOutcomes.has(outcome) ? outcome : "unknown";
-
-  const geo = await geoLookup(ip);
-
-  const row = {
-    login_event_id: pickStr(body?.login_event_id, 64),
-    username: pickStr(body?.username, 200),
-    server_url: pickStr(body?.server_url, 500),
-    outcome: finalOutcome,
-    client_error: pickStr(body?.client_error, 500),
-    duration_ms: pickInt(body?.duration_ms),
-    ip,
-    user_agent: ua,
-    effective_type: pickStr(body?.effective_type, 30),
-    downlink_mbps: pickNum(body?.downlink_mbps),
-    rtt_ms: pickInt(body?.rtt_ms),
-    save_data: pickBool(body?.save_data),
-    device_memory: pickNum(body?.device_memory),
-    hardware_concurrency: pickInt(body?.hardware_concurrency),
-    screen: pickStr(body?.screen, 30),
-    language: pickStr(body?.language, 30),
-    timezone: pickStr(body?.timezone, 80),
-    country: geo.country,
-    region: geo.region,
-    city: geo.city,
-    isp: geo.isp,
-    speed_kbps: pickInt(body?.speed_kbps),
-  };
-
-  try {
-    const admin = getAdmin();
-    const { data, error } = await admin
-      .from("client_diagnostics")
-      .insert(row)
-      .select("id")
-      .single();
-    if (error) {
-      console.error("[client-diagnostic] insert error", error);
-      return new Response(JSON.stringify({ ok: false, error: error.message }), {
-        status: 500,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
-    return new Response(JSON.stringify({ ok: true, id: data?.id ?? null }), {
-      status: 200,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  } catch (err) {
-    console.error("[client-diagnostic] fatal", err);
-    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
-      status: 500,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
+  // Edge Function desativada para limpeza total do sistema.
+  // Retorna sucesso para não quebrar o frontend, mas não processa nem insere nada.
+  return new Response(JSON.stringify({ ok: true, id: null }), {
+    status: 200,
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
 });
+
