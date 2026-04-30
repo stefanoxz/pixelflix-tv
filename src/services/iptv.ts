@@ -2,7 +2,6 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   reportDiagnostic,
   runQuickSpeedProbe,
-  classifyOutcome,
 } from "@/lib/clientDiagnostics";
 
 export interface IptvCredentials {
@@ -34,6 +33,7 @@ export interface LoginResponse {
   server_info: ServerInfo;
   allowed_servers?: string[];
   at_connection_limit?: boolean;
+  server_url?: string;
 }
 
 export interface Category {
@@ -131,7 +131,7 @@ export type InvokeKind = "login" | "token" | "data" | "event";
 const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
 // =============================================================================
-// Connectivity, telemetry, global request queue
+// Utils & Connectivity
 // =============================================================================
 
 export const connectivityConfig = {
@@ -155,19 +155,23 @@ export function setConnectivityConfig(partial: Partial<typeof connectivityConfig
   Object.assign(connectivityConfig, partial);
 }
 
-export async function iptvLogin(creds: IptvCredentials) {
-  return invokeSafe<LoginResponse & { server_url?: string }>("iptv-login", { ...creds, mode: "login" }, "login").then(r => {
-    if (!r.ok) throw new IptvLoginError(r.error, r.code, r.extra?.debug as any);
-    return r.data;
-  });
+export function isRealOnline() { return navigator.onLine; }
+export function subscribeConnectivity(fn: (online: boolean) => void) {
+  const handler = () => fn(navigator.onLine);
+  window.addEventListener("online", handler);
+  window.addEventListener("offline", handler);
+  return () => {
+    window.removeEventListener("online", handler);
+    window.removeEventListener("offline", handler);
+  };
 }
 
-export async function iptvLoginM3u(creds: IptvCredentials) {
-  return invokeSafe<LoginResponse & { server_url?: string; auto_registered?: boolean }>("iptv-login", { ...creds, mode: "m3u_register" }, "login").then(r => {
-    if (!r.ok) throw new IptvLoginError(r.error, r.code, r.extra?.debug as any);
-    return r.data;
-  });
-}
+export function getQueueStats() { return { health: "healthy" }; }
+export function getTelemetrySnapshot() { return []; }
+
+// =============================================================================
+// Auth
+// =============================================================================
 
 export class IptvLoginError extends Error {
   constructor(message: string, public code: string, public debug: any) {
@@ -180,10 +184,24 @@ export async function invokeSafe<T>(name: string, body: any, kind: InvokeKind = 
   try {
     const { data, error } = await supabase.functions.invoke(name, { body });
     if (error) return { ok: false, code: "ERROR", error: error.message };
-    return { ok: true, data };
+    const d = data as any;
+    if (d?.success === false) return { ok: false, code: d.code || "ERROR", error: d.error || "Unknown error", extra: d };
+    return { ok: true, data: d };
   } catch (e: any) {
     return { ok: false, code: "UNKNOWN", error: e.message };
   }
+}
+
+export async function iptvLogin(creds: IptvCredentials) {
+  const r = await invokeSafe<LoginResponse>("iptv-login", { ...creds, mode: "login" }, "login");
+  if (!r.ok) throw new IptvLoginError(r.error, r.code, r.extra?.debug);
+  return r.data;
+}
+
+export async function iptvLoginM3u(creds: IptvCredentials) {
+  const r = await invokeSafe<LoginResponse & { auto_registered?: boolean }>("iptv-login", { ...creds, mode: "m3u_register" }, "login");
+  if (!r.ok) throw new IptvLoginError(r.error, r.code, r.extra?.debug);
+  return r.data;
 }
 
 export async function fetchAllowedServers(): Promise<string[]> {
@@ -193,17 +211,24 @@ export async function fetchAllowedServers(): Promise<string[]> {
 
 export function isHostAllowed(candidate: string | null | undefined, allowed?: string[] | null): boolean {
   if (!candidate || !allowed?.length) return false;
-  const h = candidate.toLowerCase().replace(/^https?:\/\//, "").split("/")[0].split(":")[0];
-  return allowed.some(a => a.toLowerCase().includes(h));
+  try {
+    const h = new URL(candidate.startsWith("http") ? candidate : `http://${candidate}`).hostname.toLowerCase();
+    return allowed.some(a => a.toLowerCase().includes(h));
+  } catch { return false; }
 }
 
 export function resolveStreamBase(serverInfo?: ServerInfo | null, fallback?: string, allowed?: string[] | null): string {
   if (serverInfo?.url && isHostAllowed(serverInfo.url, allowed)) {
      const proto = (serverInfo.server_protocol || "http").toLowerCase();
-     return `${proto}://${serverInfo.url.replace(/^https?:\/\//i, "")}:${serverInfo.port || 80}`;
+     const port = proto === "https" ? (serverInfo.https_port || "443") : (serverInfo.port || "80");
+     return `${proto}://${serverInfo.url.replace(/^https?:\/\//i, "")}:${port}`;
   }
-  return fallback || "";
+  return (fallback || "").replace(/\/+$/, "");
 }
+
+// =============================================================================
+// Catalog
+// =============================================================================
 
 export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra: any = {}): Promise<T> {
   const { data, error } = await supabase.functions.invoke("iptv-categories", { body: { ...creds, action, ...extra } });
@@ -234,6 +259,10 @@ export async function getShortEpg(c: IptvCredentials, streamId: number, limit = 
   } catch { return []; }
 }
 
+// =============================================================================
+// Streaming
+// =============================================================================
+
 export function buildLiveStreamUrl(creds: IptvCredentials, streamId: number, directSource?: string) {
   if (directSource) return directSource;
   const base = (creds.streamBase || creds.server || "").replace(/\/+$/, "");
@@ -252,10 +281,15 @@ export function buildSeriesEpisodeUrl(creds: IptvCredentials, episodeId: string 
   return `${base}/series/${creds.username}/${creds.password}/${episodeId}.${ext || "mp4"}`;
 }
 
-export async function requestStreamToken(url: string) {
-  const { data, error } = await supabase.functions.invoke("stream-token", { body: { url } });
+export async function requestStreamToken(params: { url: string, kind: string, iptvUsername: string, mode: StreamMode }) {
+  const { data, error } = await supabase.functions.invoke("stream-token", { body: params });
   if (error) throw error;
-  return data as { token: string, expires_at: string, signed_url: string };
+  return data as { token: string, expires_at: string, signed_url: string, url: string };
+}
+
+export async function primeStreamToken(url: string) {
+  // Simplificação: apenas chama o requestStreamToken com parâmetros básicos
+  return requestStreamToken({ url, kind: "playlist", iptvUsername: "", mode: "redirect" });
 }
 
 export function proxyImageUrl(url: string | null | undefined, opts?: { w?: number, h?: number, q?: number }) {
@@ -267,37 +301,66 @@ export function proxyImageUrl(url: string | null | undefined, opts?: { w?: numbe
   return `https://images.weserv.nl/?${params.toString()}`;
 }
 
+// Per-host stats & modes
+const PROXY_HOST_PREFIX = "iptv.proxy.host:";
+const ENGINE_PREF_PREFIX = "iptv.engine.pref:";
+
 export function getHostProxyMode(url: string | null | undefined): StreamMode {
-  return "redirect";
+  if (!url) return "redirect";
+  try {
+    const host = new URL(url).hostname;
+    return (localStorage.getItem(`${PROXY_HOST_PREFIX}${host}`) as StreamMode) || "redirect";
+  } catch { return "redirect"; }
 }
 
 export function markHostProxyRequired(url: string | null | undefined, reason: string) {
-  return true;
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname;
+    localStorage.setItem(`${PROXY_HOST_PREFIX}${host}`, "stream");
+    return true;
+  } catch { return false; }
 }
 
-export function clearHostProxyMode(url: string | null | undefined) {}
+export function clearHostProxyMode(url: string | null | undefined) {
+  if (!url) return;
+  try {
+    const host = new URL(url).hostname;
+    localStorage.removeItem(`${PROXY_HOST_PREFIX}${host}`);
+  } catch {}
+}
 
 export function markHostSuccess(url: string | null | undefined) {}
 export function markHostFailure(url: string | null | undefined, reason: string) {}
 
 export function shouldUseProxy(url: string | null | undefined): boolean {
-  return false;
+  return getHostProxyMode(url) === "stream";
 }
 
 export function getPreferredEngine(url: string | null | undefined): "hls" | "mpegts" {
-  return "hls";
+  if (!url) return "hls";
+  try {
+    const host = new URL(url).hostname;
+    return (localStorage.getItem(`${ENGINE_PREF_PREFIX}${host}`) as any) || "hls";
+  } catch { return "hls"; }
 }
 
-export function setPreferredEngine(url: string | null | undefined, engine: "hls" | "mpegts") {}
-
-export async function primeStreamToken(url: string) {
-  return requestStreamToken(url);
+export function setPreferredEngine(url: string | null | undefined, engine: "hls" | "mpegts") {
+  if (!url) return;
+  try {
+    const host = new URL(url).hostname;
+    localStorage.setItem(`${ENGINE_PREF_PREFIX}${host}`, engine);
+  } catch {}
 }
 
 export type PlaybackStrategy = { mode: "internal", type: "hls" | "native" } | { mode: "external" } | { mode: "error", reason: string };
 
 export function getPlaybackStrategy(ext?: string, url?: string): PlaybackStrategy {
-  return { mode: "internal", type: "hls" };
+  const e = (ext || "").toLowerCase().replace(/^\./, "");
+  if (e === "m3u8" || url?.includes(".m3u8")) return { mode: "internal", type: "hls" };
+  if (["mp4", "webm", "m4v"].includes(e)) return { mode: "internal", type: "native" };
+  if (["mkv", "avi", "mov", "ts"].includes(e)) return { mode: "external" };
+  return { mode: "internal", type: "native" };
 }
 
 export function isValidStreamUrl(url?: string | null): url is string {
@@ -305,15 +368,17 @@ export function isValidStreamUrl(url?: string | null): url is string {
 }
 
 export function getFormatBadge(ext?: string, url?: string | null) {
+  const strategy = getPlaybackStrategy(ext, url || undefined);
+  if (strategy.mode === "external") return { label: "EXTERNO", tone: "yellow", tooltip: "Player externo" };
   return { label: "STREAM", tone: "blue", tooltip: "Streaming" };
 }
 
 export function getStreamType(ext?: string, url?: string): any {
-  return "hls";
+  return getPlaybackStrategy(ext, url).type || "native";
 }
 
 export function isExternalOnly(ext?: string, url?: string | null): boolean {
-  return false;
+  return getPlaybackStrategy(ext, url || undefined).mode === "external";
 }
 
 export function normalizeExt(ext?: string): string {
@@ -323,60 +388,3 @@ export function normalizeExt(ext?: string): string {
 export function reportStreamEvent(body: any) {
   supabase.functions.invoke("stream-events", { body }).catch(() => {});
 }
-
-export function isRealOnline() { return true; }
-export function subscribeConnectivity(fn: any) { return () => {}; }
-export function getQueueStats() { return { health: "healthy" }; }
-export function getTelemetrySnapshot() { return []; }
-
-// Backward compatibility exports
-export {
-  iptvLogin,
-  iptvLoginM3u,
-  fetchAllowedServers,
-  resolveStreamBase,
-  isHostAllowed,
-  IptvLoginError,
-  getLiveCategories,
-  getLiveStreams,
-  getVodCategories,
-  getVodStreams,
-  getSeriesCategories,
-  getSeries,
-  getSeriesInfo,
-  getVodInfo,
-  iptvFetch,
-  buildLiveStreamUrl,
-  buildVodStreamUrl,
-  buildSeriesEpisodeUrl,
-  requestStreamToken,
-  reportStreamEvent,
-  getHostProxyMode,
-  markHostProxyRequired,
-  clearHostProxyMode,
-  getPlaybackStrategy,
-  isValidStreamUrl,
-  getFormatBadge,
-  getStreamType,
-  isExternalOnly,
-  normalizeExt,
-  getShortEpg,
-  proxyImageUrl,
-  connectivityConfig,
-  setConnectivityConfig,
-  getTelemetrySnapshot,
-  isRealOnline,
-  subscribeConnectivity,
-  getQueueStats
-};
-
-// Export types
-export type {
-  IptvCredentials,
-  LoginResponse,
-  Category,
-  LiveStream,
-  VodStream,
-  Series,
-  EpgEntry
-};
