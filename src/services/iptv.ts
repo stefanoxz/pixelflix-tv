@@ -1,7 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import {
   reportDiagnostic,
-  runQuickSpeedProbe,
 } from "@/lib/clientDiagnostics";
 
 export interface IptvCredentials {
@@ -155,18 +154,21 @@ export function setConnectivityConfig(partial: Partial<typeof connectivityConfig
   Object.assign(connectivityConfig, partial);
 }
 
-export function isRealOnline() { return navigator.onLine; }
+export function isRealOnline() { return typeof navigator !== "undefined" ? navigator.onLine : true; }
 export function subscribeConnectivity(fn: (online: boolean) => void) {
-  const handler = () => fn(navigator.onLine);
-  window.addEventListener("online", handler);
-  window.addEventListener("offline", handler);
-  return () => {
-    window.removeEventListener("online", handler);
-    window.removeEventListener("offline", handler);
-  };
+  const handler = () => fn(isRealOnline());
+  if (typeof window !== "undefined") {
+    window.addEventListener("online", handler);
+    window.addEventListener("offline", handler);
+    return () => {
+      window.removeEventListener("online", handler);
+      window.removeEventListener("offline", handler);
+    };
+  }
+  return () => {};
 }
 
-export function getQueueStats() { return { health: "healthy" }; }
+export function getQueueStats() { return { health: "healthy" as const }; }
 export function getTelemetrySnapshot() { return []; }
 
 // =============================================================================
@@ -192,16 +194,16 @@ export async function invokeSafe<T>(name: string, body: any, kind: InvokeKind = 
   }
 }
 
-export async function iptvLogin(creds: IptvCredentials) {
+export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> {
   const r = await invokeSafe<LoginResponse>("iptv-login", { ...creds, mode: "login" }, "login");
-  if (!r.ok) throw new IptvLoginError(r.error, r.code, r.extra?.debug);
-  return r.data;
+  if (r.ok) return r.data;
+  throw new IptvLoginError(r.error, r.code, r.extra?.debug);
 }
 
-export async function iptvLoginM3u(creds: IptvCredentials) {
+export async function iptvLoginM3u(creds: IptvCredentials): Promise<LoginResponse & { auto_registered?: boolean }> {
   const r = await invokeSafe<LoginResponse & { auto_registered?: boolean }>("iptv-login", { ...creds, mode: "m3u_register" }, "login");
-  if (!r.ok) throw new IptvLoginError(r.error, r.code, r.extra?.debug);
-  return r.data;
+  if (r.ok) return r.data;
+  throw new IptvLoginError(r.error, r.code, r.extra?.debug);
 }
 
 export async function fetchAllowedServers(): Promise<string[]> {
@@ -220,8 +222,9 @@ export function isHostAllowed(candidate: string | null | undefined, allowed?: st
 export function resolveStreamBase(serverInfo?: ServerInfo | null, fallback?: string, allowed?: string[] | null): string {
   if (serverInfo?.url && isHostAllowed(serverInfo.url, allowed)) {
      const proto = (serverInfo.server_protocol || "http").toLowerCase();
-     const port = proto === "https" ? (serverInfo.https_port || "443") : (serverInfo.port || "80");
-     return `${proto}://${serverInfo.url.replace(/^https?:\/\//i, "")}:${port}`;
+     const port = proto === "https" ? (serverInfo.https_port || serverInfo.port || "443") : (serverInfo.port || serverInfo.https_port || "80");
+     const host = serverInfo.url.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+     return `${proto}://${host}:${port}`;
   }
   return (fallback || "").replace(/\/+$/, "");
 }
@@ -250,13 +253,22 @@ export async function getShortEpg(c: IptvCredentials, streamId: number, limit = 
     const res = await iptvFetch<any>(c, "get_short_epg", { stream_id: streamId, limit });
     const list = Array.isArray(res) ? res : res?.epg_listings ?? [];
     return list.map((raw: any) => ({
-      id: raw.id || raw.epg_id,
-      title: atob(raw.title || ""),
-      description: atob(raw.description || ""),
+      id: String(raw.id || raw.epg_id),
+      title: decodeB64(raw.title),
+      description: decodeB64(raw.description),
       startMs: Number(raw.start_timestamp) * 1000,
       endMs: Number(raw.stop_timestamp) * 1000,
     }));
   } catch { return []; }
+}
+
+function decodeB64(s: string | undefined | null): string {
+  if (!s) return "";
+  try {
+    const binString = atob(s);
+    const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0)!);
+    return new TextDecoder("utf-8").decode(bytes);
+  } catch { return s; }
 }
 
 // =============================================================================
@@ -264,44 +276,44 @@ export async function getShortEpg(c: IptvCredentials, streamId: number, limit = 
 // =============================================================================
 
 export function buildLiveStreamUrl(creds: IptvCredentials, streamId: number, directSource?: string) {
-  if (directSource) return directSource;
+  if (directSource && directSource.startsWith("http")) return directSource;
   const base = (creds.streamBase || creds.server || "").replace(/\/+$/, "");
   return `${base}/live/${creds.username}/${creds.password}/${streamId}.m3u8`;
 }
 
 export function buildVodStreamUrl(creds: IptvCredentials, streamId: number, ext: string, directSource?: string) {
-  if (directSource) return directSource;
+  if (directSource && directSource.startsWith("http")) return directSource;
   const base = (creds.streamBase || creds.server || "").replace(/\/+$/, "");
   return `${base}/movie/${creds.username}/${creds.password}/${streamId}.${ext}`;
 }
 
 export function buildSeriesEpisodeUrl(creds: IptvCredentials, episodeId: string | number, ext: string, directSource?: string) {
-  if (directSource) return directSource;
+  if (directSource && directSource.startsWith("http")) return directSource;
   const base = (creds.streamBase || creds.server || "").replace(/\/+$/, "");
   return `${base}/series/${creds.username}/${creds.password}/${episodeId}.${ext || "mp4"}`;
 }
 
-export async function requestStreamToken(params: { url: string, kind: string, iptvUsername: string, mode: StreamMode }) {
+export async function requestStreamToken(params: { url: string, kind: string, iptvUsername?: string, mode: StreamMode }) {
   const { data, error } = await supabase.functions.invoke("stream-token", { body: params });
   if (error) throw error;
   return data as { token: string, expires_at: string, signed_url: string, url: string };
 }
 
-export async function primeStreamToken(url: string) {
-  // Simplificação: apenas chama o requestStreamToken com parâmetros básicos
-  return requestStreamToken({ url, kind: "playlist", iptvUsername: "", mode: "redirect" });
+export async function primeStreamToken(params: { url: string, kind: string, iptvUsername?: string, mode: string, signal?: AbortSignal }) {
+  return requestStreamToken({ url: params.url, kind: params.kind, iptvUsername: params.iptvUsername, mode: params.mode as any });
 }
 
 export function proxyImageUrl(url: string | null | undefined, opts?: { w?: number, h?: number, q?: number }) {
   if (!url) return "";
+  const trimmed = url.trim();
+  if (!trimmed) return "";
   const params = new URLSearchParams();
-  params.set("url", url.replace(/^https?:\/\//i, ""));
+  params.set("url", trimmed.replace(/^https?:\/\//i, ""));
   if (opts?.w) params.set("w", String(opts.w));
   if (opts?.h) params.set("h", String(opts.h));
   return `https://images.weserv.nl/?${params.toString()}`;
 }
 
-// Per-host stats & modes
 const PROXY_HOST_PREFIX = "iptv.proxy.host:";
 const ENGINE_PREF_PREFIX = "iptv.engine.pref:";
 
@@ -374,7 +386,8 @@ export function getFormatBadge(ext?: string, url?: string | null) {
 }
 
 export function getStreamType(ext?: string, url?: string): any {
-  return getPlaybackStrategy(ext, url).type || "native";
+  const strategy = getPlaybackStrategy(ext, url);
+  return strategy.mode === "internal" ? strategy.type : "native";
 }
 
 export function isExternalOnly(ext?: string, url?: string | null): boolean {
@@ -385,6 +398,6 @@ export function normalizeExt(ext?: string): string {
   return (ext || "").toLowerCase().replace(/^\./, "");
 }
 
-export function reportStreamEvent(body: any) {
-  supabase.functions.invoke("stream-events", { body }).catch(() => {});
+export function reportStreamEvent(event: string, payload: any) {
+  supabase.functions.invoke("stream-events", { body: { event, ...payload } }).catch(() => {});
 }
