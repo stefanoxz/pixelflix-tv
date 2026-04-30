@@ -63,16 +63,25 @@ display: none !important;
   }
 
   .bg-gradient-card {
-    @apply bg-gradient-to-b from-secondary/30 to-background/90;
+    @apply bg-gradient-to-b from-secondary/40 to-background/95;
+  }
+
+  .glass {
+    @apply bg-background/40 backdrop-blur-md border border-white/10;
+  }
+
+  .glass-card {
+    @apply bg-card/60 backdrop-blur-lg border border-white/5;
   }
 
   .shadow-glow {
-    @apply shadow-[0_0_20px_-5px_rgba(139,92,246,0.3)];
+    @apply shadow-[0_0_25px_-5px_rgba(139,92,246,0.4)];
   }
 
   .hero-title {
-    @apply text-4xl md:text-5xl lg:text-7xl font-black tracking-tight leading-[0.95] drop-shadow-2xl;
+    @apply text-4xl md:text-5xl lg:text-7xl font-black tracking-tight leading-[1.1] drop-shadow-2xl;
   }
+
 
   .tap-feedback {
     @apply active:scale-95 transition-transform duration-100;
