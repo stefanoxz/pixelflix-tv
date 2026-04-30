@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useIptv } from "@/context/useIptv";
+import { useIptv } from "@/context/IptvContext";
 
 /**
  * Persistência de progresso de reprodução ("continue assistindo").
