@@ -304,12 +304,15 @@ function App() {
       <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-indigo-500/5 blur-[100px] rounded-full pointer-events-none z-0" />
 
       <header className="h-24 px-8 flex items-center justify-between relative z-50">
-        <div className="flex items-center gap-3 font-black text-3xl tracking-tighter">
+        <div className="flex items-center gap-3 font-black text-3xl tracking-tighter cursor-default">
           <Play className="w-7 h-7 text-primary fill-current" /> SuperTech
         </div>
         <button 
-          onClick={() => setIsLoginOpen(true)}
-          className="px-6 h-12 rounded-2xl bg-primary text-white font-black uppercase text-xs tracking-widest shadow-glow hover:scale-105 transition-all"
+          onClick={() => {
+            console.log("Clicou no botão Entrar da Header");
+            setIsLoginOpen(true);
+          }}
+          className="px-6 h-12 rounded-2xl bg-primary text-white font-black uppercase text-xs tracking-widest shadow-glow hover:scale-105 active:scale-95 transition-all z-[60]"
         >
           Entrar
         </button>
