@@ -225,7 +225,7 @@ Deno.serve(async (req) => {
       const delays = [2000, 4000, 8000];
       for (const delay of delays) {
         await new Promise((r) => setTimeout(r, delay));
-        result = await fetchWithRetries(url);
+        result = await fetchWithRetries(url, ip);
         if (result.ok || result.reason !== "MAX_CONNECTIONS") break;
       }
     }
