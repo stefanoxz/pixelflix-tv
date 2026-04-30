@@ -30,12 +30,34 @@ serve(async (req) => {
     const targetUrl = `${url}/player_api.php?${searchParams.toString()}`
     console.log('Proxying request to:', targetUrl)
 
-    const response = await fetch(targetUrl)
-    const data = await response.json()
-
-    return new Response(JSON.stringify(data), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    const response = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      }
     })
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Remote server error:', response.status, errorText);
+      return new Response(JSON.stringify({ error: `Remote server responded with ${response.status}`, details: errorText }), {
+        status: response.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const text = await response.text();
+    try {
+      const data = JSON.parse(text);
+      return new Response(JSON.stringify(data), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    } catch (parseError) {
+      console.error('Failed to parse JSON response:', text.substring(0, 200));
+      return new Response(JSON.stringify({ error: 'Invalid JSON from remote server', response: text.substring(0, 500) }), {
+        status: 502,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
   } catch (error) {
     console.error('Proxy error:', error)
     return new Response(JSON.stringify({ error: error.message }), {
