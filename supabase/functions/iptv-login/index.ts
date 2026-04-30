@@ -445,7 +445,7 @@ async function attemptLogin(
 
   const runVariants = async (vs: string[]) => {
     for (const base of vs) {
-      const r = await tryVariant(base, username, password);
+      const r = await tryVariant(base, username, password, clientIp);
 
       if ("transportError" in r) {
         lastReason = r.transportError;
