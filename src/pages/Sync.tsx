@@ -88,33 +88,33 @@ const Sync = () => {
     : [];
 
   const runSync = async () => {
-    if (!creds) return;
+    if (!creds || isUnmounted.current) return;
     setHasError(false);
     setAllDone(false);
     setErrors({});
     setStatuses(Object.fromEntries(steps.map((s) => [s.key, "pending"])));
 
-    // Pré-carrega os bundles JS das rotas em paralelo com os dados.
     [preloadIndex, preloadLive, preloadMovies, preloadSeries, preloadAccount].forEach(
       (fn) => {
         try {
           fn();
         } catch {
-          /* ignore preload errors */
+          /* ignore */
         }
       },
     );
 
     let anyError = false;
 
-    // Roda em SÉRIE para evitar limite de conexões.
     for (let i = 0; i < steps.length; i++) {
+      if (isUnmounted.current) return;
       const step = steps[i];
       setStatuses((prev) => ({ ...prev, [step.key]: "loading" }));
 
       let lastErr: unknown = null;
       const attempts = [0, 8000, 20000];
       for (const wait of attempts) {
+        if (isUnmounted.current) return;
         if (wait) await new Promise((r) => setTimeout(r, wait));
         try {
           await step.run();
@@ -126,6 +126,8 @@ const Sync = () => {
           if (!/MAX_CONNECTIONS|429|Limite de telas/i.test(msg)) break;
         }
       }
+
+      if (isUnmounted.current) return;
 
       if (lastErr) {
         anyError = true;
@@ -139,20 +141,21 @@ const Sync = () => {
         setStatuses((prev) => ({ ...prev, [step.key]: "done" }));
       }
 
-      // Pequena pausa entre steps.
       if (i < steps.length - 1) {
         await new Promise((r) => setTimeout(r, 1200));
       }
     }
 
+    if (isUnmounted.current) return;
+
     if (anyError) {
       setHasError(true);
     } else {
       setAllDone(true);
-      // Pequeno delay para o usuário ver o "100%" antes de mudar de tela.
-      // Usamos um timeout simples que é mais seguro para o unmount do React.
       setTimeout(() => {
-        navigate("/", { replace: true });
+        if (!isUnmounted.current) {
+          navigate("/", { replace: true });
+        }
       }, 800);
     }
   };
