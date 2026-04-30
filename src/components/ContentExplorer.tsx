@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Search, Grid, List as ListIcon, Play, Star, Info, X } from 'lucide-react';
+import { ChevronLeft, Search, Grid, List as ListIcon, Play, Star, Info, X, Settings } from 'lucide-react';
 
 interface ContentExplorerProps {
   type: 'live' | 'movie' | 'series';
