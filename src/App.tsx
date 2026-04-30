@@ -78,18 +78,32 @@ function App() {
   }, [])
 
   const loadList = async (creds: any) => {
-    if (!creds) return
-    setLoading(true)
+    if (!creds) {
+      alert("Por favor, insira uma URL M3U válida (ex: http://servidor.com/get.php?username=...)");
+      return;
+    }
+    setLoading(true);
     try {
-      const m3u = await fetchM3u(creds)
-      const { streams: s, categories: c } = parseM3uToData(m3u)
-      setStreams(s)
-      setCategories([{ category_id: 'Todos', category_name: 'Todos' }, ...c])
-      setIsLoginOpen(false)
-      localStorage.setItem('last_list', JSON.stringify(creds))
+      console.log("Iniciando sincronização da lista...");
+      const m3u = await fetchM3u(creds);
+      const { streams: s, categories: c } = parseM3uToData(m3u);
+      
+      if (s.length === 0) {
+        alert("A lista foi carregada, mas não encontramos nenhum canal. Verifique se o usuário/senha estão corretos.");
+        return;
+      }
+
+      setStreams(s);
+      setCategories([{ category_id: 'Todos', category_name: 'Todos' }, ...c]);
+      setIsLoginOpen(false);
+      localStorage.setItem('last_list', JSON.stringify(creds));
+      console.log("Lista carregada com sucesso:", s.length, "canais.");
     } catch (e) { 
-      alert("Erro de conexão. Servidores IPTV podem ter restrições de CORS.") 
-    } finally { setLoading(false) }
+      console.error("Erro no loadList:", e);
+      alert("Erro ao conectar com o servidor IPTV. Isso pode ser um bloqueio de CORS ou o servidor está offline."); 
+    } finally { 
+      setLoading(false); 
+    }
   }
 
   const filtered = streams.filter(s => 
