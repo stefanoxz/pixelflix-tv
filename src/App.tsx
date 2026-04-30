@@ -348,7 +348,7 @@ function App() {
       {isLoginOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300">
           <div className="bg-neutral-900 border border-white/5 p-10 rounded-[48px] w-full max-w-xl space-y-8 shadow-2xl relative">
-            <button onClick={() => setIsLoginOpen(false)} className="absolute top-8 right-8 text-neutral-500 hover:text-white"><X /></button>
+            <button onClick={() => setIsLoginOpen(false)} className="absolute top-8 right-8 text-neutral-500 hover:text-white transition-colors z-10"><X /></button>
             
             <div className="space-y-2">
               <h2 className="text-4xl font-black text-white tracking-tighter">Entrar no <span className="text-primary italic">Cloud</span></h2>
