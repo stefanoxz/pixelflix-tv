@@ -1,7 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import {
-  reportDiagnostic,
-} from "@/lib/clientDiagnostics";
 import type {
   IptvCredentials,
   UserInfo,
@@ -190,8 +187,6 @@ export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> 
   });
 }
 
-
-
 export async function iptvLoginM3u(creds: IptvCredentials): Promise<LoginResponse & { auto_registered?: boolean }> {
   try {
     const r = await invokeSafe<LoginResponse & { auto_registered?: boolean }>("iptv-login", { ...creds, mode: "m3u_register" }, "login");
@@ -216,7 +211,6 @@ export async function iptvLoginM3u(creds: IptvCredentials): Promise<LoginRespons
     }
   }
 }
-
 
 export async function fetchAllowedServers(): Promise<string[]> {
   const r = await invokeSafe<{ allowed: boolean, candidates?: string[] }>("iptv-login", { mode: "validate" });
@@ -262,8 +256,6 @@ export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra
       
       if (error) {
         console.error(`[iptv-fetch] Edge function error for ${action}:`, error);
-        // Fallback final: se a Edge Function falhou (provável bloqueio de IP/Datacenter),
-        // tentamos via proxy público de CORS como última esperança.
         return tryPublicProxyFetch<T>(directUrl, action);
       }
       
@@ -274,7 +266,6 @@ export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra
       return data as T;
     } catch (e: any) {
       if (e instanceof IptvApiError) throw e;
-      // Se deu erro de rede na Edge Function, tenta o proxy público
       try {
         return await tryPublicProxyFetch<T>(directUrl, action);
       } catch {
@@ -321,17 +312,27 @@ async function tryPublicProxyFetch<T>(url: string, action: string): Promise<T> {
         } as unknown as T;
       }
       
-      // Se estamos tentando buscar categorias/streams e recebemos um M3U,
-      // podemos tentar extrair o que foi pedido.
-      if (action.includes("categories")) return [] as unknown as T;
-      if (action.includes("streams") || action === "get_series") return [] as unknown as T;
+      if (action.includes("categories") || action.includes("streams") || action === "get_series") {
+        return parseM3uToXtream(text, action) as unknown as T;
+      }
       
       throw new Error("O servidor retornou uma playlist M3U em vez de dados JSON.");
+    }
+
+    return JSON.parse(text) as T;
+  } catch (e) {
+    if (!url.includes("get.php") && (action.includes("categories") || action.includes("streams") || action === "get_series")) {
+      const urlObj = new URL(url);
+      const m3uUrl = `${urlObj.origin}/get.php?username=${urlObj.searchParams.get("username")}&password=${urlObj.searchParams.get("password")}&type=m3u_plus&output=ts`;
+      console.log(`[iptv-fetch] Retrying via get.php proxy due to failure...`);
+      return tryPublicProxyFetch<T>(m3uUrl, action);
+    }
+    
+    console.error(`[iptv-fetch] Public proxy failed for ${action}:`, e);
+    throw new IptvApiError(`O servidor IPTV está bloqueando conexões. Verifique sua conexão ou tente outra rede.`);
+  }
 }
 
-/**
- * Utilitário básico para converter conteúdo M3U em objetos Xtream-like.
- */
 function parseM3uToXtream(m3u: string, action: string): any {
   if (action.includes("categories")) {
     const categories = new Set<string>();
@@ -376,27 +377,6 @@ function parseM3uToXtream(m3u: string, action: string): any {
   return [];
 }
 
-
-    return JSON.parse(text) as T;
-  } catch (e) {
-    // Se falhou no player_api, mas é um servidor que sabemos que funciona melhor com get.php
-    if (!url.includes("get.php") && (action.includes("categories") || action.includes("streams") || action === "get_series")) {
-      const urlObj = new URL(url);
-      const m3uUrl = `${urlObj.origin}/get.php?username=${urlObj.searchParams.get("username")}&password=${urlObj.searchParams.get("password")}&type=m3u_plus&output=ts`;
-      console.log(`[iptv-fetch] Retrying via get.php proxy due to player_api failure...`);
-      // Retorna lista vazia por enquanto para não travar a UI, 
-      // mas o ideal seria parsear o M3U. Em servidores 444, [] é melhor que Erro.
-      return [] as unknown as T;
-    }
-    
-    console.error(`[iptv-fetch] Public proxy also failed for ${action}:`, e);
-    throw new IptvApiError(`O servidor IPTV está bloqueando conexões. Tente usar uma VPN ou outra rede.`);
-  }
-}
-
-
-
-
 export const getLiveCategories = (c: IptvCredentials) => iptvFetch<Category[]>(c, "get_live_categories");
 export const getLiveStreams = (c: IptvCredentials) => iptvFetch<LiveStream[]>(c, "get_live_streams");
 export const getVodCategories = (c: IptvCredentials) => iptvFetch<Category[]>(c, "get_vod_categories");
@@ -429,10 +409,6 @@ function decodeB64(s: string | undefined | null): string {
   } catch { return s; }
 }
 
-// =============================================================================
-// Streaming
-// =============================================================================
-
 export function buildLiveStreamUrl(creds: IptvCredentials, streamId: number, directSource?: string) {
   if (directSource && directSource.startsWith("http")) return directSource;
   const base = (creds.streamBase || creds.server || "").replace(/\/+$/, "");
@@ -463,41 +439,27 @@ export async function primeStreamToken(params: { url: string, kind: string, iptv
 
 export function proxyImageUrl(url: string | null | undefined, opts?: { w?: number, h?: number, q?: number }) {
   if (!url) return "";
-  const trimmed = url.trim();
-  if (!trimmed) return "";
-  // Removido proxy Weserv: retornando URL direta para evitar bloqueios de proxy
-  return trimmed;
+  return url.trim();
 }
 
-const PROXY_HOST_PREFIX = "iptv.proxy.host:";
-const ENGINE_PREF_PREFIX = "iptv.engine.pref:";
-
 export function getHostProxyMode(url: string | null | undefined): StreamMode {
-  // Removido modo proxy: sempre redireciona diretamente
   return "redirect";
 }
 
 export function markHostProxyRequired(url: string | null | undefined, reason: string) {
-  // Desativado: não forçamos mais uso de proxy por falha de host
   return false;
 }
 
-export function clearHostProxyMode(url: string | null | undefined) {
-  // No-op agora que proxy está desativado
-}
-
+export function clearHostProxyMode(url: string | null | undefined) {}
 export function markHostSuccess(url: string | null | undefined) {}
 export function markHostFailure(url: string | null | undefined, reason: string) {}
-
-export function shouldUseProxy(url: string | null | undefined): boolean {
-  return false;
-}
+export function shouldUseProxy(url: string | null | undefined): boolean { return false; }
 
 export function getPreferredEngine(url: string | null | undefined): "hls" | "mpegts" {
   if (!url) return "hls";
   try {
     const host = new URL(url).hostname;
-    return (localStorage.getItem(`${ENGINE_PREF_PREFIX}${host}`) as any) || "hls";
+    return (localStorage.getItem(`iptv.engine.pref:${host}`) as any) || "hls";
   } catch { return "hls"; }
 }
 
@@ -505,7 +467,7 @@ export function setPreferredEngine(url: string | null | undefined, engine: "hls"
   if (!url) return;
   try {
     const host = new URL(url).hostname;
-    localStorage.setItem(`${ENGINE_PREF_PREFIX}${host}`, engine);
+    localStorage.setItem(`iptv.engine.pref:${host}`, engine);
   } catch {}
 }
 
@@ -525,8 +487,8 @@ export function isValidStreamUrl(url?: string | null): url is string {
 
 export function getFormatBadge(ext?: string, url?: string | null) {
   const strategy = getPlaybackStrategy(ext, url || undefined);
-  if (strategy.mode === "external") return { label: "EXTERNO", tone: "yellow", tooltip: "Player externo" };
-  return { label: "STREAM", tone: "blue", tooltip: "Streaming" };
+  if (strategy.mode === "external") return { label: "EXTERNO", tone: "yellow" as const, tooltip: "Player externo" };
+  return { label: "STREAM", tone: "blue" as const, tooltip: "Streaming" };
 }
 
 export function getStreamType(ext?: string, url?: string): any {
