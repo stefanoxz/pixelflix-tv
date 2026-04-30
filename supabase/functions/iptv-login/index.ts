@@ -943,7 +943,7 @@ Deno.serve(async (req) => {
       //    (caso comum: Cloudflare na frente de origin que só serve M3U)
       const failStatus = (r as { status?: number }).status;
       const failReason = (r as { reason?: string }).reason ?? "";
-      const playlistFallbackDebug: any = undefined;
+      let playlistFallbackDebug: any = undefined;
       const shouldTryPlaylist =
         !r.ok &&
         (failStatus === 200 || failStatus === 401 || failStatus === 404) &&
