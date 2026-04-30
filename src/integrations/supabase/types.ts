@@ -128,6 +128,24 @@ export type Database = {
         }
         Relationships: []
       }
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string | null
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       blocked_dns_failures: {
         Row: {
           created_at: string

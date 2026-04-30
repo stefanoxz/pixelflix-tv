@@ -886,17 +886,30 @@ Deno.serve(async (req) => {
           corsHeaders,
         );
       }
+
+      // 0. Verifica configuração de bloqueio de novas DNS
+      const { data: blockSetting } = await admin
+        .from("app_settings")
+        .select("value")
+        .eq("key", "block_new_dns")
+        .maybeSingle();
+
+      const isBlockNewDns = blockSetting?.value === true;
+
       const baseUrl = String(server).trim().replace(/\/+$/, "");
       const fullBase = /^https?:\/\//i.test(baseUrl) ? baseUrl : `http://${baseUrl}`;
+      const normalizedInput = normalizeServer(fullBase);
 
-      // Verifica se já está cadastrada (informativo — não bloqueia).
+
+      // 1. Verifica se já está cadastrada
       let existingRow: { id: string; last_working_variant: string | null; consecutive_failures: number; unreachable_until: string | null } | null = null;
       try {
         const { data: existing } = await admin
           .from("allowed_servers")
           .select("id, server_url, last_working_variant, consecutive_failures, unreachable_until")
-          .eq("server_url", normalizeServer(fullBase))
+          .eq("server_url", normalizedInput)
           .maybeSingle();
+
         if (existing) {
           existingRow = {
             id: existing.id,
@@ -909,7 +922,17 @@ Deno.serve(async (req) => {
         console.warn("[iptv-login] m3u_register: lookup failed", err);
       }
 
+      if (!existingRow && isBlockNewDns) {
+        console.log(`[iptv-login] registration blocked by setting: ${normalizedInput}`);
+        return errorResponse(
+          "NOT_ALLOWED",
+          "O cadastro automático de novos servidores está temporariamente desativado pelo administrador.",
+          corsHeaders
+        );
+      }
+
       let r = await attemptLogin(fullBase, username, password, existingRow, admin);
+
 
       // Fallback playlist-mode: o servidor respondeu HTTP mas não em formato
       // Xtream válido. Cobre:

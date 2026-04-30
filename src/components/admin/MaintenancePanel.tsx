@@ -16,11 +16,13 @@ import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { invokeAdminApi } from "@/lib/adminApi";
+import { supabase } from "@/integrations/supabase/client";
 import {
   getPlayerLogsEnabled,
   setPlayerLogsEnabled,
 } from "@/hooks/usePlayerLogsEnabled";
-import { Database, Trash2, RefreshCw, Activity, AlertTriangle, Clock, Terminal } from "lucide-react";
+import { Database, Trash2, RefreshCw, Activity, AlertTriangle, Clock, Terminal, Shield } from "lucide-react";
+
 
 interface TableStat {
   table: string;
@@ -58,6 +60,43 @@ export default function MaintenancePanel() {
   const [confirm, setConfirm] = useState<TableStat | null>(null);
   const [confirmEvict, setConfirmEvict] = useState(false);
   const [playerLogs, setPlayerLogs] = useState<boolean>(() => getPlayerLogsEnabled());
+  const [blockNewDns, setBlockNewDns] = useState(false);
+  const [dnsSettingLoading, setDnsSettingLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchDnsSetting = async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "block_new_dns")
+        .single();
+      if (data) {
+        setBlockNewDns(Boolean(data.value));
+      }
+    };
+    void fetchDnsSetting();
+  }, []);
+
+  const toggleBlockNewDns = async (next: boolean) => {
+    setDnsSettingLoading(true);
+    try {
+      const { error } = await supabase
+        .from("app_settings")
+        .upsert({ key: "block_new_dns", value: next });
+
+      if (error) throw error;
+      setBlockNewDns(next);
+      toast.success(
+        next
+          ? "Novas DNSs serão bloqueadas"
+          : "Novas DNSs poderão ser cadastradas",
+      );
+    } catch (e) {
+      toast.error("Falha ao salvar configuração", { description: (e as Error).message });
+    } finally {
+      setDnsSettingLoading(false);
+    }
+  };
 
   const togglePlayerLogs = (next: boolean) => {
     setPlayerLogs(next);
@@ -154,34 +193,65 @@ export default function MaintenancePanel() {
         </Card>
       </div>
 
-      {/* Diagnóstico pessoal — só visível pra admin */}
-      <Card className="p-6 bg-gradient-card border-border/50">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-lg text-primary bg-primary/10 flex items-center justify-center shrink-0">
-              <Terminal className="h-5 w-5" />
+      {/* Configurações Globais */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Bloqueio de DNS */}
+        <Card className="p-6 bg-gradient-card border-border/50">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-lg text-destructive bg-destructive/10 flex items-center justify-center shrink-0">
+                <Shield className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Bloquear novas DNS</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Se ativado, novas DNS não serão cadastradas automaticamente via login M3U.
+                  Útil para manter controle total sobre os servidores permitidos.
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg font-semibold">Logs do player (sua sessão)</h2>
-              <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
-                Mostra um botão "Logs" sobre o player de vídeo com causa raiz, motor (HLS/MPEG-TS),
-                upstream e tempos de bootstrap. Só você vê — usuários comuns nunca veem esse painel.
-                A telemetria é coletada de qualquer jeito; isso aqui só liga/desliga o overlay visual.
-              </p>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="block-dns-toggle" className="text-sm">
+                {dnsSettingLoading ? "..." : blockNewDns ? "Bloqueado" : "Liberado"}
+              </Label>
+              <Switch
+                id="block-dns-toggle"
+                checked={blockNewDns}
+                disabled={dnsSettingLoading}
+                onCheckedChange={toggleBlockNewDns}
+              />
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="player-logs-toggle" className="text-sm">
-              {playerLogs ? "Ativo" : "Desligado"}
-            </Label>
-            <Switch
-              id="player-logs-toggle"
-              checked={playerLogs}
-              onCheckedChange={togglePlayerLogs}
-            />
+        </Card>
+
+        {/* Diagnóstico pessoal — só visível pra admin */}
+        <Card className="p-6 bg-gradient-card border-border/50">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-lg text-primary bg-primary/10 flex items-center justify-center shrink-0">
+                <Terminal className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Logs do player (sua sessão)</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Mostra um botão "Logs" sobre o player com causa raiz, motor e telemetria.
+                  Só você vê — usuários comuns nunca veem esse painel.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="player-logs-toggle" className="text-sm">
+                {playerLogs ? "Ativo" : "Desligado"}
+              </Label>
+              <Switch
+                id="player-logs-toggle"
+                checked={playerLogs}
+                onCheckedChange={togglePlayerLogs}
+              />
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
 
       {/* Ações rápidas */}
       <Card className="p-6 bg-gradient-card border-border/50">
