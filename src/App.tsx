@@ -360,26 +360,27 @@ function App() {
               try {
                 const formData = new FormData(e.target as HTMLFormElement);
                 const urlValue = formData.get('url') as string;
-                console.log("Processando URL:", urlValue);
+                if (!urlValue) return;
                 const creds = parseM3uUrl(urlValue);
                 loadList(creds);
               } catch (err) {
-                console.error("Erro no submit:", err);
-                alert("Ocorreu um erro ao processar a lista.");
+                console.error("Submit error:", err);
+                alert("Ocorreu um erro inesperado.");
               }
             }} className="space-y-6">
               <div className="relative group">
-                <Link2 className="absolute left-5 top-1/2 -translate-y-1/2 text-neutral-600 group-focus-within:text-primary transition-colors" />
+                <Link2 className="absolute left-5 top-1/2 -translate-y-1/2 text-neutral-600 group-focus-within:text-primary transition-colors pointer-events-none" />
                 <input 
                   name="url" 
                   autoFocus
                   placeholder="http://safawe.space/get.php?username=..." 
                   className="w-full bg-black border border-white/5 rounded-[24px] py-6 pl-14 pr-6 text-white placeholder:text-neutral-700 focus:border-primary/50 transition-all outline-none" 
+                  required
                 />
               </div>
               <button 
                 disabled={loading} 
-                className="w-full h-20 bg-primary text-white rounded-[24px] font-black uppercase tracking-[0.2em] shadow-glow flex items-center justify-center gap-3 disabled:opacity-50"
+                className="w-full h-20 bg-primary text-white rounded-[24px] font-black uppercase tracking-[0.2em] shadow-glow flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? <Loader2 className="animate-spin" /> : 'Sincronizar Lista'}
               </button>
