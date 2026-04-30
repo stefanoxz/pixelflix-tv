@@ -253,15 +253,21 @@ function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col relative overflow-hidden">
-      {/* Background Decor */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[50vh] bg-gradient-to-b from-primary/10 via-background to-transparent" />
-      <div className="absolute top-1/4 right-0 w-[500px] h-[500px] bg-primary/10 blur-[120px] rounded-full" />
-      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-indigo-500/5 blur-[100px] rounded-full" />
+      {/* Background Decor - Adicionado pointer-events-none para não bloquear cliques */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[50vh] bg-gradient-to-b from-primary/10 via-background to-transparent pointer-events-none z-0" />
+      <div className="absolute top-1/4 right-0 w-[500px] h-[500px] bg-primary/10 blur-[120px] rounded-full pointer-events-none z-0" />
+      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-indigo-500/5 blur-[100px] rounded-full pointer-events-none z-0" />
 
-      <header className="h-24 px-8 flex items-center justify-between relative z-10">
+      <header className="h-24 px-8 flex items-center justify-between relative z-50">
         <div className="flex items-center gap-3 font-black text-3xl tracking-tighter">
           <Play className="w-7 h-7 text-primary fill-current" /> SuperTech
         </div>
+        <button 
+          onClick={() => setIsLoginOpen(true)}
+          className="px-6 h-12 rounded-2xl bg-primary text-white font-black uppercase text-xs tracking-widest shadow-glow hover:scale-105 transition-all"
+        >
+          Entrar
+        </button>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center p-8 relative z-10">
