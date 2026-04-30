@@ -99,7 +99,12 @@ export default function MaintenancePanel() {
   };
 
   const togglePlayerLogs = (next: boolean) => {
-...
+    setPlayerLogs(next);
+    setPlayerLogsEnabled(next);
+    toast.success(
+      next
+        ? "Painel 'Logs do player' ativado para sua sessão"
+        : "Painel 'Logs do player' desativado",
     );
   };
 
