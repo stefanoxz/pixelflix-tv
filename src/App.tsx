@@ -7,6 +7,7 @@ import { Stream, Category } from './types/iptv'
 const Player = ({ stream, onBack }: { stream: Stream, onBack: () => void }) => {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     if (!videoRef.current || !stream.direct_source) return
@@ -21,6 +22,13 @@ const Player = ({ stream, onBack }: { stream: Stream, onBack: () => void }) => {
           setLoading(false)
           video.play().catch(() => {})
         })
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            console.error("HLS Fatal Error:", data)
+            setError(true)
+            setLoading(false)
+          }
+        })
         return () => hls.destroy()
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = stream.direct_source!
@@ -31,8 +39,18 @@ const Player = ({ stream, onBack }: { stream: Stream, onBack: () => void }) => {
       }
     }
     
-    return initPlayer()
+    initPlayer()
   }, [stream])
+
+  if (error) return (
+    <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center p-8 text-center">
+      <Tv className="w-16 h-16 text-red-500 mb-4" />
+      <h2 className="text-xl font-bold">Erro ao reproduzir canal</h2>
+      <p className="text-neutral-500 mb-6">O servidor não respondeu ou o stream é incompatível.</p>
+      <button onClick={onBack} className="px-6 py-3 bg-white/10 rounded-xl">Voltar para a lista</button>
+    </div>
+  )
+
 
   return (
     <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center animate-in fade-in duration-300">
