@@ -214,7 +214,7 @@ const Admin = () => {
             <TabsContent value="team"><TeamPanel /></TabsContent>
             <TabsContent value="maintenance"><MaintenancePanel /></TabsContent>
             <TabsContent value="demo-creds"><DemoCredentialsPanel /></TabsContent>
-            {/* Stats desativados */}
+            <TabsContent value="stats"><StatsPanel /></TabsContent>
 
             <TabsContent value="endpoint-test"><EndpointTestPanel allowedServers={allowed.map((s) => ({ server_url: s.server_url, label: s.label }))} onServerApplied={refresh} /></TabsContent>
             {/* Diagnósticos e eventos desativados */}
