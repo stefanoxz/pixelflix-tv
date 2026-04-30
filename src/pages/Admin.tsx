@@ -1,5 +1,6 @@
 import { useState, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTheme } from "next-themes";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,7 +44,7 @@ import StreamEventsPanel from "@/components/admin/StreamEventsPanel";
 import { visibleAdminNav, findNavItem } from "@/components/admin/adminNav";
 import AdminMobileTopBar from "@/components/admin/AdminMobileTopBar";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
-import { LogOut, Shield, RefreshCw, X, Pencil, Trash2, Loader2 } from "lucide-react";
+import { LogOut, Shield, RefreshCw, X, Pencil, Trash2, Loader2, Moon, Sun } from "lucide-react";
 import { useAdminData } from "@/hooks/useAdminData";
 import type { AllowedServer, MonitoringSession, MonitoringBlock } from "@/types/admin";
 
