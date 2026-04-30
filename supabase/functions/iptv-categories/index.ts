@@ -135,6 +135,13 @@ async function fetchWithRetries(url: string, clientIp?: string, attemptsPerUa = 
           continue;
         }
 
+        if (res.status === 403) {
+          // Se for 403, tenta o próximo User-Agent antes de desistir
+          lastStatus = 403;
+          lastReason = "HTTP 403";
+          continue;
+        }
+
         if (SOFT_NOT_FOUND_STATUSES.has(res.status)) {
           // Tenta ler o corpo: muitos painéis devolvem "LIMITE DE TELAS" /
           // "MAX CONNECTIONS REACHED" com 401/403. Detectamos para
