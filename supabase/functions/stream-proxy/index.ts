@@ -64,6 +64,13 @@ const SEGMENT_FETCH_TIMEOUT_MS = 12_000;
 // Cap concurrent streamed segments per client IP /24 to avoid abuse.
 const MAX_STREAM_CONCURRENCY_PER_IP = 6;
 
+// Free Proxies List (CORS & Region bypass)
+const PUBLIC_PROXIES = [
+  "https://cors-anywhere.herokuapp.com/",
+  "https://api.allorigins.win/raw?url=",
+  "https://proxy.cors.sh/",
+];
+
 // In-memory per-IP failure tracking (best-effort, per worker)
 const ipFailures = new Map<string, { count: number; first: number; until?: number }>();
 function noteFailure(ip: string) {
@@ -335,22 +342,35 @@ Deno.serve(async (req) => {
       const range = req.headers.get("range");
       if (range) upstreamHeaders["Range"] = range;
 
-      let upstream: Response;
-      try {
-        // half-duplex streaming: começa a entregar bytes assim que chegam,
-        // sem aguardar o corpo todo. Reduz TTFF do primeiro segmento.
-        const fetchInit: RequestInit & { duplex?: string } = {
-          method: "GET",
-          redirect: "follow",
-          headers: upstreamHeaders,
-          signal: AbortSignal.timeout(SEGMENT_FETCH_TIMEOUT_MS),
-          duplex: "half",
-        };
-        upstream = await fetch(payload.u, fetchInit);
-      } catch (err) {
+      let upstream: Response | null = null;
+      let lastError: string = "unknown";
+
+      // Try local fetch first, then fallback to public proxies if it fails
+      const targets = [payload.u, ...PUBLIC_PROXIES.map(p => `${p}${encodeURIComponent(payload.u)}`)];
+      
+      for (const targetUrl of targets) {
+        try {
+          const fetchInit: RequestInit & { duplex?: string } = {
+            method: "GET",
+            redirect: "follow",
+            headers: upstreamHeaders,
+            signal: AbortSignal.timeout(SEGMENT_FETCH_TIMEOUT_MS),
+            duplex: "half",
+          };
+          const res = await fetch(targetUrl, fetchInit);
+          if (res.ok) {
+            upstream = res;
+            break;
+          }
+          lastError = `Status ${res.status}`;
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : "fetch_failed";
+        }
+      }
+
+      if (!upstream) {
         ipBump(ipKey, -1);
-        const reason = err instanceof Error ? err.message : "fetch_failed";
-        return new Response(`Upstream fetch failed: ${reason}`, {
+        return new Response(`Upstream fetch failed: ${lastError}`, {
           status: 502,
           headers: { ...cors, "Content-Type": "text/plain" },
         });
@@ -411,21 +431,35 @@ Deno.serve(async (req) => {
     } as const;
 
     const fetchPlaylist = async (rawUrl: string): Promise<{ text: string; finalUrl: URL } | { error: Response }> => {
-      const r = await fetch(rawUrl, { method: "GET", redirect: "follow", headers: upstreamHeaders });
-      const fUrl = new URL(r.url || rawUrl);
-      if (isPrivateHost(fUrl.host)) {
-        return { error: new Response("Forbidden", { status: 403, headers: cors }) };
+      let lastError: string = "unknown";
+      const targets = [rawUrl, ...PUBLIC_PROXIES.map(p => `${p}${encodeURIComponent(rawUrl)}`)];
+
+      for (const targetUrl of targets) {
+        try {
+          const r = await fetch(targetUrl, { method: "GET", redirect: "follow", headers: upstreamHeaders });
+          if (!r.ok) {
+            lastError = `Status ${r.status}`;
+            continue;
+          }
+          const fUrl = new URL(r.url || rawUrl);
+          if (isPrivateHost(fUrl.host)) continue;
+          
+          const t = await r.text();
+          if (t.includes("#EXTM3U") || t.includes("#EXT-X")) {
+            return { text: t, finalUrl: fUrl };
+          }
+          lastError = "Not a playlist";
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : "fetch_failed";
+        }
       }
-      const t = await r.text();
-      if (!t.includes("#EXTM3U") && !t.includes("#EXT-X")) {
-        return {
-          error: new Response("Bad upstream playlist", {
-            status: 502,
-            headers: { ...cors, "Content-Type": "text/plain" },
-          }),
-        };
-      }
-      return { text: t, finalUrl: fUrl };
+
+      return {
+        error: new Response(`Playlist fetch failed: ${lastError}`, {
+          status: 502,
+          headers: { ...cors, "Content-Type": "text/plain" },
+        }),
+      };
     };
 
     // ===== Pull master =====
