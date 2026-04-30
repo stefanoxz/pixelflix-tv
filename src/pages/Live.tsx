@@ -34,7 +34,6 @@ function preheatStreamFunctions() {
   if (!base) return;
   const opts: RequestInit = { method: "OPTIONS", keepalive: true, mode: "cors" };
   try { void fetch(`${base}/functions/v1/stream-token`, opts); } catch { /* noop */ }
-  try { void fetch(`${base}/functions/v1/stream-proxy`, opts); } catch { /* noop */ }
   try { void fetch(`${base}/functions/v1/stream-event`, opts); } catch { /* noop */ }
 }
 

@@ -684,9 +684,7 @@ export const Player = forwardRef<HTMLVideoElement, PlayerProps>(function Player(
       // historically misbehaves"; otherwise honour the short-lived
       // proxy-required cache (30min). New hosts default to "redirect".
       const decisionUrl = rawUrl ?? src;
-      segmentModeRef.current = shouldUseProxy(decisionUrl)
-        ? "stream"
-        : getHostProxyMode(decisionUrl);
+      segmentModeRef.current = "redirect";
       pushLog({
         source: "diag",
         level: "info",
