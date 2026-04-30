@@ -294,6 +294,22 @@ interface UpsertEntry {
 
 const TOKEN_TTL_SECONDS = 24 * 60 * 60;
 
+Deno.serve(async (req: Request) => {
+  const cors = corsFor(req);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method !== "POST") {
+    return jsonResp(405, { error: "method_not_allowed" }, cors);
+  }
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonResp(400, { error: "invalid_json" }, cors);
+  }
+
+  const action = String(body?.action ?? "");
+
   try {
     // Edge Function desativada para limpeza total do sistema.
     // Retorna respostas vazias de sucesso para manter o app funcionando sem erros visuais.
@@ -304,4 +320,5 @@ const TOKEN_TTL_SECONDS = 24 * 60 * 60;
     return jsonResp(200, { ok: true }, cors);
   }
 });
+
 
