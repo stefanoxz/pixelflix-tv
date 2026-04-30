@@ -168,11 +168,27 @@ export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> 
   const loginUrl = `${creds.server}/player_api.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}`;
   
   return tryBrowserFetch<LoginResponse>(loginUrl, async () => {
-    const r = await invokeSafe<LoginResponse>("iptv-login", { ...creds, mode: "login" }, "login");
-    if (r.ok) return r.data;
-    throw new IptvLoginError((r as any).error, (r as any).code, (r as any).extra?.debug);
+    try {
+      const r = await invokeSafe<LoginResponse>("iptv-login", { ...creds, mode: "login" }, "login");
+      if (r.ok) return r.data;
+      
+      // Se a Edge Function falhou por bloqueio (SERVER_UNREACHABLE ou erro 444), tenta proxy público
+      if (r.code === "SERVER_UNREACHABLE" || r.error?.includes("444")) {
+        return await tryPublicProxyFetch<LoginResponse>(loginUrl, "login");
+      }
+      
+      throw new IptvLoginError((r as any).error, (r as any).code, (r as any).extra?.debug);
+    } catch (e: any) {
+      if (e instanceof IptvLoginError) throw e;
+      try {
+        return await tryPublicProxyFetch<LoginResponse>(loginUrl, "login");
+      } catch {
+        throw e;
+      }
+    }
   });
 }
+
 
 export async function iptvLoginM3u(creds: IptvCredentials): Promise<LoginResponse & { auto_registered?: boolean }> {
   const r = await invokeSafe<LoginResponse & { auto_registered?: boolean }>("iptv-login", { ...creds, mode: "m3u_register" }, "login");
