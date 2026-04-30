@@ -138,7 +138,8 @@ const App = () => (
         </BrowserRouter>
       </TooltipProvider>
     </IptvProvider>
-  </ThemeProvider>
+    </ThemeProvider>
+  </ErrorBoundary>
 );
 
 export default App;
