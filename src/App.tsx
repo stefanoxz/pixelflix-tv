@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
+import { ContentExplorer } from './components/ContentExplorer';
 
 type View = 'login' | 'dashboard' | 'live' | 'movie' | 'series' | 'settings';
 
@@ -22,6 +23,7 @@ function App() {
   return (
     <>
       {currentView === 'login' && <Login onLogin={handleLogin} />}
+      
       {currentView === 'dashboard' && (
         <Dashboard 
           onLogout={handleLogout} 
@@ -29,11 +31,17 @@ function App() {
         />
       )}
       
-      {/* Mocking other views for now */}
       {(currentView === 'live' || currentView === 'movie' || currentView === 'series') && (
+        <ContentExplorer 
+          type={currentView as 'live' | 'movie' | 'series'} 
+          onBack={() => setCurrentView('dashboard')} 
+        />
+      )}
+
+      {currentView === 'settings' && (
         <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-8 text-center">
-          <h2 className="text-4xl font-black mb-4 uppercase tracking-widest">{currentView} Content</h2>
-          <p className="text-zinc-500 mb-8 max-w-md">Esta funcionalidade está sendo implementada para carregar os dados do seu servidor Xtream Codes.</p>
+          <h2 className="text-4xl font-black mb-4 uppercase tracking-widest">Configurações</h2>
+          <p className="text-zinc-500 mb-8 max-w-md">Painel de configurações em desenvolvimento.</p>
           <button 
             onClick={() => setCurrentView('dashboard')}
             className="px-8 py-4 bg-white text-black font-black rounded-2xl hover:bg-zinc-200 transition-all"
