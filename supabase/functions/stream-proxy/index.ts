@@ -338,6 +338,10 @@ Deno.serve(async (req) => {
         Referer: `${decoded.protocol}//${decoded.host}/`,
         Accept: "*/*",
         Connection: "keep-alive",
+        "X-Forwarded-For": ip,
+        "X-Real-IP": ip,
+        "CF-Connecting-IP": ip,
+        "True-Client-IP": ip,
       };
       const range = req.headers.get("range");
       if (range) upstreamHeaders["Range"] = range;
@@ -423,12 +427,19 @@ Deno.serve(async (req) => {
 
     // ----- playlist: fetch upstream, rewrite, return inline -----
     // Helper para buscar uma playlist do upstream com headers padrão.
-    const upstreamHeaders = {
-      "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
-      Referer: `${decoded.protocol}//${decoded.host}/`,
-      Accept: "*/*",
-      Connection: "keep-alive",
-    } as const;
+    const getUpstreamHeaders = (targetUrl: string, clientIpAddr: string) => {
+      const d = new URL(targetUrl);
+      return {
+        "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
+        Referer: `${d.protocol}//${d.host}/`,
+        Accept: "*/*",
+        Connection: "keep-alive",
+        "X-Forwarded-For": clientIpAddr,
+        "X-Real-IP": clientIpAddr,
+        "CF-Connecting-IP": clientIpAddr,
+        "True-Client-IP": clientIpAddr,
+      };
+    };
 
     const fetchPlaylist = async (rawUrl: string): Promise<{ text: string; finalUrl: URL } | { error: Response }> => {
       let lastError: string = "unknown";
@@ -436,7 +447,8 @@ Deno.serve(async (req) => {
 
       for (const targetUrl of targets) {
         try {
-          const r = await fetch(targetUrl, { method: "GET", redirect: "follow", headers: upstreamHeaders });
+          const headers = getUpstreamHeaders(targetUrl, ip);
+          const r = await fetch(targetUrl, { method: "GET", redirect: "follow", headers });
           if (!r.ok) {
             lastError = `Status ${r.status}`;
             continue;
