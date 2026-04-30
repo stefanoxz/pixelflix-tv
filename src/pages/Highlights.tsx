@@ -225,16 +225,20 @@ const Highlights = () => {
         <div className="absolute -top-20 -left-20 h-96 w-96 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
 
         <div className="relative h-full flex items-end pb-8 md:pb-8 mx-auto max-w-[1800px] px-4 md:px-8 gap-6">
-          <div key={featured?.id ?? "empty"} className="max-w-2xl md:max-w-md lg:max-w-xl space-y-4 animate-fade-in flex-1 min-w-0">
-            <p
-              className="text-[10px] md:text-sm text-muted-foreground/70 md:text-muted-foreground/90 font-semibold tracking-[0.12em] md:tracking-tight uppercase md:normal-case md:font-medium"
-              aria-live="polite"
-            >
-              {greeting}{displayName ? `, ${displayName}` : ""}
-            </p>
-            <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-xs font-medium text-primary backdrop-blur">
-              ✨ Em destaque {featured?.kind === "series" ? "· Série" : featured?.kind === "movie" ? "· Filme" : ""}
-            </span>
+          <div key={featured?.id ?? "empty"} className="max-w-2xl md:max-w-md lg:max-w-xl space-y-6 animate-fade-in flex-1 min-w-0">
+            <div className="space-y-2">
+              <p
+                className="text-[10px] md:text-sm text-muted-foreground/70 md:text-muted-foreground/90 font-bold tracking-[0.2em] uppercase"
+                aria-live="polite"
+              >
+                {greeting}{displayName ? `, ${displayName}` : ""}
+              </p>
+              <span className="inline-flex items-center gap-2 rounded-full bg-primary/20 border border-primary/30 px-3 py-1 text-[11px] font-bold text-primary backdrop-blur-md shadow-sm">
+                <Sparkles className="h-3 w-3 fill-current" />
+                Destaque do Dia {featured?.kind === "series" ? "· Série" : featured?.kind === "movie" ? "· Filme" : ""}
+              </span>
+            </div>
+            
             <h1 className="hero-title">
               {featured?.title || "Bem-vindo ao SuperTech"}
             </h1>
