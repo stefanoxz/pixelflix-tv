@@ -70,7 +70,7 @@ export function WelcomeNameDialog({ username, open, onClose }: Props) {
         if (!next) handleSkip();
       }}
     >
-      <DialogContent className="sm:max-w-[420px] p-4 sm:p-6 gap-3 sm:gap-4">
+      <DialogContent className="sm:max-w-[420px] p-6 sm:p-8 gap-5 glass-card border-white/10 shadow-2xl">
         <DialogHeader className="space-y-2 sm:space-y-3">
           <div className="flex items-center justify-center mb-1">
             <div className="h-9 w-9 sm:h-12 sm:w-12 rounded-full bg-gradient-primary flex items-center justify-center shadow-glow ring-2 ring-primary/30">
