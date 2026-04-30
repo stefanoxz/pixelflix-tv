@@ -307,46 +307,32 @@ export function proxyImageUrl(url: string | null | undefined, opts?: { w?: numbe
   if (!url) return "";
   const trimmed = url.trim();
   if (!trimmed) return "";
-  const params = new URLSearchParams();
-  params.set("url", trimmed.replace(/^https?:\/\//i, ""));
-  if (opts?.w) params.set("w", String(opts.w));
-  if (opts?.h) params.set("h", String(opts.h));
-  return `https://images.weserv.nl/?${params.toString()}`;
+  // Removido proxy Weserv: retornando URL direta para evitar bloqueios de proxy
+  return trimmed;
 }
 
 const PROXY_HOST_PREFIX = "iptv.proxy.host:";
 const ENGINE_PREF_PREFIX = "iptv.engine.pref:";
 
 export function getHostProxyMode(url: string | null | undefined): StreamMode {
-  if (!url) return "redirect";
-  try {
-    const host = new URL(url).hostname;
-    return (localStorage.getItem(`${PROXY_HOST_PREFIX}${host}`) as StreamMode) || "redirect";
-  } catch { return "redirect"; }
+  // Removido modo proxy: sempre redireciona diretamente
+  return "redirect";
 }
 
 export function markHostProxyRequired(url: string | null | undefined, reason: string) {
-  if (!url) return false;
-  try {
-    const host = new URL(url).hostname;
-    localStorage.setItem(`${PROXY_HOST_PREFIX}${host}`, "stream");
-    return true;
-  } catch { return false; }
+  // Desativado: não forçamos mais uso de proxy por falha de host
+  return false;
 }
 
 export function clearHostProxyMode(url: string | null | undefined) {
-  if (!url) return;
-  try {
-    const host = new URL(url).hostname;
-    localStorage.removeItem(`${PROXY_HOST_PREFIX}${host}`);
-  } catch {}
+  // No-op agora que proxy está desativado
 }
 
 export function markHostSuccess(url: string | null | undefined) {}
 export function markHostFailure(url: string | null | undefined, reason: string) {}
 
 export function shouldUseProxy(url: string | null | undefined): boolean {
-  return getHostProxyMode(url) === "stream";
+  return false;
 }
 
 export function getPreferredEngine(url: string | null | undefined): "hls" | "mpegts" {
