@@ -163,10 +163,12 @@ export async function invokeSafe<T>(
 
 export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> {
   let server = creds.server?.trim() || "";
-  if (server && !server.startsWith("http://") && !server.startsWith("https://")) {
-    server = `http://${server}`;
-  } else if (server.startsWith("https://")) {
-    server = server.replace(/^https:\/\//i, "http://");
+  // Forçamos HTTP apenas para o host, preservando portas
+  if (server) {
+    server = server.replace(/^https?:\/\//i, "http://");
+    if (!server.startsWith("http://")) {
+      server = `http://${server}`;
+    }
   }
   const username = creds.username.trim();
   const password = creds.password.trim();
@@ -196,10 +198,11 @@ export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> 
 
 export async function iptvLoginM3u(creds: IptvCredentials): Promise<LoginResponse & { auto_registered?: boolean }> {
   let server = creds.server?.trim() || "";
-  if (server && !server.startsWith("http://") && !server.startsWith("https://")) {
-    server = `http://${server}`;
-  } else if (server.startsWith("https://")) {
-    server = server.replace(/^https:\/\//i, "http://");
+  if (server) {
+    server = server.replace(/^https?:\/\//i, "http://");
+    if (!server.startsWith("http://")) {
+      server = `http://${server}`;
+    }
   }
   const username = creds.username.trim();
   const password = creds.password.trim();
@@ -252,8 +255,8 @@ export function resolveStreamBase(serverInfo?: ServerInfo | null, fallback?: str
 
 export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra: any = {}): Promise<T> {
   let server = creds.server || "";
-  if (server.startsWith("https://")) {
-    server = server.replace(/^https:\/\//i, "http://");
+  if (server) {
+    server = server.replace(/^https?:\/\//i, "http://");
   }
 
   const params = new URLSearchParams({
