@@ -536,6 +536,7 @@ async function tryPlaylistFallback(
   serverBase: string,
   username: string,
   password: string,
+  clientIp?: string,
 ): Promise<
   | { ok: true; data: any; usedVariant: string }
   | {
