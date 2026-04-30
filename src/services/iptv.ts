@@ -16,9 +16,9 @@ export function parseM3uUrl(input: string): IptvCredentials | null {
 
 export async function fetchM3u(creds: IptvCredentials): Promise<string> {
   const url = `${creds.server}/get.php?username=${creds.username}&password=${creds.password}&type=m3u_plus&output=ts`;
-  // Usando um proxy CORS público para desenvolvimento se necessário, 
-  // ou assumindo que o servidor permite (geralmente não permite, precisa de backend real ou proxy)
-  const res = await fetch(url);
+  // Proxy CORS público para evitar bloqueios do navegador
+  const proxy = "https://api.allorigins.win/raw?url=";
+  const res = await fetch(proxy + encodeURIComponent(url));
   if (!res.ok) throw new Error("Falha ao carregar lista");
   return await res.text();
 }
