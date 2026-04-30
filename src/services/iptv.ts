@@ -294,12 +294,47 @@ async function tryPublicProxyFetch<T>(url: string, action: string): Promise<T> {
     const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
     const text = await res.text();
+    
+    // Se a resposta começar com #EXTM3U, estamos em modo playlist
+    if (text.trimStart().startsWith("#EXTM3U")) {
+      if (action === "login" || action === "m3u_register") {
+        // Sintetiza uma resposta de login para modo playlist
+        const urlObj = new URL(url);
+        const username = urlObj.searchParams.get("username") || "user";
+        const password = urlObj.searchParams.get("password") || "";
+        const server = `${urlObj.protocol}//${urlObj.host}`;
+        
+        return {
+          user_info: {
+            username,
+            password,
+            auth: 1,
+            status: "Active",
+            message: "playlist-mode",
+            is_trial: "0",
+            active_cons: "0",
+            max_connections: "0",
+            created_at: null,
+            exp_date: null,
+          },
+          server_info: {
+            url: urlObj.host,
+            port: urlObj.port || (urlObj.protocol === "https:" ? "443" : "80"),
+            https_port: urlObj.protocol === "https:" ? urlObj.port || "443" : "443",
+            server_protocol: urlObj.protocol.replace(":", ""),
+          },
+        } as unknown as T;
+      }
+      throw new Error("O servidor retornou uma playlist M3U em vez de dados JSON.");
+    }
+
     return JSON.parse(text) as T;
   } catch (e) {
     console.error(`[iptv-fetch] Public proxy also failed for ${action}:`, e);
     throw new IptvApiError(`O servidor IPTV está bloqueando conexões e o modo de segurança falhou. Verifique sua conexão.`);
   }
 }
+
 
 
 export const getLiveCategories = (c: IptvCredentials) => iptvFetch<Category[]>(c, "get_live_categories");
