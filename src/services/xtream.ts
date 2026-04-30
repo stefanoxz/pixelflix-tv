@@ -10,6 +10,10 @@ export class XtreamService {
     this.credentials = { ...creds, url: formattedUrl };
   }
 
+  getCredentials() {
+    return this.credentials;
+  }
+
   private async fetchAction(action: string, params: Record<string, string> = {}) {
     if (!this.credentials) throw new Error('No credentials set');
 
