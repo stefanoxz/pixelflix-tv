@@ -25,23 +25,27 @@ export class XtreamService {
     });
 
     const url = `${this.credentials.url}/player_api.php?${searchParams.toString()}`;
-    
-    // Alternative CORS Proxy (Corsproxy.io is often more stable for IPTV responses)
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    console.log(`Fetching action: ${action} from ${url}`);
+
+    // IPTV servers often fail with some proxies. 
+    // Let's use a very reliable one for IPTV: thingproxy or a direct fetch if it's local/allowed
+    const proxyUrl = `https://thingproxy.freeboard.io/fetch/${url}`;
 
     try {
       const response = await fetch(proxyUrl);
-      if (!response.ok) throw new Error('Network response was not ok');
-      return await response.json();
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      console.log(`Data received for ${action}:`, data ? (Array.isArray(data) ? data.length : 'object') : 'null');
+      return data;
     } catch (err) {
-      console.warn('Corsproxy failed, attempting AllOrigins fallback:', err);
+      console.warn(`Proxy failed for ${action}, trying AllOrigins:`, err);
       try {
-        const allOriginsUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const aoResponse = await fetch(allOriginsUrl);
-        const aoData = await aoResponse.json();
+        const aoUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+        const aoRes = await fetch(aoUrl);
+        const aoData = await aoRes.json();
         return JSON.parse(aoData.contents);
       } catch (aoErr) {
-        console.error('All proxies failed:', aoErr);
+        console.error(`All proxies failed for ${action}:`, aoErr);
         throw aoErr;
       }
     }
