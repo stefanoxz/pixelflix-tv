@@ -141,14 +141,12 @@ const Sync = () => {
     if (anyError) {
       setHasError(true);
     } else {
-      // Forçar atualização do QueryClient para garantir que os dados sejam marcados como frescos
-      await queryClient.invalidateQueries();
       setAllDone(true);
-      // Aguarda o próximo frame para garantir que o estado allDone foi processado
-      // antes de disparar a navegação que desmonta o componente.
-      requestAnimationFrame(() => {
-        setTimeout(() => navigate("/", { replace: true }), 600);
-      });
+      // Pequeno delay para o usuário ver o "100%" antes de mudar de tela.
+      // Usamos um timeout simples que é mais seguro para o unmount do React.
+      setTimeout(() => {
+        navigate("/", { replace: true });
+      }, 800);
     }
   };
 
