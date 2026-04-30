@@ -23,7 +23,7 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
   // React Query for categories
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', type],
-    queryFn: () => contentActions.getCategories(type),
+    queryFn: () => xtreamService.getCategories(type),
     select: (data) => [{ category_id: 'Todos', category_name: 'Todos' }, { category_id: 'Favoritos', category_name: '★ Meus Favoritos' }, ...data],
   });
 
