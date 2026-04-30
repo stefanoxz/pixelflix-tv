@@ -157,7 +157,11 @@ async function fetchWithRetries(url: string, clientIp?: string, attemptsPerUa = 
           return { ok: false, status: res.status, reason: `HTTP ${res.status}`, softNotFound: true };
         }
 
-        if (!res.ok) return { ok: false, status: res.status, reason: `HTTP ${res.status}` };
+        if (!res.ok) {
+          lastStatus = res.status;
+          lastReason = `HTTP ${res.status}`;
+          continue; // Tenta próximo UA para qualquer erro HTTP não tratado
+        }
 
         const text = await res.text();
         try {
