@@ -196,14 +196,14 @@ export async function invokeSafe<T>(name: string, body: any, kind: InvokeKind = 
 
 export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> {
   const r = await invokeSafe<LoginResponse>("iptv-login", { ...creds, mode: "login" }, "login");
-  if (r.ok) return r.data;
-  throw new IptvLoginError(r.error, r.code, r.extra?.debug);
+  if (!r.ok) throw new IptvLoginError(r.error, r.code, r.extra?.debug);
+  return r.data;
 }
 
 export async function iptvLoginM3u(creds: IptvCredentials): Promise<LoginResponse & { auto_registered?: boolean }> {
   const r = await invokeSafe<LoginResponse & { auto_registered?: boolean }>("iptv-login", { ...creds, mode: "m3u_register" }, "login");
-  if (r.ok) return r.data;
-  throw new IptvLoginError(r.error, r.code, r.extra?.debug);
+  if (!r.ok) throw new IptvLoginError(r.error, r.code, r.extra?.debug);
+  return r.data;
 }
 
 export async function fetchAllowedServers(): Promise<string[]> {
