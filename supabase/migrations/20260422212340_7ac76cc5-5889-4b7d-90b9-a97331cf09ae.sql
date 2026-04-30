@@ -1,1 +1,0 @@
-CREATE INDEX IF NOT EXISTS idx_used_nonces_used_at ON public.used_nonces (used_at DESC);

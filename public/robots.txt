@@ -1,7 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /admin/
-Disallow: /account
-Disallow: /sync
-
-Sitemap: https://supertech-iptv.lovable.app/sitemap.xml
