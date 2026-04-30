@@ -14,12 +14,68 @@ export type Database = {
   }
   public: {
     Tables: {
+      favorites: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          stream_icon: string | null
+          stream_id: string
+          stream_type: string
+          username: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          stream_icon?: string | null
+          stream_id: string
+          stream_type: string
+          username: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          stream_icon?: string | null
+          stream_id?: string
+          stream_type?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          id: string
+          profile_name: string
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id?: string
+          profile_name: string
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id?: string
+          profile_name?: string
+          username?: string
+        }
+        Relationships: []
+      }
       settings: {
         Row: {
           admin_password: string
           created_at: string | null
           dns_url: string
           id: string
+          primary_color: string | null
+          site_logo: string | null
           updated_at: string | null
         }
         Insert: {
@@ -27,6 +83,8 @@ export type Database = {
           created_at?: string | null
           dns_url?: string
           id?: string
+          primary_color?: string | null
+          site_logo?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -34,6 +92,8 @@ export type Database = {
           created_at?: string | null
           dns_url?: string
           id?: string
+          primary_color?: string | null
+          site_logo?: string | null
           updated_at?: string | null
         }
         Relationships: []
