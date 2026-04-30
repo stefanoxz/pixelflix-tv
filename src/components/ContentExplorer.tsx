@@ -28,18 +28,24 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
   });
 
   // React Query for streams
-  const { data: items = [], isLoading: itemsLoading } = useQuery({
+  const { data: items = [], isLoading: itemsLoading, error } = useQuery({
     queryKey: ['streams', type],
     queryFn: () => xtreamService.getStreams(type),
-    select: (data) => data.map(s => ({
-      ...s,
-      id: String(s.stream_id || s.series_id),
-      name: s.name,
-      icon: s.stream_icon || s.cover,
-      rating: s.rating || 'N/A',
-      year: s.year || '2024',
-      duration: type === 'live' ? 'AO VIVO' : s.duration || 'N/A'
-    })),
+    select: (data) => {
+      if (!Array.isArray(data)) {
+        console.warn('Streams data is not an array:', data);
+        return [];
+      }
+      return data.map(s => ({
+        ...s,
+        id: String(s.stream_id || s.series_id || (s as any).id),
+        name: s.name || (s as any).title || 'Sem Nome',
+        icon: s.stream_icon || s.cover || (s as any).stream_icon,
+        rating: s.rating || 'N/A',
+        year: s.year || '2024',
+        duration: type === 'live' ? 'AO VIVO' : s.duration || 'N/A'
+      }));
+    },
   });
 
   // React Query for favorites from DB
