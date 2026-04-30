@@ -79,9 +79,10 @@ export const HeroSection = memo(({
             <p className="text-[10px] md:text-sm text-muted-foreground/70 md:text-muted-foreground/90 font-bold tracking-[0.2em] uppercase" aria-live="polite">
               {greeting}{displayName ? `, ${displayName}` : ""}
             </p>
-            <span className="inline-flex items-center gap-2 rounded-full bg-primary/20 border border-primary/30 px-3 py-1 text-[11px] font-bold text-primary backdrop-blur-md shadow-sm">
+            <span className="inline-flex items-center gap-2 rounded-full bg-primary/20 border border-primary/30 px-4 py-1.5 text-[11px] font-bold text-primary backdrop-blur-xl shadow-lg shadow-primary/10">
               ✨ Destaque do Dia {featured?.kind === "series" ? "· Série" : featured?.kind === "movie" ? "· Filme" : ""}
             </span>
+
           </div>
           
           <h1 className="hero-title">
