@@ -288,7 +288,10 @@ function App() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom duration-1000 delay-300">
             <button 
-              onClick={() => setIsLoginOpen(true)} 
+              onClick={() => {
+                console.log("Abrindo modal de login...");
+                setIsLoginOpen(true);
+              }} 
               className="w-full sm:w-auto px-10 h-16 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-glow flex items-center justify-center gap-3"
             >
               Acessar Player <ChevronRight className="w-5 h-5" />
