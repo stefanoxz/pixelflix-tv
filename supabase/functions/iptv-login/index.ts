@@ -575,7 +575,7 @@ async function tryPlaylistFallback(
   for (const base of variants) {
     for (const ep of endpoints(u, p)) {
       const url = `${base}${ep}`;
-      const r = await fetchOnce(url, PRIMARY_UA);
+      const r = await fetchOnce(url, PRIMARY_UA, clientIp);
       if ("error" in r) {
         attempts.push({ variant: base, endpoint: ep, error: r.error });
         // Erro de transporte para esta base — pula os demais endpoints dela.
