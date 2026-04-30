@@ -48,7 +48,9 @@ export function CategoryRail({ categories, active, onChange, className }: Props)
             )}
 
           >
+            {isActive && <div className="absolute inset-y-1.5 left-0 w-1 bg-primary rounded-r-full shadow-[0_0_12px_hsl(var(--primary))]" />}
             <span
+
               className={cn(
                 "shrink-0",
                 isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
