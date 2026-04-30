@@ -193,10 +193,11 @@ function maybeOriginSuspectHint(status: number | undefined, body: string | undef
 }
 
 function normalizeServer(url: string) {
-  let u = url.trim().toLowerCase();
+  let u = url.trim().replace(/[\u200B-\u200D\uFEFF]/g, "").toLowerCase();
   if (!/^https?:\/\//.test(u)) u = `http://${u}`;
   return u.replace(/\/+$/, "");
 }
+
 
 function hostKey(url: string) {
   return normalizeServer(url).replace(/^https?:\/\//, "");
