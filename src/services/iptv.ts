@@ -182,6 +182,28 @@ export class IptvLoginError extends Error {
   }
 }
 
+/**
+ * Tenta realizar o fetch diretamente do navegador (IP residencial).
+ */
+async function tryBrowserFetch<T>(url: string, fallback: () => Promise<T>): Promise<T> {
+  try {
+    const res = await fetch(url, { 
+      method: "GET", 
+      credentials: "omit",
+      cache: "no-store",
+      signal: AbortSignal.timeout(6000) 
+    });
+    
+    if (res.ok) {
+      const text = await res.text();
+      return JSON.parse(text) as T;
+    }
+    throw new Error(`HTTP ${res.status}`);
+  } catch (e) {
+    return fallback();
+  }
+}
+
 export async function invokeSafe<T>(name: string, body: any, kind: InvokeKind = "data"): Promise<{ ok: true, data: T } | { ok: false, code: string, error: string, status?: number, extra?: any }> {
   try {
     const { data, error } = await supabase.functions.invoke(name, { body });
@@ -195,15 +217,19 @@ export async function invokeSafe<T>(name: string, body: any, kind: InvokeKind = 
 }
 
 export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> {
-  const r = await invokeSafe<LoginResponse>("iptv-login", { ...creds, mode: "login" }, "login");
-  if (!r.ok) throw new IptvLoginError((r as any).error, (r as any).code, (r as any).extra?.debug);
-  return r.data;
+  const loginUrl = `${creds.server}/player_api.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}`;
+  
+  return tryBrowserFetch<LoginResponse>(loginUrl, async () => {
+    const r = await invokeSafe<LoginResponse>("iptv-login", { ...creds, mode: "login" }, "login");
+    if (r.ok) return r.data;
+    throw new IptvLoginError((r as any).error, (r as any).code, (r as any).extra?.debug);
+  });
 }
 
 export async function iptvLoginM3u(creds: IptvCredentials): Promise<LoginResponse & { auto_registered?: boolean }> {
   const r = await invokeSafe<LoginResponse & { auto_registered?: boolean }>("iptv-login", { ...creds, mode: "m3u_register" }, "login");
-  if (!r.ok) throw new IptvLoginError((r as any).error, (r as any).code, (r as any).extra?.debug);
-  return r.data;
+  if (r.ok) return r.data;
+  throw new IptvLoginError((r as any).error, (r as any).code, (r as any).extra?.debug);
 }
 
 export async function fetchAllowedServers(): Promise<string[]> {
