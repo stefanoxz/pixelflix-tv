@@ -64,6 +64,7 @@ const AdminPanelFallback = () => (
 
 const Admin = () => {
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   const { isAdmin, isModerator, role, loading: roleLoading } = useAdminRole();
   const [tab, setTab] = useState("dashboard");
   const [dnsErrorsHours, setDnsErrorsHours] = useState<number>(24);
@@ -178,6 +179,14 @@ const Admin = () => {
             <p className="text-sm text-muted-foreground mt-1">{currentNav?.id === "dashboard" ? "Visão geral" : "Gerenciamento do sistema"}</p>
           </div>
           <div className="flex items-center gap-2 ml-auto">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              title={theme === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
             <Button variant="outline" size="sm" onClick={refresh} disabled={loading}><RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />Atualizar</Button>
           </div>
         </div>
