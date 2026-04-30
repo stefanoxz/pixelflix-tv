@@ -931,7 +931,7 @@ Deno.serve(async (req) => {
           }
         | undefined;
       if (shouldTryPlaylist) {
-        const pl = await tryPlaylistFallback(fullBase, username, password);
+        const pl = await tryPlaylistFallback(fullBase, username, password, ip);
         if (pl.ok) {
           console.log(
             `[iptv-login] m3u_register PLAYLIST_FALLBACK_OK after=${failStatus} server=${fullBase} variant=${pl.usedVariant}`,
