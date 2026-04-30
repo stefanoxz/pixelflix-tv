@@ -64,7 +64,7 @@ const Player = ({ stream, onBack }: { stream: Stream, onBack: () => void }) => {
   }, [stream]);
 
   if (error) return (
-    <div className="fixed inset-0 z-[300] bg-black flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[400] bg-black flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300">
       <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
         <Tv className="w-12 h-12 text-red-500" />
       </div>
@@ -77,20 +77,20 @@ const Player = ({ stream, onBack }: { stream: Stream, onBack: () => void }) => {
   )
 
   return (
-    <div className="fixed inset-0 z-[300] bg-black flex flex-col items-center justify-center animate-in fade-in duration-300">
-      <button onClick={onBack} className="absolute top-6 left-6 z-[310] p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full transition-all text-white">
+    <div className="fixed inset-0 z-[400] bg-black flex flex-col items-center justify-center animate-in fade-in duration-300">
+      <button onClick={onBack} className="absolute top-6 left-6 z-[410] p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full transition-all text-white">
         <ArrowLeft className="w-6 h-6" />
       </button>
       
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-[305]">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-[405]">
           <Loader2 className="w-12 h-12 text-primary animate-spin" />
         </div>
       )}
 
       <video ref={videoRef} className="w-full h-full object-contain" controls autoPlay playsInline />
       
-      <div className="absolute bottom-12 left-0 right-0 p-8 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none z-[305]">
+      <div className="absolute bottom-12 left-0 right-0 p-8 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none z-[405]">
         <div className="max-w-4xl mx-auto">
           <h2 className="text-3xl font-black text-white mb-2 tracking-tighter">{stream.name}</h2>
           <span className="px-3 py-1 bg-primary/20 border border-primary/30 text-primary text-xs font-bold rounded-full uppercase tracking-widest">
@@ -303,7 +303,7 @@ function App() {
       <div className="absolute top-1/4 right-0 w-[500px] h-[500px] bg-primary/10 blur-[120px] rounded-full pointer-events-none z-0" />
       <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-indigo-500/5 blur-[100px] rounded-full pointer-events-none z-0" />
 
-      <header className="h-24 px-8 flex items-center justify-between relative z-50">
+      <header className="h-24 px-8 flex items-center justify-between relative z-[100]">
         <div className="flex items-center gap-3 font-black text-3xl tracking-tighter cursor-default">
           <Play className="w-7 h-7 text-primary fill-current" /> SuperTech
         </div>
@@ -312,7 +312,7 @@ function App() {
             console.log("Clicou no botão Entrar da Header");
             setIsLoginOpen(true);
           }}
-          className="px-6 h-12 rounded-2xl bg-primary text-white font-black uppercase text-xs tracking-widest shadow-glow hover:scale-105 active:scale-95 transition-all z-[60]"
+          className="px-6 h-12 rounded-2xl bg-primary text-white font-black uppercase text-xs tracking-widest shadow-glow hover:scale-105 active:scale-95 transition-all z-[110] relative cursor-pointer"
         >
           Entrar
         </button>
@@ -330,7 +330,7 @@ function App() {
               <span className="text-primary italic">IPTV</span> Definitiva
             </h1>
             <p className="text-xl text-neutral-500 max-w-2xl mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom duration-1000 delay-200">
-              Transformamos sua lista M3U em uma experiência cinematográfica fluida, segura e de alta performance diretamente no seu navegador.
+              Transformamos sua lista M3U em uma experiêncian cinematográfica fluida, segura e de alta performance diretamente no seu navegador.
             </p>
           </div>
 
@@ -340,7 +340,7 @@ function App() {
                 console.log("Hero: Acessar Player clicado");
                 setIsLoginOpen(true);
               }} 
-              className="w-full sm:w-auto px-10 h-16 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-glow flex items-center justify-center gap-3 cursor-pointer"
+              className="w-full sm:w-auto px-10 h-16 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-glow flex items-center justify-center gap-3 cursor-pointer relative z-[70]"
             >
               Acessar Player <ChevronRight className="w-5 h-5" />
             </button>
@@ -350,14 +350,14 @@ function App() {
                 const demoUrl = "http://safawe.space/get.php?username=406850266&password=823833547&type=m3u_plus&output=ts";
                 loadList(parseM3uUrl(demoUrl));
               }}
-              className="w-full sm:w-auto px-10 h-16 bg-white/5 border border-white/5 hover:bg-white/10 active:scale-95 rounded-2xl font-black uppercase tracking-widest text-neutral-400 transition-all cursor-pointer"
+              className="w-full sm:w-auto px-10 h-16 bg-white/5 border border-white/5 hover:bg-white/10 active:scale-95 rounded-2xl font-black uppercase tracking-widest text-neutral-400 transition-all cursor-pointer relative z-[70]"
             >
               Ver Demo
             </button>
           </div>
         </div>
 
-        <div className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl w-full animate-in fade-in slide-in-from-bottom duration-1000 delay-500">
+        <div className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl w-full animate-in fade-in slide-in-from-bottom duration-1000 delay-500 relative z-[10]">
           <div className="p-8 bg-white/5 rounded-[40px] border border-white/5 space-y-4">
             <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center"><Zap className="text-primary" /></div>
             <h4 className="text-xl font-bold text-white tracking-tight">Ultra Veloz</h4>
@@ -379,7 +379,7 @@ function App() {
       {isLoginOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300">
           <div className="bg-neutral-900 border border-white/5 p-10 rounded-[48px] w-full max-w-xl space-y-8 shadow-2xl relative">
-            <button onClick={() => setIsLoginOpen(false)} className="absolute top-8 right-8 text-neutral-500 hover:text-white transition-colors z-10"><X /></button>
+            <button onClick={() => setIsLoginOpen(false)} className="absolute top-8 right-8 text-neutral-500 hover:text-white transition-colors z-10 cursor-pointer"><X /></button>
             
             <div className="space-y-2">
               <h2 className="text-4xl font-black text-white tracking-tighter">Entrar no <span className="text-primary italic">Cloud</span></h2>
@@ -411,7 +411,7 @@ function App() {
               </div>
               <button 
                 disabled={loading} 
-                className="w-full h-20 bg-primary text-white rounded-[24px] font-black uppercase tracking-[0.2em] shadow-glow flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-20 bg-primary text-white rounded-[24px] font-black uppercase tracking-[0.2em] shadow-glow flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {loading ? <Loader2 className="animate-spin" /> : 'Sincronizar Lista'}
               </button>
