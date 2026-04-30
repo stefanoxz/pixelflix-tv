@@ -183,6 +183,7 @@ Deno.serve(async (req) => {
     );
   }
 
+  console.log(`[iptv-categories] Request received: ${req.method} from IP ${ip}`);
   try {
     const body = await req.json();
     const { server, username, password, action, ...extra } = body ?? {};
@@ -216,6 +217,8 @@ Deno.serve(async (req) => {
       if (v !== undefined && v !== null) params.append(k, String(v));
     }
     const url = `${match}/player_api.php?${params.toString()}`;
+    console.log(`[iptv-categories] Fetching from upstream: ${url.replace(/password=[^&]+/, 'password=***')}`);
+
 
     // Retry com backoff quando o painel devolve MAX_CONNECTIONS.
     // Conexões "fantasma" do próprio painel costumam liberar em poucos segundos,
@@ -231,6 +234,7 @@ Deno.serve(async (req) => {
     }
 
     if (!result.ok) {
+      console.error(`[iptv-categories] Upstream error for ${action}: ${result.reason} (status ${result.status})`);
       // Limite de telas/conexões atingido — sinaliza explicitamente à UI.
       if (result.reason === "MAX_CONNECTIONS") {
         return new Response(
