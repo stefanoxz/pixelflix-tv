@@ -52,10 +52,10 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
         ref={ref}
         onClick={onClick}
         className={cn(
-          "group relative overflow-hidden rounded-lg bg-gradient-card text-left",
-          "transition-all duration-300 ease-out",
-          "hover:-translate-y-1 hover:shadow-[0_16px_40px_-12px_hsl(var(--primary)/0.55)] hover:z-10",
-          "active:scale-[0.97]",
+          "group relative overflow-hidden rounded-xl bg-gradient-card text-left",
+          "transition-all duration-500 cubic-bezier(0.25, 1, 0.5, 1)",
+          "hover:-translate-y-2 hover:shadow-[0_22px_50px_-12px_rgba(0,0,0,0.8)] hover:z-10",
+          "active:scale-95",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           aspect === "poster" ? "aspect-[2/3]" : "aspect-video"
         )}
@@ -134,8 +134,8 @@ export const MediaCard = forwardRef<HTMLButtonElement, MediaCardProps>(
           );
         })()}
 
-        <div className="absolute bottom-0 left-0 right-0 p-3">
-          <h3 className="text-sm font-semibold text-white line-clamp-2 drop-shadow">{title}</h3>
+        <div className="absolute bottom-0 left-0 right-0 p-4 pt-10 bg-gradient-to-t from-black via-black/80 to-transparent">
+          <h3 className="text-[13px] md:text-sm font-bold text-white line-clamp-2 leading-snug group-hover:text-primary transition-colors duration-300">{title}</h3>
         </div>
       </button>
     );
