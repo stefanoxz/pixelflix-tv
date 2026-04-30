@@ -162,7 +162,12 @@ export async function invokeSafe<T>(
 }
 
 export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> {
-  const server = creds.server?.trim() || "";
+  let server = creds.server?.trim() || "";
+  if (server && !server.startsWith("http://") && !server.startsWith("https://")) {
+    server = `http://${server}`;
+  } else if (server.startsWith("https://")) {
+    server = server.replace(/^https:\/\//i, "http://");
+  }
   const username = creds.username.trim();
   const password = creds.password.trim();
   
@@ -190,7 +195,12 @@ export async function iptvLogin(creds: IptvCredentials): Promise<LoginResponse> 
 
 
 export async function iptvLoginM3u(creds: IptvCredentials): Promise<LoginResponse & { auto_registered?: boolean }> {
-  const server = creds.server?.trim() || "";
+  let server = creds.server?.trim() || "";
+  if (server && !server.startsWith("http://") && !server.startsWith("https://")) {
+    server = `http://${server}`;
+  } else if (server.startsWith("https://")) {
+    server = server.replace(/^https:\/\//i, "http://");
+  }
   const username = creds.username.trim();
   const password = creds.password.trim();
 
@@ -241,18 +251,23 @@ export function resolveStreamBase(serverInfo?: ServerInfo | null, fallback?: str
 // =============================================================================
 
 export async function iptvFetch<T>(creds: IptvCredentials, action: string, extra: any = {}): Promise<T> {
+  let server = creds.server || "";
+  if (server.startsWith("https://")) {
+    server = server.replace(/^https:\/\//i, "http://");
+  }
+
   const params = new URLSearchParams({
     username: creds.username,
     password: creds.password,
     action,
     ...extra
   });
-  const directUrl = `${creds.server}/player_api.php?${params.toString()}`;
+  const directUrl = `${server}/player_api.php?${params.toString()}`;
 
   return tryBrowserFetch<T>(directUrl, async () => {
     try {
       const { data, error } = await supabase.functions.invoke("iptv-categories", { 
-        body: { ...creds, action, ...extra } 
+        body: { ...creds, server, action, ...extra } 
       });
       
       if (error) {
