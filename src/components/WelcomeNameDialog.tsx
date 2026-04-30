@@ -98,7 +98,7 @@ export function WelcomeNameDialog({ username, open, onClose }: Props) {
             autoComplete="given-name"
             aria-invalid={!!error}
             aria-describedby={error ? "name-error" : undefined}
-            className="h-10"
+            className="h-12 text-center text-lg font-semibold bg-white/5 border-white/10 rounded-xl focus:ring-primary/40 focus:border-primary/40"
           />
           {error && (
             <p id="name-error" className="text-xs text-destructive">
