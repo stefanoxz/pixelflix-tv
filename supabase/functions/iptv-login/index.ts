@@ -356,6 +356,7 @@ async function tryVariant(
   base: string,
   username: string,
   password: string,
+  clientIp?: string,
 ): Promise<
   | { ok: true; data: any; usedVariant: string; route: "direct" | "proxy" }
   | { ok: false; status: number; body: string; reason: string; contentType?: string }
