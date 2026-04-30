@@ -28,27 +28,43 @@ export class XtreamService {
     console.log(`Fetching action: ${action} from ${url}`);
 
     // IPTV servers often fail with some proxies. 
-    // Let's use a very reliable one for IPTV: thingproxy or a direct fetch if it's local/allowed
-    const proxyUrl = `https://thingproxy.freeboard.io/fetch/${url}`;
+    // We'll try multiple proxies in parallel to find the fastest one that works.
+    const proxies = [
+      (u: string) => `https://thingproxy.freeboard.io/fetch/${u}`,
+      (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+      (u: string) => `https://cors-anywhere.herokuapp.com/${u}`, // Note: might require demo access
+    ];
 
-    try {
-      const response = await fetch(proxyUrl);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      console.log(`Data received for ${action}:`, data ? (Array.isArray(data) ? data.length : 'object') : 'null');
-      return data;
-    } catch (err) {
-      console.warn(`Proxy failed for ${action}, trying AllOrigins:`, err);
+    for (const getProxyUrl of proxies) {
       try {
-        const aoUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const aoRes = await fetch(aoUrl);
-        const aoData = await aoRes.json();
-        return JSON.parse(aoData.contents);
-      } catch (aoErr) {
-        console.error(`All proxies failed for ${action}:`, aoErr);
-        throw aoErr;
+        const proxyUrl = getProxyUrl(url);
+        console.log(`Trying proxy: ${proxyUrl}`);
+        const response = await fetch(proxyUrl, {
+          signal: AbortSignal.timeout(10000) // 10s timeout per proxy
+        });
+
+        if (!response.ok) continue;
+
+        let data;
+        if (proxyUrl.includes('allorigins')) {
+          const json = await response.json();
+          data = JSON.parse(json.contents);
+        } else {
+          data = await response.json();
+        }
+
+        if (data) {
+          console.log(`Success with proxy for ${action}`);
+          return data;
+        }
+      } catch (err) {
+        console.warn(`Proxy failed for ${action}:`, err);
+        continue;
       }
     }
+
+    throw new Error(`All proxies failed for ${action}`);
+  }
   }
 
   async authenticate(): Promise<{ user_info: UserInfo }> {
