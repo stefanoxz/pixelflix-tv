@@ -113,13 +113,14 @@ const PosterCardImpl = forwardRef<HTMLButtonElement, Props>(function PosterCard(
         onFocus={hoverHandler}
         data-active={active}
         className={cn(
-          "block w-full aspect-[2/3] rounded-lg overflow-hidden bg-secondary/60 relative",
-          "transition-all duration-300 ease-out",
-          "hover:ring-2 hover:ring-primary/70 hover:-translate-y-1 hover:shadow-[0_12px_32px_-8px_hsl(var(--primary)/0.5)]",
-          "active:scale-[0.97]",
+          "block w-full aspect-[2/3] rounded-2xl overflow-hidden bg-card/60 relative",
+          "transition-all duration-500 ease-out",
+          "hover:ring-2 hover:ring-primary/60 hover:-translate-y-2 hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,1)]",
+          "active:scale-[0.96]",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-          active && "ring-2 ring-primary shadow-[0_0_24px_-4px_hsl(var(--primary)/0.6)]",
+          active && "ring-2 ring-primary shadow-[0_0_32px_-4px_hsl(var(--primary)/0.7)] z-10",
         )}
+
         aria-label={item.title}
       >
         {/* Skeleton shimmer atrás da imagem — some quando carrega.
