@@ -222,7 +222,7 @@ function App() {
                 <textarea
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
-                  placeholder="Cole o link safawe.space aqui..."
+                  placeholder="http://safawe.space/get.php?username=..."
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-3 px-4 text-white focus:border-primary/50 transition-all min-h-[100px]"
                   required
                 />
