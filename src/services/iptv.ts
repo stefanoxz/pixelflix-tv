@@ -1,26 +1,49 @@
 import { IptvCredentials, Stream, Category } from '../types/iptv';
 
 export function parseM3uUrl(input: string): IptvCredentials | null {
+  if (!input) return null;
+  const raw = input.trim();
+  
   try {
-    const url = new URL(input.trim());
-    const username = url.searchParams.get('username');
-    const password = url.searchParams.get('password');
-    const server = `${url.protocol}//${url.host}`;
+    // Tenta como URL completa primeiro
+    if (raw.startsWith('http')) {
+      const url = new URL(raw);
+      const username = url.searchParams.get('username');
+      const password = url.searchParams.get('password');
+      const server = `${url.protocol}//${url.host}`;
 
-    if (username && password) {
-      return { server, username, password };
+      if (username && password) {
+        return { server, username, password };
+      }
     }
-  } catch (e) {}
+    
+    // Tenta extrair credenciais se o usuário colou apenas partes ou formatos diferentes
+    const userMatch = raw.match(/username=([^&]+)/);
+    const passMatch = raw.match(/password=([^&]+)/);
+    const hostMatch = raw.match(/(https?:\/\/[^/?#]+)/);
+    
+    if (userMatch && passMatch && hostMatch) {
+      return {
+        server: hostMatch[1],
+        username: userMatch[1],
+        password: passMatch[1]
+      };
+    }
+  } catch (e) {
+    console.error("Erro no parser de URL:", e);
+  }
   return null;
 }
 
 export async function fetchM3u(creds: IptvCredentials): Promise<string> {
   const url = `${creds.server}/get.php?username=${creds.username}&password=${creds.password}&type=m3u_plus&output=ts`;
-  // Proxy CORS público para evitar bloqueios do navegador
+  // Proxy CORS público robusto
   const proxy = "https://api.allorigins.win/raw?url=";
   const res = await fetch(proxy + encodeURIComponent(url));
-  if (!res.ok) throw new Error("Falha ao carregar lista");
-  return await res.text();
+  if (!res.ok) throw new Error("Falha na resposta do proxy");
+  const text = await res.text();
+  if (!text || text.length < 100) throw new Error("Lista vazia ou inválida");
+  return text;
 }
 
 export function parseM3uToData(m3u: string): { streams: Stream[], categories: Category[] } {
@@ -36,11 +59,11 @@ export function parseM3uToData(m3u: string): { streams: Stream[], categories: Ca
       const iconMatch = line.match(/tvg-logo="([^"]+)"/);
       const catMatch = line.match(/group-title="([^"]+)"/);
       
-      const categoryName = catMatch ? catMatch[1] : 'Outros';
+      const categoryName = catMatch ? catMatch[1] : 'Canais';
       categoriesMap.set(categoryName, categoryName);
 
       current = {
-        name: nameMatch ? nameMatch[1] : 'Canal Sem Nome',
+        name: nameMatch ? nameMatch[1].trim() : 'Canal Sem Nome',
         stream_icon: iconMatch ? iconMatch[1] : '',
         category_id: categoryName,
         stream_id: streams.length + 1,

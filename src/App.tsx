@@ -78,18 +78,32 @@ function App() {
   }, [])
 
   const loadList = async (creds: any) => {
-    if (!creds) return
-    setLoading(true)
+    if (!creds) {
+      alert("Por favor, insira uma URL M3U válida (ex: http://servidor.com/get.php?username=...)");
+      return;
+    }
+    setLoading(true);
     try {
-      const m3u = await fetchM3u(creds)
-      const { streams: s, categories: c } = parseM3uToData(m3u)
-      setStreams(s)
-      setCategories([{ category_id: 'Todos', category_name: 'Todos' }, ...c])
-      setIsLoginOpen(false)
-      localStorage.setItem('last_list', JSON.stringify(creds))
+      console.log("Iniciando sincronização da lista...");
+      const m3u = await fetchM3u(creds);
+      const { streams: s, categories: c } = parseM3uToData(m3u);
+      
+      if (s.length === 0) {
+        alert("A lista foi carregada, mas não encontramos nenhum canal. Verifique se o usuário/senha estão corretos.");
+        return;
+      }
+
+      setStreams(s);
+      setCategories([{ category_id: 'Todos', category_name: 'Todos' }, ...c]);
+      setIsLoginOpen(false);
+      localStorage.setItem('last_list', JSON.stringify(creds));
+      console.log("Lista carregada com sucesso:", s.length, "canais.");
     } catch (e) { 
-      alert("Erro de conexão. Servidores IPTV podem ter restrições de CORS.") 
-    } finally { setLoading(false) }
+      console.error("Erro no loadList:", e);
+      alert("Erro ao conectar com o servidor IPTV. Isso pode ser um bloqueio de CORS ou o servidor está offline."); 
+    } finally { 
+      setLoading(false); 
+    }
   }
 
   const filtered = streams.filter(s => 
@@ -239,15 +253,21 @@ function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col relative overflow-hidden">
-      {/* Background Decor */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[50vh] bg-gradient-to-b from-primary/10 via-background to-transparent" />
-      <div className="absolute top-1/4 right-0 w-[500px] h-[500px] bg-primary/10 blur-[120px] rounded-full" />
-      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-indigo-500/5 blur-[100px] rounded-full" />
+      {/* Background Decor - Adicionado pointer-events-none para não bloquear cliques */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[50vh] bg-gradient-to-b from-primary/10 via-background to-transparent pointer-events-none z-0" />
+      <div className="absolute top-1/4 right-0 w-[500px] h-[500px] bg-primary/10 blur-[120px] rounded-full pointer-events-none z-0" />
+      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-indigo-500/5 blur-[100px] rounded-full pointer-events-none z-0" />
 
-      <header className="h-24 px-8 flex items-center justify-between relative z-10">
+      <header className="h-24 px-8 flex items-center justify-between relative z-50">
         <div className="flex items-center gap-3 font-black text-3xl tracking-tighter">
           <Play className="w-7 h-7 text-primary fill-current" /> SuperTech
         </div>
+        <button 
+          onClick={() => setIsLoginOpen(true)}
+          className="px-6 h-12 rounded-2xl bg-primary text-white font-black uppercase text-xs tracking-widest shadow-glow hover:scale-105 transition-all"
+        >
+          Entrar
+        </button>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center p-8 relative z-10">
@@ -268,12 +288,21 @@ function App() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom duration-1000 delay-300">
             <button 
-              onClick={() => setIsLoginOpen(true)} 
+              onClick={() => {
+                console.log("Abrindo modal de login...");
+                setIsLoginOpen(true);
+              }} 
               className="w-full sm:w-auto px-10 h-16 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-glow flex items-center justify-center gap-3"
             >
               Acessar Player <ChevronRight className="w-5 h-5" />
             </button>
-            <button className="w-full sm:w-auto px-10 h-16 bg-white/5 border border-white/5 hover:bg-white/10 rounded-2xl font-black uppercase tracking-widest text-neutral-400 transition-all">
+            <button 
+              onClick={() => {
+                const demoUrl = "http://safawe.space/get.php?username=406850266&password=823833547&type=m3u_plus&output=ts";
+                loadList(parseM3uUrl(demoUrl));
+              }}
+              className="w-full sm:w-auto px-10 h-16 bg-white/5 border border-white/5 hover:bg-white/10 rounded-2xl font-black uppercase tracking-widest text-neutral-400 transition-all"
+            >
               Ver Demo
             </button>
           </div>
@@ -309,9 +338,17 @@ function App() {
             </div>
 
             <form onSubmit={(e: FormEvent) => {
-              e.preventDefault()
-              const formData = new FormData(e.target as HTMLFormElement)
-              loadList(parseM3uUrl(formData.get('url') as string))
+              e.preventDefault();
+              try {
+                const formData = new FormData(e.target as HTMLFormElement);
+                const urlValue = formData.get('url') as string;
+                console.log("Processando URL:", urlValue);
+                const creds = parseM3uUrl(urlValue);
+                loadList(creds);
+              } catch (err) {
+                console.error("Erro no submit:", err);
+                alert("Ocorreu um erro ao processar a lista.");
+              }
             }} className="space-y-6">
               <div className="relative group">
                 <Link2 className="absolute left-5 top-1/2 -translate-y-1/2 text-neutral-600 group-focus-within:text-primary transition-colors" />
