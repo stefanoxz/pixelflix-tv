@@ -4,6 +4,7 @@ import { xtreamService } from '../services/xtream';
 import { contentActions } from '../services/content';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { VideoPlayer } from './VideoPlayer';
+import vibeLogo from '@/assets/vibe-logo.png';
 
 interface ContentExplorerProps {
   type: 'live' | 'movie' | 'series';
