@@ -39,10 +39,11 @@ export const Dashboard = memo(({ onLogout, onNavigate }: DashboardProps) => {
   const newSeries = useMemo(() => buildItems('Nova'), []);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex flex-col font-sans selection:bg-purple-500/30">
+    <div className="min-h-screen bg-[#08060a] text-white flex flex-col font-sans selection:bg-purple-500/30">
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 right-0 w-[60%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full" />
-        <div className="absolute bottom-0 left-0 w-[60%] h-[40%] bg-purple-900/10 blur-[120px] rounded-full" />
+        <div className="absolute top-0 right-0 w-[70%] h-[50%] bg-purple-600/15 blur-[140px] rounded-full animate-pulse" />
+        <div className="absolute bottom-0 left-0 w-[70%] h-[50%] bg-violet-900/15 blur-[140px] rounded-full animate-pulse" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[40%] h-[40%] bg-pink-500/5 blur-[120px] rounded-full" />
       </div>
 
       <HomeNav onNavigate={onNavigate} onLogout={onLogout} />

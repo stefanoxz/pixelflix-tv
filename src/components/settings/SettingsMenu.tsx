@@ -112,7 +112,7 @@ export const SettingsMenu = ({ onBack, onLogout }: SettingsMenuProps) => {
   ];
 
   return (
-    <div className="flex h-screen bg-[#050505] text-white font-sans overflow-hidden">
+    <div className="flex h-screen bg-[#08060a] text-white font-sans overflow-hidden">
       {/* Sidebar */}
       <div className="w-80 border-r border-white/5 bg-[#080808]/50 flex flex-col p-6">
         <div className="flex items-center gap-3 mb-10 px-4">

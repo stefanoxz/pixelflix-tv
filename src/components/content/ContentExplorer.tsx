@@ -177,7 +177,10 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
 
   if (itemsLoading) {
     return (
-      <div className="h-screen bg-black text-white flex flex-col font-sans overflow-hidden">
+      <div className="h-screen bg-[#08060a] text-white flex flex-col font-sans overflow-hidden">
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute top-0 left-0 w-full h-full bg-purple-600/5 blur-[120px] opacity-50" />
+        </div>
         <ExplorerHeader 
           title={title}
           itemCount={0}
@@ -236,7 +239,10 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
   }
 
   return (
-    <div className="h-screen bg-black text-white flex flex-col font-sans selection:bg-white/10 overflow-hidden">
+    <div className="h-screen bg-[#08060a] text-white flex flex-col font-sans selection:bg-white/10 overflow-hidden relative">
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 left-0 w-full h-full bg-purple-600/5 blur-[120px] opacity-30" />
+      </div>
       <ExplorerHeader 
         title={title}
         itemCount={filteredItems.length}
