@@ -20,7 +20,11 @@ export const ContentItem = memo(({ item, isFav, viewMode, onPlay, onSelect, onTo
             alt={item.name} 
             loading="lazy"
             className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-1000 group-hover:scale-110" 
-            onError={(e) => {(e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x600/111111/FFFFFF?text=SEM+CAPA';}} 
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.onerror = null;
+              target.src = 'https://via.placeholder.com/400x600/111111/FFFFFF?text=SEM+CAPA';
+            }}
           />
           
           <div className="absolute top-5 right-5 px-3 py-1.5 bg-black/60 backdrop-blur-xl rounded-2xl border border-white/10 flex items-center gap-2 shadow-2xl">
