@@ -3,6 +3,8 @@ import { supabase } from './supabase';
 
 export class XtreamService {
   private credentials: XtreamCredentials | null = null;
+  private cache: Map<string, { data: any, timestamp: number }> = new Map();
+  private CACHE_DURATION = 1000 * 60 * 10; // 10 minutes cache for list data
 
   setCredentials(creds: XtreamCredentials) {
     // Ensure URL has protocol and no trailing slash
