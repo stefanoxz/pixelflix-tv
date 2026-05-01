@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { User, Lock, ArrowRight, ShieldCheck, PlayCircle } from 'lucide-react';
+import { User, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
 import { xtreamService } from '../services/xtream';
 import { getSettings } from '../services/supabase';
+import vibeLogo from '@/assets/vibe-logo.png';
 
 interface LoginProps {
   onLogin: () => void;
@@ -75,21 +76,16 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
       <main className="relative z-10 w-full max-w-[440px]">
         <div className="bg-[#0A0A0A]/40 border border-white/10 rounded-[48px] p-8 md:p-14 shadow-[0_0_100px_rgba(0,0,0,0.5)] backdrop-blur-3xl ring-1 ring-white/5">
           <div className="flex flex-col items-center mb-12">
-            <div className="mb-8 flex flex-col items-center gap-4">
+            <div className="mb-6 flex flex-col items-center">
               <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-3xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-                <div className="relative w-20 h-20 bg-black border border-white/10 rounded-2xl flex items-center justify-center shadow-2xl">
-                  <PlayCircle className="text-white" size={48} fill="white" />
-                </div>
+                <div className="absolute inset-0 bg-purple-600/30 blur-3xl rounded-full opacity-60 group-hover:opacity-100 transition-opacity duration-700" />
+                <img 
+                  src={vibeLogo} 
+                  alt="Vibe Logo" 
+                  className="relative w-56 h-auto object-contain drop-shadow-[0_0_30px_rgba(168,85,247,0.4)]"
+                />
               </div>
-              <div className="flex flex-col items-center">
-                <h1 className="text-6xl font-black tracking-tighter text-white leading-none select-none uppercase italic">VIBE</h1>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <div className="h-[2px] w-8 bg-blue-500 rounded-full" />
-                  <span className="text-[10px] font-black tracking-[0.4em] text-blue-500 uppercase">Premium</span>
-                  <div className="h-[2px] w-8 bg-blue-500 rounded-full" />
-                </div>
-              </div>
+              <p className="mt-2 text-[10px] font-black tracking-[0.5em] text-purple-400/80 uppercase">Premium WebPlayer</p>
             </div>
             <div className="h-1.5 w-16 bg-gradient-to-r from-transparent via-white/40 to-transparent rounded-full" />
             <p className="mt-6 text-[11px] font-black text-zinc-400 uppercase tracking-[0.5em] opacity-80">

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
-import { PlayCircle } from 'lucide-react';
+import vibeLogo from '@/assets/vibe-logo.png';
 
 interface VideoPlayerProps {
   options: any;
@@ -63,12 +63,12 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
       <div ref={videoRef} className="w-full h-full" />
       
       {/* Vibe Watermark */}
-      <div className="absolute top-8 right-8 flex items-center gap-3 opacity-40 group-hover:opacity-100 transition-opacity pointer-events-none z-10 bg-black/40 backdrop-blur-md px-5 py-2.5 rounded-2xl border border-white/10 shadow-2xl">
-        <PlayCircle className="text-white" size={24} fill="white" />
-        <div className="flex flex-col">
-          <span className="text-2xl font-black tracking-tighter text-white uppercase italic leading-none">VIBE</span>
-          <span className="text-[8px] font-black tracking-[0.3em] text-blue-500 uppercase">Premium</span>
-        </div>
+      <div className="absolute top-6 right-6 opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+        <img 
+          src={vibeLogo} 
+          alt="Vibe" 
+          className="h-12 w-auto object-contain drop-shadow-[0_0_15px_rgba(168,85,247,0.6)]"
+        />
       </div>
     </div>
   );
