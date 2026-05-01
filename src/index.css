@@ -31,8 +31,48 @@
   }
 }
 
+/* Premium Video.js Customization */
 .video-js.vjs-theme-city {
   --vjs-theme-city--primary: #7c3aed;
+  --vjs-theme-city--secondary: rgba(255, 255, 255, 0.8);
+  font-family: inherit;
+}
+
+.video-js .vjs-control-bar {
+  background: linear-gradient(to top, rgba(0,0,0,0.9), transparent) !important;
+  height: 80px !important;
+  padding: 0 20px !important;
+}
+
+.video-js .vjs-big-play-button {
+  background-color: rgba(124, 58, 237, 0.8) !important;
+  border-radius: 50% !important;
+  border: none !important;
+  width: 80px !important;
+  height: 80px !important;
+  line-height: 80px !important;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease !important;
+}
+
+.video-js .vjs-big-play-button:hover {
+  background-color: rgba(124, 58, 237, 1) !important;
+  transform: scale(1.1) translate(-45%, -45%) !important;
+}
+
+.video-js .vjs-play-progress {
+  background-color: var(--vjs-theme-city--primary) !important;
+  border-radius: 10px !important;
+}
+
+.video-js .vjs-slider {
+  background-color: rgba(255,255,255,0.2) !important;
+  border-radius: 10px !important;
+}
+
+.video-js .vjs-load-progress {
+  background: rgba(255,255,255,0.4) !important;
+  border-radius: 10px !important;
 }
 
 .custom-scrollbar::-webkit-scrollbar {

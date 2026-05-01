@@ -22,7 +22,7 @@ export const ExplorerHeader = memo(({
   onBack 
 }: ExplorerHeaderProps) => {
   return (
-    <header className="px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 bg-[#050505]/95 backdrop-blur-md sticky top-0 z-50">
+    <header className="px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 bg-[#050505]/60 backdrop-blur-2xl sticky top-0 z-50">
       <div className="flex items-center gap-5">
         <button onClick={onBack} className="p-2.5 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-zinc-400 hover:text-white border border-white/5">
           <ChevronLeft size={22} />

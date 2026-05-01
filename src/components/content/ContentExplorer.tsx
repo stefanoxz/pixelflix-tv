@@ -161,12 +161,49 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
 
   if (itemsLoading) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
-        <div className="relative">
-          <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-          <div className="absolute inset-0 blur-lg bg-blue-500/20 animate-pulse" />
+      <div className="h-screen bg-black text-white flex flex-col font-sans overflow-hidden">
+        <ExplorerHeader 
+          title={title}
+          itemCount={0}
+          searchQuery={searchQuery}
+          onSearchChange={() => {}}
+          viewMode={viewMode}
+          onViewModeChange={() => {}}
+          onBack={onBack}
+        />
+        <div className="flex flex-1 overflow-hidden">
+          <CategorySidebar 
+            categories={[]}
+            selectedCategory={selectedCategory}
+            onSelectCategory={() => {}}
+          />
+          <main className="flex-1 overflow-hidden p-6 md:p-12 relative">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-zinc-900/40 via-black to-black pointer-events-none" />
+            <div className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-8 md:gap-10" : "space-y-6 max-w-6xl mx-auto"}>
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div key={i} className="animate-pulse flex flex-col">
+                  {viewMode === 'grid' ? (
+                    <>
+                      <div className="aspect-[2/3] rounded-[40px] bg-zinc-900 border border-white/5" />
+                      <div className="mt-6 px-2 space-y-2">
+                        <div className="h-4 bg-zinc-900 rounded-md w-3/4" />
+                        <div className="h-3 bg-zinc-900 rounded-md w-1/4" />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-6 p-5 bg-white/5 rounded-[32px] border border-white/5">
+                      <div className="w-20 h-28 rounded-2xl bg-zinc-900 flex-shrink-0" />
+                      <div className="flex-1 space-y-3">
+                        <div className="h-5 bg-zinc-900 rounded-md w-1/3" />
+                        <div className="h-3 bg-zinc-900 rounded-md w-1/4" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </main>
         </div>
-        <p className="text-zinc-600 font-black uppercase tracking-[0.4em] text-[10px]">Carregando conteúdo...</p>
       </div>
     );
   }

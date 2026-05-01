@@ -14,7 +14,10 @@ export const ContentItem = memo(({ item, isFav, viewMode, onPlay, onSelect, onTo
   if (viewMode === 'grid') {
     return (
       <div className="group flex flex-col animate-in fade-in zoom-in-95 duration-700">
-        <div onClick={() => onSelect(item)} className="cursor-pointer relative aspect-[2/3] rounded-[40px] overflow-hidden bg-zinc-900 border border-white/5 transition-all duration-700 group-hover:-translate-y-3 group-hover:shadow-[0_30px_60px_rgba(0,0,0,0.8)] group-hover:border-white/20 ring-1 ring-white/0 group-hover:ring-white/10">
+        <button 
+          onClick={() => onSelect(item)} 
+          className="text-left w-full focus:outline-none focus-visible:ring-4 focus-visible:ring-purple-500/50 rounded-[40px] cursor-pointer relative aspect-[2/3] overflow-hidden bg-zinc-900 border border-white/5 transition-all duration-700 group-hover:-translate-y-3 group-hover:shadow-[0_30px_60px_rgba(0,0,0,0.8)] group-hover:border-white/20 ring-1 ring-white/0 group-hover:ring-white/10"
+        >
           <img 
             src={item.icon} 
             alt={item.name} 
@@ -34,22 +37,19 @@ export const ContentItem = memo(({ item, isFav, viewMode, onPlay, onSelect, onTo
           </div>
 
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500 flex flex-col justify-end p-8">
-            <button 
-              onClick={(e) => { e.stopPropagation(); onPlay(item); }} 
-              className="w-full bg-white text-black h-14 rounded-3xl flex items-center justify-center hover:bg-zinc-200 transition-transform transform translate-y-6 group-hover:translate-y-0 duration-500 shadow-[0_20px_40px_rgba(255,255,255,0.1)] will-change-transform"
-            >
+            <div className="w-full bg-white text-black h-14 rounded-3xl flex items-center justify-center transition-transform transform translate-y-6 group-hover:translate-y-0 duration-500 shadow-[0_20px_40px_rgba(255,255,255,0.1)] will-change-transform">
               <Play size={24} fill="currentColor" className="ml-1" />
-            </button>
+            </div>
           </div>
-        </div>
+        </button>
         
         <div className="mt-6 px-2 space-y-1">
-          <h4 className="text-[13px] font-black truncate text-zinc-300 group-hover:text-white transition-colors tracking-tight uppercase">{item.name}</h4>
+          <h4 className="text-[14px] leading-tight font-bold truncate text-zinc-300 group-hover:text-white transition-colors tracking-tight capitalize">{item.name?.toLowerCase()}</h4>
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-zinc-600 font-black tracking-[0.2em]">{item.year}</span>
+            <span className="text-[10px] text-zinc-600 font-bold tracking-widest">{item.year}</span>
             <button 
               onClick={(e) => { e.stopPropagation(); onToggleFavorite(item); }} 
-              className={`p-2 rounded-xl transition-all ${isFav ? 'text-red-500 bg-red-500/10' : 'text-zinc-700 hover:text-white hover:bg-white/5'}`}
+              className={`p-2 rounded-xl transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 ${isFav ? 'text-red-500 bg-red-500/10' : 'text-zinc-700 hover:text-white hover:bg-white/5'}`}
             >
               <Heart size={16} fill={isFav ? 'currentColor' : 'none'} strokeWidth={2.5} />
             </button>
