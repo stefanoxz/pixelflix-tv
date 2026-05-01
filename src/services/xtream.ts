@@ -81,7 +81,8 @@ export class XtreamService {
 
         let data;
         const proxyName = proxyUrl.includes('allorigins') ? 'allorigins' : 
-                         proxyUrl.includes('corsproxy.io') ? 'corsproxy' : 'thingproxy';
+                         proxyUrl.includes('corsproxy.io') ? 'corsproxy' : 
+                         proxyUrl.includes('cors-anywhere') ? 'cors-anywhere' : 'cors-sh';
 
         if (proxyName === 'allorigins') {
           const json = await response.json();
