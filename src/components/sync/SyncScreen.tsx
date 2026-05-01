@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Database, CloudDownload, Film, Tv, PlayCircle, CheckCircle2, AlertCircle } from 'lucide-react';
+import { CloudDownload, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { xtreamService } from '../services/xtream';
+import { xtreamService } from '../../services/xtream';
+import { SyncProgressBar } from './SyncProgressBar';
 
 interface SyncScreenProps {
   onComplete: () => void;
@@ -19,9 +20,7 @@ export const SyncScreen = ({ onComplete, profileName }: SyncScreenProps) => {
     const syncData = async () => {
       try {
         const creds = xtreamService.getCredentials();
-        console.log('Syncing for DNS:', creds?.url);
         
-        // Step 1: Auth check
         setStatus('Verificando credenciais...');
         setProgress(15);
         try {
@@ -31,16 +30,13 @@ export const SyncScreen = ({ onComplete, profileName }: SyncScreenProps) => {
           throw authErr;
         }
         
-        // Step 2: Live Categories
         setStatus('Sincronizando canais ao vivo...');
         setProgress(35);
-        const liveCats = await queryClient.fetchQuery({
+        await queryClient.fetchQuery({
           queryKey: ['categories', 'live'],
           queryFn: () => xtreamService.getCategories('live'),
         });
-        console.log('Live categories found:', liveCats?.length);
 
-        // Step 3: Movie Categories
         setStatus('Sincronizando catálogo de filmes...');
         setProgress(55);
         await queryClient.fetchQuery({
@@ -48,7 +44,6 @@ export const SyncScreen = ({ onComplete, profileName }: SyncScreenProps) => {
           queryFn: () => xtreamService.getCategories('movie'),
         });
 
-        // Step 4: Series Categories
         setStatus('Mapeando séries e episódios...');
         setProgress(75);
         await queryClient.fetchQuery({
@@ -56,7 +51,6 @@ export const SyncScreen = ({ onComplete, profileName }: SyncScreenProps) => {
           queryFn: () => xtreamService.getCategories('series'),
         });
 
-        // Step 5: Optimization
         setStatus('Otimizando player de vídeo...');
         setProgress(90);
         await new Promise(r => setTimeout(r, 500));
@@ -65,8 +59,7 @@ export const SyncScreen = ({ onComplete, profileName }: SyncScreenProps) => {
         setStatus('Tudo pronto!');
         setTimeout(onComplete, 1000);
       } catch (err: any) {
-        console.error('Sync failed:', err);
-        setError(err.message || 'Erro ao sincronizar dados. Verifique sua conexão.');
+        setError(err.message || 'Erro ao sincronizar dados.');
       }
     };
 
@@ -75,18 +68,17 @@ export const SyncScreen = ({ onComplete, profileName }: SyncScreenProps) => {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      {/* Background Glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-purple-600/10 blur-[150px] rounded-full animate-pulse" />
       
       <div className="relative z-10 w-full max-w-md flex flex-col items-center text-center">
         <div className="mb-12 relative">
           <div className={`w-24 h-24 rounded-3xl flex items-center justify-center border border-white/10 shadow-2xl relative overflow-hidden transition-colors ${error ? 'bg-red-500/20' : 'bg-zinc-900'}`}>
              {error ? (
-               <AlertCircle size={40} className="text-red-500 animate-pulse" />
+                <AlertCircle size={40} className="text-red-500 animate-pulse" />
              ) : progress < 100 ? (
-               <CloudDownload size={40} className="text-blue-500 animate-bounce" />
+                <CloudDownload size={40} className="text-blue-500 animate-bounce" />
              ) : (
-               <CheckCircle2 size={40} className="text-green-500 animate-in zoom-in duration-500" />
+                <CheckCircle2 size={40} className="text-green-500 animate-in zoom-in duration-500" />
              )}
           </div>
           {!error && (
@@ -99,40 +91,20 @@ export const SyncScreen = ({ onComplete, profileName }: SyncScreenProps) => {
         <h1 className="text-3xl font-black mb-2 tracking-tight">
           {error ? 'Falha na Sincronização' : 'Sincronizando Conteúdo'}
         </h1>
-        <p className="text-zinc-500 mb-6">
+        <p className="text-zinc-500 mb-6 text-sm">
           {error ? 'Ocorreu um problema ao tentar carregar seus dados.' : <>Olá <span className="text-white font-bold">{profileName}</span>, estamos preparando sua experiência premium.</>}
         </p>
 
         {debugInfo && (
           <div className="mb-8 p-3 bg-white/5 border border-white/10 rounded-xl text-[10px] text-zinc-400 font-mono text-left w-full break-all">
-            <span className="text-purple-400 font-bold block mb-1">DETALHES TÉCNICOS:</span>
+            <span className="text-purple-400 font-bold block mb-1 uppercase tracking-widest text-[9px]">Detalhes Técnicos:</span>
             {debugInfo}
           </div>
         )}
 
         {!error ? (
           <>
-            <div className="w-full h-2 bg-zinc-900 rounded-full overflow-hidden mb-8 border border-white/5">
-              <div 
-                className="h-full bg-gradient-to-r from-blue-600 to-cyan-500 transition-all duration-500 ease-out shadow-[0_0_20px_rgba(37,99,235,0.5)]"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-
-            <div className="grid grid-cols-4 gap-4 w-full mb-12">
-              {[
-                { icon: Tv, p: 35 },
-                { icon: Film, p: 55 },
-                { icon: PlayCircle, p: 75 },
-                { icon: Database, p: 90 },
-              ].map((item, i) => (
-                <div key={i} className={`flex flex-col items-center gap-2 transition-all duration-500 ${progress >= item.p ? 'text-blue-500 scale-110' : 'text-zinc-700'}`}>
-                  <item.icon size={20} />
-                  <div className={`w-1 h-1 rounded-full ${progress >= item.p ? 'bg-blue-500' : 'bg-zinc-800'}`} />
-                </div>
-              ))}
-            </div>
-
+            <SyncProgressBar progress={progress} />
             <p className="text-[11px] font-black uppercase tracking-[0.4em] text-zinc-400 animate-pulse h-4">
               {status}
             </p>
@@ -153,7 +125,7 @@ export const SyncScreen = ({ onComplete, profileName }: SyncScreenProps) => {
       </div>
 
       <div className="absolute bottom-12 text-[10px] font-bold text-zinc-700 tracking-[0.3em] uppercase">
-        SuperTech WebPlayer &bull; Versão Estável
+        Vibe WebPlayer &bull; Versão Estável
       </div>
     </div>
   );

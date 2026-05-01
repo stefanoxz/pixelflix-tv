@@ -2,10 +2,10 @@ import { useState, lazy, Suspense } from 'react';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { ProfileSelection } from './components/ProfileSelection';
-import { SyncScreen } from './components/SyncScreen';
+import { SyncScreen } from './components/sync/SyncScreen';
 import { Loader2 } from 'lucide-react';
 
-const ContentExplorer = lazy(() => import('./components/ContentExplorer').then(module => ({ default: module.ContentExplorer })));
+const ContentExplorer = lazy(() => import('./components/content/ContentExplorer').then(module => ({ default: module.ContentExplorer })));
 const AdminPanel = lazy(() => import('./components/AdminPanel').then(module => ({ default: module.AdminPanel })));
 
 const LoadingView = () => (
