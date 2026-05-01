@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ChevronLeft, Search, Grid, List as ListIcon, Play, Star, Info, X, Settings, Loader2, Heart, PlayCircle } from 'lucide-react';
+import { ChevronLeft, Search, Grid, List as ListIcon, Play, Star, Info, X, Settings, Loader2, Heart, PlayCircle, AlertCircle } from 'lucide-react';
 import { xtreamService } from '../services/xtream';
 import { contentActions } from '../services/content';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
