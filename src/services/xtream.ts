@@ -100,6 +100,10 @@ export class XtreamService {
             throw new Error(data.message || 'Falha na autenticação do servidor');
           }
           console.log(`Success with ${proxyName} for ${action}`);
+          
+          // Cache the successful result
+          this.cache.set(cacheKey, { data, timestamp: Date.now() });
+          
           return data;
         }
       } catch (err) {
