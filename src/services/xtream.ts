@@ -154,7 +154,7 @@ export class XtreamService {
 
   async getStreams(type: 'live' | 'movie' | 'series', categoryId?: string): Promise<Stream[]> {
     try {
-      const action = type === 'live' ? 'get_live_streams' : type === 'movie' ? 'get_vod_streams' : 'get_series_streams';
+      const action = type === 'live' ? 'get_live_streams' : type === 'movie' ? 'get_vod_streams' : 'get_series';
       const params = categoryId ? { category_id: categoryId } : {};
       const data = await this.fetchAction(action, params);
       
