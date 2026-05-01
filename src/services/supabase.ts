@@ -28,3 +28,46 @@ export const updateSettings = async (id: string, updates: { dns_url?: string; ad
   if (error) throw error;
   return data;
 };
+
+export const getProfiles = async (username: string) => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('username', username)
+    .order('created_at', { ascending: true });
+  
+  if (error) throw error;
+  return data;
+};
+
+export const createProfile = async (profile: { username: string; profile_name: string; avatar_url: string }) => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .insert([profile])
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+};
+
+export const updateProfile = async (id: string, updates: { profile_name?: string; avatar_url?: string }) => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+};
+
+export const deleteProfile = async (id: string) => {
+  const { error } = await supabase
+    .from('profiles')
+    .delete()
+    .eq('id', id);
+  
+  if (error) throw error;
+};

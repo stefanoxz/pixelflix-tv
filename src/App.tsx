@@ -1,15 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { ContentExplorer } from './components/ContentExplorer';
 import { AdminPanel } from './components/AdminPanel';
+import { ProfileSelection } from './components/ProfileSelection';
+import { SyncScreen } from './components/SyncScreen';
 
-type View = 'login' | 'dashboard' | 'live' | 'movie' | 'series' | 'settings' | 'admin';
+type View = 'login' | 'profiles' | 'sync' | 'dashboard' | 'live' | 'movie' | 'series' | 'settings' | 'admin';
+
+interface Profile {
+  id: string;
+  profile_name: string;
+  avatar_url: string;
+}
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('login');
+  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
 
   const handleLogin = () => {
+    setCurrentView('profiles');
+  };
+
+  const handleProfileSelect = (profile: Profile) => {
+    setSelectedProfile(profile);
+    setCurrentView('sync');
+  };
+
+  const handleSyncComplete = () => {
     setCurrentView('dashboard');
   };
 
@@ -18,6 +36,7 @@ function App() {
   };
 
   const handleLogout = () => {
+    setSelectedProfile(null);
     setCurrentView('login');
   };
 
@@ -33,9 +52,23 @@ function App() {
           onAdminLogin={handleAdminLogin}
         />
       )}
+
+      {currentView === 'profiles' && (
+        <ProfileSelection 
+          onSelect={handleProfileSelect}
+        />
+      )}
+
+      {currentView === 'sync' && (
+        <SyncScreen 
+          profileName={selectedProfile?.profile_name || ''}
+          onComplete={handleSyncComplete}
+        />
+      )}
       
       {currentView === 'dashboard' && (
         <Dashboard 
+          profile={selectedProfile}
           onLogout={handleLogout} 
           onNavigate={(view) => handleNavigate(view as View)} 
         />
