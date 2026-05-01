@@ -13,8 +13,10 @@ export const MainHeader = ({ onNavigate, onLogout }: MainHeaderProps) => {
         <div className="group cursor-pointer flex items-center" onClick={() => onNavigate('dashboard')}>
           <img 
             src={vibeLogo} 
-            alt="Vibe" 
+            alt="Logotipo Vibe Premium - O melhor WebPlayer IPTV" 
+            title="Vibe Premium WebPlayer"
             className="h-14 w-auto object-contain drop-shadow-[0_0_15px_rgba(168,85,247,0.4)] group-hover:drop-shadow-[0_0_25px_rgba(168,85,247,0.6)] transition-all"
+            loading="eager"
           />
         </div>
         <nav className="hidden lg:flex items-center gap-10">
