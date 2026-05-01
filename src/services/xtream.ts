@@ -44,10 +44,14 @@ export class XtreamService {
     console.log(`Fetching action: ${action}`);
 
     // IPTV servers are picky. We use proxies to bypass CORS.
+    // Increased timeout for streams which can be very large
+    const isStreamAction = action.includes('streams') || action.includes('series');
+    const timeout = isStreamAction ? 20000 : 10000;
+
     const proxies = [
+      (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
       (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
       (u: string) => `https://thingproxy.freeboard.io/fetch/${u}`,
-      (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
     ];
 
     let lastError: any = null;
@@ -57,7 +61,7 @@ export class XtreamService {
         const proxyUrl = getProxyUrl(url);
         console.log(`Trying proxy for ${action}...`);
         
-        const response = await this.fetchWithTimeout(proxyUrl, 8000);
+        const response = await this.fetchWithTimeout(proxyUrl, timeout);
 
         if (!response.ok) {
           console.warn(`Proxy returned status ${response.status} for ${action}`);
@@ -65,13 +69,15 @@ export class XtreamService {
         }
 
         let data;
-        if (proxyUrl.includes('allorigins')) {
+        const proxyName = proxyUrl.includes('allorigins') ? 'allorigins' : 
+                         proxyUrl.includes('corsproxy.io') ? 'corsproxy' : 'thingproxy';
+
+        if (proxyName === 'allorigins') {
           const json = await response.json();
           if (!json.contents) continue;
           try {
             data = JSON.parse(json.contents);
           } catch (e) {
-            // Some IPTV servers return raw strings or malformed JSON
             console.warn("AllOrigins: Failed to parse contents", e);
             continue;
           }
@@ -80,11 +86,11 @@ export class XtreamService {
         }
 
         if (data) {
-          // Some servers return { status: false, message: "..." }
+          // Handle cases where data is an error object
           if (data.status === false || (data.user_info && data.user_info.auth === 0)) {
             throw new Error(data.message || 'Falha na autenticação do servidor');
           }
-          console.log(`Success with proxy for ${action}`);
+          console.log(`Success with ${proxyName} for ${action}`);
           return data;
         }
       } catch (err) {
@@ -94,7 +100,7 @@ export class XtreamService {
       }
     }
 
-    throw lastError || new Error(`Não foi possível conectar ao servidor IPTV. Verifique o DNS e tente novamente.`);
+    throw lastError || new Error(`Não foi possível carregar os dados. O servidor IPTV pode estar lento ou bloqueando a conexão.`);
   }
 
   async authenticate(): Promise<{ user_info: UserInfo }> {
