@@ -95,13 +95,18 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
 
   const videoOptions = useMemo(() => {
     if (!selectedItem) return null;
+    
+    // Determine the best extension based on type
+    const ext = type === 'live' ? 'm3u8' : 'mp4';
+    const streamUrl = xtreamService.getStreamUrl(selectedItem.id, ext, type);
+    
     return {
       autoplay: true,
       controls: true,
       responsive: true,
       fluid: true,
       sources: [{
-        src: xtreamService.getStreamUrl(selectedItem.id, type === 'live' ? 'm3u8' : 'mp4', type),
+        src: streamUrl,
         type: type === 'live' ? 'application/x-mpegURL' : 'video/mp4'
       }]
     };
