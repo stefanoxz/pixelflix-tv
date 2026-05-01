@@ -6,6 +6,7 @@ import { SyncScreen } from './components/sync/SyncScreen';
 import { Loader2 } from 'lucide-react';
 
 const ContentExplorer = lazy(() => import('./components/content/ContentExplorer').then(module => ({ default: module.ContentExplorer })));
+const LiveExplorer = lazy(() => import('./components/live/LiveExplorer').then(module => ({ default: module.LiveExplorer })));
 const AdminPanel = lazy(() => import('./components/AdminPanel').then(module => ({ default: module.AdminPanel })));
 
 const LoadingView = () => (
@@ -84,9 +85,13 @@ function App() {
           />
         )}
         
-        {(currentView === 'live' || currentView === 'movie' || currentView === 'series') && (
+        {currentView === 'live' && (
+          <LiveExplorer onBack={() => setCurrentView('dashboard')} />
+        )}
+
+        {(currentView === 'movie' || currentView === 'series') && (
           <ContentExplorer 
-            type={currentView as 'live' | 'movie' | 'series'} 
+            type={currentView as 'movie' | 'series'} 
             onBack={() => setCurrentView('dashboard')} 
           />
         )}

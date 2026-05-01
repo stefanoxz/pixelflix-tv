@@ -174,6 +174,21 @@ export class XtreamService {
     const ext = extension || (type === 'live' ? 'm3u8' : 'mp4');
     return `${baseUrl}/${prefix}${this.credentials.username}/${this.credentials.password}/${streamId}.${ext}`;
   }
+
+  async getShortEPG(streamId: string): Promise<any> {
+    try {
+      const data = await this.fetchAction('get_short_epg', { stream_id: streamId, limit: '1' });
+      
+      // Typical short EPG response contains "epg_listings" array
+      if (data && data.epg_listings && data.epg_listings.length > 0) {
+        return data.epg_listings[0];
+      }
+      return null;
+    } catch (err) {
+      console.warn(`Error fetching EPG for stream ${streamId}:`, err);
+      return null;
+    }
+  }
 }
 
 export const xtreamService = new XtreamService();
