@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { User, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { xtreamService } from '../services/xtream';
 import { getSettings } from '../services/supabase';
 import vibeLogo from '@/assets/vibe-logo.png';
+import { UserLoginForm } from './auth/UserLoginForm';
+import { AdminLoginForm } from './auth/AdminLoginForm';
 
 interface LoginProps {
   onLogin: () => void;
@@ -66,7 +68,6 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4 font-sans selection:bg-purple-500/30 overflow-hidden relative">
-      {/* Background Gradient & Pattern */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-purple-600/10 blur-[120px] rounded-full animate-pulse" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-600/10 blur-[120px] rounded-full animate-pulse" style={{ animationDelay: '2s' }} />
@@ -95,57 +96,17 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {!isAdminMode ? (
-              <>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Usuário</label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none transition-colors group-focus-within:text-white text-zinc-600">
-                      <User size={18} />
-                    </div>
-                    <input
-                      type="text"
-                      autoFocus
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      className="w-full bg-white/5 border border-white/5 text-white pl-12 pr-4 py-4 rounded-2xl focus:outline-none focus:bg-white/10 transition-all placeholder:text-zinc-700 font-bold"
-                      placeholder="958457249"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Senha</label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none transition-colors group-focus-within:text-white text-zinc-600">
-                      <Lock size={18} />
-                    </div>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-white/5 border border-white/5 text-white pl-12 pr-4 py-4 rounded-2xl focus:outline-none focus:bg-white/10 transition-all placeholder:text-zinc-700 font-bold"
-                      placeholder="••••••••"
-                    />
-                  </div>
-                </div>
-              </>
+              <UserLoginForm 
+                username={username}
+                setUsername={setUsername}
+                password={password}
+                setPassword={setPassword}
+              />
             ) : (
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Senha de Admin</label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none transition-colors group-focus-within:text-white text-zinc-600">
-                    <ShieldCheck size={18} />
-                  </div>
-                  <input
-                    type="password"
-                    autoFocus
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    className="w-full bg-white/5 border border-white/5 text-white pl-12 pr-4 py-4 rounded-2xl focus:outline-none focus:bg-white/10 transition-all placeholder:text-zinc-700 font-bold"
-                    placeholder="Sua senha master"
-                  />
-                </div>
-              </div>
+              <AdminLoginForm 
+                adminPassword={adminPassword}
+                setAdminPassword={setAdminPassword}
+              />
             )}
 
             {error && (
