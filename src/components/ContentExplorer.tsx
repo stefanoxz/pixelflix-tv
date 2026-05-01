@@ -238,8 +238,7 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
           </div>
         )}
       </main>
-        </main>
-      </div>
+    </div>
 
       {selectedItem && !isPlaying && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
