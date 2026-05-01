@@ -235,8 +235,9 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
                 </div>
               );
             })}
-            )}
           </div>
+        )}
+      </main>
         </main>
       </div>
 
