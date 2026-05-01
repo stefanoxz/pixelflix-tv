@@ -22,45 +22,48 @@ export const SyncScreen = ({ onComplete, profileName, avatarUrl }: SyncScreenPro
       try {
         const creds = xtreamService.getCredentials();
         
-        setStatus('Verificando credenciais...');
+        setStatus('Estabelecendo conexão...');
         setProgress(15);
         try {
           await xtreamService.authenticate();
         } catch (authErr: any) {
-          setDebugInfo(`Erro no servidor IPTV (${creds?.url}): ${authErr.message}`);
-          throw authErr;
+          console.error('Sync auth error:', authErr);
+          const debugMsg = `Servidor: ${creds?.url} | Erro: ${authErr.message}`;
+          setDebugInfo(debugMsg);
+          throw new Error('Falha na autenticação. Verifique se sua conta está ativa ou se os dados estão corretos.');
         }
         
-        setStatus('Sincronizando canais ao vivo...');
+        setStatus('Sincronizando canais...');
         setProgress(35);
         await queryClient.fetchQuery({
           queryKey: ['categories', 'live'],
           queryFn: () => xtreamService.getCategories('live'),
-        });
+        }).catch(err => console.warn('Falha leve ao baixar categorias de TV:', err));
 
-        setStatus('Sincronizando catálogo de filmes...');
+        setStatus('Carregando biblioteca de filmes...');
         setProgress(55);
         await queryClient.fetchQuery({
           queryKey: ['categories', 'movie'],
           queryFn: () => xtreamService.getCategories('movie'),
-        });
+        }).catch(err => console.warn('Falha leve ao baixar categorias de Filmes:', err));
 
-        setStatus('Mapeando séries e episódios...');
+        setStatus('Mapeando séries...');
         setProgress(75);
         await queryClient.fetchQuery({
           queryKey: ['categories', 'series'],
           queryFn: () => xtreamService.getCategories('series'),
-        });
+        }).catch(err => console.warn('Falha leve ao baixar categorias de Séries:', err));
 
-        setStatus('Otimizando player de vídeo...');
+        setStatus('Finalizando...');
         setProgress(90);
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 800));
 
         setProgress(100);
-        setStatus('Tudo pronto!');
-        setTimeout(onComplete, 1000);
+        setStatus('Pronto!');
+        setTimeout(onComplete, 500);
       } catch (err: any) {
-        setError(err.message || 'Erro ao sincronizar dados.');
+        console.error('Sync critical error:', err);
+        setError(err.message || 'Erro de conexão. O servidor pode estar instável ou bloqueando o acesso.');
       }
     };
 
