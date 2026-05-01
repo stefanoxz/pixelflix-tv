@@ -1,10 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
-import { ContentExplorer } from './components/ContentExplorer';
-import { AdminPanel } from './components/AdminPanel';
 import { ProfileSelection } from './components/ProfileSelection';
 import { SyncScreen } from './components/SyncScreen';
+import { Loader2 } from 'lucide-react';
+
+const ContentExplorer = lazy(() => import('./components/ContentExplorer').then(module => ({ default: module.ContentExplorer })));
+const AdminPanel = lazy(() => import('./components/AdminPanel').then(module => ({ default: module.AdminPanel })));
+
+const LoadingView = () => (
+  <div className="min-h-screen bg-black flex items-center justify-center">
+    <Loader2 className="w-12 h-12 text-purple-500 animate-spin" />
+  </div>
+);
 
 type View = 'login' | 'profiles' | 'sync' | 'dashboard' | 'live' | 'movie' | 'series' | 'settings' | 'admin';
 
