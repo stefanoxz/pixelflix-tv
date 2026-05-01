@@ -82,9 +82,10 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
         }
 
         try {
-          const response = await xtreamService.login(dnsUrl, username, password);
+          xtreamService.setCredentials({ url: dnsUrl, username, password });
+          const userInfo = await xtreamService.authenticate();
       
-          if (response.success) {
+          if (userInfo) {
             // Bridge Xtream Auth with Supabase Auth for RLS Security
             const supaEmail = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@pixelflix.local`;
             const supaPassword = `Px!${password}#tv`; // Secure derived password
