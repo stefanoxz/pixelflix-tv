@@ -1,11 +1,18 @@
-import { Tv, Film, PlayCircle, Settings, User, LogOut, Search, ArrowRight } from 'lucide-react';
+import { Tv, Film, PlayCircle, Settings, User, LogOut, Search, ArrowRight, UserCircle } from 'lucide-react';
+
+interface Profile {
+  id: string;
+  profile_name: string;
+  avatar_url: string;
+}
 
 interface DashboardProps {
   onLogout: () => void;
   onNavigate: (view: 'live' | 'movie' | 'series' | 'settings') => void;
+  profile: Profile | null;
 }
 
-export const Dashboard = ({ onLogout, onNavigate }: DashboardProps) => {
+export const Dashboard = ({ onLogout, onNavigate, profile }: DashboardProps) => {
   const menuItems = [
     { id: 'live', label: 'CANAIS AO VIVO', icon: Tv, color: 'from-blue-600 to-cyan-500', count: '2.500+' },
     { id: 'movie', label: 'FILMES', icon: Film, color: 'from-purple-600 to-pink-500', count: '10.000+' },
