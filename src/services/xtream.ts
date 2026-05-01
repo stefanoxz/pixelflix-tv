@@ -58,8 +58,8 @@ export class XtreamService {
     const timeout = isStreamAction ? 20000 : 10000;
 
     const proxies = [
-      (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
       (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+      (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
       (u: string) => `https://thingproxy.freeboard.io/fetch/${u}`,
     ];
 
