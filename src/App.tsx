@@ -71,6 +71,7 @@ function App() {
         {currentView === 'sync' && (
           <SyncScreen 
             profileName={selectedProfile?.profile_name || ''}
+            avatarUrl={selectedProfile?.avatar_url || ''}
             onComplete={handleSyncComplete}
           />
         )}
