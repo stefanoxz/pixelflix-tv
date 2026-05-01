@@ -167,10 +167,18 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
 
   const title = type === 'live' ? 'Canais ao Vivo' : type === 'movie' ? 'Filmes' : 'Séries';
 
-  const handlePlay = (item: any) => {
+  const handlePlay = useCallback((item: any) => {
     setSelectedItem(item);
     setIsPlaying(true);
-  };
+  }, []);
+
+  const handleToggleFavorite = useCallback((item: any) => {
+    toggleFavoriteMutation.mutate(item);
+  }, [toggleFavoriteMutation]);
+
+  const handleSelectItem = useCallback((item: any) => {
+    setSelectedItem(item);
+  }, []);
 
   const videoOptions = useMemo(() => {
     if (!selectedItem) return null;
