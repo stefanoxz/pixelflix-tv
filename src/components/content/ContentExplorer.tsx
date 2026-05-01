@@ -125,34 +125,6 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
     };
   }, [selectedItem, type]);
 
-  if (itemsLoading) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
-        <div className="relative">
-          <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-          <div className="absolute inset-0 blur-lg bg-blue-500/20 animate-pulse" />
-        </div>
-        <p className="text-zinc-600 font-black uppercase tracking-[0.4em] text-[10px]">Carregando conteúdo...</p>
-      </div>
-    );
-  }
-
-  if (isPlaying && selectedItem) {
-    return (
-      <div className="fixed inset-0 z-[200] bg-black">
-        <ErrorBoundary isLocal>
-          <VideoPlayer options={videoOptions} onReady={() => console.log('Player ready')} />
-        </ErrorBoundary>
-        <button 
-          onClick={() => setIsPlaying(false)}
-          className="absolute top-8 left-8 z-[210] p-4 bg-black/50 hover:bg-black/80 text-white rounded-full transition-all"
-        >
-          <ChevronLeft size={24} />
-        </button>
-      </div>
-    );
-  }
-
   const parentRef = React.useRef<HTMLDivElement>(null);
   
   // Calculate dynamic columns based on window width to match tailwind classes
@@ -185,6 +157,34 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
     estimateSize: () => viewMode === 'grid' ? 350 : 150, // rough estimate of row height
     overscan: 5,
   });
+
+  if (itemsLoading) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
+        <div className="relative">
+          <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+          <div className="absolute inset-0 blur-lg bg-blue-500/20 animate-pulse" />
+        </div>
+        <p className="text-zinc-600 font-black uppercase tracking-[0.4em] text-[10px]">Carregando conteúdo...</p>
+      </div>
+    );
+  }
+
+  if (isPlaying && selectedItem) {
+    return (
+      <div className="fixed inset-0 z-[200] bg-black">
+        <ErrorBoundary isLocal>
+          <VideoPlayer options={videoOptions} onReady={() => console.log('Player ready')} />
+        </ErrorBoundary>
+        <button 
+          onClick={() => setIsPlaying(false)}
+          className="absolute top-8 left-8 z-[210] p-4 bg-black/50 hover:bg-black/80 text-white rounded-full transition-all"
+        >
+          <ChevronLeft size={24} />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-white/10">
