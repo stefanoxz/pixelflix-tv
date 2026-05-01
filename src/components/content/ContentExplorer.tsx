@@ -1,5 +1,6 @@
-import { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Loader2, AlertCircle, Search, ChevronLeft } from 'lucide-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { xtreamService } from '../../services/xtream';
 import { contentActions } from '../../services/content';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -17,12 +18,20 @@ interface ContentExplorerProps {
 export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   
   const username = xtreamService.getCredentials()?.username || 'user';
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', type],
@@ -75,11 +84,11 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
       list = items.filter(item => String(item.category_id) === selectedCategory);
     }
     
-    if (searchQuery) {
-      list = list.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    if (debouncedSearchQuery) {
+      list = list.filter(item => item.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()));
     }
     return list;
-  }, [items, selectedCategory, searchQuery, favorites]);
+  }, [items, selectedCategory, debouncedSearchQuery, favorites]);
 
   const title = type === 'live' ? 'Canais ao Vivo' : type === 'movie' ? 'Filmes' : 'Séries';
 
@@ -141,6 +150,39 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
     );
   }
 
+  const parentRef = React.useRef<HTMLDivElement>(null);
+  
+  // Calculate dynamic columns based on window width to match tailwind classes
+  const [columns, setColumns] = useState(6); // default to 2xl
+  
+  useEffect(() => {
+    const updateColumns = () => {
+      const width = window.innerWidth;
+      if (viewMode === 'list') {
+        setColumns(1);
+      } else {
+        if (width >= 1536) setColumns(6); // 2xl
+        else if (width >= 1280) setColumns(5); // xl
+        else if (width >= 1024) setColumns(4); // lg
+        else if (width >= 640) setColumns(3); // sm
+        else setColumns(2); // default
+      }
+    };
+    
+    updateColumns();
+    window.addEventListener('resize', updateColumns);
+    return () => window.removeEventListener('resize', updateColumns);
+  }, [viewMode]);
+
+  const rowCount = Math.ceil(filteredItems.length / columns);
+
+  const virtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => viewMode === 'grid' ? 350 : 150, // rough estimate of row height
+    overscan: 5,
+  });
+
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-white/10">
       <ExplorerHeader 
@@ -160,11 +202,14 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
           onSelectCategory={setSelectedCategory}
         />
 
-        <main className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar bg-gradient-to-br from-black to-[#080808] relative scroll-smooth">
+        <main 
+          ref={parentRef}
+          className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar bg-gradient-to-br from-black to-[#080808] relative scroll-smooth"
+        >
           <div className="fixed inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-linen.png')] opacity-[0.05] pointer-events-none" />
 
           {error ? (
-            <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-6 w-full col-span-full">
+            <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-6 w-full col-span-full relative z-10">
               <div className="p-6 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 mb-4 animate-pulse">
                 <AlertCircle size={48} strokeWidth={1} />
               </div>
@@ -178,7 +223,7 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
               </button>
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4 w-full col-span-full">
+            <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4 w-full col-span-full relative z-10">
               <div className="p-6 rounded-full bg-white/5 border border-white/10 text-zinc-600 mb-4">
                 <Search size={48} strokeWidth={1} />
               </div>
@@ -191,18 +236,47 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
               </button>
             </div>
           ) : (
-            <div className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-8 md:gap-10" : "space-y-6 max-w-6xl mx-auto"}>
-              {filteredItems.map(item => (
-                <ContentItem 
-                  key={item.id}
-                  item={item}
-                  isFav={favorites.some((f: any) => String(f.stream_id) === item.id)}
-                  viewMode={viewMode}
-                  onPlay={handlePlay}
-                  onSelect={handleSelectItem}
-                  onToggleFavorite={handleToggleFavorite}
-                />
-              ))}
+            <div 
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const startIndex = virtualRow.index * columns;
+                const rowItems = filteredItems.slice(startIndex, startIndex + columns);
+
+                return (
+                  <div
+                    key={virtualRow.key}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                      paddingBottom: viewMode === 'grid' ? '40px' : '24px',
+                    }}
+                  >
+                    <div className={viewMode === 'grid' ? `grid grid-cols-${columns} gap-8 md:gap-10` : "space-y-6 max-w-6xl mx-auto"}>
+                      {rowItems.map(item => (
+                        <ContentItem 
+                          key={item.id}
+                          item={item}
+                          isFav={favorites.some((f: any) => String(f.stream_id) === item.id)}
+                          viewMode={viewMode}
+                          onPlay={handlePlay}
+                          onSelect={handleSelectItem}
+                          onToggleFavorite={handleToggleFavorite}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </main>
