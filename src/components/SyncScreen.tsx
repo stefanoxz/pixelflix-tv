@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Database, CloudDownload, Film, Tv, PlayCircle, CheckCircle2 } from 'lucide-react';
+import { Database, CloudDownload, Film, Tv, PlayCircle, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { xtreamService } from '../services/xtream';
 
 interface SyncScreenProps {
   onComplete: () => void;
@@ -9,33 +11,57 @@ interface SyncScreenProps {
 export const SyncScreen = ({ onComplete, profileName }: SyncScreenProps) => {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Iniciando conexão...');
-  const [completed, setCompleted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    const steps = [
-      { p: 10, s: 'Verificando credenciais...' },
-      { p: 30, s: 'Carregando canais ao vivo...' },
-      { p: 50, s: 'Sincronizando catálogo de filmes...' },
-      { p: 75, s: 'Mapeando séries e episódios...' },
-      { p: 90, s: 'Otimizando player de vídeo...' },
-      { p: 100, s: 'Tudo pronto!' },
-    ];
+    const syncData = async () => {
+      try {
+        // Step 1: Auth check
+        setStatus('Verificando credenciais...');
+        setProgress(15);
+        await xtreamService.authenticate();
+        
+        // Step 2: Live Categories
+        setStatus('Sincronizando canais ao vivo...');
+        setProgress(35);
+        await queryClient.prefetchQuery({
+          queryKey: ['categories', 'live'],
+          queryFn: () => xtreamService.getCategories('live'),
+        });
 
-    let currentStep = 0;
-    const interval = setInterval(() => {
-      if (currentStep < steps.length) {
-        setProgress(steps[currentStep].p);
-        setStatus(steps[currentStep].s);
-        currentStep++;
-      } else {
-        clearInterval(interval);
-        setCompleted(true);
-        setTimeout(onComplete, 1500);
+        // Step 3: Movie Categories
+        setStatus('Sincronizando catálogo de filmes...');
+        setProgress(55);
+        await queryClient.prefetchQuery({
+          queryKey: ['categories', 'movie'],
+          queryFn: () => xtreamService.getCategories('movie'),
+        });
+
+        // Step 4: Series Categories
+        setStatus('Mapeando séries e episódios...');
+        setProgress(75);
+        await queryClient.prefetchQuery({
+          queryKey: ['categories', 'series'],
+          queryFn: () => xtreamService.getCategories('series'),
+        });
+
+        // Step 5: Optimization
+        setStatus('Otimizando player de vídeo...');
+        setProgress(90);
+        await new Promise(r => setTimeout(r, 500));
+
+        setProgress(100);
+        setStatus('Tudo pronto!');
+        setTimeout(onComplete, 1000);
+      } catch (err: any) {
+        console.error('Sync failed:', err);
+        setError(err.message || 'Erro ao sincronizar dados. Verifique sua conexão.');
       }
-    }, 800);
+    };
 
-    return () => clearInterval(interval);
-  }, [onComplete]);
+    syncData();
+  }, [onComplete, queryClient]);
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
