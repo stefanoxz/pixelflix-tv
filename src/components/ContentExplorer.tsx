@@ -27,10 +27,14 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
     select: (data) => [{ category_id: 'Todos', category_name: 'Todos' }, { category_id: 'Favoritos', category_name: '★ Meus Favoritos' }, ...data],
   });
 
-  // React Query for streams
-  const { data: items = [], isLoading: itemsLoading, error } = useQuery({
-    queryKey: ['streams', type],
-    queryFn: () => xtreamService.getStreams(type),
+  const { data: items = [], isLoading: itemsLoading, error, refetch } = useQuery({
+    queryKey: ['streams', type, selectedCategory === 'Favoritos' ? 'all' : selectedCategory],
+    queryFn: () => {
+      // If category is "Todos" or "Favoritos", we might need to fetch all or handle specially
+      // But standard Xtream often prefers fetching by category for performance
+      const catId = (selectedCategory === 'Todos' || selectedCategory === 'Favoritos') ? undefined : selectedCategory;
+      return xtreamService.getStreams(type, catId);
+    },
     select: (data) => {
       if (!Array.isArray(data)) {
         console.warn('Streams data is not an array:', data);
@@ -67,9 +71,9 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
     if (selectedCategory === 'Favoritos') {
       const favIds = favorites.map((f: any) => String(f.stream_id));
       list = items.filter(item => favIds.includes(item.id));
-    } else if (selectedCategory !== 'Todos') {
-      list = items.filter(item => String(item.category_id) === String(selectedCategory));
     }
+    // We don't need to filter by category here anymore as the query handles it
+    // unless it's "Todos" which already returns the full list for that type
 
     if (searchQuery) {
       list = list.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -119,6 +123,13 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
             <h2 className="text-xl font-black uppercase tracking-widest">{title}</h2>
             <div className="h-4 w-[1px] bg-white/10" />
             <p className="text-[10px] font-bold text-zinc-500 tracking-[0.2em] uppercase">{filteredItems.length} Itens</p>
+            <button 
+              onClick={() => refetch()}
+              className="p-2 hover:bg-white/5 rounded-lg transition-colors text-zinc-500 hover:text-white"
+              title="Atualizar lista"
+            >
+              <Loader2 size={14} className={itemsLoading ? "animate-spin" : ""} />
+            </button>
           </div>
         </div>
 
