@@ -7,9 +7,10 @@ import { SyncProgressBar } from './SyncProgressBar';
 interface SyncScreenProps {
   onComplete: () => void;
   profileName: string;
+  avatarUrl: string;
 }
 
-export const SyncScreen = ({ onComplete, profileName }: SyncScreenProps) => {
+export const SyncScreen = ({ onComplete, profileName, avatarUrl }: SyncScreenProps) => {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Iniciando conexão...');
   const [error, setError] = useState<string | null>(null);
