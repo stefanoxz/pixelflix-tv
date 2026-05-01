@@ -27,6 +27,11 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
         onReady && onReady(player);
       });
 
+      player.on('error', () => {
+        const error = player.error();
+        console.error('VideoJS Error:', error);
+      });
+
     // You could update an existing player in the `else` block here
     // on prop change, for example:
     } else {
