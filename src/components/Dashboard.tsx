@@ -14,12 +14,12 @@ interface DashboardProps {
   profile: Profile | null;
 }
 
-export const Dashboard = ({ onLogout, onNavigate, profile }: DashboardProps) => {
-  const menuItems = [
+export const Dashboard = memo(({ onLogout, onNavigate, profile }: DashboardProps) => {
+  const menuItems = useMemo(() => [
     { id: 'live', label: 'CANAIS AO VIVO', icon: Tv, color: 'from-blue-600 to-cyan-500', count: '2.500+' },
     { id: 'movie', label: 'FILMES', icon: Film, color: 'from-purple-600 to-pink-500', count: '10.000+' },
     { id: 'series', label: 'SÉRIES', icon: PlayCircle, color: 'from-orange-600 to-red-500', count: '3.000+' },
-  ];
+  ], []);
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col font-sans selection:bg-white/10">
