@@ -142,8 +142,8 @@ export const Dashboard = ({ onLogout, onNavigate, profile }: DashboardProps) => 
         </div>
       </main>
 
-      <footer className="p-8 text-center border-t border-white/5">
-        <p className="text-[10px] font-bold text-zinc-600 tracking-[0.3em] uppercase">SuperTech WebPlayer &copy; 2026</p>
+      <footer className="p-8 text-center border-t border-white/5 bg-black/40">
+        <p className="text-[10px] font-bold text-zinc-600 tracking-[0.3em] uppercase">Vibe WebPlayer &copy; 2026 &bull; Desenvolvido por SuperTech</p>
       </footer>
     </div>
   );
