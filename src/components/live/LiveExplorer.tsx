@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { xtreamService } from '../../services/xtream';
 import { contentActions } from '../../services/content';
+import { settingsService } from '../../services/settingsService';
 import { LiveCategorySidebar } from './LiveCategorySidebar';
 import { LiveChannelList } from './LiveChannelList';
 import { LivePlayerPanel } from './LivePlayerPanel';
@@ -22,11 +23,25 @@ export const LiveExplorer = ({ onBack }: LiveExplorerProps) => {
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', 'live'],
     queryFn: () => xtreamService.getCategories('live'),
-    select: (data) => [
-      { category_id: 'Todos', category_name: 'Todos' }, 
-      { category_id: 'Favoritos', category_name: '★ Meus Favoritos' }, 
-      ...data
-    ],
+    select: (data) => {
+      const { adultLockEnabled } = settingsService.getSettings();
+      let filtered = data;
+      
+      if (adultLockEnabled) {
+        filtered = data.filter(c => 
+          !c.category_name.toLowerCase().includes('adult') && 
+          !c.category_name.toLowerCase().includes('🔞') &&
+          !c.category_name.toLowerCase().includes('18+') &&
+          !c.category_name.toLowerCase().includes('xxx')
+        );
+      }
+
+      return [
+        { category_id: 'Todos', category_name: 'Todos' }, 
+        { category_id: 'Favoritos', category_name: '★ Meus Favoritos' }, 
+        ...filtered
+      ];
+    },
   });
 
   // Fetch Channels (100% Sync strategy - relies on cache from SyncScreen)

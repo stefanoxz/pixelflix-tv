@@ -1,5 +1,6 @@
 import { XtreamCredentials, UserInfo, Category, Stream } from '../types';
 import { supabase } from './supabase';
+import { settingsService } from './settingsService';
 
 export class XtreamError extends Error {
   constructor(message: string, public code?: string, public details?: any) {
@@ -167,11 +168,15 @@ export class XtreamService {
     }
   }
 
-  getStreamUrl(streamId: string, extension: string = 'm3u8', type: 'live' | 'movie' | 'series' = 'live'): string {
+  getStreamUrl(streamId: string, extension: string = '', type: 'live' | 'movie' | 'series' = 'live'): string {
     if (!this.credentials) return '';
     const baseUrl = this.credentials.url.replace(/\/$/, '');
     const prefix = type === 'live' ? '' : type === 'movie' ? 'movie/' : 'series/';
-    const ext = extension || (type === 'live' ? 'm3u8' : 'mp4');
+    
+    // Get extension from settings if not explicitly provided
+    const { playerType } = settingsService.getSettings();
+    const ext = extension || (type === 'live' ? 'm3u8' : playerType === 'ts' ? 'ts' : 'mp4');
+    
     return `${baseUrl}/${prefix}${this.credentials.username}/${this.credentials.password}/${streamId}.${ext}`;
   }
 

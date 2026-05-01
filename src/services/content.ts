@@ -45,5 +45,13 @@ export const contentActions = {
       });
       return true; // Added
     }
+  },
+
+  clearFavorites: async (username: string) => {
+    const { error } = await supabase
+      .from('favorites')
+      .delete()
+      .eq('username', username);
+    if (error) throw error;
   }
 };

@@ -9,6 +9,7 @@ import { Loader2 } from 'lucide-react';
 const ContentExplorer = lazy(() => import('./components/content/ContentExplorer').then(module => ({ default: module.ContentExplorer })));
 const LiveExplorer = lazy(() => import('./components/live/LiveExplorer').then(module => ({ default: module.LiveExplorer })));
 const AdminPanel = lazy(() => import('./components/AdminPanel').then(module => ({ default: module.AdminPanel })));
+const SettingsMenu = lazy(() => import('./components/settings/SettingsMenu').then(module => ({ default: module.SettingsMenu })));
 
 const LoadingView = () => (
   <div className="min-h-screen bg-black flex items-center justify-center">
@@ -102,16 +103,10 @@ function App() {
         )}
 
         {currentView === 'settings' && (
-          <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-8 text-center">
-            <h2 className="text-4xl font-black mb-4 uppercase tracking-widest">Configurações</h2>
-            <p className="text-zinc-500 mb-8 max-w-md">Painel de configurações do usuário em desenvolvimento.</p>
-            <button 
-              onClick={() => setCurrentView('dashboard')}
-              className="px-8 py-4 bg-white text-black font-black rounded-2xl hover:bg-zinc-200 transition-all"
-            >
-              Voltar ao Dashboard
-            </button>
-          </div>
+          <SettingsMenu 
+            onBack={() => setCurrentView('dashboard')} 
+            onLogout={handleLogout}
+          />
         )}
       </Suspense>
     </ErrorBoundary>

@@ -11,6 +11,7 @@ import { ContentDetailModal } from './ContentDetailModal';
 import { ExplorerHeader } from '../layout/ExplorerHeader';
 import { CategorySidebar } from '../layout/CategorySidebar';
 import { PremiumPlayer } from '../PremiumPlayer';
+import { settingsService } from '../../services/settingsService';
 
 interface ContentExplorerProps {
   type: 'live' | 'movie' | 'series';
@@ -38,11 +39,25 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
   const { data: categories = [] } = useQuery({
     queryKey: ['categories', type],
     queryFn: () => xtreamService.getCategories(type),
-    select: (data) => [
-      { category_id: 'Todos', category_name: 'Todos' }, 
-      { category_id: 'Favoritos', category_name: '★ Meus Favoritos' }, 
-      ...data
-    ],
+    select: (data) => {
+      const { adultLockEnabled } = settingsService.getSettings();
+      let filtered = data;
+      
+      if (adultLockEnabled) {
+        filtered = data.filter(c => 
+          !c.category_name.toLowerCase().includes('adult') && 
+          !c.category_name.toLowerCase().includes('🔞') &&
+          !c.category_name.toLowerCase().includes('18+') &&
+          !c.category_name.toLowerCase().includes('xxx')
+        );
+      }
+
+      return [
+        { category_id: 'Todos', category_name: 'Todos' }, 
+        { category_id: 'Favoritos', category_name: '★ Meus Favoritos' }, 
+        ...filtered
+      ];
+    },
   });
 
   // Fetch All Items (100% Sync strategy - relies on cache from SyncScreen)
