@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import { Tv, Film, PlayCircle, Settings, User, LogOut, Search, ArrowRight, UserCircle, RefreshCcw } from 'lucide-react';
 import vibeLogo from '@/assets/vibe-logo.png';
 
