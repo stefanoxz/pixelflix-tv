@@ -63,9 +63,12 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
       <div ref={videoRef} className="w-full h-full" />
       
       {/* Vibe Watermark */}
-      <div className="absolute top-6 right-6 flex items-center gap-2 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none z-10 bg-black/20 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10">
-        <PlayCircle className="text-white" size={20} fill="currentColor" />
-        <span className="text-xl font-black tracking-widest text-white uppercase">Vibe</span>
+      <div className="absolute top-8 right-8 flex items-center gap-3 opacity-40 group-hover:opacity-100 transition-opacity pointer-events-none z-10 bg-black/40 backdrop-blur-md px-5 py-2.5 rounded-2xl border border-white/10 shadow-2xl">
+        <PlayCircle className="text-white" size={24} fill="white" />
+        <div className="flex flex-col">
+          <span className="text-2xl font-black tracking-tighter text-white uppercase italic leading-none">VIBE</span>
+          <span className="text-[8px] font-black tracking-[0.3em] text-blue-500 uppercase">Premium</span>
+        </div>
       </div>
     </div>
   );

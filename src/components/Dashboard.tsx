@@ -30,11 +30,14 @@ export const Dashboard = ({ onLogout, onNavigate, profile }: DashboardProps) => 
       {/* Header */}
       <header className="px-6 md:px-12 py-8 flex items-center justify-between border-b border-white/5 bg-black/60 backdrop-blur-xl sticky top-0 z-50">
         <div className="flex items-center gap-12">
-          <div className="group cursor-pointer flex items-center gap-2" onClick={() => onNavigate('dashboard' as any)}>
-            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg shadow-white/10 group-hover:rotate-12 transition-all">
-              <PlayCircle className="text-black" size={24} fill="currentColor" />
+          <div className="group cursor-pointer flex items-center gap-4" onClick={() => onNavigate('dashboard' as any)}>
+            <div className="w-10 h-10 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center shadow-lg group-hover:bg-white/10 transition-all">
+              <PlayCircle className="text-white" size={24} fill="white" />
             </div>
-            <h1 className="text-3xl font-black tracking-[0.2em] group-hover:text-zinc-300 transition-colors uppercase">Vibe</h1>
+            <div className="flex flex-col">
+              <h1 className="text-2xl font-black tracking-tighter group-hover:text-zinc-300 transition-colors uppercase italic">VIBE</h1>
+              <span className="text-[8px] font-black tracking-[0.3em] text-blue-500 -mt-1 uppercase">Premium</span>
+            </div>
           </div>
           <nav className="hidden lg:flex items-center gap-10">
             <button className="text-zinc-500 hover:text-white transition-all text-[11px] font-black tracking-[0.3em] uppercase relative after:content-[''] after:absolute after:-bottom-2 after:left-0 after:w-0 hover:after:w-full after:h-0.5 after:bg-white after:transition-all">Início</button>
