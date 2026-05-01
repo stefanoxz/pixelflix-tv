@@ -35,6 +35,13 @@ export class XtreamService {
   private async fetchAction(action: string, params: Record<string, string> = {}) {
     if (!this.credentials) throw new Error('No credentials set');
 
+    const cacheKey = `${action}-${JSON.stringify(params)}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      console.log(`Returning cached data for ${action}`);
+      return cached.data;
+    }
+
     const searchParams = new URLSearchParams({
       username: this.credentials.username,
       password: this.credentials.password,
