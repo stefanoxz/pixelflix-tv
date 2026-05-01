@@ -60,8 +60,9 @@ export class XtreamService {
     const proxies = [
       (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
       (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-      (u: string) => `https://thingproxy.freeboard.io/fetch/${u}`,
-      (u: string) => u, // Direct fetch as last resort
+      (u: string) => `https://cors-anywhere.herokuapp.com/${u}`,
+      (u: string) => `https://proxy.cors.sh/${u}`,
+      (u: string) => u,
     ];
 
     let lastError: any = null;
