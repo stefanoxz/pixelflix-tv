@@ -265,7 +265,7 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
           ))}
         </aside>
 
-        <main className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar bg-gradient-to-br from-black to-[#080808] relative">
+        <main className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar bg-gradient-to-br from-black to-[#080808] relative scroll-smooth">
           {/* Subtle noise pattern */}
           <div className="fixed inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-linen.png')] opacity-[0.05] pointer-events-none" />
 
