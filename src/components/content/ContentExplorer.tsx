@@ -10,6 +10,7 @@ import { ContentItem } from './ContentItem';
 import { ContentDetailModal } from './ContentDetailModal';
 import { ExplorerHeader } from '../layout/ExplorerHeader';
 import { CategorySidebar } from '../layout/CategorySidebar';
+import { PremiumPlayer } from '../PremiumPlayer';
 
 interface ContentExplorerProps {
   type: 'live' | 'movie' | 'series';
@@ -210,17 +211,12 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
 
   if (isPlaying && selectedItem) {
     return (
-      <div className="fixed inset-0 z-[200] bg-black">
-        <ErrorBoundary isLocal>
-          <VideoPlayer options={videoOptions} onReady={() => console.log('Player ready')} />
-        </ErrorBoundary>
-        <button 
-          onClick={() => setIsPlaying(false)}
-          className="absolute top-8 left-8 z-[210] p-4 bg-black/50 hover:bg-black/80 text-white rounded-full transition-all"
-        >
-          <ChevronLeft size={24} />
-        </button>
-      </div>
+      <PremiumPlayer 
+        options={videoOptions}
+        title={selectedItem.name}
+        subtitle={type === 'movie' ? 'Filme' : 'Série'}
+        onClose={() => setIsPlaying(false)}
+      />
     );
   }
 
