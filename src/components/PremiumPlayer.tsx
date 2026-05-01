@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -44,7 +44,7 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, isFullscreen 
     }, 4000);
   }, [showOptions]);
 
-  const handlePlayerReady = (player: any) => {
+  const handlePlayerReady = useCallback((player: any) => {
     playerRef.current = player;
     player.on('play', () => setIsPlaying(true));
     player.on('pause', () => setIsPlaying(false));
@@ -58,7 +58,7 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, isFullscreen 
     player.on('loadedmetadata', () => {
       setDuration(player.duration());
     });
-  };
+  }, []);
 
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -95,6 +95,13 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, isFullscreen 
     { label: 'Sincronizar', value: '', icon: RefreshCw },
   ];
 
+  // Memoize options to prevent VideoPlayer from re-initializing on every PremiumPlayer state change (like currentTime)
+  const memoizedOptions = useMemo(() => ({
+    ...options,
+    controls: false,
+    autoplay: true
+  }), [options.sources[0]?.src]); // Only re-memoize if the actual source URL changes
+
   return (
     <div 
       className={`${isFullscreen ? 'fixed inset-0 z-[200]' : 'relative w-full h-full'} bg-black transition-cursor duration-500 overflow-hidden ${isIdle ? 'cursor-none' : 'cursor-default'}`}
@@ -103,7 +110,7 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, isFullscreen 
     >
       <ErrorBoundary isLocal>
         <VideoPlayer 
-          options={{ ...options, controls: false, autoplay: true }} 
+          options={memoizedOptions} 
           onReady={handlePlayerReady} 
         />
       </ErrorBoundary>

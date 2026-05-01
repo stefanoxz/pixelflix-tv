@@ -70,8 +70,13 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
       initPlayer();
     } else {
       const player = playerRef.current;
-      player.autoplay(options.autoplay);
-      player.src(options.sources);
+      const currentSrc = player.src();
+      const newSrc = options.sources[0]?.src;
+      
+      if (newSrc && currentSrc !== newSrc) {
+        player.autoplay(options.autoplay);
+        player.src(options.sources);
+      }
     }
 
     return () => {
