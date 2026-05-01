@@ -1,17 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   ChevronLeft, 
-  ChevronRight, 
   Volume2, 
   VolumeX, 
-  Settings2, 
   Maximize, 
   Zap, 
-  X, 
-  Monitor,
-  Music,
-  Subtitles,
-  RefreshCw,
   Play
 } from 'lucide-react';
 import { VideoPlayer } from './VideoPlayer';
@@ -27,7 +20,6 @@ interface PremiumPlayerProps {
 
 export const PremiumPlayer = ({ options, title, subtitle, onClose, isFullscreen = true }: PremiumPlayerProps) => {
   const [isIdle, setIsIdle] = useState(false);
-  const [showOptions, setShowOptions] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [volume, setVolume] = useState(80);
   const [isMuted, setIsMuted] = useState(false);
@@ -40,9 +32,9 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, isFullscreen 
     setIsIdle(false);
     if (idleTimer.current) clearTimeout(idleTimer.current);
     idleTimer.current = setTimeout(() => {
-      if (!showOptions) setIsIdle(true);
+      setIsIdle(true);
     }, 4000);
-  }, [showOptions]);
+  }, []);
 
   const handlePlayerReady = useCallback((player: any) => {
     playerRef.current = player;
@@ -82,31 +74,16 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, isFullscreen 
     };
   }, [resetIdleTimer]);
 
-  const toggleOptions = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowOptions(!showOptions);
-  };
-
-  const menuItems = [
-    { label: 'Qualidade', value: 'Auto', icon: Monitor },
-    { label: 'Áudio', value: '', icon: Music },
-    { label: 'Legendas', value: '', icon: Subtitles },
-    { label: 'Som', value: isMuted || volume === 0 ? 'Mudo' : 'Ligado', icon: Volume2 },
-    { label: 'Sincronizar', value: '', icon: RefreshCw },
-  ];
-
-  // Memoize options to prevent VideoPlayer from re-initializing on every PremiumPlayer state change (like currentTime)
   const memoizedOptions = useMemo(() => ({
     ...options,
     controls: false,
     autoplay: true
-  }), [options.sources[0]?.src]); // Only re-memoize if the actual source URL changes
+  }), [options.sources[0]?.src]);
 
   return (
     <div 
       className={`${isFullscreen ? 'fixed inset-0 z-[200]' : 'relative w-full h-full'} bg-black transition-cursor duration-500 overflow-hidden ${isIdle ? 'cursor-none' : 'cursor-default'}`}
       onMouseMove={resetIdleTimer}
-      onClick={() => setShowOptions(false)}
     >
       <ErrorBoundary isLocal>
         <VideoPlayer 
@@ -149,40 +126,6 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, isFullscreen 
           </button>
         </div>
       )}
-
-      {/* Options Overlay Menu */}
-      <div 
-        onClick={(e) => e.stopPropagation()}
-        className={`absolute top-1/2 -translate-y-1/2 right-12 w-[380px] max-w-[90%] bg-black/40 backdrop-blur-3xl border border-white/5 rounded-[32px] p-8 z-[250] transition-all duration-500 ${showOptions ? 'opacity-100 scale-100 translate-x-0' : 'opacity-0 scale-95 translate-x-10 pointer-events-none'}`}
-      >
-        <div className="flex items-center justify-between mb-10">
-          <div className="flex items-center gap-4">
-            <Settings2 size={22} className="text-zinc-400" />
-            <h3 className="text-xl font-bold text-white tracking-tight">Opções</h3>
-          </div>
-          <button onClick={() => setShowOptions(false)} className="p-2 rounded-full hover:bg-white/5 text-zinc-500 transition-colors">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          {menuItems.map((item, index) => (
-            <button 
-              key={index}
-              className="w-full flex items-center justify-between p-5 rounded-2xl hover:bg-white/5 transition-all group border border-transparent hover:border-white/5"
-            >
-              <div className="flex items-center gap-5">
-                <item.icon size={20} className="text-zinc-500 group-hover:text-white transition-colors" />
-                <span className="font-bold text-zinc-300 group-hover:text-white transition-colors">{item.label}</span>
-              </div>
-              <div className="flex items-center gap-4">
-                {item.value && <span className="text-sm font-bold text-zinc-500">{item.value}</span>}
-                <ChevronRight size={16} className="text-zinc-600 group-hover:text-white transition-all" />
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
 
       {/* Custom Bottom Bar */}
       <div 
@@ -250,12 +193,6 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, isFullscreen 
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-4">
                 <span className="hidden sm:inline text-[10px] font-black text-zinc-300 uppercase tracking-widest">Auto</span>
-                <button 
-                  onClick={toggleOptions}
-                  className={`transition-all ${showOptions ? 'text-purple-500 scale-110' : 'text-zinc-400 hover:text-white'}`}
-                >
-                  <Settings2 size={20} />
-                </button>
                 <button 
                   onClick={() => {
                     if (playerRef.current) {
