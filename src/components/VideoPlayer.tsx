@@ -17,13 +17,17 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
   const { options, onReady } = props;
 
   useEffect(() => {
+    let isMounted = true;
+
     if (!playerRef.current) {
       const initPlayer = async () => {
         // Dynamically import video.js and its CSS
         const videojsModule = await import('video.js');
         await import('video.js/dist/video-js.css');
-        const videojs = videojsModule.default;
+        
+        if (!isMounted) return;
 
+        const videojs = videojsModule.default;
         const videoElement = document.createElement("video-js");
         videoElement.classList.add('vjs-big-play-centered');
         videoElement.classList.add('vjs-theme-city');
@@ -34,22 +38,27 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
           const player = playerRef.current = videojs(videoElement, {
             ...options,
             controlBar: {
-          children: [
-            'playToggle',
-            'volumePanel',
-            'currentTimeDisplay',
-            'timeDivider',
-            'durationDisplay',
-            'progressControl',
-            'fullscreenToggle',
-          ],
-        },
-        html5: {
-          vhs: { overrideNative: true },
-          nativeAudioTracks: false,
-          nativeVideoTracks: false
-        }
+              children: [
+                'playToggle',
+                'volumePanel',
+                'currentTimeDisplay',
+                'timeDivider',
+                'durationDisplay',
+                'progressControl',
+                'fullscreenToggle',
+              ],
+            },
+            html5: {
+              vhs: { overrideNative: true },
+              nativeAudioTracks: false,
+              nativeVideoTracks: false
+            }
           }, () => {
+            if (!isMounted) {
+              player.dispose();
+              playerRef.current = null;
+              return;
+            }
             onReady && onReady(player);
           });
 
@@ -64,6 +73,10 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
       player.autoplay(options.autoplay);
       player.src(options.sources);
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [options, videoRef]);
 
   // Touch Gesture Handling
@@ -114,14 +127,13 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
   };
 
   useEffect(() => {
-    const player = playerRef.current;
     return () => {
-      if (player && !player.isDisposed()) {
-        player.dispose();
+      if (playerRef.current) {
+        playerRef.current.dispose();
         playerRef.current = null;
       }
     };
-  }, [playerRef]);
+  }, []);
 
   return (
     <div 
