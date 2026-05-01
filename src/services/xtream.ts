@@ -3,6 +3,8 @@ import { supabase } from './supabase';
 
 export class XtreamService {
   private credentials: XtreamCredentials | null = null;
+  private cache: Map<string, { data: any, timestamp: number }> = new Map();
+  private CACHE_DURATION = 1000 * 60 * 10; // 10 minutes cache for list data
 
   setCredentials(creds: XtreamCredentials) {
     // Ensure URL has protocol and no trailing slash
@@ -32,6 +34,13 @@ export class XtreamService {
 
   private async fetchAction(action: string, params: Record<string, string> = {}) {
     if (!this.credentials) throw new Error('No credentials set');
+
+    const cacheKey = `${action}-${JSON.stringify(params)}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      console.log(`Returning cached data for ${action}`);
+      return cached.data;
+    }
 
     const searchParams = new URLSearchParams({
       username: this.credentials.username,
@@ -91,6 +100,10 @@ export class XtreamService {
             throw new Error(data.message || 'Falha na autenticação do servidor');
           }
           console.log(`Success with ${proxyName} for ${action}`);
+          
+          // Cache the successful result
+          this.cache.set(cacheKey, { data, timestamp: Date.now() });
+          
           return data;
         }
       } catch (err) {
