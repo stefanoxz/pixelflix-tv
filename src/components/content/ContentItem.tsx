@@ -19,7 +19,8 @@ export const ContentItem = memo(({ item, isFav, viewMode, onPlay, onSelect, onTo
             src={item.icon} 
             alt={item.name} 
             loading="lazy"
-            className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-1000 group-hover:scale-110" 
+            decoding="async"
+            className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-transform duration-1000 group-hover:scale-110 will-change-transform" 
             onError={(e) => {
               const target = e.target as HTMLImageElement;
               target.onerror = null;
@@ -35,7 +36,7 @@ export const ContentItem = memo(({ item, isFav, viewMode, onPlay, onSelect, onTo
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500 flex flex-col justify-end p-8">
             <button 
               onClick={(e) => { e.stopPropagation(); onPlay(item); }} 
-              className="w-full bg-white text-black h-14 rounded-3xl flex items-center justify-center hover:bg-zinc-200 transition-all transform translate-y-6 group-hover:translate-y-0 duration-500 shadow-[0_20px_40px_rgba(255,255,255,0.1)]"
+              className="w-full bg-white text-black h-14 rounded-3xl flex items-center justify-center hover:bg-zinc-200 transition-transform transform translate-y-6 group-hover:translate-y-0 duration-500 shadow-[0_20px_40px_rgba(255,255,255,0.1)] will-change-transform"
             >
               <Play size={24} fill="currentColor" className="ml-1" />
             </button>
@@ -65,7 +66,8 @@ export const ContentItem = memo(({ item, isFav, viewMode, onPlay, onSelect, onTo
           src={item.icon} 
           alt={item.name} 
           loading="lazy"
-          className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-all" 
+          decoding="async"
+          className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" 
           onError={(e) => {(e.target as HTMLImageElement).src = 'https://via.placeholder.com/200x300/111111/FFFFFF?text=S/C';}} 
         />
       </div>

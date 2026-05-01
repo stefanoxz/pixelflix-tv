@@ -150,6 +150,7 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
   }, [viewMode]);
 
   const rowCount = Math.ceil(filteredItems.length / columns);
+  const favoriteIds = useMemo(() => new Set(favorites.map((f: any) => String(f.stream_id))), [favorites]);
 
   const virtualizer = useVirtualizer({
     count: rowCount,
@@ -269,7 +270,7 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
                         <ContentItem 
                           key={item.id}
                           item={item}
-                          isFav={favorites.some((f: any) => String(f.stream_id) === item.id)}
+                          isFav={favoriteIds.has(String(item.id))}
                           viewMode={viewMode}
                           onPlay={handlePlay}
                           onSelect={handleSelectItem}
