@@ -19,8 +19,10 @@ export const contentActions = {
     return data;
   },
 
-  toggleFavorite: async (username: string, stream: any, type: string) => {
-    const streamId = String(stream.stream_id || stream.series_id);
+  toggleFavorite: async (username: string, item: any, type: string) => {
+    const streamId = String(item.stream_id || item.series_id || item.id);
+    const name = item.name || item.title || 'Sem Nome';
+    const icon = item.icon || item.stream_icon || item.cover || '';
     
     // Check if exists
     const { data: existing } = await supabase
@@ -28,7 +30,7 @@ export const contentActions = {
       .select('id')
       .eq('username', username)
       .eq('stream_id', streamId)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       await supabase.from('favorites').delete().eq('id', existing.id);
@@ -38,8 +40,8 @@ export const contentActions = {
         username,
         stream_id: streamId,
         stream_type: type,
-        name: stream.name,
-        stream_icon: stream.stream_icon || stream.cover
+        name: name,
+        stream_icon: icon
       });
       return true; // Added
     }

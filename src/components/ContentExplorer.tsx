@@ -27,10 +27,14 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
     select: (data) => [{ category_id: 'Todos', category_name: 'Todos' }, { category_id: 'Favoritos', category_name: '★ Meus Favoritos' }, ...data],
   });
 
-  // React Query for streams
-  const { data: items = [], isLoading: itemsLoading, error } = useQuery({
-    queryKey: ['streams', type],
-    queryFn: () => xtreamService.getStreams(type),
+  const { data: items = [], isLoading: itemsLoading, error, refetch } = useQuery({
+    queryKey: ['streams', type, selectedCategory === 'Favoritos' ? 'all' : selectedCategory],
+    queryFn: () => {
+      // If category is "Todos" or "Favoritos", we might need to fetch all or handle specially
+      // But standard Xtream often prefers fetching by category for performance
+      const catId = (selectedCategory === 'Todos' || selectedCategory === 'Favoritos') ? undefined : selectedCategory;
+      return xtreamService.getStreams(type, catId);
+    },
     select: (data) => {
       if (!Array.isArray(data)) {
         console.warn('Streams data is not an array:', data);
@@ -67,9 +71,9 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
     if (selectedCategory === 'Favoritos') {
       const favIds = favorites.map((f: any) => String(f.stream_id));
       list = items.filter(item => favIds.includes(item.id));
-    } else if (selectedCategory !== 'Todos') {
-      list = items.filter(item => String(item.category_id) === String(selectedCategory));
     }
+    // We don't need to filter by category here anymore as the query handles it
+    // unless it's "Todos" which already returns the full list for that type
 
     if (searchQuery) {
       list = list.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -119,6 +123,13 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
             <h2 className="text-xl font-black uppercase tracking-widest">{title}</h2>
             <div className="h-4 w-[1px] bg-white/10" />
             <p className="text-[10px] font-bold text-zinc-500 tracking-[0.2em] uppercase">{filteredItems.length} Itens</p>
+            <button 
+              onClick={() => refetch()}
+              className="p-2 hover:bg-white/5 rounded-lg transition-colors text-zinc-500 hover:text-white"
+              title="Atualizar lista"
+            >
+              <Loader2 size={14} className={itemsLoading ? "animate-spin" : ""} />
+            </button>
           </div>
         </div>
 
@@ -162,7 +173,22 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
           {/* Subtle noise pattern */}
           <div className="fixed inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-linen.png')] opacity-[0.05] pointer-events-none" />
 
-          <div className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-8 md:gap-10" : "space-y-6 max-w-6xl mx-auto"}>
+          {filteredItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4 w-full col-span-full">
+              <div className="p-6 rounded-full bg-white/5 border border-white/10 text-zinc-600 mb-4">
+                <Search size={48} strokeWidth={1} />
+              </div>
+              <h3 className="text-xl font-black text-white uppercase tracking-widest">Nenhum conteúdo encontrado</h3>
+              <p className="text-zinc-500 text-sm max-w-md mx-auto">Tente ajustar sua pesquisa ou trocar de categoria para encontrar o que procura.</p>
+              <button 
+                onClick={() => { setSearchQuery(''); setSelectedCategory('Todos'); }}
+                className="mt-6 px-8 py-3 bg-white text-black font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-zinc-200 transition-all"
+              >
+                Limpar Filtros
+              </button>
+            </div>
+          ) : (
+            <div className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-8 md:gap-10" : "space-y-6 max-w-6xl mx-auto"}>
             {filteredItems.map(item => {
               const isFav = favorites.some((f: any) => String(f.stream_id) === item.id);
               return viewMode === 'grid' ? (
@@ -221,8 +247,9 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
               );
             })}
           </div>
-        </main>
-      </div>
+        )}
+      </main>
+    </div>
 
       {selectedItem && !isPlaying && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">

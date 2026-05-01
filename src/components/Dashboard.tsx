@@ -1,4 +1,4 @@
-import { Tv, Film, PlayCircle, Settings, User, LogOut, Search } from 'lucide-react';
+import { Tv, Film, PlayCircle, Settings, User, LogOut, Search, ArrowRight } from 'lucide-react';
 
 interface DashboardProps {
   onLogout: () => void;
@@ -128,18 +128,4 @@ export const Dashboard = ({ onLogout, onNavigate }: DashboardProps) => {
   );
 };
 
-const ArrowRight = ({ size, className }: { size: number, className?: string }) => (
-  <svg 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="3" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className={className}
-  >
-    <path d="M5 12h14m-7-7 7 7-7 7" />
-  </svg>
-);
+// Redundant local ArrowRight removed, using lucide-react version
