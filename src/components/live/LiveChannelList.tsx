@@ -1,5 +1,6 @@
-import { memo } from 'react';
+import React, { memo, useRef } from 'react';
 import { Heart } from 'lucide-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Stream } from '../../../types';
 
 interface LiveChannelListProps {

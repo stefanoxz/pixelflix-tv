@@ -117,7 +117,7 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
             <div>
               <div className="flex items-center gap-3 mb-1.5">
                 <h3 className="text-sm font-black text-white tracking-widest uppercase">
-                  {epg?.title ? decodeBase64(epg.title).replace(/[^a-zA-Z0-9 \-]/g, '') : 'Programa Atual'}
+                  {epg?.title ? String(decodeBase64(epg.title)).replace(/[^a-zA-Z0-9 \-]/g, '') : 'Programa Atual'}
                 </h3>
                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
               </div>
@@ -142,7 +142,7 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
 
         <p className="text-[10px] text-zinc-500 font-medium leading-relaxed max-w-4xl mb-6">
           {epg?.description 
-            ? decodeBase64(epg.description)
+            ? String(decodeBase64(epg.description))
             : 'O telejornal cobre os fatos do dia e as últimas notícias da noite. Conta com a colaboração de colunistas em áreas como economia e cultura.'}
         </p>
 
