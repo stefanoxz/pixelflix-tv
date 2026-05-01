@@ -52,9 +52,23 @@ function App() {
           onAdminLogin={handleAdminLogin}
         />
       )}
+
+      {currentView === 'profiles' && (
+        <ProfileSelection 
+          onSelect={handleProfileSelect}
+        />
+      )}
+
+      {currentView === 'sync' && (
+        <SyncScreen 
+          profileName={selectedProfile?.profile_name || ''}
+          onComplete={handleSyncComplete}
+        />
+      )}
       
       {currentView === 'dashboard' && (
         <Dashboard 
+          profile={selectedProfile}
           onLogout={handleLogout} 
           onNavigate={(view) => handleNavigate(view as View)} 
         />
