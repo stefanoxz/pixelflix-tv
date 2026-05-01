@@ -13,23 +13,27 @@ const STREAMINGS = [
 
 export const StreamingRow = () => {
   return (
-    <section className="mt-10">
-      <h3 className="flex items-center gap-2 text-base font-bold text-white mb-4">
-        <Play size={16} className="text-purple-500 fill-purple-500" />
-        Escolha seu Streaming
-      </h3>
-      <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+    <section className="mt-16">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="flex items-center gap-3 text-lg font-black text-white uppercase tracking-tighter italic">
+          <div className="w-1.5 h-6 bg-primary rounded-full" />
+          Escolha seu Streaming
+        </h3>
+        <div className="h-[1px] flex-1 bg-white/5 ml-6" />
+      </div>
+      
+      <div className="flex gap-4 overflow-x-auto pb-6 no-scrollbar scroll-smooth">
         {STREAMINGS.map((s) => (
           <button
             key={s.name}
-            className="shrink-0 w-32 h-16 rounded-xl flex items-center justify-center border border-white/10 hover:border-purple-500/50 hover:scale-105 transition-all overflow-hidden p-3"
-            style={{ backgroundColor: s.bg }}
+            className="group relative shrink-0 w-40 h-24 rounded-2xl flex items-center justify-center border border-white/5 hover:border-primary/50 transition-all duration-500 overflow-hidden p-6 bg-[#0A0A0A] shadow-lg hover:shadow-primary/10"
             aria-label={s.name}
           >
+            <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500`} style={{ backgroundColor: s.bg }} />
             <img
               src={s.logo}
               alt={s.name}
-              className="max-h-full max-w-full object-contain"
+              className="relative z-10 max-h-full max-w-full object-contain filter brightness-100 group-hover:scale-110 transition-transform duration-500"
               loading="lazy"
             />
           </button>
