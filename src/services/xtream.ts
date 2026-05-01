@@ -1,18 +1,33 @@
 import { XtreamCredentials, UserInfo, Category, Stream } from '../types';
 import { supabase } from './supabase';
 
+export class XtreamError extends Error {
+  constructor(message: string, public code?: string, public details?: any) {
+    super(message);
+    this.name = 'XtreamError';
+  }
+}
+
 export class XtreamService {
   private credentials: XtreamCredentials | null = null;
   private cache: Map<string, { data: any, timestamp: number }> = new Map();
   private CACHE_DURATION = 1000 * 60 * 10; // 10 minutes cache for list data
 
   setCredentials(creds: XtreamCredentials) {
-    // Ensure URL has protocol and no trailing slash
-    let url = creds.url.trim().replace(/\/$/, '');
-    if (!url.startsWith('http')) {
-      url = `http://${url}`;
+    try {
+      if (!creds.url || !creds.username || !creds.password) {
+        throw new Error('Credenciais incompletas');
+      }
+      // Ensure URL has protocol and no trailing slash
+      let url = creds.url.trim().replace(/\/$/, '');
+      if (!url.startsWith('http')) {
+        url = `http://${url}`;
+      }
+      this.credentials = { ...creds, url };
+    } catch (err) {
+      console.error('Error setting credentials:', err);
+      throw new XtreamError('Erro ao configurar servidor IPTV');
     }
-    this.credentials = { ...creds, url };
   }
 
   getCredentials() {
@@ -26,19 +41,23 @@ export class XtreamService {
       const response = await fetch(url, { signal: controller.signal });
       clearTimeout(id);
       return response;
-    } catch (err) {
+    } catch (err: any) {
       clearTimeout(id);
+      if (err.name === 'AbortError') {
+        throw new Error('Tempo de resposta excedido (Timeout)');
+      }
       throw err;
     }
   }
 
   private async fetchAction(action: string, params: Record<string, string> = {}) {
-    if (!this.credentials) throw new Error('No credentials set');
+    if (!this.credentials) {
+      throw new XtreamError('Servidor não configurado', 'NO_CONFIG');
+    }
 
     const cacheKey = `${action}-${JSON.stringify(params)}`;
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
-      console.log(`Returning cached data for ${action}`);
       return cached.data;
     }
 
@@ -50,12 +69,8 @@ export class XtreamService {
     });
 
     const url = `${this.credentials.url}/player_api.php?${searchParams.toString()}`;
-    console.log(`Fetching action: ${action}`);
-
-    // IPTV servers are picky. We use proxies to bypass CORS.
-    // Increased timeout for streams which can be very large
     const isStreamAction = action.includes('streams') || action.includes('series');
-    const timeout = isStreamAction ? 20000 : 10000;
+    const timeout = isStreamAction ? 25000 : 12000;
 
     const proxies = [
       (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
@@ -70,98 +85,93 @@ export class XtreamService {
     for (const getProxyUrl of proxies) {
       try {
         const proxyUrl = getProxyUrl(url);
-        console.log(`Trying proxy for ${action}...`);
-        
         const response = await this.fetchWithTimeout(proxyUrl, timeout);
 
-        if (!response.ok) {
-          console.warn(`Proxy returned status ${response.status} for ${action}`);
-          continue;
-        }
+        if (!response.ok) continue;
 
         let data;
-        const proxyName = proxyUrl.includes('allorigins') ? 'allorigins' : 
-                         proxyUrl.includes('corsproxy.io') ? 'corsproxy' : 
-                         proxyUrl.includes('cors-anywhere') ? 'cors-anywhere' : 'cors-sh';
+        const isAllOrigins = proxyUrl.includes('allorigins');
 
-        if (proxyName === 'allorigins') {
+        if (isAllOrigins) {
           const json = await response.json();
           if (!json.contents) continue;
           try {
             data = JSON.parse(json.contents);
-          } catch (e) {
-            console.warn("AllOrigins: Failed to parse contents", e);
-            continue;
-          }
+          } catch { continue; }
         } else {
           data = await response.json();
         }
 
         if (data) {
-          // Handle cases where data is an error object
+          // Validation of IPTV response format
           if (data.status === false || (data.user_info && data.user_info.auth === 0)) {
-            throw new Error(data.message || 'Falha na autenticação do servidor');
+            throw new XtreamError(data.message || 'Usuário ou senha inválidos no servidor IPTV', 'AUTH_FAILED');
           }
-          console.log(`Success with ${proxyName} for ${action}`);
           
-          // Cache the successful result
           this.cache.set(cacheKey, { data, timestamp: Date.now() });
-          
           return data;
         }
-      } catch (err) {
-        console.warn(`Proxy failed for ${action}:`, err);
+      } catch (err: any) {
+        if (err instanceof XtreamError) throw err;
         lastError = err;
         continue;
       }
     }
 
-    throw lastError || new Error(`Não foi possível carregar os dados. O servidor IPTV pode estar lento ou bloqueando a conexão.`);
+    const userFriendlyMessage = lastError?.message?.includes('Timeout') 
+      ? 'O servidor demorou muito para responder. Tente novamente.'
+      : 'Não foi possível conectar ao servidor. Verifique a URL e sua internet.';
+      
+    throw new XtreamError(userFriendlyMessage, 'NETWORK_ERROR', lastError);
   }
 
   async authenticate(): Promise<{ user_info: UserInfo }> {
-    const data = await this.fetchAction('');
-    if (!data.user_info || data.user_info.auth === 0) {
-      throw new Error('Authentication failed');
+    try {
+      const data = await this.fetchAction('');
+      if (!data.user_info || data.user_info.auth === 0) {
+        throw new XtreamError('Acesso negado pelo servidor IPTV', 'AUTH_FAILED');
+      }
+      return data;
+    } catch (err: any) {
+      if (err instanceof XtreamError) throw err;
+      throw new XtreamError('Falha na autenticação. Verifique os dados.', 'UNKNOWN');
     }
-    return data;
   }
 
   async getCategories(type: 'live' | 'movie' | 'series'): Promise<Category[]> {
-    const action = type === 'live' ? 'get_live_categories' : type === 'movie' ? 'get_vod_categories' : 'get_series_categories';
-    const data = await this.fetchAction(action);
-    
-    if (Array.isArray(data)) return data;
-    if (typeof data === 'object' && data !== null) {
-      // Some servers return categories as an object { "0": {...}, "1": {...} }
-      return Object.values(data);
+    try {
+      const action = type === 'live' ? 'get_live_categories' : type === 'movie' ? 'get_vod_categories' : 'get_series_categories';
+      const data = await this.fetchAction(action);
+      
+      if (Array.isArray(data)) return data;
+      if (typeof data === 'object' && data !== null) return Object.values(data);
+      return [];
+    } catch (err) {
+      console.warn(`Error fetching ${type} categories:`, err);
+      return []; // Return empty instead of crashing for lists
     }
-    return [];
   }
 
   async getStreams(type: 'live' | 'movie' | 'series', categoryId?: string): Promise<Stream[]> {
-    const action = type === 'live' ? 'get_live_streams' : type === 'movie' ? 'get_vod_streams' : 'get_series_streams';
-    const params = categoryId ? { category_id: categoryId } : {};
-    const data = await this.fetchAction(action, params);
-    
-    if (Array.isArray(data)) return data;
-    if (typeof data === 'object' && data !== null) {
-      return Object.values(data);
+    try {
+      const action = type === 'live' ? 'get_live_streams' : type === 'movie' ? 'get_vod_streams' : 'get_series_streams';
+      const params = categoryId ? { category_id: categoryId } : {};
+      const data = await this.fetchAction(action, params);
+      
+      if (Array.isArray(data)) return data;
+      if (typeof data === 'object' && data !== null) return Object.values(data);
+      return [];
+    } catch (err) {
+      console.warn(`Error fetching ${type} streams:`, err);
+      return [];
     }
-    return [];
   }
 
   getStreamUrl(streamId: string, extension: string = 'm3u8', type: 'live' | 'movie' | 'series' = 'live'): string {
     if (!this.credentials) return '';
-    
-    // Ensure URL doesn't end with slash before building
     const baseUrl = this.credentials.url.replace(/\/$/, '');
     const prefix = type === 'live' ? '' : type === 'movie' ? 'movie/' : 'series/';
-    
-    // Extensions: live usually m3u8 or ts, movie/series usually mp4 or mkv
-    // Many providers require specific extensions for VOD
     const ext = extension || (type === 'live' ? 'm3u8' : 'mp4');
-    
     return `${baseUrl}/${prefix}${this.credentials.username}/${this.credentials.password}/${streamId}.${ext}`;
   }
 }
