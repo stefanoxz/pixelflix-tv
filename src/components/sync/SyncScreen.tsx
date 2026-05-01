@@ -7,9 +7,10 @@ import { SyncProgressBar } from './SyncProgressBar';
 interface SyncScreenProps {
   onComplete: () => void;
   profileName: string;
+  avatarUrl: string;
 }
 
-export const SyncScreen = ({ onComplete, profileName }: SyncScreenProps) => {
+export const SyncScreen = ({ onComplete, profileName, avatarUrl }: SyncScreenProps) => {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Iniciando conexão...');
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +76,8 @@ export const SyncScreen = ({ onComplete, profileName }: SyncScreenProps) => {
           <div className={`w-24 h-24 rounded-3xl flex items-center justify-center border border-white/10 shadow-2xl relative overflow-hidden transition-colors ${error ? 'bg-red-500/20' : 'bg-zinc-900'}`}>
              {error ? (
                 <AlertCircle size={40} className="text-red-500 animate-pulse" />
+             ) : avatarUrl ? (
+                <img src={avatarUrl} alt={profileName} className="w-full h-full object-cover animate-in fade-in zoom-in duration-700" />
              ) : progress < 100 ? (
                 <CloudDownload size={40} className="text-blue-500 animate-bounce" />
              ) : (

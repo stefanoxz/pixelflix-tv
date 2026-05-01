@@ -14,12 +14,12 @@ interface ProfileSelectionProps {
 }
 
 const AVATARS = [
-  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop',
-  'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=200&h=200&fit=crop',
-  'https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=200&h=200&fit=crop',
-  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop',
-  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop',
+  'https://img.freepik.com/free-vector/cute-fox-sitting-cartoon-vector-icon-illustration_138676-4148.jpg',
+  'https://img.freepik.com/free-vector/cute-panda-with-bamboo-cartoon-vector-icon-illustration_138676-3642.jpg',
+  'https://img.freepik.com/free-vector/cute-lion-king-cartoon-vector-icon-illustration_138676-3539.jpg',
+  'https://img.freepik.com/free-vector/cute-koala-sleeping-tree-cartoon-vector-icon-illustration_138676-3641.jpg',
+  'https://img.freepik.com/free-vector/cute-penguin-floating-with-balloon-cartoon-vector-icon-illustration_138676-3634.jpg',
+  'https://img.freepik.com/free-vector/cute-elephant-sitting-cartoon-vector-icon-illustration_138676-3640.jpg',
 ];
 
 export const ProfileSelection = ({ onSelect }: ProfileSelectionProps) => {
