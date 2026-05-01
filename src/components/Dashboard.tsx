@@ -1,4 +1,4 @@
-import { Tv, Film, PlayCircle, Settings, User, LogOut, Search, ArrowRight, UserCircle } from 'lucide-react';
+import { Tv, Film, PlayCircle, Settings, User, LogOut, Search, ArrowRight, UserCircle, RefreshCcw } from 'lucide-react';
 
 interface Profile {
   id: string;
@@ -8,7 +8,7 @@ interface Profile {
 
 interface DashboardProps {
   onLogout: () => void;
-  onNavigate: (view: 'live' | 'movie' | 'series' | 'settings') => void;
+  onNavigate: (view: 'live' | 'movie' | 'series' | 'settings' | 'profiles' | 'sync') => void;
   profile: Profile | null;
 }
 
@@ -103,15 +103,21 @@ export const Dashboard = ({ onLogout, onNavigate, profile }: DashboardProps) => 
         {/* User Info Card */}
         <div className="mt-12 bg-[#0A0A0A] border border-white/5 rounded-[32px] p-8 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="flex items-center gap-6">
-            <div className="w-16 h-16 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
+            <button 
+              onClick={() => onNavigate('profiles')}
+              className="relative group w-16 h-16 rounded-2xl overflow-hidden border border-white/10 shadow-lg"
+            >
               {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt={profile.profile_name} className="w-full h-full object-cover" />
+                <img src={profile.avatar_url} alt={profile.profile_name} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
               ) : (
                 <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
                   <User size={32} className="text-zinc-500" />
                 </div>
               )}
-            </div>
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <RefreshCcw size={16} className="text-white" />
+              </div>
+            </button>
             <div>
               <p className="text-zinc-500 text-[10px] font-bold tracking-[0.2em] uppercase mb-1">Perfil Ativo</p>
               <div className="flex items-center gap-3">

@@ -106,8 +106,11 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
   if (itemsLoading) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
-        <Loader2 className="w-12 h-12 text-white animate-spin" />
-        <p className="text-zinc-600 font-black uppercase tracking-[0.4em] text-[10px]">Sincronizando Conteúdo...</p>
+        <div className="relative">
+          <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+          <div className="absolute inset-0 blur-lg bg-blue-500/20 animate-pulse" />
+        </div>
+        <p className="text-zinc-600 font-black uppercase tracking-[0.4em] text-[10px]">Carregando conteúdo...</p>
       </div>
     );
   }
