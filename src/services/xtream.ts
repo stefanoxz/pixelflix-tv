@@ -61,6 +61,7 @@ export class XtreamService {
       (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
       (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
       (u: string) => `https://thingproxy.freeboard.io/fetch/${u}`,
+      (u: string) => u, // Direct fetch as last resort
     ];
 
     let lastError: any = null;
