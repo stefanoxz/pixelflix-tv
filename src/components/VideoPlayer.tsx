@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
-import { PlayCircle } from 'lucide-react';
+import vibeLogo from '@/assets/vibe-logo.png';
 
 interface VideoPlayerProps {
   options: any;
