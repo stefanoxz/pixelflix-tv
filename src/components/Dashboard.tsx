@@ -34,8 +34,8 @@ export const Dashboard = memo(({ onLogout, onNavigate, profile }: DashboardProps
 
       <main className="flex-1 p-6 md:p-12 max-w-[1600px] mx-auto w-full relative">
         <div className="mb-16">
-          <h2 className="text-zinc-600 text-[11px] font-black tracking-[0.5em] uppercase mb-4 animate-in fade-in slide-in-from-left duration-700">Explorar catálogo</h2>
-          <h3 className="text-5xl md:text-7xl font-black tracking-tighter leading-none animate-in fade-in slide-in-from-bottom duration-1000">Sua jornada começa aqui.</h3>
+          <p className="text-zinc-600 text-[11px] font-black tracking-[0.5em] uppercase mb-4 animate-in fade-in slide-in-from-left duration-700">Explorar catálogo</p>
+          <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-none animate-in fade-in slide-in-from-bottom duration-1000">Sua jornada premium começa aqui.</h1>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
