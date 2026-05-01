@@ -50,7 +50,7 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
             onLogin();
           } catch (authErr) {
             console.error('Auth error:', authErr);
-            setError('Usuário ou senha inválidos no servidor IPTV');
+            setError(authErr instanceof Error ? authErr.message : 'Falha na conexão com o servidor IPTV');
           }
         } else {
           setError('Preencha todos os campos');
