@@ -125,14 +125,12 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
           </button>
           
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-3 mr-6 cursor-pointer hover:opacity-80 transition-opacity" onClick={onBack}>
-              <div className="w-9 h-9 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center">
-                <PlayCircle className="text-white" size={20} fill="white" />
-              </div>
-              <div className="flex flex-col">
-                <h1 className="text-lg font-black tracking-tighter uppercase italic leading-none">VIBE</h1>
-                <span className="text-[7px] font-black tracking-[0.2em] text-blue-500 uppercase">Premium</span>
-              </div>
+            <div className="cursor-pointer hover:opacity-80 transition-opacity mr-2" onClick={onBack}>
+              <img 
+                src={vibeLogo} 
+                alt="Vibe" 
+                className="h-10 w-auto object-contain drop-shadow-[0_0_10px_rgba(168,85,247,0.4)]"
+              />
             </div>
             <div className="h-6 w-[1px] bg-white/10" />
             <h2 className="text-xl font-black uppercase tracking-widest ml-2">{title}</h2>
