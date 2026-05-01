@@ -1,6 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
-import videojs from 'video.js';
-import 'video.js/dist/video-js.css';
+import React, { useEffect, useRef, useState, memo } from 'react';
 import vibeLogo from '@/assets/vibe-logo.png';
 import { Volume2, Sun, Loader2 } from 'lucide-react';
 
@@ -20,14 +18,22 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
 
   useEffect(() => {
     if (!playerRef.current) {
-      const videoElement = document.createElement("video-js");
-      videoElement.classList.add('vjs-big-play-centered');
-      videoElement.classList.add('vjs-theme-city');
-      videoRef.current?.appendChild(videoElement);
+      const initPlayer = async () => {
+        // Dynamically import video.js and its CSS
+        const videojsModule = await import('video.js');
+        await import('video.js/dist/video-js.css');
+        const videojs = videojsModule.default;
 
-      const player = playerRef.current = videojs(videoElement, {
-        ...options,
-        controlBar: {
+        const videoElement = document.createElement("video-js");
+        videoElement.classList.add('vjs-big-play-centered');
+        videoElement.classList.add('vjs-theme-city');
+        
+        if (videoRef.current) {
+          videoRef.current.appendChild(videoElement);
+
+          const player = playerRef.current = videojs(videoElement, {
+            ...options,
+            controlBar: {
           children: [
             'playToggle',
             'volumePanel',
@@ -43,13 +49,16 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
           nativeAudioTracks: false,
           nativeVideoTracks: false
         }
-      }, () => {
-        onReady && onReady(player);
-      });
+          }, () => {
+            onReady && onReady(player);
+          });
 
-      player.on('error', () => {
-        console.error('VideoJS Error:', player.error());
-      });
+          player.on('error', () => {
+            console.error('VideoJS Error:', player.error());
+          });
+        }
+      };
+      initPlayer();
     } else {
       const player = playerRef.current;
       player.autoplay(options.autoplay);

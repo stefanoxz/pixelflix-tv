@@ -82,9 +82,30 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
         }
 
         try {
-          xtreamService.setCredentials({ url: dnsUrl, username, password });
-          await xtreamService.authenticate();
-          onLogin();
+          const response = await xtreamService.login(dnsUrl, username, password);
+      
+          if (response.success) {
+            // Bridge Xtream Auth with Supabase Auth for RLS Security
+            const supaEmail = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@pixelflix.local`;
+            const supaPassword = `Px!${password}#tv`; // Secure derived password
+            
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+              email: supaEmail,
+              password: supaPassword,
+            });
+
+            if (signInError) {
+              // If user doesn't exist in Supabase, create it
+              await supabase.auth.signUp({
+                email: supaEmail,
+                password: supaPassword,
+              });
+            }
+
+            onLogin();
+          } else {
+             setError('Usuário ou senha incorretos');
+          }
         } catch (authErr: any) {
           console.error('Login auth error:', authErr);
           // Friendly error mapping
