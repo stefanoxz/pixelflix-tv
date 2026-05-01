@@ -177,7 +177,23 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
           {/* Subtle noise pattern */}
           <div className="fixed inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-linen.png')] opacity-[0.05] pointer-events-none" />
 
-          {filteredItems.length === 0 ? (
+          {error ? (
+            <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-6 w-full col-span-full">
+              <div className="p-6 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 mb-4 animate-pulse">
+                <AlertCircle size={48} strokeWidth={1} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-white uppercase tracking-widest">Erro ao carregar conteúdo</h3>
+                <p className="text-zinc-500 text-sm max-w-md mx-auto">Não foi possível conectar ao servidor IPTV. O servidor pode estar offline ou recusando a conexão.</p>
+              </div>
+              <button 
+                onClick={() => refetch()}
+                className="mt-6 px-10 py-4 bg-white text-black font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-zinc-200 transition-all shadow-xl active:scale-95"
+              >
+                Tentar Novamente
+              </button>
+            </div>
+          ) : filteredItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4 w-full col-span-full">
               <div className="p-6 rounded-full bg-white/5 border border-white/10 text-zinc-600 mb-4">
                 <Search size={48} strokeWidth={1} />
