@@ -12,6 +12,7 @@ export const SyncScreen = ({ onComplete, profileName }: SyncScreenProps) => {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Iniciando conexão...');
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   useEffect(() => {
