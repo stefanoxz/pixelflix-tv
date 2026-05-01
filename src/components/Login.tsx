@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { User, Lock, ArrowRight, ShieldCheck, PlayCircle } from 'lucide-react';
+import { User, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
 import { xtreamService } from '../services/xtream';
 import { getSettings } from '../services/supabase';
+import vibeLogo from '@/assets/vibe-logo.png';
 
 interface LoginProps {
   onLogin: () => void;
