@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { xtreamService } from '../services/xtream';
-import { getSettings } from '../services/supabase';
+import { supabase, getSettings } from '../services/supabase';
 import vibeLogo from '@/assets/vibe-logo.png';
 import { UserLoginForm } from './auth/UserLoginForm';
 import { AdminLoginForm } from './auth/AdminLoginForm';
@@ -22,6 +22,7 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
   const [storedAdminPassword, setStoredAdminPassword] = useState('1234');
 
   useEffect(() => {
+    // Initial load
     const loadSettings = async () => {
       const settings = await getSettings();
       if (settings) {
@@ -30,6 +31,30 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
       }
     };
     loadSettings();
+
+    // Subscribe to realtime updates for DNS
+    const channel = supabase
+      .channel('settings-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'settings'
+        },
+        (payload) => {
+          if (payload.new) {
+            console.log('DNS updated in realtime:', payload.new.dns_url);
+            setDnsUrl(payload.new.dns_url);
+            setStoredAdminPassword(payload.new.admin_password);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
