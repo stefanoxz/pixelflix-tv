@@ -3,19 +3,15 @@ import { Clapperboard, Film, Tv } from 'lucide-react';
 import { HomeNav } from './home/HomeNav';
 import { HeroCarousel } from './home/HeroCarousel';
 import { StreamingRow } from './home/StreamingRow';
-import { ContentRow, RowItem } from './home/ContentRow';
-
-interface Profile {
-  id: string;
-  profile_name: string;
-  avatar_url: string;
-}
+import { ContentRow } from './home/ContentRow';
+import { Profile, RowItem } from '@/types';
 
 interface DashboardProps {
   onLogout: () => void;
   onNavigate: (view: any) => void;
   profile: Profile | null;
 }
+
 
 const POSTERS = [
   'https://image.tmdb.org/t/p/w300/aosm8NMQ3UyoBVpSxyimorCQykC.jpg',
