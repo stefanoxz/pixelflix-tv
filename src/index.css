@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
+    --background: 240 10% 2%;
     --foreground: 0 0% 98%;
     --card: 240 10% 3.9%;
     --card-foreground: 0 0% 98%;
@@ -31,6 +31,10 @@
   }
 }
 
+.video-js.vjs-theme-city {
+  --vjs-theme-city--primary: #7c3aed;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
@@ -43,6 +47,19 @@
   @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
 }
 
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+img {
+  content-visibility: auto;
+}
+
+/* Hide lovable badges as requested in previous contexts */
 a[href*="lovable.dev"], 
 iframe[src*="lovable.dev"],
 div[style*="Edit with Lovable"],
@@ -54,5 +71,3 @@ div[style*="Edit with Lovable"],
   position: absolute !important;
   z-index: -9999 !important;
 }
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
