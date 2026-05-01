@@ -60,33 +60,46 @@ export const LiveChannelList = memo(({ channels, selectedChannel, favorites, onS
               >
                 <div 
                   onClick={() => onSelectChannel(channel)}
-                  className={`flex items-center gap-4 px-4 py-3 rounded-2xl cursor-pointer transition-all border h-[64px] ${
+                  className={`flex items-center gap-4 px-4 py-3 rounded-2xl cursor-pointer transition-all border h-[72px] group relative overflow-hidden ${
                     isSelected 
-                    ? 'bg-blue-600/10 border-blue-500/20 shadow-[0_0_20px_rgba(37,99,235,0.1)]' 
-                    : 'bg-transparent border-transparent hover:bg-white/5'
+                    ? 'bg-purple-600/10 border-purple-500/30 shadow-[0_0_25px_rgba(168,85,247,0.15)]' 
+                    : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.05] hover:border-white/10'
                   }`}
                 >
+                  {/* Active Indicator Glow */}
+                  {isSelected && (
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-500 shadow-[0_0_15px_#a855f7]" />
+                  )}
+
+                  <div className="w-12 h-12 rounded-xl bg-[#151515] overflow-hidden flex items-center justify-center shrink-0 p-1.5 border border-white/5 group-hover:border-purple-500/30 transition-colors">
+                    {channel.icon ? (
+                      <img loading="lazy" src={channel.icon} alt={channel.name} className="w-full h-full object-contain" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg opacity-80" />
+                    )}
+                  </div>
+ 
+                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                    <span className={`text-[12px] font-bold tracking-wide truncate ${isSelected ? 'text-white' : 'text-zinc-300 group-hover:text-white'}`}>
+                      {channel.name}
+                    </span>
+                    <span className="text-[9px] text-zinc-500 font-medium truncate uppercase tracking-widest opacity-60">
+                      Culinária & Variedades
+                    </span>
+                    <div className="w-full h-0.5 bg-white/5 rounded-full mt-1.5 overflow-hidden">
+                      <div className={`h-full ${isSelected ? 'bg-purple-500' : 'bg-zinc-700'} rounded-full`} style={{ width: '45%' }} />
+                    </div>
+                  </div>
+
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
                       onToggleFavorite(channel);
                     }}
-                    className="text-zinc-600 hover:text-red-500 transition-colors shrink-0"
+                    className={`transition-all shrink-0 ${isFav ? 'text-purple-500' : 'text-zinc-700 hover:text-purple-400 opacity-0 group-hover:opacity-100'}`}
                   >
-                    <Heart size={14} className={isFav ? 'fill-red-500 text-red-500' : ''} />
+                    <Heart size={16} className={isFav ? 'fill-purple-500' : ''} />
                   </button>
-
-                  <div className="w-10 h-10 rounded-full bg-white/5 overflow-hidden flex items-center justify-center shrink-0 p-1 border border-white/5">
-                    {channel.icon ? (
-                      <img loading="lazy" src={channel.icon} alt={channel.name} className="w-full h-full object-contain" />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-purple-500 to-blue-500 rounded-full" />
-                    )}
-                  </div>
-
-                  <span className={`text-[11px] font-black tracking-wider truncate uppercase ${isSelected ? 'text-white' : 'text-zinc-300'}`}>
-                    {channel.name}
-                  </span>
                 </div>
               </div>
             );

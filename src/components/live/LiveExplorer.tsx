@@ -111,18 +111,37 @@ export const LiveExplorer = ({ onBack }: LiveExplorerProps) => {
   return (
     <div className="h-screen bg-black text-white flex flex-col font-sans overflow-hidden">
       {/* Header */}
-      <header className="h-16 px-6 flex items-center justify-between border-b border-white/5 bg-[#050505] shrink-0">
-        <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-white">
+      <header className="h-20 px-10 flex items-center justify-between border-b border-white/5 bg-[#050505]/80 backdrop-blur-2xl shrink-0 z-20 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
+        
+        <div className="flex items-center gap-6">
+          <button 
+            onClick={onBack} 
+            className="w-10 h-10 flex items-center justify-center rounded-2xl bg-white/5 border border-white/5 hover:bg-purple-600/20 hover:border-purple-500/30 transition-all text-zinc-400 hover:text-white"
+          >
             <ChevronLeft size={20} />
           </button>
-          <div className="flex items-center gap-3">
-            <h1 className="text-sm font-black tracking-widest uppercase">Canais</h1>
+          <div className="flex flex-col">
+            <h1 className="text-xs font-black tracking-[0.4em] text-zinc-500 uppercase leading-none mb-1">WebPlayer Premium</h1>
+            <h2 className="text-lg font-black tracking-widest uppercase text-white text-glow">Canais ao Vivo</h2>
           </div>
         </div>
-        <div className="flex flex-col items-end justify-center">
-          <span className="text-sm font-black tracking-wider leading-none">{timeString}</span>
-          <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest leading-none mt-1">{dateString}</span>
+
+        <div className="flex items-center gap-8">
+           <div className="hidden md:flex flex-col items-end">
+              <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-1">Qualidade</span>
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-600/10 border border-purple-500/20 rounded-lg">
+                 <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_#a855f7]" />
+                 <span className="text-[9px] font-black text-white uppercase tracking-widest">Ultra HD 4K</span>
+              </div>
+           </div>
+           
+           <div className="h-8 w-[1px] bg-white/5" />
+
+           <div className="flex flex-col items-end justify-center">
+             <span className="text-xl font-black tracking-tighter text-white leading-none">{timeString}</span>
+             <span className="text-[9px] text-purple-500 font-black uppercase tracking-[0.2em] leading-none mt-1.5">{dateString}</span>
+           </div>
         </div>
       </header>
 

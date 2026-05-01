@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100;200;300;400;500;600;700;800;900&display=swap');
+
 @layer base {
   :root {
     --background: 240 10% 2%;
@@ -28,6 +30,21 @@
 
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/30 selection:text-primary-foreground;
+    font-family: 'Outfit', sans-serif;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-white/[0.03] backdrop-blur-2xl border border-white/5;
+  }
+  
+  .text-glow {
+    text-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+  }
+  
+  .luxury-gradient {
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #d946ef 100%);
   }
 }
 

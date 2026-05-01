@@ -111,50 +111,62 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
       </div>
 
       {/* EPG Panel */}
-      <div className="bg-[#0A0A0A] border border-white/5 rounded-3xl p-6 relative overflow-hidden shrink-0">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-white/5 rounded-2xl border border-white/5">
-              <Tv size={20} className="text-zinc-400" />
+      <div className="bg-[#0A0A0A] border border-white/5 rounded-[32px] p-8 relative overflow-hidden shrink-0 shadow-2xl">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600/5 blur-[80px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        
+        <div className="flex items-start justify-between mb-6">
+          <div className="flex items-start gap-5">
+            <div className="w-14 h-14 bg-white/[0.03] rounded-2xl border border-white/5 flex items-center justify-center shadow-inner">
+              <Tv size={24} className="text-purple-500/80" />
             </div>
             <div>
-              <div className="flex items-center gap-3 mb-1.5">
-                <h3 className="text-sm font-black text-white tracking-widest uppercase">
+              <div className="flex items-center gap-3 mb-2">
+                <h3 className="text-lg font-bold text-white tracking-tight">
                   {epg?.title ? String(decodeBase64(epg.title)).replace(/[^a-zA-Z0-9 \-]/g, '') : 'Programa Atual'}
                 </h3>
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-red-500/10 border border-red-500/20 rounded-md">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-[9px] font-black text-red-500 uppercase tracking-widest">LIVE</span>
+                </div>
               </div>
               
-              <div className="flex items-center gap-4 text-[10px] font-bold tracking-widest">
-                <div className="flex items-center gap-1.5 text-zinc-500">
-                  <Clock size={12} />
+              <div className="flex items-center gap-6 text-[11px] font-semibold tracking-wider">
+                <div className="flex items-center gap-2 text-zinc-400">
+                  <Clock size={14} className="text-purple-500/50" />
                   <span>{epg?.start ? formatTime(epg.start) : '00:00'} — {epg?.end ? formatTime(epg.end) : '00:00'}</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-orange-500">
-                  <Zap size={12} className="fill-orange-500" />
-                  <span>{progressPercentage}%</span>
+                <div className="flex items-center gap-2 text-purple-400">
+                  <Zap size={14} className="fill-purple-500/20" />
+                  <span className="text-glow">{progressPercentage}% concluído</span>
                 </div>
               </div>
             </div>
           </div>
           
-          <div className="px-4 py-1.5 bg-red-500 rounded-full text-[9px] font-black text-white tracking-widest uppercase flex items-center gap-1.5">
-            Ao Vivo
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em]">Próximo</span>
+            <span className="text-[11px] font-bold text-zinc-400">Jornal da Noite • 22:00</span>
           </div>
         </div>
 
-        <p className="text-[10px] text-zinc-500 font-medium leading-relaxed max-w-4xl mb-6">
+        <p className="text-[12px] text-zinc-500 font-medium leading-relaxed max-w-4xl mb-8 opacity-80">
           {epg?.description 
             ? String(decodeBase64(epg.description))
             : 'O telejornal cobre os fatos do dia e as últimas notícias da noite. Conta com a colaboração de colunistas em áreas como economia e cultura.'}
         </p>
 
         {/* Progress Bar */}
-        <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 rounded-full" 
-            style={{ width: `${progressPercentage}%` }} 
-          />
+        <div className="space-y-3">
+          <div className="flex justify-between items-end">
+             <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Progresso do programa</span>
+             <span className="text-[10px] font-black text-purple-500">{progressPercentage}%</span>
+          </div>
+          <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden p-[1px]">
+            <div 
+              className="h-full bg-gradient-to-r from-purple-600 via-purple-400 to-pink-500 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all duration-1000 ease-out" 
+              style={{ width: `${progressPercentage}%` }} 
+            />
+          </div>
         </div>
       </div>
     </div>
