@@ -103,14 +103,20 @@ export const Dashboard = ({ onLogout, onNavigate, profile }: DashboardProps) => 
         {/* User Info Card */}
         <div className="mt-12 bg-[#0A0A0A] border border-white/5 rounded-[32px] p-8 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="flex items-center gap-6">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center border border-white/10">
-              <User size={32} className="text-zinc-500" />
+            <div className="w-16 h-16 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt={profile.profile_name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                  <User size={32} className="text-zinc-500" />
+                </div>
+              )}
             </div>
             <div>
-              <p className="text-zinc-500 text-[10px] font-bold tracking-[0.2em] uppercase mb-1">Status da Conta</p>
+              <p className="text-zinc-500 text-[10px] font-bold tracking-[0.2em] uppercase mb-1">Perfil Ativo</p>
               <div className="flex items-center gap-3">
-                <span className="text-xl font-bold">Premium User</span>
-                <span className="px-2 py-0.5 rounded-md bg-green-500/10 text-green-500 text-[10px] font-bold border border-green-500/20 uppercase tracking-tighter">Ativo</span>
+                <span className="text-xl font-bold">{profile?.profile_name || 'Usuário'}</span>
+                <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-500 text-[10px] font-bold border border-blue-500/20 uppercase tracking-tighter">Conectado</span>
               </div>
             </div>
           </div>
