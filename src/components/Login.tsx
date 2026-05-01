@@ -64,32 +64,43 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
 
     try {
       if (isAdminMode) {
+        if (!adminPassword) {
+          setError('Informe a senha administrativa');
+          setLoading(false);
+          return;
+        }
         if (adminPassword === storedAdminPassword) {
           onAdminLogin();
         } else {
           setError('Senha administrativa incorreta');
         }
       } else {
-        if (username && password) {
+        if (!username || !password) {
+          setError('Preencha usuário e senha');
+          setLoading(false);
+          return;
+        }
+
+        try {
           xtreamService.setCredentials({ url: dnsUrl, username, password });
-          
-          try {
-            await xtreamService.authenticate();
-            onLogin();
-          } catch (authErr) {
-            console.error('Auth error:', authErr);
-            setError(authErr instanceof Error ? authErr.message : 'Falha na conexão com o servidor IPTV');
-          }
-        } else {
-          setError('Preencha todos os campos');
+          await xtreamService.authenticate();
+          onLogin();
+        } catch (authErr: any) {
+          console.error('Login auth error:', authErr);
+          // Friendly error mapping
+          const msg = authErr.code === 'AUTH_FAILED' 
+            ? 'Usuário ou senha incorretos' 
+            : authErr.message || 'Erro ao conectar ao servidor';
+          setError(msg);
         }
       }
     } catch (err) {
-      setError('Falha na autenticação. Verifique os dados.');
+      setError('Ocorreu um erro inesperado. Tente novamente.');
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4 font-sans selection:bg-purple-500/30 overflow-hidden relative">
