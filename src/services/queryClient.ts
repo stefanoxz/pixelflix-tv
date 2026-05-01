@@ -1,8 +1,8 @@
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/query-core';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
 
-// Use a single instance of QueryClient to avoid type mismatch issues between core and react-query
+// Use the core QueryClient to match the persister's expectations
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -12,7 +12,7 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
     },
   },
-});
+}) as any;
 
 const persister = createSyncStoragePersister({
   storage: window.localStorage,

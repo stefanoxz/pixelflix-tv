@@ -22,7 +22,7 @@ export interface StreamSettings {
 }
 
 export interface XtreamCredentials {
-  serverUrl: string;
+  url: string; // Changed from serverUrl to url to match usage
   username: string;
   password: string;
 }
@@ -59,4 +59,8 @@ export interface Stream {
   tv_archive_duration: number;
   rating?: string;
   year?: string;
+  // Added fields for ContentExplorer compatibility
+  series_id?: number;
+  cover?: string;
+  duration?: string;
 }
