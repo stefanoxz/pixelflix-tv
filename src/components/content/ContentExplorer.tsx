@@ -188,7 +188,7 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-white/10">
+    <div className="h-screen bg-black text-white flex flex-col font-sans selection:bg-white/10 overflow-hidden">
       <ExplorerHeader 
         title={title}
         itemCount={filteredItems.length}
