@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
+import { User, Lock, ArrowRight, ShieldCheck, PlayCircle } from 'lucide-react';
 import { xtreamService } from '../services/xtream';
 import { getSettings } from '../services/supabase';
 
@@ -75,8 +75,11 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
       <main className="relative z-10 w-full max-w-[440px]">
         <div className="bg-[#0A0A0A]/40 border border-white/10 rounded-[48px] p-8 md:p-14 shadow-[0_0_100px_rgba(0,0,0,0.5)] backdrop-blur-3xl ring-1 ring-white/5">
           <div className="flex flex-col items-center mb-12">
-            <div className="mb-6 p-4 bg-white/5 rounded-3xl border border-white/10 shadow-inner">
-              <h1 className="text-6xl font-black tracking-[0.3em] text-white leading-none select-none">BLACK</h1>
+            <div className="mb-6 flex items-center gap-3">
+              <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-2xl shadow-white/20">
+                <PlayCircle className="text-black" size={32} fill="currentColor" />
+              </div>
+              <h1 className="text-5xl font-black tracking-[0.1em] text-white leading-none select-none uppercase">Vibe</h1>
             </div>
             <div className="h-1.5 w-16 bg-gradient-to-r from-transparent via-white/40 to-transparent rounded-full" />
             <p className="mt-6 text-[11px] font-black text-zinc-400 uppercase tracking-[0.5em] opacity-80">

@@ -30,9 +30,11 @@ export const Dashboard = ({ onLogout, onNavigate, profile }: DashboardProps) => 
       {/* Header */}
       <header className="px-6 md:px-12 py-8 flex items-center justify-between border-b border-white/5 bg-black/60 backdrop-blur-xl sticky top-0 z-50">
         <div className="flex items-center gap-12">
-          <div className="group cursor-pointer">
-            <h1 className="text-3xl font-black tracking-[0.3em] group-hover:text-zinc-300 transition-colors">BLACK</h1>
-            <div className="h-1 w-0 group-hover:w-full bg-white transition-all duration-500 rounded-full" />
+          <div className="group cursor-pointer flex items-center gap-2" onClick={() => onNavigate('dashboard' as any)}>
+            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg shadow-white/10 group-hover:rotate-12 transition-all">
+              <PlayCircle className="text-black" size={24} fill="currentColor" />
+            </div>
+            <h1 className="text-3xl font-black tracking-[0.2em] group-hover:text-zinc-300 transition-colors uppercase">Vibe</h1>
           </div>
           <nav className="hidden lg:flex items-center gap-10">
             <button className="text-zinc-500 hover:text-white transition-all text-[11px] font-black tracking-[0.3em] uppercase relative after:content-[''] after:absolute after:-bottom-2 after:left-0 after:w-0 hover:after:w-full after:h-0.5 after:bg-white after:transition-all">Início</button>
@@ -140,8 +142,8 @@ export const Dashboard = ({ onLogout, onNavigate, profile }: DashboardProps) => 
         </div>
       </main>
 
-      <footer className="p-8 text-center border-t border-white/5">
-        <p className="text-[10px] font-bold text-zinc-600 tracking-[0.3em] uppercase">SuperTech WebPlayer &copy; 2026</p>
+      <footer className="p-8 text-center border-t border-white/5 bg-black/40">
+        <p className="text-[10px] font-bold text-zinc-600 tracking-[0.3em] uppercase">Vibe WebPlayer &copy; 2026 &bull; Desenvolvido por SuperTech</p>
       </footer>
     </div>
   );

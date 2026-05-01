@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ChevronLeft, Search, Grid, List as ListIcon, Play, Star, Info, X, Settings, Loader2, Heart } from 'lucide-react';
+import { ChevronLeft, Search, Grid, List as ListIcon, Play, Star, Info, X, Settings, Loader2, Heart, PlayCircle, AlertCircle } from 'lucide-react';
 import { xtreamService } from '../services/xtream';
 import { contentActions } from '../services/content';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -122,17 +122,18 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
           <button onClick={onBack} className="p-2.5 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-zinc-400 hover:text-white border border-white/5">
             <ChevronLeft size={22} />
           </button>
+          
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-black uppercase tracking-widest">{title}</h2>
+            <div className="flex items-center gap-2 mr-4">
+              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-lg shadow-white/10">
+                <PlayCircle className="text-black" size={18} fill="currentColor" />
+              </div>
+              <h1 className="text-lg font-black tracking-widest uppercase hidden sm:block">Vibe</h1>
+            </div>
+            <div className="h-6 w-[1px] bg-white/10" />
+            <h2 className="text-xl font-black uppercase tracking-widest ml-2">{title}</h2>
             <div className="h-4 w-[1px] bg-white/10" />
             <p className="text-[10px] font-bold text-zinc-500 tracking-[0.2em] uppercase">{filteredItems.length} Itens</p>
-            <button 
-              onClick={() => refetch()}
-              className="p-2 hover:bg-white/5 rounded-lg transition-colors text-zinc-500 hover:text-white"
-              title="Atualizar lista"
-            >
-              <Loader2 size={14} className={itemsLoading ? "animate-spin" : ""} />
-            </button>
           </div>
         </div>
 
@@ -176,7 +177,23 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
           {/* Subtle noise pattern */}
           <div className="fixed inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-linen.png')] opacity-[0.05] pointer-events-none" />
 
-          {filteredItems.length === 0 ? (
+          {error ? (
+            <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-6 w-full col-span-full">
+              <div className="p-6 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 mb-4 animate-pulse">
+                <AlertCircle size={48} strokeWidth={1} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-white uppercase tracking-widest">Erro ao carregar conteúdo</h3>
+                <p className="text-zinc-500 text-sm max-w-md mx-auto">Não foi possível conectar ao servidor IPTV. O servidor pode estar offline ou recusando a conexão.</p>
+              </div>
+              <button 
+                onClick={() => refetch()}
+                className="mt-6 px-10 py-4 bg-white text-black font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-zinc-200 transition-all shadow-xl active:scale-95"
+              >
+                Tentar Novamente
+              </button>
+            </div>
+          ) : filteredItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4 w-full col-span-full">
               <div className="p-6 rounded-full bg-white/5 border border-white/10 text-zinc-600 mb-4">
                 <Search size={48} strokeWidth={1} />
