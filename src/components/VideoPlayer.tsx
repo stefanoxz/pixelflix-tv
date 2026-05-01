@@ -157,5 +157,3 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
 }
 
 export default VideoPlayer;
-
-export default VideoPlayer;
