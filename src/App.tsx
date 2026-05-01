@@ -3,6 +3,7 @@ import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { ProfileSelection } from './components/ProfileSelection';
 import { SyncScreen } from './components/sync/SyncScreen';
+import { ErrorBoundary } from './components/layout/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
 
 const ContentExplorer = lazy(() => import('./components/content/ContentExplorer').then(module => ({ default: module.ContentExplorer })));
@@ -54,7 +55,7 @@ function App() {
   };
 
   return (
-    <>
+    <ErrorBoundary>
       <Suspense fallback={<LoadingView />}>
         {currentView === 'login' && (
           <Login 
@@ -97,7 +98,7 @@ function App() {
         )}
 
         {currentView === 'admin' && (
-          <AdminPanel onBack={() => setCurrentView('login')} />
+          <AdminPanel onBack={() => handleNavigate('login')} />
         )}
 
         {currentView === 'settings' && (
@@ -113,7 +114,7 @@ function App() {
           </div>
         )}
       </Suspense>
-    </>
+    </ErrorBoundary>
   );
 }
 

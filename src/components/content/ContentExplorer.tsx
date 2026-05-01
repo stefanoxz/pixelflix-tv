@@ -5,6 +5,7 @@ import { xtreamService } from '../../services/xtream';
 import { contentActions } from '../../services/content';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { VideoPlayer } from '../VideoPlayer';
+import { ErrorBoundary } from '../layout/ErrorBoundary';
 import { ContentItem } from './ContentItem';
 import { ContentDetailModal } from './ContentDetailModal';
 import { ExplorerHeader } from '../layout/ExplorerHeader';
@@ -139,7 +140,9 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
   if (isPlaying && selectedItem) {
     return (
       <div className="fixed inset-0 z-[200] bg-black">
-        <VideoPlayer options={videoOptions} onReady={() => console.log('Player ready')} />
+        <ErrorBoundary isLocal>
+          <VideoPlayer options={videoOptions} onReady={() => console.log('Player ready')} />
+        </ErrorBoundary>
         <button 
           onClick={() => setIsPlaying(false)}
           className="absolute top-8 left-8 z-[210] p-4 bg-black/50 hover:bg-black/80 text-white rounded-full transition-all"
