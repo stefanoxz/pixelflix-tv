@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Clock, Zap, Tv, Loader2 } from 'lucide-react';
-import { VideoPlayer } from '../VideoPlayer';
+import { PremiumPlayer } from '../PremiumPlayer';
 import { ErrorBoundary } from '../layout/ErrorBoundary';
 import { xtreamService } from '../../services/xtream';
 
@@ -104,7 +104,13 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
         ) : isPlaying && videoOptions ? (
           <div className="w-full h-full relative z-10 bg-black">
             <ErrorBoundary isLocal>
-              <VideoPlayer options={videoOptions} onReady={() => {}} />
+              <PremiumPlayer 
+                options={videoOptions} 
+                title={channel.name} 
+                subtitle="Canais ao Vivo"
+                isFullscreen={false}
+                onClose={() => {}} 
+              />
             </ErrorBoundary>
           </div>
         ) : null}
