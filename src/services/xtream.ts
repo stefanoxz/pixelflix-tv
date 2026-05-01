@@ -150,8 +150,16 @@ export class XtreamService {
 
   getStreamUrl(streamId: string, extension: string = 'm3u8', type: 'live' | 'movie' | 'series' = 'live'): string {
     if (!this.credentials) return '';
+    
+    // Ensure URL doesn't end with slash before building
+    const baseUrl = this.credentials.url.replace(/\/$/, '');
     const prefix = type === 'live' ? '' : type === 'movie' ? 'movie/' : 'series/';
-    return `${this.credentials.url}/${prefix}${this.credentials.username}/${this.credentials.password}/${streamId}.${extension}`;
+    
+    // Extensions: live usually m3u8 or ts, movie/series usually mp4 or mkv
+    // Many providers require specific extensions for VOD
+    const ext = extension || (type === 'live' ? 'm3u8' : 'mp4');
+    
+    return `${baseUrl}/${prefix}${this.credentials.username}/${this.credentials.password}/${streamId}.${ext}`;
   }
 }
 
