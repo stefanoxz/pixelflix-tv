@@ -34,25 +34,37 @@ export const SyncScreen = ({ onComplete, profileName, avatarUrl }: SyncScreenPro
         }
         
         setStatus('Sincronizando canais...');
-        setProgress(35);
+        setProgress(30);
         await queryClient.fetchQuery({
           queryKey: ['categories', 'live'],
           queryFn: () => xtreamService.getCategories('live'),
         }).catch(err => console.warn('Falha leve ao baixar categorias de TV:', err));
+        await queryClient.fetchQuery({
+          queryKey: ['streams', 'live', 'all'],
+          queryFn: () => xtreamService.getStreams('live'),
+        }).catch(err => console.warn('Falha leve ao baixar canais de TV:', err));
 
         setStatus('Carregando biblioteca de filmes...');
-        setProgress(55);
+        setProgress(50);
         await queryClient.fetchQuery({
           queryKey: ['categories', 'movie'],
           queryFn: () => xtreamService.getCategories('movie'),
         }).catch(err => console.warn('Falha leve ao baixar categorias de Filmes:', err));
+        await queryClient.fetchQuery({
+          queryKey: ['streams', 'movie', 'all'],
+          queryFn: () => xtreamService.getStreams('movie'),
+        }).catch(err => console.warn('Falha leve ao baixar Filmes:', err));
 
         setStatus('Mapeando séries...');
-        setProgress(75);
+        setProgress(70);
         await queryClient.fetchQuery({
           queryKey: ['categories', 'series'],
           queryFn: () => xtreamService.getCategories('series'),
         }).catch(err => console.warn('Falha leve ao baixar categorias de Séries:', err));
+        await queryClient.fetchQuery({
+          queryKey: ['streams', 'series', 'all'],
+          queryFn: () => xtreamService.getStreams('series'),
+        }).catch(err => console.warn('Falha leve ao baixar Séries:', err));
 
         setStatus('Finalizando...');
         setProgress(90);

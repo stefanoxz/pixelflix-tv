@@ -29,13 +29,11 @@ export const LiveExplorer = ({ onBack }: LiveExplorerProps) => {
     ],
   });
 
-  // Fetch Channels
+  // Fetch Channels (100% Sync strategy - relies on cache from SyncScreen)
   const { data: allChannels = [] } = useQuery({
-    queryKey: ['streams', 'live', selectedCategory === 'Favoritos' ? 'all' : selectedCategory],
-    queryFn: () => {
-      const catId = (selectedCategory === 'Todos' || selectedCategory === 'Favoritos') ? undefined : selectedCategory;
-      return xtreamService.getStreams('live', catId);
-    },
+    queryKey: ['streams', 'live', 'all'],
+    queryFn: () => xtreamService.getStreams('live'),
+    staleTime: Infinity, // keep in cache indefinitely
     select: (data) => {
       if (!Array.isArray(data)) return [];
       return data.map(s => ({
@@ -67,12 +65,14 @@ export const LiveExplorer = ({ onBack }: LiveExplorerProps) => {
     enabled: !!selectedChannel,
   });
 
-  // Filter channels based on selected category (e.g. Favoritos)
+  // Filter channels locally based on selected category (e.g. Favoritos)
   const filteredChannels = useMemo(() => {
     let list = allChannels;
     if (selectedCategory === 'Favoritos') {
       const favIds = favoritesData.map((f: any) => String(f.stream_id));
       list = allChannels.filter(item => favIds.includes(item.id));
+    } else if (selectedCategory !== 'Todos') {
+      list = allChannels.filter(item => String(item.category_id) === selectedCategory);
     }
     return list;
   }, [allChannels, selectedCategory, favoritesData]);

@@ -34,12 +34,11 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
     ],
   });
 
+  // Fetch All Items (100% Sync strategy - relies on cache from SyncScreen)
   const { data: items = [], isLoading: itemsLoading, error, refetch } = useQuery({
-    queryKey: ['streams', type, selectedCategory === 'Favoritos' ? 'all' : selectedCategory],
-    queryFn: () => {
-      const catId = (selectedCategory === 'Todos' || selectedCategory === 'Favoritos') ? undefined : selectedCategory;
-      return xtreamService.getStreams(type, catId);
-    },
+    queryKey: ['streams', type, 'all'],
+    queryFn: () => xtreamService.getStreams(type),
+    staleTime: Infinity, // keep in cache indefinitely
     select: (data) => {
       if (!Array.isArray(data)) return [];
       return data.map(s => ({
@@ -66,12 +65,16 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
     },
   });
 
+  // Filter items locally based on selected category (e.g. Favoritos)
   const filteredItems = useMemo(() => {
     let list = items;
     if (selectedCategory === 'Favoritos') {
       const favIds = favorites.map((f: any) => String(f.stream_id));
       list = items.filter(item => favIds.includes(item.id));
+    } else if (selectedCategory !== 'Todos') {
+      list = items.filter(item => String(item.category_id) === selectedCategory);
     }
+    
     if (searchQuery) {
       list = list.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
     }
