@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Loader2, AlertCircle, Search } from 'lucide-react';
+import { Loader2, AlertCircle, Search, ChevronLeft } from 'lucide-react';
 import { xtreamService } from '../../services/xtream';
 import { contentActions } from '../../services/content';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
