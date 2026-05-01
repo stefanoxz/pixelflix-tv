@@ -150,6 +150,6 @@ export const Dashboard = memo(({ onLogout, onNavigate, profile }: DashboardProps
       </footer>
     </div>
   );
-};
+});
 
 // Redundant local ArrowRight removed, using lucide-react version
