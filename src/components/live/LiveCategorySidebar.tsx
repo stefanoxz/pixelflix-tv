@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Tv, Star } from 'lucide-react';
+import { Tv, Star, ChevronRight } from 'lucide-react';
 
 interface LiveCategorySidebarProps {
   categories: any[];
@@ -9,28 +9,36 @@ interface LiveCategorySidebarProps {
 
 export const LiveCategorySidebar = memo(({ categories, selectedCategory, onSelectCategory }: LiveCategorySidebarProps) => {
   return (
-    <aside className="w-64 flex flex-col border-r border-white/5 bg-[#0A0A0A] p-4 gap-1.5 overflow-y-auto custom-scrollbar flex-shrink-0">
+    <aside className="w-72 flex flex-col border-r border-white/5 bg-[#121212] p-4 gap-2 overflow-y-auto custom-scrollbar flex-shrink-0">
       {categories.map(cat => {
         const catId = String(cat.category_id);
         const isActive = selectedCategory === catId;
-        const isFav = cat.category_name.includes('Favoritos');
+        const isFav = cat.category_name.toLowerCase().includes('favoritos');
         
         return (
           <button
             key={catId}
             onClick={() => onSelectCategory(catId)}
-            className={`w-full flex items-center gap-3 text-left px-4 py-3.5 rounded-xl transition-all border group ${
+            className={`w-full group flex items-center justify-between px-4 py-4 rounded-xl transition-all relative overflow-hidden border ${
               isActive
-              ? 'bg-purple-600/10 text-white shadow-[0_0_20px_rgba(168,85,247,0.1)] border-purple-500/30' 
-              : 'text-zinc-500 bg-transparent border-transparent hover:bg-white/5 hover:text-zinc-300'
+              ? 'bg-gradient-to-r from-purple-900/40 to-transparent border-purple-500/30 text-white' 
+              : 'bg-[#1A1A1A]/50 border-transparent text-zinc-500 hover:bg-[#1A1A1A] hover:text-zinc-300'
             }`}
           >
-            <div className={`p-1.5 rounded-lg transition-colors ${isActive ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-zinc-600 group-hover:text-zinc-400'}`}>
-              {isFav ? <Star size={14} /> : <Tv size={14} />}
+            {isActive && (
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 shadow-[0_0_15px_#3b82f6]" />
+            )}
+
+            <div className="flex items-center gap-4">
+              <div className={`transition-colors ${isActive ? 'text-purple-400' : 'text-zinc-600 group-hover:text-zinc-400'}`}>
+                {isFav ? <Star size={18} /> : <Tv size={18} />}
+              </div>
+              <span className={`text-[13px] font-bold tracking-wide truncate transition-colors ${isActive ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-300'}`}>
+                {cat.category_name.replace('★', '').trim()}
+              </span>
             </div>
-            <span className={`uppercase tracking-[0.2em] text-[9px] font-black truncate transition-colors ${isActive ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'}`}>
-              {cat.category_name.replace('★', '').trim()}
-            </span>
+
+            <ChevronRight size={14} className={`transition-all ${isActive ? 'text-blue-400 opacity-100' : 'opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5'}`} />
           </button>
         );
       })}

@@ -6,11 +6,11 @@
 
 @layer base {
   :root {
-    --background: 260 15% 4%;
+    --background: 0 0% 7%; /* #121212 */
     --foreground: 0 0% 98%;
-    --card: 260 15% 6%;
+    --card: 0 0% 10%; /* #1A1A1A */
     --card-foreground: 0 0% 98%;
-    --popover: 260 15% 6%;
+    --popover: 0 0% 10%;
     --popover-foreground: 0 0% 98%;
     --primary: 263.4 70% 50.4%;
     --primary-foreground: 210 40% 98%;
@@ -31,10 +31,6 @@
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/30 selection:text-primary-foreground;
     font-family: 'Outfit', sans-serif;
-    background-image: 
-      radial-gradient(at 0% 0%, rgba(124, 58, 237, 0.08) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.08) 0px, transparent 50%);
-    background-attachment: fixed;
   }
 }
 
