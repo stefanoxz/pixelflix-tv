@@ -36,15 +36,15 @@ export const HomeNav = ({ onNavigate, onLogout }: HomeNavProps) => {
       </div>
 
       <nav className="flex-1 flex items-center justify-center">
-        <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-full px-2 py-1.5 backdrop-blur-md overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-full px-2 py-1.5 backdrop-blur-md overflow-x-auto no-scrollbar shadow-inner">
           {navItems.map((item) => (
             <button
               key={item.id}
               onClick={() => handleClick(item.id)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-zinc-300 hover:text-white hover:bg-white/10 transition-all text-xs font-semibold whitespace-nowrap"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 transition-all text-[11px] font-bold whitespace-nowrap active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
-              <item.icon size={14} />
-              <span className="hidden sm:inline">{item.label}</span>
+              <item.icon size={14} className="opacity-70" />
+              <span className="hidden lg:inline tracking-wide">{item.label}</span>
             </button>
           ))}
         </div>
