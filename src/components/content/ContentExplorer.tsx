@@ -203,8 +203,8 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
                 <div key={i} className="animate-pulse flex flex-col">
                   {viewMode === 'grid' ? (
                     <>
-                      <div className="aspect-[2/3] rounded-[40px] bg-zinc-900 border border-white/5" />
-                      <div className="mt-6 px-2 space-y-2">
+                      <div className="aspect-[2/3] rounded-2xl bg-zinc-900 border border-white/5" />
+                      <div className="mt-3 px-1 space-y-2">
                         <div className="h-4 bg-zinc-900 rounded-md w-3/4" />
                         <div className="h-3 bg-zinc-900 rounded-md w-1/4" />
                       </div>
