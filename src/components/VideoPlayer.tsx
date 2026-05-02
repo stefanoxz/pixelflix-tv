@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState, memo } from 'react';
+import videojs from 'video.js';
+import 'video.js/dist/video-js.css';
 import vibeLogo from '@/assets/vibe-logo.png';
 import { Volume2, Sun, Loader2 } from 'lucide-react';
 
@@ -21,14 +23,8 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
     let isMounted = true;
 
     if (!playerRef.current) {
-      const initPlayer = async () => {
-        // Dynamically import video.js and its CSS
-        const videojsModule = await import('video.js');
-        await import('video.js/dist/video-js.css');
-        
         if (!isMounted) return;
 
-        const videojs = videojsModule.default;
         const videoElement = document.createElement("video-js");
         videoElement.classList.add('vjs-big-play-centered');
         videoElement.classList.add('vjs-theme-city');
@@ -79,8 +75,6 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
             if (onError) onError(error);
           });
         }
-      };
-      initPlayer();
     } else {
       const player = playerRef.current;
       const currentSrc = player.src();

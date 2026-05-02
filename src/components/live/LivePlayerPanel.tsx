@@ -55,10 +55,12 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
       setIsPlaying(false);
       setPlayerError(null);
       setCurrentFormat(settingsService.getSettings().playerType);
+      
+      // Much faster transition to player
       const timer = setTimeout(() => {
         setIsLoading(false);
         setIsPlaying(true);
-      }, 2000);
+      }, 400); 
       return () => clearTimeout(timer);
     }
   }, [channel?.id]);
@@ -69,10 +71,11 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
     setPlayerError(null);
     setIsLoading(true);
     setIsPlaying(false);
+    
     setTimeout(() => {
       setIsLoading(false);
       setIsPlaying(true);
-    }, 1000);
+    }, 300);
   };
 
   const currentProgram = useMemo(() => {
