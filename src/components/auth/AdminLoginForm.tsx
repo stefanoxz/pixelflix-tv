@@ -1,4 +1,5 @@
-import { ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
+import { ShieldCheck, Eye, EyeOff } from 'lucide-react';
 
 interface AdminLoginFormProps {
   adminPassword: string;
@@ -6,21 +7,30 @@ interface AdminLoginFormProps {
 }
 
 export const AdminLoginForm = ({ adminPassword, setAdminPassword }: AdminLoginFormProps) => {
+  const [showPassword, setShowPassword] = useState(false);
+
   return (
     <div className="space-y-2">
-      <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Senha de Admin</label>
+      <label className="text-[11px] font-black text-zinc-400 uppercase tracking-[0.3em] ml-1">Senha Master</label>
       <div className="relative group">
-        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none transition-colors group-focus-within:text-white text-zinc-600">
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-purple-400 transition-colors">
           <ShieldCheck size={18} />
         </div>
         <input
-          type="password"
+          type={showPassword ? 'text' : 'password'}
           autoFocus
           value={adminPassword}
           onChange={(e) => setAdminPassword(e.target.value)}
-          className="w-full bg-white/5 border border-white/5 text-white pl-12 pr-4 py-4 rounded-2xl focus:outline-none focus:bg-white/10 transition-all placeholder:text-zinc-700 font-bold"
-          placeholder="Sua senha master"
+          className="w-full bg-white/[0.05] border border-white/10 rounded-2xl py-4 pl-12 pr-12 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-600/30 focus:border-purple-500/50 transition-all font-bold text-sm"
+          placeholder="Senha administrativa"
         />
+        <button
+          type="button"
+          onClick={() => setShowPassword(!showPassword)}
+          className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors"
+        >
+          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
       </div>
     </div>
   );
