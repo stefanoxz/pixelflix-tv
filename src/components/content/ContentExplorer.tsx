@@ -198,7 +198,7 @@ export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
           />
           <main className="flex-1 overflow-hidden p-6 md:p-12 relative">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-zinc-900/40 via-black to-black pointer-events-none" />
-            <div className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-5" : "space-y-6 max-w-6xl mx-auto"}>
+            <div className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 md:gap-4" : "space-y-6 max-w-6xl mx-auto"}>
               {Array.from({ length: 12 }).map((_, i) => (
                 <div key={i} className="animate-pulse flex flex-col">
                   {viewMode === 'grid' ? (

@@ -13,17 +13,17 @@ interface ContentItemProps {
 export const ContentItem = memo(({ item, isFav, viewMode, onPlay, onSelect, onToggleFavorite }: ContentItemProps) => {
   if (viewMode === 'grid') {
     return (
-      <div className="group flex flex-col transition-all duration-500">
+      <div className="group flex flex-col transition-all duration-300">
         <button 
           onClick={() => onSelect(item)} 
-          className="text-left w-full focus:outline-none rounded-[16px] cursor-pointer relative aspect-[2/3] overflow-hidden bg-zinc-900 border border-white/5 shadow-[0_10px_30px_rgba(0,0,0,0.5)] group-hover:shadow-[0_20px_50px_rgba(0,0,0,0.8)] group-hover:border-white/20 transition-all duration-500"
+          className="text-left w-full focus:outline-none rounded-[14px] cursor-pointer relative aspect-[2/3] overflow-hidden bg-zinc-900 transition-all duration-300 group-hover:ring-2 group-hover:ring-purple-500/50"
         >
           <img 
             src={item.icon} 
             alt={item.name} 
             loading="lazy"
             decoding="async"
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
             onError={(e) => {
               const target = e.target as HTMLImageElement;
               target.onerror = null;
@@ -31,18 +31,18 @@ export const ContentItem = memo(({ item, isFav, viewMode, onPlay, onSelect, onTo
             }}
           />
           
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center">
-            <div className="w-12 h-12 bg-white/10 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/20 shadow-2xl">
-              <Play size={24} fill="white" className="text-white ml-1" />
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+            <div className="w-12 h-12 bg-white/10 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/20">
+              <Play size={20} fill="white" className="text-white ml-1" />
             </div>
           </div>
         </button>
         
-        <div className="mt-3.5 space-y-1 px-0.5">
-          <h4 className="text-[14px] font-bold text-white tracking-tight line-clamp-1">
+        <div className="mt-2.5 px-0.5 space-y-0.5">
+          <h4 className="text-xs md:text-sm font-bold text-white transition-colors tracking-tight line-clamp-1">
             {item.name}
           </h4>
-          <span className="text-[11px] text-zinc-500 font-semibold block">{item.year}</span>
+          <span className="text-[10px] md:text-xs text-zinc-500 font-medium block">{item.year}</span>
         </div>
       </div>
     );
