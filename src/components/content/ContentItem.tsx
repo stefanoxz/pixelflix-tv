@@ -13,17 +13,17 @@ interface ContentItemProps {
 export const ContentItem = memo(({ item, isFav, viewMode, onPlay, onSelect, onToggleFavorite }: ContentItemProps) => {
   if (viewMode === 'grid') {
     return (
-      <div className="group flex flex-col transition-all duration-500 hover:scale-[1.02]">
+      <div className="group flex flex-col transition-all duration-300">
         <button 
           onClick={() => onSelect(item)} 
-          className="text-left w-full focus:outline-none rounded-2xl cursor-pointer relative aspect-[2/3] overflow-hidden bg-zinc-900 border border-white/5 shadow-lg group-hover:shadow-2xl group-hover:border-white/10 transition-all duration-500"
+          className="text-left w-full focus:outline-none rounded-[14px] cursor-pointer relative aspect-[2/3] overflow-hidden bg-zinc-900 border border-white/5 shadow-2xl group-hover:ring-2 group-hover:ring-purple-500/50 transition-all duration-300"
         >
           <img 
             src={item.icon} 
             alt={item.name} 
             loading="lazy"
             decoding="async"
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
             onError={(e) => {
               const target = e.target as HTMLImageElement;
               target.onerror = null;
@@ -31,26 +31,18 @@ export const ContentItem = memo(({ item, isFav, viewMode, onPlay, onSelect, onTo
             }}
           />
           
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/20">
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+            <div className="w-12 h-12 bg-white/10 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/20">
               <Play size={20} fill="white" className="text-white ml-1" />
             </div>
           </div>
         </button>
         
-        <div className="mt-3 px-1 space-y-0.5">
-          <h4 className="text-[13px] font-bold text-white transition-colors tracking-tight line-clamp-1 group-hover:text-purple-400">
+        <div className="mt-3 space-y-0.5">
+          <h4 className="text-[14px] font-bold text-white transition-colors tracking-tight line-clamp-1">
             {item.name}
           </h4>
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-zinc-500 font-medium">{item.year}</span>
-            <button 
-              onClick={(e) => { e.stopPropagation(); onToggleFavorite(item); }} 
-              className={`p-1.5 rounded-lg transition-all ${isFav ? 'text-red-500' : 'text-zinc-600 hover:text-white'}`}
-            >
-              <Heart size={14} fill={isFav ? 'currentColor' : 'none'} strokeWidth={2.5} />
-            </button>
-          </div>
+          <span className="text-[12px] text-zinc-500 font-medium block">{item.year}</span>
         </div>
       </div>
     );
