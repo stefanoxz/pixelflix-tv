@@ -123,36 +123,43 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
     }
   };
 
-
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4 font-sans selection:bg-purple-500/30 overflow-hidden relative">
+    <div className="min-h-screen bg-[#050308] text-white flex flex-col items-center justify-center p-4 font-sans selection:bg-purple-500/30 overflow-hidden relative">
+      {/* Cinematic Background Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-purple-600/10 blur-[120px] rounded-full animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-600/10 blur-[120px] rounded-full animate-pulse" style={{ animationDelay: '2s' }} />
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03]" />
+        <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-purple-600/10 blur-[160px] rounded-full animate-pulse opacity-40" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[70%] h-[70%] bg-blue-600/10 blur-[160px] rounded-full animate-pulse opacity-30" style={{ animationDelay: '3s' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-b from-transparent via-purple-900/5 to-transparent opacity-50" />
       </div>
 
-      <main className="relative z-10 w-full max-w-[440px]">
-        <div className="bg-[#0A0A0A]/40 border border-white/10 rounded-[48px] p-8 md:p-14 shadow-[0_0_100px_rgba(0,0,0,0.5)] backdrop-blur-3xl ring-1 ring-white/5">
-          <div className="flex flex-col items-center mb-12">
-            <div className="mb-6 flex flex-col items-center">
+      <main className="relative z-10 w-full max-w-[460px] animate-in fade-in zoom-in duration-1000">
+        <div className="bg-[#08060D]/60 border border-white/5 rounded-[56px] p-10 md:p-16 shadow-[0_0_120px_rgba(0,0,0,0.8)] backdrop-blur-[40px] ring-1 ring-white/5 relative overflow-hidden">
+          {/* Subtle reflection effect */}
+          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+          
+          <div className="flex flex-col items-center mb-14 relative z-10">
+            <div className="mb-8 flex flex-col items-center">
               <div className="relative group">
-                <div className="absolute inset-0 bg-purple-600/30 blur-3xl rounded-full opacity-60 group-hover:opacity-100 transition-opacity duration-700" />
+                <div className="absolute inset-0 bg-purple-600/20 blur-[40px] rounded-full opacity-40 group-hover:opacity-80 transition-opacity duration-1000" />
                 <img 
                   src={vibeLogo} 
                   alt="Vibe Logo" 
-                  className="relative w-56 h-auto object-contain drop-shadow-[0_0_30px_rgba(168,85,247,0.4)]"
+                  className="relative w-64 h-auto object-contain drop-shadow-[0_0_40px_rgba(168,85,247,0.3)] transition-transform duration-700 group-hover:scale-105"
                 />
               </div>
-              <p className="mt-2 text-[10px] font-black tracking-[0.5em] text-purple-400/80 uppercase">Premium WebPlayer</p>
+              <div className="flex items-center gap-4 mt-4">
+                <div className="h-[1px] w-8 bg-gradient-to-r from-transparent to-purple-500/50" />
+                <p className="text-[10px] font-black tracking-[0.6em] text-purple-400 uppercase">Premium WebPlayer</p>
+                <div className="h-[1px] w-8 bg-gradient-to-l from-transparent to-purple-500/50" />
+              </div>
             </div>
-            <div className="h-1.5 w-16 bg-gradient-to-r from-transparent via-white/40 to-transparent rounded-full" />
-            <p className="mt-6 text-[11px] font-black text-zinc-400 uppercase tracking-[0.5em] opacity-80">
-              {isAdminMode ? 'SISTEMA ADMINISTRATIVO' : 'CINEMA PARTICULAR'}
+            <p className="text-[12px] font-black text-zinc-500 uppercase tracking-[0.4em] opacity-80 mb-2">
+              {isAdminMode ? 'Acesso ao Sistema' : 'Seu Cinema Particular'}
             </p>
+            <div className="h-[2px] w-12 bg-purple-600/30 rounded-full" />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-8 relative z-10">
             {!isAdminMode ? (
               <UserLoginForm 
                 username={username}
@@ -168,42 +175,50 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
             )}
 
             {error && (
-              <p className="text-red-500 text-[10px] font-black text-center bg-red-500/10 py-3 rounded-xl border border-red-500/10 uppercase tracking-wider">
-                {error}
-              </p>
+              <div className="animate-in shake duration-500">
+                <p className="text-red-400 text-[10px] font-bold text-center bg-red-500/5 py-4 rounded-2xl border border-red-500/10 uppercase tracking-widest leading-relaxed">
+                  {error}
+                </p>
+              </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-white text-black font-black py-4 rounded-2xl hover:bg-zinc-200 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4 shadow-2xl shadow-white/5 disabled:opacity-50 disabled:scale-100 uppercase text-xs tracking-[0.2em]"
+              className="group relative w-full overflow-hidden rounded-3xl p-[1px] transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:scale-100 mt-2"
             >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-              ) : (
-                <>
-                  {isAdminMode ? 'Acessar Painel' : 'Entrar'}
-                  <ArrowRight size={18} />
-                </>
-              )}
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 opacity-80 group-hover:opacity-100 transition-opacity" />
+              <div className="relative bg-white text-black font-black py-4 rounded-[23px] flex items-center justify-center gap-3 transition-colors group-hover:bg-transparent group-hover:text-white uppercase text-[11px] tracking-[0.3em]">
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-current/20 border-t-current rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span>{isAdminMode ? 'Sincronizar' : 'Iniciar Sessão'}</span>
+                    <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
+                  </>
+                )}
+              </div>
             </button>
           </form>
 
-          <div className="mt-10 pt-6 border-t border-white/5 flex justify-center">
+          <div className="mt-12 pt-8 border-t border-white/5 flex justify-center relative z-10">
             <button 
               onClick={() => {
                 setIsAdminMode(!isAdminMode);
                 setError('');
               }}
-              className="text-[10px] font-black text-zinc-600 hover:text-zinc-400 transition-colors uppercase tracking-[0.3em]"
+              className="text-[10px] font-black text-zinc-600 hover:text-purple-400 transition-all uppercase tracking-[0.4em] hover:tracking-[0.5em]"
             >
-              {isAdminMode ? 'Voltar para o Player' : 'Acesso Restrito'}
+              {isAdminMode ? 'Voltar ao Player' : 'Gerenciamento Administrativo'}
             </button>
           </div>
         </div>
 
-        <div className="mt-8 text-center">
-          <p className="text-[10px] font-black text-zinc-700 tracking-[0.5em] uppercase">V. 1.0.1</p>
+        <div className="mt-12 text-center relative z-10">
+          <div className="inline-flex items-center gap-3 px-4 py-2 bg-white/5 rounded-full border border-white/5 backdrop-blur-md">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_#22c55e]" />
+            <p className="text-[9px] font-black text-zinc-500 tracking-[0.4em] uppercase">V. 1.0.1 &bull; Servidores Ativos</p>
+          </div>
         </div>
       </main>
     </div>
