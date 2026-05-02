@@ -127,25 +127,18 @@ export const LiveExplorer = ({ onBack }: LiveExplorerProps) => {
           
           <div className="h-10 w-[1px] bg-white/10" />
 
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-6">
             <div className="relative">
-              <div className="absolute inset-0 bg-purple-600/20 blur-xl rounded-full" />
+              <div className="absolute inset-0 bg-purple-600/10 blur-2xl rounded-full" />
               <img 
                 src="/src/assets/vibe-logo.png" 
                 alt="Logo" 
-                className="h-10 w-auto relative z-10 drop-shadow-[0_0_10px_rgba(168,85,247,0.3)]" 
+                className="h-14 w-auto relative z-10 drop-shadow-[0_0_20px_rgba(168,85,247,0.2)]" 
               />
             </div>
             
             <div className="flex flex-col">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[9px] font-black tracking-[0.3em] text-purple-500 uppercase">Live Streaming</span>
-                <div className="flex items-center gap-1 px-1.5 py-0.5 bg-red-500/10 border border-red-500/20 rounded-md">
-                   <div className="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
-                   <span className="text-[7px] font-black text-red-500 uppercase tracking-tighter">Sinal Ativo</span>
-                </div>
-              </div>
-              <h2 className="text-xl font-black tracking-widest uppercase text-white text-glow leading-none">Canais ao Vivo</h2>
+              <h2 className="text-2xl font-black tracking-widest uppercase text-white text-glow leading-none">Canais ao Vivo</h2>
             </div>
           </div>
         </div>
