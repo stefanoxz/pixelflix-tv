@@ -141,9 +141,9 @@ export const SettingsMenu = ({ onBack, onLogout }: SettingsMenuProps) => {
         </nav>
 
         <div className="space-y-2 mt-auto pt-6 border-t border-white/5">
-          <button onClick={() => window.location.reload()} className="w-full flex items-center gap-4 p-4 rounded-2xl text-zinc-500 hover:bg-white/5 hover:text-white transition-all">
+          <button onClick={() => onNavigate('sync')} className="w-full flex items-center gap-4 p-4 rounded-2xl text-zinc-500 hover:bg-white/5 hover:text-white transition-all">
             <RefreshCw size={20} />
-            <span className="font-bold tracking-wide">Recarregar</span>
+            <span className="font-bold tracking-wide">Sincronizar</span>
           </button>
           <button onClick={onLogout} className="w-full flex items-center gap-4 p-4 rounded-2xl text-zinc-500 hover:bg-red-500/10 hover:text-red-500 transition-all">
             <LogOut size={20} />

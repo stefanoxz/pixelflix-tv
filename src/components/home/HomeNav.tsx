@@ -12,13 +12,12 @@ const navItems = [
   { id: 'series', label: 'Séries', icon: PlayCircle },
   { id: 'events', label: 'Eventos', icon: Calendar },
   { id: 'search', label: 'Buscar', icon: Search },
-  { id: 'reload', label: 'Recarregar', icon: RefreshCcw },
+  { id: 'sync', label: 'Sincronizar', icon: RefreshCcw },
   { id: 'settings', label: 'Configurações', icon: Settings },
 ];
 
 export const HomeNav = ({ onNavigate, onLogout }: HomeNavProps) => {
   const handleClick = (id: string) => {
-    if (id === 'reload') return window.location.reload();
     if (id === 'search') return;
     if (id === 'events') return;
     onNavigate(id);

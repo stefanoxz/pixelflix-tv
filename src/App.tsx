@@ -106,6 +106,7 @@ function App() {
           <SettingsMenu 
             onBack={() => setCurrentView('dashboard')} 
             onLogout={handleLogout}
+            onNavigate={(view) => handleNavigate(view as View)}
           />
         )}
       </Suspense>
