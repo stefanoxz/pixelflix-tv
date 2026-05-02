@@ -5,6 +5,7 @@ interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   isLocal?: boolean;
+  onReset?: () => void;
 }
 
 interface State {
@@ -28,6 +29,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   private handleReset = () => {
+    if (this.props.onReset) {
+      this.props.onReset();
+    }
     this.setState({ hasError: false, error: null });
   };
 
@@ -71,15 +75,15 @@ export class ErrorBoundary extends Component<Props, State> {
           
           <p className="text-zinc-500 max-w-lg mb-10 leading-relaxed">
             Um erro inesperado aconteceu e derrubou a aplicação. Nossa equipe de auto-reparo já registrou o problema. 
-            Você pode tentar recarregar a tela atual ou voltar para a tela inicial.
+            Você pode tentar sincronizar os dados ou voltar para a tela inicial.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center gap-4">
             <button 
-              onClick={() => window.location.reload()}
+              onClick={this.handleReset}
               className="px-8 py-4 bg-white text-black rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-zinc-200 transition-all flex items-center gap-3 w-full sm:w-auto justify-center"
             >
-              <RefreshCw size={16} /> Recarregar Página
+              <RefreshCw size={16} /> Sincronizar Agora
             </button>
             <button 
               onClick={this.handleGoHome}

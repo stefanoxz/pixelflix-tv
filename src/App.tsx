@@ -56,7 +56,7 @@ function App() {
   };
 
   return (
-    <ErrorBoundary>
+    <ErrorBoundary onReset={() => setCurrentView('sync')}>
       <Suspense fallback={<LoadingView />}>
         {currentView === 'login' && (
           <Login 
