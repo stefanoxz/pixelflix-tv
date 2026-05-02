@@ -4,8 +4,8 @@ import {
   Volume2, 
   VolumeX, 
   Maximize, 
-  Zap, 
-  Play
+  Play,
+  Pause
 } from 'lucide-react';
 import { VideoPlayer } from './VideoPlayer';
 import { ErrorBoundary } from './layout/ErrorBoundary';
