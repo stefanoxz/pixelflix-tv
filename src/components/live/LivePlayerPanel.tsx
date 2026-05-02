@@ -196,25 +196,57 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
         )}
 
         {isLoading ? (
-          <div className="relative z-10 flex flex-col items-center gap-4">
-            <Loader2 className="w-10 h-10 text-white animate-spin opacity-80" />
-            <span className="text-[10px] font-black tracking-[0.3em] text-white uppercase drop-shadow-md">Conectando...</span>
+          <div className="relative z-10 flex flex-col items-center gap-6">
+            <div className="relative">
+              <div className="absolute inset-0 bg-purple-600/30 blur-2xl rounded-full animate-pulse" />
+              <Loader2 className="w-12 h-12 text-white animate-spin relative z-10" />
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[11px] font-black tracking-[0.4em] text-white uppercase drop-shadow-lg">Sincronizando</span>
+              <div className="flex gap-1">
+                <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                <div className="w-1 h-1 bg-purple-500 rounded-full animate-bounce" />
+              </div>
+            </div>
           </div>
         ) : playerError ? (
-          <div className="relative z-10 flex flex-col items-center gap-6 p-10 text-center max-w-md">
-            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center border border-red-500/20 mb-2">
-              <Play size={32} className="text-red-500 opacity-50" />
+          <div className="relative z-10 flex flex-col items-center gap-8 p-12 text-center max-w-lg animate-in fade-in zoom-in duration-500">
+            <div className="relative">
+              <div className="absolute inset-0 bg-red-600/20 blur-3xl rounded-full animate-pulse" />
+              <div className="w-24 h-24 bg-[#08060D] rounded-full flex items-center justify-center border border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.2)] relative z-10">
+                <Play size={40} className="text-red-500 fill-red-500/20 translate-x-1" />
+              </div>
             </div>
-            <div>
-              <h3 className="text-xl font-bold text-white mb-2">Erro de Reprodução</h3>
-              <p className="text-sm text-zinc-500 leading-relaxed mb-6">
-                Não foi possível carregar este canal no formato <span className="text-purple-400 font-bold uppercase">{currentFormat}</span>. Tente alternar o formato abaixo.
+            <div className="space-y-3">
+              <h3 className="text-2xl font-black text-white tracking-tight">Falha na Reprodução</h3>
+              <p className="text-sm text-zinc-400 leading-relaxed max-w-[320px] mx-auto">
+                Este canal não respondeu no formato <span className="text-purple-400 font-bold uppercase">{currentFormat}</span>. Deseja tentar outro formato ou recarregar?
               </p>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
               <button 
                 onClick={toggleFormat}
-                className="px-8 py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-purple-500/20 active:scale-95"
+                className="group relative px-8 py-4 overflow-hidden rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] w-full sm:w-auto"
               >
-                Alternar para {currentFormat === 'm3u8' ? 'MPEGTS (TS)' : 'HLS (M3U8)'}
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 opacity-90 group-hover:opacity-100" />
+                <span className="relative text-white font-black text-[10px] uppercase tracking-[0.2em]">
+                  Alternar para {currentFormat === 'm3u8' ? 'TS' : 'HLS'}
+                </span>
+              </button>
+              <button 
+                onClick={() => {
+                  setPlayerError(null);
+                  setIsLoading(true);
+                  setIsPlaying(false);
+                  setTimeout(() => {
+                    setIsLoading(false);
+                    setIsPlaying(true);
+                  }, 1000);
+                }}
+                className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all w-full sm:w-auto"
+              >
+                Tentar Novamente
               </button>
             </div>
           </div>
