@@ -180,18 +180,17 @@ export class XtreamService {
     return `${baseUrl}/${prefix}${this.credentials.username}/${this.credentials.password}/${streamId}.${ext}`;
   }
 
-  async getShortEPG(streamId: string): Promise<any> {
+  async getShortEPG(streamId: string): Promise<any[]> {
     try {
-      const data = await this.fetchAction('get_short_epg', { stream_id: streamId, limit: '1' });
+      const data = await this.fetchAction('get_short_epg', { stream_id: streamId, limit: '10' });
       
-      // Typical short EPG response contains "epg_listings" array
-      if (data && data.epg_listings && data.epg_listings.length > 0) {
-        return data.epg_listings[0];
+      if (data && data.epg_listings && Array.isArray(data.epg_listings)) {
+        return data.epg_listings;
       }
-      return null;
+      return [];
     } catch (err) {
       console.warn(`Error fetching EPG for stream ${streamId}:`, err);
-      return null;
+      return [];
     }
   }
 }
