@@ -3,6 +3,7 @@ import { Clock, Tv, Loader2 } from 'lucide-react';
 import { PremiumPlayer } from '../PremiumPlayer';
 import { ErrorBoundary } from '../layout/ErrorBoundary';
 import { xtreamService } from '../../services/xtream';
+import { settingsService } from '../../services/settingsService';
 
 interface LivePlayerPanelProps {
   channel: any | null;
