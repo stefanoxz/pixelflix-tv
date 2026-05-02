@@ -78,10 +78,27 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
     return Math.min(Math.max(percentage, 0), 100);
   }, [currentProgram]);
 
-  const formatTime = (timeStr: string) => {
-    if (!timeStr) return '';
-    const match = timeStr.match(/\d{2}:\d{2}/);
-    return match ? match[0] : timeStr;
+  const formatTime = (time: any) => {
+    if (!time) return '00:00';
+    
+    // Handle Unix Timestamp (seconds)
+    if (typeof time === 'number' || (!isNaN(Number(time)) && String(time).length >= 10)) {
+      const date = new Date(Number(time) * 1000);
+      return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Handle String like "2024-05-01 22:00:00"
+    if (typeof time === 'string') {
+      const match = time.match(/\d{2}:\d{2}/);
+      if (match) return match[0];
+      
+      const date = new Date(time);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      }
+    }
+    
+    return String(time);
   };
 
   const decodeBase64 = (str: string) => {
