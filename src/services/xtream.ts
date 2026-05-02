@@ -98,7 +98,13 @@ export class XtreamService {
     for (const getProxyUrl of proxies) {
       try {
         const proxyUrl = getProxyUrl(url);
-        const response = await this.fetchWithTimeout(proxyUrl, timeout);
+        let response = await this.fetchWithTimeout(proxyUrl, timeout);
+
+        // Fallback to https if http fails
+        if (!response.ok && url.startsWith('http://')) {
+          const httpsUrl = url.replace('http://', 'https://');
+          response = await this.fetchWithTimeout(getProxyUrl(httpsUrl), timeout);
+        }
 
         if (!response.ok) continue;
 

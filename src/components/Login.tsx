@@ -157,6 +157,8 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
               />
             ) : (
               <AdminLoginForm 
+                dnsUrl={dnsUrl}
+                setDnsUrl={setDnsUrl}
                 adminPassword={adminPassword}
                 setAdminPassword={setAdminPassword}
               />
