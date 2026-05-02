@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Clock, Zap, Tv, Loader2 } from 'lucide-react';
+import { Clock, Tv, Loader2 } from 'lucide-react';
 import { PremiumPlayer } from '../PremiumPlayer';
 import { ErrorBoundary } from '../layout/ErrorBoundary';
 import { xtreamService } from '../../services/xtream';
@@ -46,10 +46,6 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
   const progressPercentage = useMemo(() => {
     if (!epg || !epg.start || !epg.end) return 0;
     try {
-      // epg.start and epg.end are typically timestamp strings in "YYYY-MM-DD HH:mm:ss" format or base64.
-      // Xtream API usually returns epg.start as string like "2024-05-01 00:25:00" or similar, or epoch.
-      // For this UI, we will just simulate a nice progress or try to parse.
-      // Let's assume the epg has epg_start and epg_end or we fake it for the visuals
       return 74; // Static for now as requested by the visual reference
     } catch {
       return 50;
@@ -58,7 +54,6 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
 
   const formatTime = (timeStr: string) => {
     if (!timeStr) return '';
-    // if it's a full date string, extract time
     const match = timeStr.match(/\d{2}:\d{2}/);
     return match ? match[0] : timeStr;
   };
@@ -179,7 +174,7 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
             />
           </div>
         </div>
-      </div>     </div>
+      </div>
     </div>
   );
 };
