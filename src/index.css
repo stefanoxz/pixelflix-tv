@@ -104,6 +104,19 @@
   @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
 }
 
+.custom-scrollbar-horizontal::-webkit-scrollbar {
+  height: 3px;
+}
+
+.custom-scrollbar-horizontal::-webkit-scrollbar-track {
+  @apply bg-white/5 rounded-full;
+  margin: 0 40px;
+}
+
+.custom-scrollbar-horizontal::-webkit-scrollbar-thumb {
+  @apply bg-purple-600/40 rounded-full hover:bg-purple-500 transition-colors;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }

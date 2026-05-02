@@ -252,23 +252,25 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
               </div>
             </div>
 
-            <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar-horizontal -mx-1 px-1">
+            <div className="flex gap-5 overflow-x-auto pb-6 custom-scrollbar-horizontal -mx-2 px-2 scroll-smooth">
               {futurePrograms.length > 0 ? futurePrograms.map((prog, idx) => (
                 <div 
                   key={idx} 
-                  className="min-w-[240px] p-5 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] hover:border-white/10 transition-all group cursor-default"
+                  className="min-w-[280px] p-6 rounded-[32px] bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-purple-500/20 transition-all duration-500 group cursor-default hover:-translate-y-1"
                 >
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[10px] font-black text-purple-500 tracking-widest uppercase">
-                      {prog.start ? formatTime(prog.start) : '00:00'}
-                    </span>
-                    <div className="w-1.5 h-1.5 rounded-full bg-white/10 group-hover:bg-purple-500/50 transition-colors" />
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="px-3 py-1 bg-purple-600/10 border border-purple-500/20 rounded-xl">
+                      <span className="text-[10px] font-black text-purple-400 tracking-widest uppercase">
+                        {prog.start ? formatTime(prog.start) : '00:00'}
+                      </span>
+                    </div>
+                    <div className="w-2 h-2 rounded-full bg-white/10 group-hover:bg-purple-500 group-hover:shadow-[0_0_10px_#a855f7] transition-all duration-500" />
                   </div>
-                  <h5 className="text-[13px] font-bold text-white mb-1.5 line-clamp-1 group-hover:text-purple-300 transition-colors">
+                  <h5 className="text-sm font-black text-white mb-2 line-clamp-1 group-hover:text-purple-300 transition-colors duration-300">
                     {prog.title ? String(decodeBase64(prog.title)) : 'Sem Título'}
                   </h5>
-                  <p className="text-[10px] text-zinc-500 line-clamp-2 leading-relaxed opacity-60 group-hover:opacity-100 transition-opacity">
-                    {prog.description ? String(decodeBase64(prog.description)) : 'Nenhuma descrição disponível.'}
+                  <p className="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed opacity-60 group-hover:opacity-100 transition-opacity duration-500 font-medium">
+                    {prog.description ? String(decodeBase64(prog.description)) : 'Acompanhe a continuação deste canal logo após o programa atual.'}
                   </p>
                 </div>
               )) : (
