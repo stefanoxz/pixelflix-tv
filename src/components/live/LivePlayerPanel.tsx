@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Clock, Tv, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Clock, Tv, Loader2, Play } from 'lucide-react';
 import { PremiumPlayer } from '../PremiumPlayer';
 import { ErrorBoundary } from '../layout/ErrorBoundary';
 import { xtreamService } from '../../services/xtream';
@@ -15,6 +15,39 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [playerError, setPlayerError] = useState<any>(null);
   const [currentFormat, setCurrentFormat] = useState<'m3u8' | 'ts'>(settingsService.getSettings().playerType);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft += e.deltaY;
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!scrollRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - scrollRef.current.offsetLeft);
+    setScrollLeft(scrollRef.current.scrollLeft);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !scrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const walk = (x - startX) * 2; // Scroll speed
+    scrollRef.current.scrollLeft = scrollLeft - walk;
+  };
 
   useEffect(() => {
     if (channel) {
@@ -252,7 +285,15 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
               </div>
             </div>
 
-            <div className="flex gap-5 overflow-x-auto pb-6 custom-scrollbar-horizontal -mx-2 px-2 scroll-smooth">
+            <div 
+              ref={scrollRef}
+              onWheel={handleWheel}
+              onMouseDown={handleMouseDown}
+              onMouseLeave={handleMouseLeave}
+              onMouseUp={handleMouseUp}
+              onMouseMove={handleMouseMove}
+              className={`flex gap-5 overflow-x-auto pb-6 custom-scrollbar-horizontal -mx-2 px-2 scroll-smooth select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab active:cursor-grabbing'}`}
+            >
               {futurePrograms.length > 0 ? futurePrograms.map((prog, idx) => (
                 <div 
                   key={idx} 
