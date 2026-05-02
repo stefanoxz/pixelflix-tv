@@ -132,28 +132,28 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-b from-transparent via-purple-900/5 to-transparent opacity-50" />
       </div>
 
-      <main className="relative z-10 w-full max-w-[460px] animate-in fade-in zoom-in duration-1000">
-        <div className="bg-[#08060D]/60 border border-white/5 rounded-[56px] p-10 md:p-16 shadow-[0_0_120px_rgba(0,0,0,0.8)] backdrop-blur-[40px] ring-1 ring-white/5 relative overflow-hidden">
+      <main className="relative z-10 w-full max-w-[420px] animate-in fade-in zoom-in duration-1000">
+        <div className="bg-[#08060D]/60 border border-white/5 rounded-[48px] p-8 md:p-12 shadow-[0_0_120px_rgba(0,0,0,0.8)] backdrop-blur-[40px] ring-1 ring-white/5 relative overflow-hidden">
           {/* Subtle reflection effect */}
           <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
           
-          <div className="flex flex-col items-center mb-14 relative z-10">
+          <div className="flex flex-col items-center mb-10 relative z-10">
             <div className="mb-8 flex flex-col items-center">
               <div className="relative group">
                 <div className="absolute inset-0 bg-purple-600/20 blur-[40px] rounded-full opacity-40 group-hover:opacity-80 transition-opacity duration-1000" />
                 <img 
                   src={vibeLogo} 
                   alt="Vibe Logo" 
-                  className="relative w-64 h-auto object-contain drop-shadow-[0_0_40px_rgba(168,85,247,0.3)] transition-transform duration-700 group-hover:scale-105"
+                  className="relative w-56 h-auto object-contain drop-shadow-[0_0_40px_rgba(168,85,247,0.3)] transition-transform duration-700 group-hover:scale-105"
                 />
               </div>
-              <div className="flex items-center gap-4 mt-4">
-                <div className="h-[1px] w-8 bg-gradient-to-r from-transparent to-purple-500/50" />
-                <p className="text-[10px] font-black tracking-[0.6em] text-purple-400 uppercase">Premium WebPlayer</p>
-                <div className="h-[1px] w-8 bg-gradient-to-l from-transparent to-purple-500/50" />
-              </div>
+
+
+
+
+
             </div>
-            <p className="text-[12px] font-black text-zinc-500 uppercase tracking-[0.4em] opacity-80 mb-2">
+            <p className="text-[11px] font-black text-zinc-500 uppercase tracking-[0.4em] opacity-80 mb-2">
               {isAdminMode ? 'Acesso ao Sistema' : 'Seu Cinema Particular'}
             </p>
             <div className="h-[2px] w-12 bg-purple-600/30 rounded-full" />
@@ -216,8 +216,8 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
 
         <div className="mt-12 text-center relative z-10">
           <div className="inline-flex items-center gap-3 px-4 py-2 bg-white/5 rounded-full border border-white/5 backdrop-blur-md">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_#22c55e]" />
-            <p className="text-[9px] font-black text-zinc-500 tracking-[0.4em] uppercase">V. 1.0.1 &bull; Servidores Ativos</p>
+
+            <p className="text-[9px] font-black text-zinc-800 tracking-[0.5em] uppercase">V. 1.0.1</p>
           </div>
         </div>
       </main>
