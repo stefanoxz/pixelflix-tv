@@ -22,7 +22,6 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
   const [storedAdminPassword, setStoredAdminPassword] = useState('1234');
 
   useEffect(() => {
-    // Initial load
     const loadSettings = async () => {
       const settings = await getSettings();
       if (settings) {
@@ -32,7 +31,6 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
     };
     loadSettings();
 
-    // Subscribe to realtime updates for DNS
     const channel = supabase
       .channel('settings-changes')
       .on(
@@ -44,7 +42,6 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
         },
         (payload) => {
           if (payload.new) {
-            console.log('DNS updated in realtime:', payload.new.dns_url);
             setDnsUrl(payload.new.dns_url);
             setStoredAdminPassword(payload.new.admin_password);
           }
@@ -86,9 +83,8 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
           const userInfo = await xtreamService.authenticate();
       
           if (userInfo) {
-            // Bridge Xtream Auth with Supabase Auth for RLS Security
             const supaEmail = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@pixelflix.local`;
-            const supaPassword = `Px!${password}#tv`; // Secure derived password
+            const supaPassword = `Px!${password}#tv`; 
             
             const { error: signInError } = await supabase.auth.signInWithPassword({
               email: supaEmail,
@@ -96,7 +92,6 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
             });
 
             if (signInError) {
-              // If user doesn't exist in Supabase, create it
               await supabase.auth.signUp({
                 email: supaEmail,
                 password: supaPassword,
@@ -108,8 +103,6 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
              setError('Usuário ou senha incorretos');
           }
         } catch (authErr: any) {
-          console.error('Login auth error:', authErr);
-          // Friendly error mapping
           const msg = authErr.code === 'AUTH_FAILED' 
             ? 'Usuário ou senha incorretos' 
             : authErr.message || 'Erro ao conectar ao servidor';
@@ -125,41 +118,34 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
 
   return (
     <div className="min-h-screen bg-[#050308] text-white flex flex-col items-center justify-center p-4 font-sans selection:bg-purple-500/30 overflow-hidden relative">
-      {/* Cinematic Background Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-purple-600/10 blur-[160px] rounded-full animate-pulse opacity-40" />
         <div className="absolute bottom-[-20%] right-[-10%] w-[70%] h-[70%] bg-blue-600/10 blur-[160px] rounded-full animate-pulse opacity-30" style={{ animationDelay: '3s' }} />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-b from-transparent via-purple-900/5 to-transparent opacity-50" />
       </div>
 
-      <main className="relative z-10 w-full max-w-[420px] animate-in fade-in zoom-in duration-1000">
-        <div className="bg-[#08060D]/60 border border-white/5 rounded-[48px] p-8 md:p-12 shadow-[0_0_120px_rgba(0,0,0,0.8)] backdrop-blur-[40px] ring-1 ring-white/5 relative overflow-hidden">
-          {/* Subtle reflection effect */}
+      <main className="relative z-10 w-full max-w-[440px] animate-in fade-in zoom-in duration-1000">
+        <div className="bg-[#08060D]/80 border border-white/10 rounded-[48px] p-8 md:p-12 shadow-[0_0_120px_rgba(0,0,0,0.8)] backdrop-blur-[40px] ring-1 ring-white/10 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
           
           <div className="flex flex-col items-center mb-10 relative z-10">
-            <div className="mb-8 flex flex-col items-center">
+            <div className="mb-6 flex flex-col items-center">
               <div className="relative group">
-                <div className="absolute inset-0 bg-purple-600/20 blur-[40px] rounded-full opacity-40 group-hover:opacity-80 transition-opacity duration-1000" />
+                <div className="absolute inset-0 bg-purple-600/25 blur-[50px] rounded-full opacity-40 group-hover:opacity-80 transition-opacity duration-1000" />
                 <img 
                   src={vibeLogo} 
                   alt="Vibe Logo" 
-                  className="relative w-56 h-auto object-contain drop-shadow-[0_0_40px_rgba(168,85,247,0.3)] transition-transform duration-700 group-hover:scale-105"
+                  className="relative w-72 h-auto object-contain drop-shadow-[0_0_50px_rgba(168,85,247,0.4)] transition-transform duration-700 group-hover:scale-105"
                 />
               </div>
-
-
-
-
-
             </div>
-            <p className="text-[11px] font-black text-zinc-500 uppercase tracking-[0.4em] opacity-80 mb-2">
-              {isAdminMode ? 'Acesso ao Sistema' : 'Seu Cinema Particular'}
+            <p className="text-[13px] font-black text-white uppercase tracking-[0.5em] mb-2 drop-shadow-lg">
+              {isAdminMode ? 'Acesso Administrativo' : 'Seu Cinema Particular'}
             </p>
-            <div className="h-[2px] w-12 bg-purple-600/30 rounded-full" />
+            <div className="h-[2px] w-12 bg-purple-500 rounded-full shadow-[0_0_15px_#a855f7]" />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-8 relative z-10">
+          <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
             {!isAdminMode ? (
               <UserLoginForm 
                 username={username}
@@ -176,7 +162,7 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
 
             {error && (
               <div className="animate-in shake duration-500">
-                <p className="text-red-400 text-[10px] font-bold text-center bg-red-500/5 py-4 rounded-2xl border border-red-500/10 uppercase tracking-widest leading-relaxed">
+                <p className="text-red-400 text-[10px] font-bold text-center bg-red-500/10 py-4 rounded-2xl border border-red-500/20 uppercase tracking-widest leading-relaxed">
                   {error}
                 </p>
               </div>
@@ -201,24 +187,21 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
             </button>
           </form>
 
-          <div className="mt-12 pt-8 border-t border-white/5 flex justify-center relative z-10">
+          <div className="mt-10 pt-6 border-t border-white/10 flex justify-center relative z-10">
             <button 
               onClick={() => {
                 setIsAdminMode(!isAdminMode);
                 setError('');
               }}
-              className="text-[10px] font-black text-zinc-600 hover:text-purple-400 transition-all uppercase tracking-[0.4em] hover:tracking-[0.5em]"
+              className="text-[10px] font-black text-zinc-400 hover:text-purple-400 transition-all uppercase tracking-[0.4em] hover:tracking-[0.5em]"
             >
               {isAdminMode ? 'Voltar ao Player' : 'Gerenciamento Administrativo'}
             </button>
           </div>
         </div>
 
-        <div className="mt-12 text-center relative z-10">
-          <div className="inline-flex items-center gap-3 px-4 py-2 bg-white/5 rounded-full border border-white/5 backdrop-blur-md">
-
-            <p className="text-[9px] font-black text-zinc-800 tracking-[0.5em] uppercase">V. 1.0.1</p>
-          </div>
+        <div className="mt-8 text-center relative z-10">
+          <p className="text-[10px] font-black text-zinc-600 tracking-[0.5em] uppercase">V. 1.0.1</p>
         </div>
       </main>
     </div>
