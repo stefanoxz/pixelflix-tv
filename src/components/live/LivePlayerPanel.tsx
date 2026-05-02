@@ -26,11 +26,27 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
   }, [channel?.id]);
 
   const currentProgram = useMemo(() => {
-    return epg && epg.length > 0 ? epg[0] : null;
+    if (!epg || epg.length === 0) return null;
+    const now = Math.floor(Date.now() / 1000);
+    // Find the program that is currently running
+    return epg.find(prog => {
+      const start = prog.start_timestamp ? parseInt(prog.start_timestamp) : (prog.start ? new Date(prog.start).getTime() / 1000 : 0);
+      const end = prog.stop_timestamp ? parseInt(prog.stop_timestamp) : (prog.end ? new Date(prog.end).getTime() / 1000 : 0);
+      return now >= start && now < end;
+    }) || epg[0];
   }, [epg]);
 
   const futurePrograms = useMemo(() => {
-    return epg && epg.length > 1 ? epg.slice(1) : [];
+    if (!epg) return [];
+    const now = Math.floor(Date.now() / 1000);
+    return epg.filter(prog => {
+      const start = prog.start_timestamp ? parseInt(prog.start_timestamp) : (prog.start ? new Date(prog.start).getTime() / 1000 : 0);
+      return start > now;
+    }).sort((a, b) => {
+      const startA = a.start_timestamp ? parseInt(a.start_timestamp) : (a.start ? new Date(a.start).getTime() / 1000 : 0);
+      const startB = b.start_timestamp ? parseInt(b.start_timestamp) : (b.start ? new Date(b.start).getTime() / 1000 : 0);
+      return startA - startB;
+    });
   }, [epg]);
 
   const videoOptions = useMemo(() => {
