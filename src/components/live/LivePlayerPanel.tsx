@@ -134,7 +134,7 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
                 <div>
                   <div className="flex items-center gap-4 mb-3">
                     <h3 className="text-2xl font-bold text-white tracking-tight">
-                      {currentProgram?.title ? String(decodeBase64(currentProgram.title)).replace(/[^a-zA-Z0-9 \-]/g, '') : 'Programa Atual'}
+                      {currentProgram?.title ? String(decodeBase64(currentProgram.title)) : 'Programa Atual'}
                     </h3>
                     <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-xl">
                       <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_#ef4444]" />
@@ -181,9 +181,12 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
         <div className="bg-[#0A0A0A] border border-white/5 rounded-[40px] p-8 flex flex-col shadow-2xl relative overflow-hidden min-h-[350px]">
           <div className="absolute bottom-0 left-0 w-60 h-60 bg-purple-600/5 blur-[100px] rounded-full pointer-events-none" />
           
-          <div className="flex items-center gap-3 mb-6 px-2 relative z-10">
-            <Tv size={18} className="text-purple-500" />
-            <h4 className="text-sm font-black tracking-[0.2em] text-white uppercase">Próximos Programas</h4>
+          <div className="flex items-center justify-between mb-6 px-2 relative z-10">
+            <div className="flex items-center gap-3">
+              <Tv size={18} className="text-purple-500" />
+              <h4 className="text-sm font-black tracking-[0.2em] text-white uppercase">A Seguir</h4>
+            </div>
+            <span className="text-[10px] font-bold text-zinc-600 tracking-widest uppercase">Próximos</span>
           </div>
 
           <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar relative z-10">
@@ -198,7 +201,7 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
                   </div>
                 </div>
                 <h5 className="text-sm font-bold text-white mb-1 line-clamp-1 group-hover:text-purple-300 transition-colors">
-                  {prog.title ? String(decodeBase64(prog.title)).replace(/[^a-zA-Z0-9 \-]/g, '') : 'Sem Título'}
+                  {prog.title ? String(decodeBase64(prog.title)) : 'Sem Título'}
                 </h5>
                 <p className="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed">
                   {prog.description ? String(decodeBase64(prog.description)) : 'Nenhuma descrição disponível para este programa.'}
