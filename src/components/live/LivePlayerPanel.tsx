@@ -189,100 +189,95 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
         ) : null}
       </div>
 
-      {/* EPG Info Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 shrink-0">
-        {/* Current Program Panel */}
-        <div className="xl:col-span-2 bg-[#0A0A0A] border border-white/5 rounded-[40px] p-10 relative overflow-hidden shadow-2xl flex flex-col justify-between min-h-[350px]">
-          <div className="absolute top-0 right-0 w-80 h-80 bg-purple-600/10 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-          
-          <div className="relative z-10">
-            <div className="flex items-start justify-between mb-8">
-              <div className="flex items-start gap-6">
-                <div className="w-16 h-16 bg-gradient-to-br from-white/10 to-white/[0.02] rounded-[24px] border border-white/10 flex items-center justify-center shadow-2xl">
-                  <Tv size={28} className="text-purple-400" />
+      {/* Unified Cinematic EPG Panel */}
+      <div className="bg-[#0A0A0A] border border-white/5 rounded-[40px] p-8 relative overflow-hidden shadow-2xl shrink-0">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-600/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        
+        <div className="flex flex-col lg:flex-row gap-10 relative z-10">
+          {/* Current Program - Left Side */}
+          <div className="lg:w-2/5 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 bg-purple-600/10 rounded-2xl flex items-center justify-center border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.2)]">
+                  <Tv size={24} className="text-purple-500" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-4 mb-3">
-                    <h3 className="text-2xl font-bold text-white tracking-tight">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-xl font-bold text-white tracking-tight leading-tight line-clamp-1">
                       {currentProgram?.title ? String(decodeBase64(currentProgram.title)) : 'Programa Atual'}
                     </h3>
-                    <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-xl">
-                      <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_#ef4444]" />
-                      <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">AO VIVO</span>
+                    <div className="px-2 py-0.5 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-1.5 shrink-0">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                      <span className="text-[8px] font-black text-red-500 uppercase tracking-widest">LIVE</span>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-8 text-xs font-bold tracking-widest uppercase">
-                    <div className="flex items-center gap-2.5 text-zinc-400">
-                      <Clock size={16} className="text-purple-500" />
-                      <span className="text-zinc-300">{currentProgram?.start ? formatTime(currentProgram.start) : '00:00'} — {currentProgram?.end ? formatTime(currentProgram.end) : '00:00'}</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 text-purple-400">
-                      <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_#a855f7]" />
-                      <span>{progressPercentage}% concluído</span>
-                    </div>
+                  <div className="flex items-center gap-4 mt-1.5">
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                      {currentProgram?.start ? formatTime(currentProgram.start) : '00:00'} — {currentProgram?.end ? formatTime(currentProgram.end) : '00:00'}
+                    </span>
+                    <span className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">{progressPercentage}%</span>
                   </div>
                 </div>
               </div>
+              
+              <p className="text-xs text-zinc-400 leading-relaxed line-clamp-2 mb-6 opacity-80">
+                {currentProgram?.description 
+                  ? String(decodeBase64(currentProgram.description))
+                  : 'Acompanhe a programação completa em tempo real com a melhor qualidade de imagem e som.'}
+              </p>
             </div>
 
-            <p className="text-sm text-zinc-400 font-medium leading-relaxed max-w-4xl mb-10 opacity-90 line-clamp-3">
-              {currentProgram?.description 
-                ? String(decodeBase64(currentProgram.description))
-                : 'Acompanhe a programação completa em tempo real com a melhor qualidade de imagem e som.'}
-            </p>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center px-0.5">
+                 <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em]">Progresso</span>
+              </div>
+              <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-purple-600 to-pink-500 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.4)] transition-all duration-1000" 
+                  style={{ width: `${progressPercentage}%` }} 
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-4 relative z-10">
-            <div className="flex justify-between items-center px-1">
-               <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Progresso da Transmissão</span>
-               <span className="text-xs font-black text-purple-400 tracking-wider">{progressPercentage}%</span>
-            </div>
-            <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden p-[1px] relative">
-              <div 
-                className="h-full bg-gradient-to-r from-purple-600 via-purple-400 to-pink-500 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-all duration-1000 ease-out relative z-10" 
-                style={{ width: `${progressPercentage}%` }} 
-              />
-            </div>
-          </div>
-        </div>
+          {/* Divider */}
+          <div className="hidden lg:block w-[1px] bg-gradient-to-b from-transparent via-white/5 to-transparent self-stretch" />
 
-        {/* Future Programs Panel */}
-        <div className="bg-[#0A0A0A] border border-white/5 rounded-[40px] p-8 flex flex-col shadow-2xl relative overflow-hidden min-h-[350px]">
-          <div className="absolute bottom-0 left-0 w-60 h-60 bg-purple-600/5 blur-[100px] rounded-full pointer-events-none" />
-          
-          <div className="flex items-center justify-between mb-6 px-2 relative z-10">
-            <div className="flex items-center gap-3">
-              <Tv size={18} className="text-purple-500" />
-              <h4 className="text-sm font-black tracking-[0.2em] text-white uppercase">A Seguir</h4>
+          {/* Future Timeline - Right Side */}
+          <div className="lg:w-3/5">
+            <div className="flex items-center justify-between mb-5 px-1">
+              <div className="flex items-center gap-2">
+                <Clock size={14} className="text-zinc-500" />
+                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">A Seguir na Programação</span>
+              </div>
             </div>
-            <span className="text-[10px] font-bold text-zinc-600 tracking-widest uppercase">Próximos</span>
-          </div>
 
-          <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar relative z-10">
-            {futurePrograms.length > 0 ? futurePrograms.map((prog, idx) => (
-              <div key={idx} className="p-5 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] transition-all group">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-bold text-purple-400 tracking-widest uppercase">
-                    {prog.start ? formatTime(prog.start) : '00:00'}
-                  </span>
-                  <div className="px-2 py-0.5 rounded-lg bg-white/5 text-[9px] font-black text-zinc-500 group-hover:text-zinc-300 transition-colors">
-                    FUTURO
+            <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar-horizontal -mx-1 px-1">
+              {futurePrograms.length > 0 ? futurePrograms.map((prog, idx) => (
+                <div 
+                  key={idx} 
+                  className="min-w-[240px] p-5 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] hover:border-white/10 transition-all group cursor-default"
+                >
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[10px] font-black text-purple-500 tracking-widest uppercase">
+                      {prog.start ? formatTime(prog.start) : '00:00'}
+                    </span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-white/10 group-hover:bg-purple-500/50 transition-colors" />
                   </div>
+                  <h5 className="text-[13px] font-bold text-white mb-1.5 line-clamp-1 group-hover:text-purple-300 transition-colors">
+                    {prog.title ? String(decodeBase64(prog.title)) : 'Sem Título'}
+                  </h5>
+                  <p className="text-[10px] text-zinc-500 line-clamp-2 leading-relaxed opacity-60 group-hover:opacity-100 transition-opacity">
+                    {prog.description ? String(decodeBase64(prog.description)) : 'Nenhuma descrição disponível.'}
+                  </p>
                 </div>
-                <h5 className="text-sm font-bold text-white mb-1 line-clamp-1 group-hover:text-purple-300 transition-colors">
-                  {prog.title ? String(decodeBase64(prog.title)) : 'Sem Título'}
-                </h5>
-                <p className="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed">
-                  {prog.description ? String(decodeBase64(prog.description)) : 'Nenhuma descrição disponível para este programa.'}
-                </p>
-              </div>
-            )) : (
-              <div className="flex flex-col items-center justify-center h-full text-center opacity-40">
-                <Clock size={32} className="text-zinc-600 mb-3" />
-                <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Sem guia disponível</p>
-              </div>
-            )}
+              )) : (
+                <div className="flex flex-col items-center justify-center w-full py-6 text-center opacity-30">
+                  <Clock size={24} className="text-zinc-700 mb-2" />
+                  <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Sem guia disponível</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
