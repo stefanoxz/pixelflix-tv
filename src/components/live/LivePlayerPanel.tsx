@@ -77,24 +77,34 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
 
   const currentProgram = useMemo(() => {
     if (!epg || epg.length === 0) return null;
-    const now = Math.floor(Date.now() / 1000);
+    const now = xtreamService.getServerTime();
+    
     // Find the program that is currently running
     return epg.find(prog => {
-      const start = prog.start_timestamp ? parseInt(prog.start_timestamp) : (prog.start ? new Date(prog.start).getTime() / 1000 : 0);
-      const end = prog.stop_timestamp ? parseInt(prog.stop_timestamp) : (prog.end ? new Date(prog.end).getTime() / 1000 : 0);
+      let start = prog.start_timestamp ? parseInt(prog.start_timestamp) : (prog.start ? new Date(prog.start).getTime() / 1000 : 0);
+      let end = prog.stop_timestamp ? parseInt(prog.stop_timestamp) : (prog.end ? new Date(prog.end).getTime() / 1000 : 0);
+      
+      // Handle MS timestamps
+      if (start > 2000000000) start /= 1000;
+      if (end > 2000000000) end /= 1000;
+
       return now >= start && now < end;
     }) || epg[0];
   }, [epg]);
 
   const futurePrograms = useMemo(() => {
     if (!epg) return [];
-    const now = Math.floor(Date.now() / 1000);
+    const now = xtreamService.getServerTime();
+    
     return epg.filter(prog => {
-      const start = prog.start_timestamp ? parseInt(prog.start_timestamp) : (prog.start ? new Date(prog.start).getTime() / 1000 : 0);
+      let start = prog.start_timestamp ? parseInt(prog.start_timestamp) : (prog.start ? new Date(prog.start).getTime() / 1000 : 0);
+      if (start > 2000000000) start /= 1000;
       return start > now;
     }).sort((a, b) => {
-      const startA = a.start_timestamp ? parseInt(a.start_timestamp) : (a.start ? new Date(a.start).getTime() / 1000 : 0);
-      const startB = b.start_timestamp ? parseInt(b.start_timestamp) : (b.start ? new Date(b.start).getTime() / 1000 : 0);
+      let startA = a.start_timestamp ? parseInt(a.start_timestamp) : (a.start ? new Date(a.start).getTime() / 1000 : 0);
+      let startB = b.start_timestamp ? parseInt(b.start_timestamp) : (b.start ? new Date(b.start).getTime() / 1000 : 0);
+      if (startA > 2000000000) startA /= 1000;
+      if (startB > 2000000000) startB /= 1000;
       return startA - startB;
     });
   }, [epg]);
@@ -118,15 +128,17 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
 
   const progressPercentage = useMemo(() => {
     if (!currentProgram) return 0;
-    const start = currentProgram.start_timestamp ? parseInt(currentProgram.start_timestamp) : (currentProgram.start ? new Date(currentProgram.start).getTime() / 1000 : null);
-    const end = currentProgram.stop_timestamp ? parseInt(currentProgram.stop_timestamp) : (currentProgram.end ? new Date(currentProgram.end).getTime() / 1000 : null);
-    if (!start || !end) return 0;
-    const now = Math.floor(Date.now() / 1000);
+    const now = xtreamService.getServerTime();
+    let start = currentProgram.start_timestamp ? parseInt(currentProgram.start_timestamp) : (currentProgram.start ? new Date(currentProgram.start).getTime() / 1000 : 0);
+    let end = currentProgram.stop_timestamp ? parseInt(currentProgram.stop_timestamp) : (currentProgram.end ? new Date(currentProgram.end).getTime() / 1000 : 0);
+    
+    if (start > 2000000000) start /= 1000;
+    if (end > 2000000000) end /= 1000;
+
     const total = end - start;
-    const current = now - start;
+    const elapsed = now - start;
     if (total <= 0) return 0;
-    const percentage = Math.round((current / total) * 100);
-    return Math.min(Math.max(percentage, 0), 100);
+    return Math.min(Math.max(Math.floor((elapsed / total) * 100), 0), 100);
   }, [currentProgram]);
 
   const formatTime = (time: any) => {

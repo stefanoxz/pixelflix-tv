@@ -126,17 +126,32 @@ export class XtreamService {
     throw new XtreamError(userFriendlyMessage, 'NETWORK_ERROR', lastError);
   }
 
+  private serverTimeOffset = 0; // Offset in seconds
+
   async authenticate(): Promise<{ user_info: UserInfo }> {
     try {
       const data = await this.fetchAction('');
       if (!data.user_info || data.user_info.auth === 0) {
         throw new XtreamError('Acesso negado pelo servidor IPTV', 'AUTH_FAILED');
       }
+      
+      // Calculate server time offset
+      if (data.server_info && data.server_info.server_time) {
+        const serverTime = parseInt(data.server_info.server_time);
+        const localTime = Math.floor(Date.now() / 1000);
+        this.serverTimeOffset = serverTime - localTime;
+        console.log(`Server time offset: ${this.serverTimeOffset}s`);
+      }
+
       return data;
     } catch (err: any) {
       if (err instanceof XtreamError) throw err;
       throw new XtreamError('Falha na autenticação. Verifique os dados.', 'UNKNOWN');
     }
+  }
+
+  getServerTime(): number {
+    return Math.floor(Date.now() / 1000) + this.serverTimeOffset;
   }
 
   async getCategories(type: 'live' | 'movie' | 'series'): Promise<Category[]> {

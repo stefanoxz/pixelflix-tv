@@ -84,7 +84,7 @@ export const LiveChannelList = memo(({ channels, selectedChannel, favorites, onS
                       {channel.name}
                     </span>
                     <span className="text-[9px] text-zinc-500 font-medium truncate uppercase tracking-widest opacity-60">
-                      Culinária & Variedades
+                      {channel.category_name || 'Canais ao Vivo'}
                     </span>
                     <div className="w-full h-0.5 bg-white/5 rounded-full mt-1.5 overflow-hidden">
                       <div className={`h-full ${isSelected ? 'bg-purple-500' : 'bg-zinc-700'} rounded-full`} style={{ width: '45%' }} />
