@@ -108,6 +108,31 @@ export const LiveExplorer = ({ onBack }: LiveExplorerProps) => {
   const timeString = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const dateString = now.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }).toUpperCase();
 
+  const currentProgramTitle = useMemo(() => {
+    if (!epgData || epgData.length === 0) return null;
+    const now = xtreamService.getServerTime();
+    
+    const current = epgData.find((prog: any) => {
+      let start = prog.start_timestamp ? parseInt(prog.start_timestamp) : (prog.start ? new Date(prog.start).getTime() / 1000 : 0);
+      let end = prog.stop_timestamp ? parseInt(prog.stop_timestamp) : (prog.end ? new Date(prog.end).getTime() / 1000 : 0);
+      if (start > 2000000000) start /= 1000;
+      if (end > 2000000000) end /= 1000;
+      return now >= start && now < end;
+    }) || epgData[0];
+
+    if (!current || !current.title) return null;
+    
+    // Decode if base64
+    try {
+      const decoded = atob(current.title);
+      const bytes = new Uint8Array(decoded.length);
+      for (let i = 0; i < decoded.length; i++) bytes[i] = decoded.charCodeAt(i);
+      return new TextDecoder().decode(bytes);
+    } catch {
+      return current.title;
+    }
+  }, [epgData]);
+
   return (
     <div className="h-screen bg-[#050308] text-white flex flex-col font-sans overflow-hidden">
       <div className="fixed inset-0 pointer-events-none">
@@ -183,6 +208,7 @@ export const LiveExplorer = ({ onBack }: LiveExplorerProps) => {
           channels={filteredChannels} 
           selectedChannel={selectedChannel}
           favorites={favoritesList}
+          currentProgramTitle={currentProgramTitle}
           onSelectChannel={setSelectedChannel}
           onToggleFavorite={(ch) => toggleFavoriteMutation.mutate(ch)}
         />

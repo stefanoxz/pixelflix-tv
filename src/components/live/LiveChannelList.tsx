@@ -7,11 +7,19 @@ interface LiveChannelListProps {
   channels: any[];
   selectedChannel: any | null;
   favorites: string[];
+  currentProgramTitle?: string | null;
   onSelectChannel: (channel: any) => void;
   onToggleFavorite: (channel: any) => void;
 }
 
-export const LiveChannelList = memo(({ channels, selectedChannel, favorites, onSelectChannel, onToggleFavorite }: LiveChannelListProps) => {
+export const LiveChannelList = memo(({ 
+  channels, 
+  selectedChannel, 
+  favorites, 
+  currentProgramTitle,
+  onSelectChannel, 
+  onToggleFavorite 
+}: LiveChannelListProps) => {
   const parentRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -83,11 +91,11 @@ export const LiveChannelList = memo(({ channels, selectedChannel, favorites, onS
                     <span className={`text-[12px] font-bold tracking-wide truncate ${isSelected ? 'text-white' : 'text-zinc-300 group-hover:text-white'}`}>
                       {channel.name}
                     </span>
-                    <span className="text-[9px] text-zinc-500 font-medium truncate uppercase tracking-widest opacity-60">
-                      {channel.category_name || 'Canais ao Vivo'}
+                    <span className={`text-[9px] font-bold truncate uppercase tracking-widest ${isSelected ? 'text-purple-400 animate-pulse' : 'text-zinc-500 opacity-60'}`}>
+                      {isSelected && currentProgramTitle ? currentProgramTitle : (channel.category_name || 'Canais ao Vivo')}
                     </span>
-                    <div className="w-full h-0.5 bg-white/5 rounded-full mt-1.5 overflow-hidden">
-                      <div className={`h-full ${isSelected ? 'bg-purple-500' : 'bg-zinc-700'} rounded-full`} style={{ width: '45%' }} />
+                    <div className="w-full h-1 bg-white/5 rounded-full mt-2 overflow-hidden">
+                      <div className={`h-full ${isSelected ? 'bg-purple-500' : 'bg-zinc-700'} rounded-full transition-all duration-1000`} style={{ width: isSelected ? '70%' : '30%' }} />
                     </div>
                   </div>
 
