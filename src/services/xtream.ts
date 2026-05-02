@@ -14,6 +14,17 @@ export class XtreamService {
   private cache: Map<string, { data: any, timestamp: number }> = new Map();
   private CACHE_DURATION = 1000 * 60 * 10; // 10 minutes cache for list data
 
+  constructor() {
+    const saved = localStorage.getItem('xtream_creds');
+    if (saved) {
+      try {
+        this.credentials = JSON.parse(atob(saved));
+      } catch (e) {
+        console.warn('Failed to recover xtream credentials');
+      }
+    }
+  }
+
   setCredentials(creds: XtreamCredentials) {
     try {
       if (!creds.url || !creds.username || !creds.password) {
@@ -25,6 +36,7 @@ export class XtreamService {
         url = `http://${url}`;
       }
       this.credentials = { ...creds, url };
+      localStorage.setItem('xtream_creds', btoa(JSON.stringify(this.credentials)));
     } catch (err) {
       console.error('Error setting credentials:', err);
       throw new XtreamError('Erro ao configurar servidor IPTV');

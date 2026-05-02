@@ -83,7 +83,7 @@ export const SyncScreen = ({ onComplete, profileName, avatarUrl }: SyncScreenPro
   }, [onComplete, queryClient]);
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-[#050308] text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-purple-600/10 blur-[150px] rounded-full animate-pulse" />
       
       <div className="relative z-10 w-full max-w-md flex flex-col items-center text-center">
@@ -123,18 +123,28 @@ export const SyncScreen = ({ onComplete, profileName, avatarUrl }: SyncScreenPro
         {!error ? (
           <>
             <SyncProgressBar progress={progress} />
-            <p className="text-[11px] font-black uppercase tracking-[0.4em] text-zinc-400 animate-pulse h-4">
+            <p className="text-[11px] font-black uppercase tracking-[0.4em] text-purple-400 animate-pulse h-4 mt-4">
               {status}
             </p>
           </>
         ) : (
-          <div className="space-y-6 w-full">
-            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm font-medium">
+          <div className="space-y-6 w-full animate-in slide-in-from-bottom-4 duration-500">
+            <div className="p-5 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm font-medium leading-relaxed">
               {error}
             </div>
             <button 
-              onClick={() => window.location.reload()}
-              className="w-full bg-white text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-zinc-200 transition-all shadow-xl"
+              onClick={() => {
+                setError(null);
+                setDebugInfo(null);
+                setProgress(0);
+                // Triggering a state change to re-run the effect if needed, 
+                // but since it depends on queryClient and onComplete, 
+                // and it runs on mount, a simple setError(null) might not be enough 
+                // if the effect already finished.
+                // Let's force it.
+                window.location.reload(); 
+              }}
+              className="w-full bg-white text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-zinc-200 transition-all shadow-[0_0_30px_rgba(255,255,255,0.1)] active:scale-[0.98]"
             >
               Tentar Novamente
             </button>
@@ -142,8 +152,8 @@ export const SyncScreen = ({ onComplete, profileName, avatarUrl }: SyncScreenPro
         )}
       </div>
 
-      <div className="absolute bottom-12 text-[10px] font-bold text-zinc-700 tracking-[0.3em] uppercase">
-        Vibe WebPlayer &bull; Versão Estável
+      <div className="absolute bottom-12 text-[10px] font-bold text-zinc-800 tracking-[0.5em] uppercase">
+        Vibe WebPlayer &bull; Sistema Sincronizado
       </div>
     </div>
   );
