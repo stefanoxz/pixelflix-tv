@@ -16,14 +16,14 @@ export const ContentItem = memo(({ item, isFav, viewMode, onPlay, onSelect, onTo
       <div className="group flex flex-col transition-all duration-300">
         <button 
           onClick={() => onSelect(item)} 
-          className="text-left w-full focus:outline-none rounded-[14px] cursor-pointer relative aspect-[2/3] overflow-hidden bg-zinc-900 border border-white/5 shadow-2xl group-hover:ring-2 group-hover:ring-purple-500/50 transition-all duration-300"
+          className="text-left w-full focus:outline-none rounded-[12px] cursor-pointer relative aspect-[2/3] overflow-hidden bg-zinc-900 border border-white/5 transition-all duration-300 group-hover:border-white/20"
         >
           <img 
             src={item.icon} 
             alt={item.name} 
             loading="lazy"
             decoding="async"
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
             onError={(e) => {
               const target = e.target as HTMLImageElement;
               target.onerror = null;
@@ -32,17 +32,17 @@ export const ContentItem = memo(({ item, isFav, viewMode, onPlay, onSelect, onTo
           />
           
           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-            <div className="w-12 h-12 bg-white/10 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/20">
-              <Play size={20} fill="white" className="text-white ml-1" />
+            <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20">
+              <Play size={18} fill="white" className="text-white ml-0.5" />
             </div>
           </div>
         </button>
         
-        <div className="mt-3 space-y-0.5">
-          <h4 className="text-[14px] font-bold text-white transition-colors tracking-tight line-clamp-1">
+        <div className="mt-2.5 px-0.5">
+          <h4 className="text-[12px] md:text-[13px] font-bold text-white transition-colors tracking-tight line-clamp-1">
             {item.name}
           </h4>
-          <span className="text-[12px] text-zinc-500 font-medium block">{item.year}</span>
+          <span className="text-[11px] text-zinc-500 font-semibold block mt-0.5">{item.year}</span>
         </div>
       </div>
     );
