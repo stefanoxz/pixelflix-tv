@@ -117,64 +117,69 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
       </div>
 
       {/* EPG Panel */}
-      <div className="bg-[#0A0A0A] border border-white/5 rounded-[32px] p-8 relative overflow-hidden shrink-0 shadow-2xl">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600/5 blur-[80px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+      <div className="bg-[#0A0A0A] border border-white/5 rounded-[40px] p-10 relative overflow-hidden shrink-0 shadow-2xl">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-purple-600/10 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
         
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex items-start gap-5">
-            <div className="w-14 h-14 bg-white/[0.03] rounded-2xl border border-white/5 flex items-center justify-center shadow-inner">
-              <Tv size={24} className="text-purple-500/80" />
+        <div className="flex items-start justify-between mb-8">
+          <div className="flex items-start gap-6">
+            <div className="w-16 h-16 bg-gradient-to-br from-white/10 to-white/[0.02] rounded-[24px] border border-white/10 flex items-center justify-center shadow-2xl">
+              <Tv size={28} className="text-purple-400" />
             </div>
             <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h3 className="text-lg font-bold text-white tracking-tight">
+              <div className="flex items-center gap-4 mb-3">
+                <h3 className="text-2xl font-bold text-white tracking-tight">
                   {epg?.title ? String(decodeBase64(epg.title)).replace(/[^a-zA-Z0-9 \-]/g, '') : 'Programa Atual'}
                 </h3>
-                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-red-500/10 border border-red-500/20 rounded-md">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                  <span className="text-[9px] font-black text-red-500 uppercase tracking-widest">LIVE</span>
+                <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-xl">
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_#ef4444]" />
+                  <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">AO VIVO</span>
                 </div>
               </div>
               
-              <div className="flex items-center gap-6 text-[11px] font-semibold tracking-wider">
-                <div className="flex items-center gap-2 text-zinc-400">
-                  <Clock size={14} className="text-purple-500/50" />
-                  <span>{epg?.start ? formatTime(epg.start) : '00:00'} — {epg?.end ? formatTime(epg.end) : '00:00'}</span>
+              <div className="flex items-center gap-8 text-xs font-bold tracking-widest uppercase">
+                <div className="flex items-center gap-2.5 text-zinc-400">
+                  <Clock size={16} className="text-purple-500" />
+                  <span className="text-zinc-300">{epg?.start ? formatTime(epg.start) : '00:00'} — {epg?.end ? formatTime(epg.end) : '00:00'}</span>
                 </div>
-                <div className="flex items-center gap-2 text-purple-400">
-                  <Zap size={14} className="fill-purple-500/20" />
-                  <span className="text-glow">{progressPercentage}% concluído</span>
+                <div className="flex items-center gap-2.5 text-purple-400">
+                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_#a855f7]" />
+                  <span>{progressPercentage}% concluído</span>
                 </div>
               </div>
             </div>
           </div>
           
-          <div className="flex flex-col items-end gap-1">
-            <span className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em]">Próximo</span>
-            <span className="text-[11px] font-bold text-zinc-400">Jornal da Noite • 22:00</span>
+          <div className="flex flex-col items-end gap-1.5">
+            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">A SEGUIR</span>
+            <span className="text-sm font-bold text-zinc-300">Próximo Programa • 22:00</span>
           </div>
         </div>
 
-        <p className="text-[12px] text-zinc-500 font-medium leading-relaxed max-w-4xl mb-8 opacity-80">
+        <p className="text-sm text-zinc-400 font-medium leading-relaxed max-w-5xl mb-10 opacity-90 line-clamp-2">
           {epg?.description 
             ? String(decodeBase64(epg.description))
-            : 'O telejornal cobre os fatos do dia e as últimas notícias da noite. Conta com a colaboração de colunistas em áreas como economia e cultura.'}
+            : 'Acompanhe a programação completa em tempo real com a melhor qualidade de imagem e som.'}
         </p>
 
-        {/* Progress Bar */}
-        <div className="space-y-3">
-          <div className="flex justify-between items-end">
-             <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Progresso do programa</span>
-             <span className="text-[10px] font-black text-purple-500">{progressPercentage}%</span>
+        {/* Progress Bar Container */}
+        <div className="space-y-4">
+          <div className="flex justify-between items-center px-1">
+             <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Progresso da Transmissão</span>
+             <span className="text-xs font-black text-purple-400 tracking-wider">{progressPercentage}%</span>
           </div>
-          <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden p-[1px]">
+          <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden p-[1px] relative">
             <div 
-              className="h-full bg-gradient-to-r from-purple-600 via-purple-400 to-pink-500 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all duration-1000 ease-out" 
+              className="h-full bg-gradient-to-r from-purple-600 via-purple-400 to-pink-500 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-all duration-1000 ease-out relative z-10" 
               style={{ width: `${progressPercentage}%` }} 
+            />
+            {/* Subtle background glow for the bar */}
+            <div 
+              className="absolute inset-0 bg-purple-500/5 blur-sm"
+              style={{ width: `${progressPercentage}%` }}
             />
           </div>
         </div>
-      </div>
+      </div>     </div>
     </div>
   );
 };

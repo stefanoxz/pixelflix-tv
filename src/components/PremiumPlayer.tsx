@@ -184,9 +184,9 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, isFullscreen 
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-4">
               <button 
                 onClick={togglePlay}
-                className="w-10 h-10 flex items-center justify-center rounded-2xl bg-white/5 border border-white/5 text-amber-500 hover:bg-white/10 transition-all shadow-inner"
+                className="w-12 h-12 flex items-center justify-center rounded-full bg-white/10 border border-white/10 text-white hover:bg-white/20 transition-all shadow-inner"
               >
-                <Zap size={18} className="fill-amber-500/20" />
+                {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
               </button>
             </div>
 
