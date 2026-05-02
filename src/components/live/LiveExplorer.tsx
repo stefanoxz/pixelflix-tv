@@ -109,12 +109,12 @@ export const LiveExplorer = ({ onBack }: LiveExplorerProps) => {
   const dateString = now.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }).toUpperCase();
 
   return (
-    <div className="h-screen bg-[#08060a] text-white flex flex-col font-sans overflow-hidden">
+    <div className="h-screen bg-[#050308] text-white flex flex-col font-sans overflow-hidden">
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 left-0 w-full h-full bg-purple-600/5 blur-[120px] opacity-50" />
       </div>
       {/* Header */}
-      <header className="h-20 px-10 flex items-center justify-between border-b border-white/5 bg-[#050505]/80 backdrop-blur-2xl shrink-0 z-20 relative overflow-hidden">
+      <header className="h-20 px-10 flex items-center justify-between border-b border-white/5 bg-[#08060D]/80 backdrop-blur-2xl shrink-0 z-20 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
         
         <div className="flex items-center gap-6">

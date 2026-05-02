@@ -6,26 +6,26 @@
 
 @layer base {
   :root {
-    --background: 0 0% 7%; /* #121212 */
+    --background: 260 40% 3%; /* #050308 - Deepest Midnight Purple */
     --foreground: 0 0% 98%;
-    --card: 0 0% 10%; /* #1A1A1A */
+    --card: 260 40% 5%; /* #08060D - Deep Amethyst */
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 10%;
+    --popover: 260 40% 5%;
     --popover-foreground: 0 0% 98%;
-    --primary: 263.4 70% 50.4%;
+    --primary: 263.4 85% 60%; /* More vibrant purple */
     --primary-foreground: 210 40% 98%;
-    --secondary: 240 3.7% 15.9%;
+    --secondary: 260 30% 12%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
+    --muted: 260 30% 12%;
+    --muted-foreground: 260 10% 60%;
+    --accent: 263.4 85% 60%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 263.4 70% 50.4%;
-    --radius: 1rem;
+    --border: 260 30% 15%;
+    --input: 260 30% 15%;
+    --ring: 263.4 85% 60%;
+    --radius: 1.5rem;
   }
 
   body {

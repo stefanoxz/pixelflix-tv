@@ -174,9 +174,9 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
   }
 
   return (
-    <div className="flex-1 flex flex-col p-6 gap-6 bg-black overflow-y-auto custom-scrollbar">
+    <div className="flex-1 flex flex-col p-6 gap-6 bg-[#050308] overflow-y-auto custom-scrollbar">
       {/* Video Container */}
-      <div className="flex-1 min-h-[400px] rounded-3xl overflow-hidden bg-[#0A0A0A] border border-white/5 relative shadow-2xl flex items-center justify-center group">
+      <div className="flex-1 min-h-[400px] rounded-3xl overflow-hidden bg-[#08060D] border border-white/5 relative shadow-2xl flex items-center justify-center group">
         {channel.icon && (
           <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
             <img src={channel.icon} alt="bg" className="w-[80%] h-[80%] object-contain blur-[100px]" />
@@ -223,7 +223,7 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
       </div>
 
       {/* Unified Cinematic EPG Panel */}
-      <div className="bg-[#0A0A0A] border border-white/5 rounded-[40px] p-8 relative overflow-hidden shadow-2xl shrink-0">
+      <div className="bg-[#08060D] border border-white/5 rounded-[40px] p-8 relative overflow-hidden shadow-2xl shrink-0">
         <div className="absolute top-0 right-0 w-96 h-96 bg-purple-600/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
         
         <div className="flex flex-col lg:flex-row gap-10 relative z-10">
