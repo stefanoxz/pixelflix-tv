@@ -44,12 +44,22 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
 
   // Calculate EPG progress
   const progressPercentage = useMemo(() => {
-    if (!epg || !epg.start || !epg.end) return 0;
-    try {
-      return 74; // Static for now as requested by the visual reference
-    } catch {
-      return 50;
-    }
+    if (!epg) return 0;
+    
+    // Attempt to get timestamps (Xtream usually provides start_timestamp or raw strings)
+    const start = epg.start_timestamp ? parseInt(epg.start_timestamp) : (epg.start ? new Date(epg.start).getTime() / 1000 : null);
+    const end = epg.stop_timestamp ? parseInt(epg.stop_timestamp) : (epg.end ? new Date(epg.end).getTime() / 1000 : null);
+    
+    if (!start || !end) return 0;
+
+    const now = Math.floor(Date.now() / 1000);
+    const total = end - start;
+    const current = now - start;
+    
+    if (total <= 0) return 0;
+    
+    const percentage = Math.round((current / total) * 100);
+    return Math.min(Math.max(percentage, 0), 100);
   }, [epg]);
 
   const formatTime = (timeStr: string) => {
