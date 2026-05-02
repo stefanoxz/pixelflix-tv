@@ -38,6 +38,8 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
 
           const player = playerRef.current = videojs(videoElement, {
             ...options,
+            fill: true,
+            responsive: true,
             controlBar: {
               children: [
                 'playToggle',
@@ -62,6 +64,11 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
               player.dispose();
               playerRef.current = null;
               return;
+            }
+            // Force contain to avoid cropping
+            const videoTag = videoElement.querySelector('video');
+            if (videoTag) {
+              videoTag.style.objectFit = 'contain';
             }
             onReady && onReady(player);
           });

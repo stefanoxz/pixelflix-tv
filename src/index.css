@@ -92,6 +92,10 @@
   border-radius: 10px !important;
 }
 
+.video-js video {
+  object-fit: contain !important;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
