@@ -135,7 +135,14 @@ export const LiveExplorer = ({ onBack }: LiveExplorerProps) => {
               <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-1">Qualidade</span>
               <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-600/10 border border-purple-500/20 rounded-lg">
                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_#a855f7]" />
-                 <span className="text-[9px] font-black text-white uppercase tracking-widest">Ultra HD 4K</span>
+                 <span className="text-[9px] font-black text-white uppercase tracking-widest">
+                   {selectedChannel ? (
+                     selectedChannel.name.toUpperCase().includes('4K') ? 'Ultra HD 4K' :
+                     selectedChannel.name.toUpperCase().includes('FHD') ? 'Full HD 1080p' :
+                     selectedChannel.name.toUpperCase().includes('HD') ? 'HD 720p' :
+                     'SD Qualidade'
+                   ) : 'Auto'}
+                 </span>
               </div>
            </div>
            
