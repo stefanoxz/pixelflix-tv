@@ -175,8 +175,8 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
 
   return (
     <div className="flex-1 flex flex-col p-6 gap-6 bg-[#050308] overflow-y-auto custom-scrollbar">
-      {/* Video Container */}
-      <div className="flex-1 min-h-[400px] rounded-3xl overflow-hidden bg-[#08060D] border border-white/5 relative shadow-2xl flex items-center justify-center group">
+      {/* Video Container - Fixed 16:9 Aspect Ratio to prevent cropping */}
+      <div className="w-full aspect-video rounded-[32px] overflow-hidden bg-[#08060D] border border-white/5 relative shadow-2xl flex items-center justify-center group shrink-0">
         {channel.icon && (
           <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
             <img src={channel.icon} alt="bg" className="w-[80%] h-[80%] object-contain blur-[100px]" />
