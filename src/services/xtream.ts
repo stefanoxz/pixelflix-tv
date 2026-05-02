@@ -171,7 +171,13 @@ export class XtreamService {
   async getStreams(type: 'live' | 'movie' | 'series', categoryId?: string): Promise<Stream[]> {
     try {
       const action = type === 'live' ? 'get_live_streams' : type === 'movie' ? 'get_vod_streams' : 'get_series';
-      const params = categoryId ? { category_id: categoryId } : {};
+      const params: Record<string, string> = categoryId ? { category_id: categoryId } : {};
+      
+      // If live, try to get EPG info in the list if the server supports it
+      if (type === 'live') {
+        params.epg = '1';
+      }
+      
       const data = await this.fetchAction(action, params);
       
       if (Array.isArray(data)) return data;

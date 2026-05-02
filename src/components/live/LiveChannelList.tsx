@@ -92,7 +92,7 @@ export const LiveChannelList = memo(({
                       {channel.name}
                     </span>
                     <span className={`text-[9px] font-bold truncate uppercase tracking-widest ${isSelected ? 'text-purple-400 animate-pulse' : 'text-zinc-500 opacity-60'}`}>
-                      {isSelected && currentProgramTitle ? currentProgramTitle : (channel.category_name || 'Canais ao Vivo')}
+                      {isSelected && currentProgramTitle ? currentProgramTitle : (channel.epg_title || channel.now_playing || channel.category_name || 'Canais ao Vivo')}
                     </span>
                     <div className="w-full h-1 bg-white/5 rounded-full mt-2 overflow-hidden">
                       <div className={`h-full ${isSelected ? 'bg-purple-500' : 'bg-zinc-700'} rounded-full transition-all duration-1000`} style={{ width: isSelected ? '70%' : '30%' }} />
