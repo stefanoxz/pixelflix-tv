@@ -5,6 +5,7 @@ import { Volume2, Sun, Loader2 } from 'lucide-react';
 interface VideoPlayerProps {
   options: any;
   onReady?: (player: any) => void;
+  onError?: (error: any) => void;
 }
 
 export const VideoPlayer = (props: VideoPlayerProps) => {
@@ -14,7 +15,7 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
   const initialValueRef = useRef<number>(0);
   const [gestureInfo, setGestureInfo] = useState<{ type: 'volume' | 'brightness', value: number } | null>(null);
   
-  const { options, onReady } = props;
+  const { options, onReady, onError } = props;
 
   useEffect(() => {
     let isMounted = true;
@@ -49,7 +50,10 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
               ],
             },
             html5: {
-              vhs: { overrideNative: true },
+              vhs: { 
+                overrideNative: true,
+                fastQualityChange: true
+              },
               nativeAudioTracks: false,
               nativeVideoTracks: false
             }
@@ -63,7 +67,9 @@ export const VideoPlayer = (props: VideoPlayerProps) => {
           });
 
           player.on('error', () => {
-            console.error('VideoJS Error:', player.error());
+            const error = player.error();
+            console.error('VideoJS Error:', error);
+            if (onError) onError(error);
           });
         }
       };

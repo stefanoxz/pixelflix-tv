@@ -12,11 +12,15 @@ interface LivePlayerPanelProps {
 export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [playerError, setPlayerError] = useState<any>(null);
+  const [currentFormat, setCurrentFormat] = useState<'m3u8' | 'ts'>(settingsService.getSettings().playerType);
 
   useEffect(() => {
     if (channel) {
       setIsLoading(true);
       setIsPlaying(false);
+      setPlayerError(null);
+      setCurrentFormat(settingsService.getSettings().playerType);
       const timer = setTimeout(() => {
         setIsLoading(false);
         setIsPlaying(true);
@@ -24,6 +28,18 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
       return () => clearTimeout(timer);
     }
   }, [channel?.id]);
+
+  const toggleFormat = () => {
+    const newFormat = currentFormat === 'm3u8' ? 'ts' : 'm3u8';
+    setCurrentFormat(newFormat);
+    setPlayerError(null);
+    setIsLoading(true);
+    setIsPlaying(false);
+    setTimeout(() => {
+      setIsLoading(false);
+      setIsPlaying(true);
+    }, 1000);
+  };
 
   const currentProgram = useMemo(() => {
     if (!epg || epg.length === 0) return null;
@@ -51,7 +67,8 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
 
   const videoOptions = useMemo(() => {
     if (!channel || !isPlaying) return null;
-    const streamUrl = xtreamService.getStreamUrl(channel.id, 'm3u8', 'live');
+    const streamUrl = xtreamService.getStreamUrl(channel.id, currentFormat, 'live');
+    const mimeType = currentFormat === 'ts' ? 'video/mp2t' : 'application/x-mpegURL';
     
     return {
       autoplay: true,
@@ -60,10 +77,10 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
       fluid: true,
       sources: [{
         src: streamUrl,
-        type: 'application/x-mpegURL'
+        type: mimeType
       }]
     };
-  }, [channel?.id, isPlaying]);
+  }, [channel?.id, isPlaying, currentFormat]);
 
   const progressPercentage = useMemo(() => {
     if (!currentProgram) return 0;
@@ -137,6 +154,24 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
             <Loader2 className="w-10 h-10 text-white animate-spin opacity-80" />
             <span className="text-[10px] font-black tracking-[0.3em] text-white uppercase drop-shadow-md">Conectando...</span>
           </div>
+        ) : playerError ? (
+          <div className="relative z-10 flex flex-col items-center gap-6 p-10 text-center max-w-md">
+            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center border border-red-500/20 mb-2">
+              <Play size={32} className="text-red-500 opacity-50" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-white mb-2">Erro de Reprodução</h3>
+              <p className="text-sm text-zinc-500 leading-relaxed mb-6">
+                Não foi possível carregar este canal no formato <span className="text-purple-400 font-bold uppercase">{currentFormat}</span>. Tente alternar o formato abaixo.
+              </p>
+              <button 
+                onClick={toggleFormat}
+                className="px-8 py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-purple-500/20 active:scale-95"
+              >
+                Alternar para {currentFormat === 'm3u8' ? 'MPEGTS (TS)' : 'HLS (M3U8)'}
+              </button>
+            </div>
+          </div>
         ) : isPlaying && videoOptions ? (
           <div className="w-full h-full relative z-10 bg-black">
             <ErrorBoundary isLocal>
@@ -146,6 +181,7 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
                 subtitle="Canais ao Vivo"
                 isFullscreen={false}
                 onClose={() => {}} 
+                onError={(err) => setPlayerError(err)}
               />
             </ErrorBoundary>
           </div>

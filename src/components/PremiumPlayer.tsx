@@ -15,10 +15,11 @@ interface PremiumPlayerProps {
   title: string;
   subtitle: string;
   onClose: () => void;
+  onError?: (error: any) => void;
   isFullscreen?: boolean;
 }
 
-export const PremiumPlayer = ({ options, title, subtitle, onClose, isFullscreen = true }: PremiumPlayerProps) => {
+export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFullscreen = true }: PremiumPlayerProps) => {
   const [isIdle, setIsIdle] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [volume, setVolume] = useState(80);
@@ -89,6 +90,7 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, isFullscreen 
         <VideoPlayer 
           options={memoizedOptions} 
           onReady={handlePlayerReady} 
+          onError={onError}
         />
       </ErrorBoundary>
 
