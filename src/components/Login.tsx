@@ -148,6 +148,8 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
           <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
             {!isAdminMode ? (
               <UserLoginForm 
+                dnsUrl={dnsUrl}
+                setDnsUrl={setDnsUrl}
                 username={username}
                 setUsername={setUsername}
                 password={password}
