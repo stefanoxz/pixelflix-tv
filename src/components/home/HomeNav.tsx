@@ -126,9 +126,9 @@ export const HomeNav = ({ onNavigate }: HomeNavProps) => {
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/8 transition-all text-xs font-bold whitespace-nowrap active:scale-95"
+              className="flex items-center gap-2.5 px-6 py-3 rounded-full text-zinc-400 hover:text-white hover:bg-white/8 transition-all text-sm font-bold whitespace-nowrap active:scale-95"
             >
-              <item.icon size={15} className="opacity-70 shrink-0" />
+              <item.icon size={17} className="opacity-70 shrink-0" />
               <span className="hidden lg:inline tracking-wide">{item.label}</span>
             </button>
           ))}
@@ -140,9 +140,9 @@ export const HomeNav = ({ onNavigate }: HomeNavProps) => {
           {!searchOpen ? (
             <button
               onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/8 transition-all text-xs font-bold"
+              className="flex items-center gap-2.5 px-6 py-3 rounded-full text-zinc-400 hover:text-white hover:bg-white/8 transition-all text-sm font-bold"
             >
-              <Search size={15} className="opacity-70" />
+              <Search size={17} className="opacity-70" />
               <span className="hidden lg:inline tracking-wide">Buscar</span>
             </button>
           ) : (
