@@ -120,6 +120,15 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
     });
   }, [epg]);
 
+  const handlePlayerError = useCallback((error: any) => {
+    console.warn('[LivePlayer] Playback error:', error);
+    
+    // Auto-fallback logic: If HLS fails, try TS (and vice-versa)
+    const nextFormat = currentFormat === 'm3u8' ? 'ts' : 'm3u8';
+    console.log(`[LivePlayer] Attempting auto-fallback to: ${nextFormat.toUpperCase()}`);
+    setCurrentFormat(nextFormat);
+  }, [currentFormat]);
+
   const videoOptions = useMemo(() => {
     if (!channel || !isPlaying) return null;
     const streamUrl = xtreamService.getStreamUrl(channel.id, currentFormat, 'live');
@@ -133,9 +142,10 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
       sources: [{
         src: streamUrl,
         type: mimeType
-      }]
+      }],
+      onError: handlePlayerError
     };
-  }, [channel?.id, isPlaying, currentFormat]);
+  }, [channel?.id, isPlaying, currentFormat, handlePlayerError]);
 
   const progressPercentage = useMemo(() => {
     if (!currentProgram) return 0;
