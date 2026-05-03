@@ -80,6 +80,8 @@ export const Dashboard = memo(({ onLogout, onNavigate }: DashboardProps) => {
       <main className="flex-1 px-4 md:px-10 py-6 max-w-[1600px] mx-auto w-full relative">
         <HeroCarousel 
           onAction={(title, type) => onNavigate(type, title)}
+          movies={movies}
+          series={series}
         />
         
         {/* Espaçamento extra para layout premium */}

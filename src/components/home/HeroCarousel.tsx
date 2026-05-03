@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Play, Info, Star, Calendar, Tag, Loader2 } from 'lucide-react';
+import { enrichFromTmdb } from '@/services/tmdb';
+import { RowItem } from '@/types';
 
 interface HeroSlide {
   id: string;
@@ -12,19 +14,6 @@ interface HeroSlide {
   backdrop: string;
 }
 
-// Genre map (TMDB IDs → PT-BR names)
-const GENRE_MAP: Record<number, string> = {
-  28: 'Ação', 12: 'Aventura', 16: 'Animação', 35: 'Comédia',
-  80: 'Crime', 99: 'Documentário', 18: 'Drama', 10751: 'Família',
-  14: 'Fantasia', 36: 'História', 27: 'Terror', 10402: 'Música',
-  9648: 'Mistério', 10749: 'Romance', 878: 'Ficção Científica',
-  10770: 'TV Movie', 53: 'Suspense', 10752: 'Guerra', 37: 'Faroeste',
-  10759: 'Ação & Aventura', 10762: 'Kids', 10763: 'Notícias',
-  10764: 'Reality', 10765: 'Sci-Fi & Fantasy', 10766: 'Soap',
-  10767: 'Talk', 10768: 'War & Politics',
-};
-
-// Static fallback
 const FALLBACK: HeroSlide[] = [
   {
     id: '1', title: 'SINNERS', type: 'Filme', date: '2025',
@@ -37,71 +26,70 @@ const FALLBACK: HeroSlide[] = [
     rating: '7.4', genre: 'Ação',
     synopsis: 'Um grupo de anti-heróis Marvel é recrutado para uma missão que pode salvar ou destruir o mundo.',
     backdrop: 'https://image.tmdb.org/t/p/original/qlXLQ5Dn8JQIKaEMkRp3VDQxeUb.jpg',
-  },
-  {
-    id: '3', title: 'THE LAST OF US', type: 'Série', date: '2025',
-    rating: '8.8', genre: 'Drama',
-    synopsis: 'Após uma pandemia devastadora, um sobrevivente endurece viaja pelos EUA com uma adolescente imune ao fungo mutante.',
-    backdrop: 'https://image.tmdb.org/t/p/original/uDgy6hyPd7qToEdBkYo4dUKLqJB.jpg',
-  },
-];
-
-const TMDB_TOKEN = import.meta.env.VITE_TMDB_TOKEN as string | undefined;
-const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY as string | undefined;
-const HAS_TMDB = !!(TMDB_API_KEY || TMDB_TOKEN);
-
-async function fetchTrending(): Promise<HeroSlide[]> {
-  if (!HAS_TMDB) return FALLBACK;
-  try {
-    const url = TMDB_API_KEY
-      ? `https://api.themoviedb.org/3/trending/all/week?api_key=${TMDB_API_KEY}&language=pt-BR`
-      : 'https://api.themoviedb.org/3/trending/all/week?language=pt-BR';
-
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (TMDB_TOKEN && !TMDB_API_KEY) headers['Authorization'] = `Bearer ${TMDB_TOKEN}`;
-
-    const res = await fetch(url, { headers });
-    const json = await res.json();
-    return (json.results || [])
-      .filter((item: any) => item.backdrop_path)
-      .slice(0, 6)
-      .map((item: any) => ({
-        id: String(item.id),
-        title: (item.title || item.name || '').toUpperCase(),
-        type: item.media_type === 'movie' ? 'Filme' : 'Série',
-        date: (item.release_date || item.first_air_date || '').substring(0, 4),
-        rating: item.vote_average?.toFixed(1) || 'N/A',
-        genre: GENRE_MAP[item.genre_ids?.[0]] || 'Entretenimento',
-        synopsis: item.overview || 'Sem sinopse disponível.',
-        backdrop: `https://image.tmdb.org/t/p/original${item.backdrop_path}`,
-      }));
-  } catch {
-    return FALLBACK;
   }
-}
+];
 
 interface HeroCarouselProps {
   onAction: (title: string, type: 'movie' | 'series') => void;
+  movies: RowItem[];
+  series: RowItem[];
 }
 
-export const HeroCarousel = ({ onAction }: HeroCarouselProps) => {
-  const [slides, setSlides] = useState<HeroSlide[]>(FALLBACK);
+export const HeroCarousel = ({ onAction, movies, series }: HeroCarouselProps) => {
+  const [slides, setSlides] = useState<HeroSlide[]>([]);
   const [active, setActive] = useState(0);
-  const [loading, setLoading] = useState(HAS_TMDB);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchTrending().then((data) => {
-      setSlides(data);
-      setLoading(false);
-    });
-  }, []);
+    const prepareSlides = async () => {
+      // If we don't have enough data yet, don't stop loading
+      if (movies.length === 0 && series.length === 0) return;
+
+      setLoading(true);
+      try {
+        // Take top 4 movies and 4 series (latest)
+        const candidates = [
+          ...movies.slice(0, 4).map(m => ({ ...m, category: 'movie' as const })),
+          ...series.slice(0, 4).map(s => ({ ...s, category: 'series' as const }))
+        ].sort(() => 0.5 - Math.random()); // Shuffle for variety
+
+        const enriched = await Promise.all(
+          candidates.map(async (item) => {
+            const tmdb = await enrichFromTmdb(item.title, item.category);
+            return {
+              id: item.id,
+              title: (tmdb?.title || item.title).toUpperCase(),
+              type: item.category === 'movie' ? 'Filme' : 'Série',
+              date: tmdb?.year || '2024',
+              rating: tmdb?.rating || '7.5',
+              genre: tmdb?.genres?.[0] || 'Destaque',
+              synopsis: tmdb?.synopsis || 'Assista a esta super produção disponível agora no seu webplayer VIBE.',
+              backdrop: tmdb?.backdrop || item.poster || '',
+            };
+          })
+        );
+
+        // Filter out those without backdrop if possible, or use fallback
+        const validSlides = enriched.filter(s => s.backdrop);
+        setSlides(validSlides.length > 0 ? validSlides : FALLBACK);
+      } catch (err) {
+        console.error('Failed to enrich hero slides:', err);
+        setSlides(FALLBACK);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    prepareSlides();
+  }, [movies, series]);
 
   useEffect(() => {
-    const id = setInterval(() => setActive((p) => (p + 1) % slides.length), 7000);
+    if (slides.length === 0) return;
+    const id = setInterval(() => setActive((p) => (p + 1) % slides.length), 8000);
     return () => clearInterval(id);
   }, [slides.length]);
 
-  if (loading) {
+  if (loading || slides.length === 0) {
     return (
       <section className="relative w-full h-[420px] md:h-[520px] rounded-[var(--radius)] overflow-hidden border border-white/5 bg-[#08060D] flex items-center justify-center">
         <Loader2 className="w-10 h-10 text-purple-500 animate-spin" />
