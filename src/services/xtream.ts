@@ -86,10 +86,9 @@ export class XtreamService {
     const timeout = isStreamAction ? 25000 : 12000;
 
     const proxies = [
-      (u: string) => `${supabase.functions.getServicePlanUrl ? '' : (supabase as any).supabaseUrl}/functions/v1/xtream-proxy?url=${encodeURIComponent(u)}`,
-      (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+      (u: string) => `http://127.0.0.1:3001/?url=${encodeURIComponent(u)}`,
       (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-      (u: string) => `https://cors-anywhere.herokuapp.com/${u}`,
+      (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
       (u: string) => u,
     ];
 
