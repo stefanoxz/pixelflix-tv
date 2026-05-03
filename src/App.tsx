@@ -31,6 +31,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [preselectedChannel, setPreselectedChannel] = useState<any>(null);
   const [preselectedItem, setPreselectedItem] = useState<any>(null);
+  const [preselectedCategoryId, setPreselectedCategoryId] = useState<string | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(() => {
     const saved = localStorage.getItem('selected_profile');
     return saved ? JSON.parse(saved) : null;
@@ -74,19 +75,16 @@ function App() {
   };
 
   const handleNavigate = (view: View, search?: string, data?: any) => {
-    if (view === 'search' && search) {
-      setSearchQuery(search);
-      setPreselectedItem(null);
-      setCurrentView('movie');
-    } else if (view === 'live' && data) {
+    if (view === 'live' && data) {
       setPreselectedChannel(data);
+      if (data.category_id) setPreselectedCategoryId(String(data.category_id));
       setCurrentView('live');
     } else if ((view === 'movie' || view === 'series') && data) {
       setPreselectedItem(data);
-      setSearchQuery('');
+      if (data.category_id) setPreselectedCategoryId(String(data.category_id));
       setCurrentView(view);
     } else {
-      setSearchQuery('');
+      setPreselectedCategoryId(null);
       setPreselectedChannel(null);
       setPreselectedItem(null);
       setCurrentView(view);
@@ -127,8 +125,9 @@ function App() {
         
         {currentView === 'live' && (
           <LiveExplorer
-            onBack={() => { setPreselectedChannel(null); setCurrentView('dashboard'); }}
+            onBack={() => { setPreselectedChannel(null); setPreselectedCategoryId(null); setCurrentView('dashboard'); }}
             preselectedChannel={preselectedChannel}
+            initialCategoryId={preselectedCategoryId}
           />
         )}
 
@@ -144,7 +143,8 @@ function App() {
             type={currentView as 'movie' | 'series'} 
             initialSearch={searchQuery}
             initialItem={preselectedItem}
-            onBack={() => { setSearchQuery(''); setPreselectedItem(null); setCurrentView('dashboard'); }} 
+            initialCategoryId={preselectedCategoryId}
+            onBack={() => { setSearchQuery(''); setPreselectedItem(null); setPreselectedCategoryId(null); setCurrentView('dashboard'); }} 
           />
         )}
 

@@ -11,13 +11,14 @@ import { ChevronLeft } from 'lucide-react';
 interface LiveExplorerProps {
   onBack: () => void;
   preselectedChannel?: any;
+  initialCategoryId?: string | null;
 }
 
-export const LiveExplorer = ({ onBack, preselectedChannel }: LiveExplorerProps) => {
+export const LiveExplorer = ({ onBack, preselectedChannel, initialCategoryId }: LiveExplorerProps) => {
   const queryClient = useQueryClient();
   const username = xtreamService.getCredentials()?.username || 'user';
 
-  const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
+  const [selectedCategory, setSelectedCategory] = useState<string>(initialCategoryId || 'Todos');
   const [selectedChannel, setSelectedChannel] = useState<any | null>(preselectedChannel ?? null);
 
   // Fetch Categories

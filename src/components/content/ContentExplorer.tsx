@@ -18,14 +18,15 @@ interface ContentExplorerProps {
   onBack: () => void;
   initialSearch?: string;
   initialItem?: any;
+  initialCategoryId?: string | null;
 }
 
-export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem }: ContentExplorerProps) => {
+export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem, initialCategoryId }: ContentExplorerProps) => {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(initialSearch);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const [selectedCategory, setSelectedCategory] = useState(initialCategoryId || 'Todos');
   const [selectedItem, setSelectedItem] = useState<any | null>(initialItem ?? null);
   const [isPlaying, setIsPlaying] = useState(false);
   
