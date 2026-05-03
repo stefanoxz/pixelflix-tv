@@ -29,18 +29,12 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
         setLoading(true);
         try {
           const seriesId = item.series_id || item.id;
-          console.log('[Series] Fetching info for ID:', seriesId);
           const data = await xtreamService.fetchAction('get_series_info', { series_id: String(seriesId) });
           setSeriesInfo(data);
           
-          // Improved season selection logic
-          const availableSeasons = data?.seasons 
-            ? (Array.isArray(data.seasons) ? data.seasons : Object.values(data.seasons))
-            : [];
-            
-          if (availableSeasons.length > 0) {
-            const firstSeason = availableSeasons[0].season_number || Object.keys(data.episodes || {})[0];
-            setSelectedSeason(String(firstSeason));
+          const episodeKeys = Object.keys(data?.episodes || {});
+          if (episodeKeys.length > 0) {
+            setSelectedSeason(episodeKeys[0]);
           }
         } catch (err) {
           console.error('Error fetching series info:', err);
