@@ -59,8 +59,8 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
     }
     setSearching(true);
     try {
-      const [live, movies, series] = await Promise.all([
-        xtreamService.getStreams('live'),
+      // Only fetch Movies and Series as requested
+      const [movies, series] = await Promise.all([
         xtreamService.getStreams('movie'),
         xtreamService.getStreams('series'),
       ]);
@@ -69,18 +69,13 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
       const qn = normalize(q);
 
       const matched: SearchResult[] = [
-        ...live.filter((s: any) => normalize(s.name || '').includes(qn))
-          .slice(0, 10).map((s: any) => {
-            const id = String(s.stream_id || s.num || Math.random());
-            return { id, name: s.name, icon: s.stream_icon, type: 'live' as const, raw: { ...s, id } };
-          }),
         ...movies.filter((s: any) => normalize(s.name || '').includes(qn))
-          .slice(0, 10).map((s: any) => {
+          .slice(0, 15).map((s: any) => {
             const id = String(s.stream_id || s.num || Math.random());
             return { id, name: s.name, icon: s.stream_icon || s.cover, type: 'movie' as const, raw: { ...s, id } };
           }),
         ...series.filter((s: any) => normalize(s.name || '').includes(qn))
-          .slice(0, 10).map((s: any) => {
+          .slice(0, 15).map((s: any) => {
             const id = String(s.series_id || s.stream_id || Math.random());
             return { id, name: s.name, icon: s.cover || s.stream_icon, type: 'series' as const, raw: { ...s, id } };
           }),
@@ -98,12 +93,6 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
     return () => clearTimeout(timer);
   }, [query, runSearch]);
 
-  const TYPE_ICON = {
-    live: Tv,
-    movie: Film,
-    series: PlayCircle
-  };
-
   return (
     <div className="fixed inset-0 z-[100] bg-[#08060a] text-white flex flex-col font-sans overflow-hidden">
       {/* Header */}
@@ -117,7 +106,7 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
           </button>
           <div className="flex items-center gap-3">
             <Search size={24} className="text-purple-500" />
-            <h1 className="text-2xl font-black tracking-tighter uppercase italic">Pesquisar</h1>
+            <h1 className="text-2xl font-black tracking-tighter uppercase italic">Pesquisar Filmes & Séries</h1>
           </div>
         </div>
 
@@ -142,7 +131,7 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Busque por filmes ou séries..."
+                placeholder="Nome do filme ou série..."
                 className="bg-transparent flex-1 outline-none text-2xl font-black placeholder:text-zinc-700 tracking-tight"
               />
               {query && (
@@ -198,11 +187,11 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
           {!query ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40">
               <div className="w-32 h-32 rounded-full border-2 border-white/10 flex items-center justify-center mb-8">
-                <Search size={48} className="text-zinc-500" />
+                <Film size={48} className="text-zinc-500" />
               </div>
               <h2 className="text-4xl font-black tracking-tight mb-4 uppercase italic">O que vamos ver hoje?</h2>
               <p className="text-lg text-zinc-400 max-w-md leading-relaxed">
-                Use o teclado ao lado para buscar seus canais, filmes ou séries favoritos.
+                Use o teclado ao lado para buscar seus filmes ou séries favoritos.
               </p>
             </div>
           ) : searching ? (
@@ -210,35 +199,35 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
               <Loader2 className="w-12 h-12 text-purple-500 animate-spin" />
             </div>
           ) : results.length > 0 ? (
-            <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar space-y-4">
-              <h3 className="text-[10px] font-black text-zinc-500 tracking-[0.3em] uppercase mb-6 px-4">Resultados Encontrados ({results.length})</h3>
-              <div className="grid grid-cols-1 gap-3">
+            <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar pb-10">
+              <h3 className="text-[10px] font-black text-zinc-500 tracking-[0.3em] uppercase mb-8 px-2">Resultados Encontrados ({results.length})</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                 {results.map((result) => (
                   <button
                     key={`${result.type}-${result.id}`}
                     onClick={() => onNavigate(result.type, undefined, result.raw)}
-                    className="flex items-center gap-6 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-purple-500/50 transition-all group text-left shadow-xl"
+                    className="flex flex-col group text-left transition-all animate-in fade-in zoom-in duration-500"
                   >
-                    <div className="w-20 h-28 rounded-xl overflow-hidden bg-zinc-900 shrink-0 shadow-lg group-hover:scale-105 transition-transform">
+                    <div className="aspect-[2/3] w-full rounded-2xl overflow-hidden bg-zinc-900 shadow-2xl group-hover:scale-105 group-hover:ring-4 group-hover:ring-purple-500/50 transition-all relative">
                       {result.icon ? (
-                        <img src={result.icon} alt={result.name} className="w-full h-full object-cover" />
+                        <img src={result.icon} alt={result.name} className="w-full h-full object-cover" loading="lazy" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-zinc-700">
-                          <Film size={32} />
+                        <div className="w-full h-full flex items-center justify-center text-zinc-800">
+                          <Film size={48} />
                         </div>
                       )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-[8px] font-black tracking-widest uppercase border border-purple-500/20">
-                          {result.type === 'live' ? 'CANAL' : result.type === 'movie' ? 'FILME' : 'SÉRIE'}
-                        </span>
+                      {/* Overlay Type Badge */}
+                      <div className="absolute top-3 right-3">
+                         <span className="px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md text-white text-[8px] font-black tracking-widest uppercase border border-white/10">
+                            {result.type === 'movie' ? 'FILME' : 'SÉRIE'}
+                         </span>
                       </div>
-                      <h4 className="text-xl font-black text-white group-hover:text-purple-400 transition-colors line-clamp-1">{result.name}</h4>
-                      <p className="text-sm text-zinc-500 font-medium mt-1 uppercase tracking-tight">Sincronizado via Servidor VIBE</p>
                     </div>
-                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-purple-500 group-hover:text-white transition-all shadow-inner">
-                      <ChevronRight size={20} />
+                    <div className="mt-4">
+                      <h4 className="text-sm font-black text-white group-hover:text-purple-400 transition-colors line-clamp-2 leading-snug">
+                        {result.name}
+                      </h4>
+                      <p className="text-[10px] text-zinc-500 font-bold mt-1.5 uppercase tracking-widest opacity-60">Sincronizado via VIBE</p>
                     </div>
                   </button>
                 ))}
