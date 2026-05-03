@@ -115,8 +115,8 @@ export const HomeNav = ({ onNavigate }: HomeNavProps) => {
   return (
     <header className="px-6 md:px-10 py-5 flex items-center justify-between gap-6 bg-black/80 backdrop-blur-xl sticky top-0 z-50 border-b border-white/5" style={{ fontFamily: "'Inter', 'SF Pro Display', system-ui, sans-serif" }}>
       {/* Logo */}
-      <div className="shrink-0">
-        <img src={vibeLogo} alt="Vibe" className="h-14 w-auto object-contain drop-shadow-[0_0_20px_rgba(168,85,247,0.6)]" loading="eager" />
+      <div className="shrink-0 transition-transform hover:scale-105 duration-500">
+        <img src={vibeLogo} alt="Vibe" className="h-24 w-auto object-contain drop-shadow-[0_0_30px_rgba(168,85,247,0.7)]" loading="eager" />
       </div>
 
       {/* Nav Pills */}

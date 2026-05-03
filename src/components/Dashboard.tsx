@@ -3,7 +3,6 @@ import { Clapperboard, Film } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { HomeNav } from './home/HomeNav';
 import { HeroCarousel } from './home/HeroCarousel';
-import { StreamingRow } from './home/StreamingRow';
 import { ContentRow } from './home/ContentRow';
 import { RecentChannelsRow } from './home/RecentChannelsRow';
 import { xtreamService } from '@/services/xtream';
@@ -80,7 +79,9 @@ export const Dashboard = memo(({ onLogout, onNavigate }: DashboardProps) => {
 
       <main className="flex-1 px-4 md:px-10 py-6 max-w-[1600px] mx-auto w-full relative">
         <HeroCarousel />
-        <StreamingRow />
+        
+        {/* Espaçamento extra para layout premium */}
+        <div className="h-12" />
 
         {/* Recently watched channels - click goes directly to that channel */}
         <RecentChannelsRow

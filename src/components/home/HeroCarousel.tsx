@@ -131,7 +131,7 @@ export const HeroCarousel = () => {
           </span>
         </div>
 
-        <h2 className="text-5xl md:text-7xl font-black text-white mb-6 tracking-tighter leading-[0.9] drop-shadow-2xl animate-in fade-in slide-in-from-bottom duration-1000">
+        <h2 className="text-6xl md:text-8xl font-black text-white mb-6 tracking-tighter leading-[0.85] drop-shadow-2xl animate-in fade-in slide-in-from-bottom duration-1000">
           {slide.title}
         </h2>
 
