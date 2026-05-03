@@ -125,7 +125,7 @@ export const HeroCarousel = ({ onAction, movies, series }: HeroCarouselProps) =>
           </span>
         </div>
 
-        <h2 className="text-6xl md:text-8xl font-black text-white mb-6 tracking-tighter leading-[0.85] drop-shadow-2xl animate-in fade-in slide-in-from-bottom duration-1000">
+        <h2 className="text-4xl md:text-6xl font-black text-white mb-6 tracking-tighter leading-tight drop-shadow-2xl animate-in fade-in slide-in-from-bottom duration-1000 max-w-2xl">
           {slide.title}
         </h2>
 
