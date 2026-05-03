@@ -16,12 +16,13 @@ import { settingsService } from '../../services/settingsService';
 interface ContentExplorerProps {
   type: 'live' | 'movie' | 'series';
   onBack: () => void;
+  initialSearch?: string;
 }
 
-export const ContentExplorer = ({ type, onBack }: ContentExplorerProps) => {
+export const ContentExplorer = ({ type, onBack, initialSearch = '' }: ContentExplorerProps) => {
   const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(initialSearch);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [selectedItem, setSelectedItem] = useState<any | null>(null);

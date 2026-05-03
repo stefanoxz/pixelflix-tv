@@ -17,7 +17,7 @@ const LoadingView = () => (
   </div>
 );
 
-type View = 'login' | 'profiles' | 'sync' | 'dashboard' | 'live' | 'movie' | 'series' | 'settings' | 'admin';
+type View = 'login' | 'profiles' | 'sync' | 'dashboard' | 'live' | 'movie' | 'series' | 'settings' | 'admin' | 'search';
 
 interface Profile {
   id: string;
@@ -27,6 +27,7 @@ interface Profile {
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('login');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(() => {
     const saved = localStorage.getItem('selected_profile');
     return saved ? JSON.parse(saved) : null;
@@ -69,8 +70,14 @@ function App() {
     setCurrentView('login');
   };
 
-  const handleNavigate = (view: View) => {
-    setCurrentView(view);
+  const handleNavigate = (view: View, search?: string) => {
+    if (view === 'search' && search) {
+      setSearchQuery(search);
+      setCurrentView('movie'); // default search tab
+    } else {
+      setSearchQuery('');
+      setCurrentView(view);
+    }
   };
 
   return (
@@ -101,7 +108,7 @@ function App() {
           <Dashboard 
             profile={selectedProfile}
             onLogout={handleLogout} 
-            onNavigate={(view) => handleNavigate(view as View)} 
+            onNavigate={(view, search) => handleNavigate(view as View, search)} 
           />
         )}
         
@@ -112,7 +119,8 @@ function App() {
         {(currentView === 'movie' || currentView === 'series') && (
           <ContentExplorer 
             type={currentView as 'movie' | 'series'} 
-            onBack={() => setCurrentView('dashboard')} 
+            initialSearch={searchQuery}
+            onBack={() => { setSearchQuery(''); setCurrentView('dashboard'); }} 
           />
         )}
 
