@@ -8,6 +8,15 @@ interface LiveCategorySidebarProps {
 }
 
 export const LiveCategorySidebar = memo(({ categories, selectedCategory, onSelectCategory }: LiveCategorySidebarProps) => {
+  const activeRef = React.useRef<HTMLButtonElement>(null);
+
+  // Auto-scroll to active category
+  React.useEffect(() => {
+    if (activeRef.current) {
+      activeRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [selectedCategory]);
+
   return (
     <aside className="w-72 flex flex-col border-r border-white/5 bg-[#121212] p-4 gap-2 overflow-y-auto custom-scrollbar flex-shrink-0">
       {categories.map(cat => {
@@ -18,15 +27,16 @@ export const LiveCategorySidebar = memo(({ categories, selectedCategory, onSelec
         return (
           <button
             key={catId}
+            ref={isActive ? activeRef : null}
             onClick={() => onSelectCategory(catId)}
             className={`w-full group flex items-center justify-between px-4 py-4 rounded-xl transition-all relative overflow-hidden border ${
               isActive
-              ? 'bg-gradient-to-r from-purple-900/40 to-transparent border-purple-500/30 text-white' 
+              ? 'bg-gradient-to-r from-purple-600/20 to-transparent border-purple-500/30 text-white' 
               : 'bg-[#1A1A1A]/50 border-transparent text-zinc-500 hover:bg-[#1A1A1A] hover:text-zinc-300'
             }`}
           >
             {isActive && (
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 shadow-[0_0_15px_#3b82f6]" />
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-500 shadow-[0_0_15px_#a855f7]" />
             )}
 
             <div className="flex items-center gap-4">
@@ -38,7 +48,7 @@ export const LiveCategorySidebar = memo(({ categories, selectedCategory, onSelec
               </span>
             </div>
 
-            <ChevronRight size={14} className={`transition-all ${isActive ? 'text-blue-400 opacity-100' : 'opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5'}`} />
+            <ChevronRight size={14} className={`transition-all ${isActive ? 'text-purple-400 opacity-100' : 'opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5'}`} />
           </button>
         );
       })}
