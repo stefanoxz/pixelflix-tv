@@ -131,7 +131,8 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
 
   const videoOptions = useMemo(() => {
     if (!channel || !isPlaying) return null;
-    const streamUrl = xtreamService.getStreamUrl(channel.id, currentFormat, 'live');
+    const streamId = channel.stream_id || channel.id;
+    const streamUrl = xtreamService.getStreamUrl(streamId, currentFormat, 'live');
     const mimeType = currentFormat === 'ts' ? 'video/mp2t' : 'application/x-mpegURL';
     
     return {
