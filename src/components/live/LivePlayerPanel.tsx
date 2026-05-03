@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Clock, Tv, Loader2, Play } from 'lucide-react';
 import { PremiumPlayer } from '../PremiumPlayer';
 import { ErrorBoundary } from '../layout/ErrorBoundary';
