@@ -95,7 +95,7 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
       <div className="absolute inset-0 bg-black/95 backdrop-blur-xl" onClick={onClose} />
 
-      <div className="relative w-full max-w-6xl bg-[#0A0A0A] border border-white/10 rounded-[40px] overflow-hidden shadow-2xl flex flex-col md:flex-row animate-in zoom-in-95 duration-500 max-h-[90vh]">
+      <div className="relative w-full max-w-6xl bg-[#0A0A0A] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row animate-in zoom-in-95 duration-500 max-h-[90vh]">
         <button
           onClick={onClose}
           className="absolute top-6 right-6 z-20 p-3 rounded-full bg-black/50 hover:bg-white/10 transition-colors border border-white/10 text-white"
@@ -109,20 +109,27 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
         </div>
 
         {/* Poster Section */}
-        <div className="hidden md:block w-[300px] flex-shrink-0 relative">
+        <div className="hidden md:block w-[380px] flex-shrink-0 relative bg-zinc-900/20">
           {tmdbLoading ? (
-            <div className="w-full h-full bg-zinc-900 flex items-center justify-center">
+            <div className="w-full h-full flex items-center justify-center">
               <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
             </div>
           ) : (
-            <>
+            <div className="relative w-full h-full overflow-hidden">
+              {/* Blurred Background */}
               <img
                 src={display.icon}
-                className="w-full h-full object-cover opacity-90"
+                className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-30 scale-110"
+                alt=""
+              />
+              {/* Actual Poster */}
+              <img
+                src={display.icon}
+                className="relative w-full h-full object-contain z-10"
                 onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x900/111111/FFFFFF?text=SEM+CAPA'; }}
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#0A0A0A]" />
-            </>
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-[#0A0A0A] z-20" />
+            </div>
           )}
         </div>
 
