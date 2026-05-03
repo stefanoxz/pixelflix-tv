@@ -63,7 +63,7 @@ export class XtreamService {
     }
   }
 
-  private async fetchAction(action: string, params: Record<string, string> = {}) {
+  async fetchAction(action: string, params: Record<string, string> = {}) {
     if (!this.credentials) {
       throw new XtreamError('Servidor não configurado', 'NO_CONFIG');
     }
