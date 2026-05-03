@@ -51,6 +51,7 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
       fetchInfo();
     }
   }, [item, type]);
+  if (!item) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
