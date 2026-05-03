@@ -6,10 +6,12 @@ interface ContentRowProps {
   title: string;
   icon: LucideIcon;
   items: RowItem[];
+  onItemClick?: (item: RowItem) => void;
 }
 
-const ContentItem = memo(({ item }: { item: RowItem }) => (
+const ContentItem = memo(({ item, onClick }: { item: RowItem; onClick?: (item: RowItem) => void }) => (
   <button
+    onClick={() => onClick?.(item)}
     className="shrink-0 w-[140px] md:w-[160px] group/item relative rounded-xl overflow-hidden bg-zinc-900 border border-white/5 hover:border-purple-500/60 hover:scale-105 transition-all duration-300"
   >
     <div className="aspect-[2/3] w-full overflow-hidden bg-zinc-800">
@@ -38,7 +40,7 @@ const ContentItem = memo(({ item }: { item: RowItem }) => (
 
 ContentItem.displayName = 'ContentItem';
 
-export const ContentRow = memo(({ title, icon: Icon, items }: ContentRowProps) => {
+export const ContentRow = memo(({ title, icon: Icon, items, onItemClick }: ContentRowProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(true);
@@ -93,7 +95,7 @@ export const ContentRow = memo(({ title, icon: Icon, items }: ContentRowProps) =
           className="flex gap-4 overflow-x-auto pb-6 no-scrollbar scroll-smooth"
         >
           {items.map((item) => (
-            <ContentItem key={item.id} item={item} />
+            <ContentItem key={item.id} item={item} onClick={onItemClick} />
           ))}
         </div>
 

@@ -87,11 +87,21 @@ export const Dashboard = memo(({ onLogout, onNavigate }: DashboardProps) => {
         />
 
         {movies.length > 0 && (
-          <ContentRow title="Novos Filmes" icon={Film} items={movies} />
+          <ContentRow
+            title="Novos Filmes"
+            icon={Film}
+            items={movies}
+            onItemClick={(item) => onNavigate('movie', undefined, item)}
+          />
         )}
 
         {series.length > 0 && (
-          <ContentRow title="Séries em Destaque" icon={Clapperboard} items={series} />
+          <ContentRow
+            title="Séries em Destaque"
+            icon={Clapperboard}
+            items={series}
+            onItemClick={(item) => onNavigate('series', undefined, item)}
+          />
         )}
       </main>
 

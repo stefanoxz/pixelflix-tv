@@ -17,15 +17,16 @@ interface ContentExplorerProps {
   type: 'live' | 'movie' | 'series';
   onBack: () => void;
   initialSearch?: string;
+  initialItem?: any;
 }
 
-export const ContentExplorer = ({ type, onBack, initialSearch = '' }: ContentExplorerProps) => {
+export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem }: ContentExplorerProps) => {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(initialSearch);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
-  const [selectedItem, setSelectedItem] = useState<any | null>(null);
+  const [selectedItem, setSelectedItem] = useState<any | null>(initialItem ?? null);
   const [isPlaying, setIsPlaying] = useState(false);
   
   const username = xtreamService.getCredentials()?.username || 'user';

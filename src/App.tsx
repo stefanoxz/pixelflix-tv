@@ -29,6 +29,7 @@ function App() {
   const [currentView, setCurrentView] = useState<View>('login');
   const [searchQuery, setSearchQuery] = useState('');
   const [preselectedChannel, setPreselectedChannel] = useState<any>(null);
+  const [preselectedItem, setPreselectedItem] = useState<any>(null);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(() => {
     const saved = localStorage.getItem('selected_profile');
     return saved ? JSON.parse(saved) : null;
@@ -74,13 +75,19 @@ function App() {
   const handleNavigate = (view: View, search?: string, data?: any) => {
     if (view === 'search' && search) {
       setSearchQuery(search);
+      setPreselectedItem(null);
       setCurrentView('movie');
     } else if (view === 'live' && data) {
       setPreselectedChannel(data);
       setCurrentView('live');
+    } else if ((view === 'movie' || view === 'series') && data) {
+      setPreselectedItem(data);
+      setSearchQuery('');
+      setCurrentView(view);
     } else {
       setSearchQuery('');
       setPreselectedChannel(null);
+      setPreselectedItem(null);
       setCurrentView(view);
     }
   };
@@ -128,7 +135,8 @@ function App() {
           <ContentExplorer 
             type={currentView as 'movie' | 'series'} 
             initialSearch={searchQuery}
-            onBack={() => { setSearchQuery(''); setCurrentView('dashboard'); }} 
+            initialItem={preselectedItem}
+            onBack={() => { setSearchQuery(''); setPreselectedItem(null); setCurrentView('dashboard'); }} 
           />
         )}
 
