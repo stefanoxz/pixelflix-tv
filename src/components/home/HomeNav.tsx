@@ -113,7 +113,7 @@ export const HomeNav = ({ onNavigate }: HomeNavProps) => {
   };
 
   return (
-    <header className="px-6 md:px-10 py-4 flex items-center justify-between gap-6 bg-black/80 backdrop-blur-xl sticky top-0 z-50 border-b border-white/5">
+    <header className="px-6 md:px-10 py-5 flex items-center justify-between gap-6 bg-black/80 backdrop-blur-xl sticky top-0 z-50 border-b border-white/5" style={{ fontFamily: "'Inter', 'SF Pro Display', system-ui, sans-serif" }}>
       {/* Logo */}
       <div className="shrink-0">
         <img src={vibeLogo} alt="Vibe" className="h-9 w-auto object-contain drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]" loading="eager" />
@@ -126,10 +126,10 @@ export const HomeNav = ({ onNavigate }: HomeNavProps) => {
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className="flex items-center gap-3 px-8 py-3.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/8 transition-all text-base font-bold whitespace-nowrap active:scale-95"
+              className="flex items-center gap-3 px-8 py-3.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/8 transition-all text-base font-semibold tracking-wide whitespace-nowrap active:scale-95"
             >
-              <item.icon size={20} className="opacity-70 shrink-0" />
-              <span className="hidden lg:inline tracking-wide">{item.label}</span>
+              <item.icon size={20} className="opacity-60 shrink-0" />
+              <span className="hidden lg:inline">{item.label}</span>
             </button>
           ))}
 
@@ -140,30 +140,29 @@ export const HomeNav = ({ onNavigate }: HomeNavProps) => {
           {!searchOpen ? (
             <button
               onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-3 px-8 py-3.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/8 transition-all text-base font-bold"
+              className="flex items-center gap-3 px-8 py-3.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/8 transition-all text-base font-semibold tracking-wide"
             >
-              <Search size={20} className="opacity-70" />
-              <span className="hidden lg:inline tracking-wide">Buscar</span>
+              <Search size={20} className="opacity-60" />
+              <span className="hidden lg:inline">Buscar</span>
             </button>
           ) : (
-            <div ref={wrapRef} className="relative flex items-center gap-2 px-4 py-2 min-w-[240px]">
-              <Search size={13} className="text-purple-400 shrink-0" />
+            <div ref={wrapRef} className="relative flex items-center gap-3 px-5 py-2.5 min-w-[380px]">
+              <Search size={16} className="text-purple-400 shrink-0" />
               <input
                 ref={inputRef}
                 type="text"
                 value={searchQuery}
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Canais, filmes, séries..."
-                className="flex-1 bg-transparent text-white text-xs font-medium placeholder:text-zinc-600 outline-none"
+                placeholder="Buscar canais, filmes, séries..."
+                className="flex-1 bg-transparent text-white text-base font-medium placeholder:text-zinc-500 outline-none tracking-wide"
               />
               {searching
-                ? <Loader2 size={13} className="text-purple-400 animate-spin shrink-0" />
+                ? <Loader2 size={15} className="text-purple-400 animate-spin shrink-0" />
                 : searchQuery
-                  ? <button onClick={() => { setSearchQuery(''); setResults([]); }} className="text-zinc-600 hover:text-white transition-colors"><X size={13} /></button>
+                  ? <button onClick={() => { setSearchQuery(''); setResults([]); }} className="text-zinc-500 hover:text-white transition-colors"><X size={15} /></button>
                   : null
               }
-              <button onClick={handleClose} className="text-zinc-600 hover:text-white transition-colors ml-1 text-[9px] font-black uppercase tracking-widest">ESC</button>
 
               {/* Dropdown results */}
               {results.length > 0 && (
@@ -210,9 +209,7 @@ export const HomeNav = ({ onNavigate }: HomeNavProps) => {
         </div>
       </nav>
 
-      <div className="shrink-0 hidden md:block">
-        <span className="text-[9px] font-bold text-zinc-700 tracking-widest">v1.5.10</span>
-      </div>
+      <div className="shrink-0 w-9" />
     </header>
   );
 };
