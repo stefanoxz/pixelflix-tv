@@ -200,7 +200,6 @@ export const LiveExplorer = ({ onBack }: LiveExplorerProps) => {
           selectedCategory={selectedCategory} 
           onSelectCategory={(id) => {
             setSelectedCategory(id);
-            setSelectedChannel(null); // Optional: clear selected channel when changing category
           }} 
         />
         
