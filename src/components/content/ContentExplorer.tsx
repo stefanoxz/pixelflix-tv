@@ -126,11 +126,24 @@ export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem 
 
   const videoOptions = useMemo(() => {
     if (!selectedItem) return null;
-    
+
+    // Normalize: items from ContentExplorer have .id (string), raw items from Dashboard have .stream_id or .series_id
+    const streamId = String(
+      selectedItem.id ||
+      selectedItem.stream_id ||
+      selectedItem.series_id ||
+      ''
+    );
+
+    if (!streamId) {
+      console.warn('[ContentExplorer] Could not determine stream ID for item:', selectedItem);
+      return null;
+    }
+
     // Determine the best extension based on type
     const ext = type === 'live' ? 'm3u8' : 'mp4';
-    const streamUrl = xtreamService.getStreamUrl(selectedItem.id, ext, type);
-    
+    const streamUrl = xtreamService.getStreamUrl(streamId, ext, type);
+
     return {
       autoplay: true,
       controls: true,
