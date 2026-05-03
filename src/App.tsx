@@ -10,6 +10,7 @@ const ContentExplorer = lazy(() => import('./components/content/ContentExplorer'
 const LiveExplorer = lazy(() => import('./components/live/LiveExplorer').then(module => ({ default: module.LiveExplorer })));
 const AdminPanel = lazy(() => import('./components/AdminPanel').then(module => ({ default: module.AdminPanel })));
 const SettingsMenu = lazy(() => import('./components/settings/SettingsMenu').then(module => ({ default: module.SettingsMenu })));
+const SearchView = lazy(() => import('./components/SearchView').then(module => ({ default: module.SearchView })));
 
 const LoadingView = () => (
   <div className="min-h-screen bg-black flex items-center justify-center">
@@ -128,6 +129,13 @@ function App() {
           <LiveExplorer
             onBack={() => { setPreselectedChannel(null); setCurrentView('dashboard'); }}
             preselectedChannel={preselectedChannel}
+          />
+        )}
+
+        {currentView === 'search' && (
+          <SearchView 
+            onNavigate={handleNavigate}
+            onBack={() => setCurrentView('dashboard')}
           />
         )}
 

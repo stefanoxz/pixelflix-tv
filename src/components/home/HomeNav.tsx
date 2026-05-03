@@ -136,80 +136,26 @@ export const HomeNav = ({ onNavigate }: HomeNavProps) => {
           {/* Divider */}
           <div className="w-px h-5 bg-white/10 mx-1 shrink-0" />
 
-          {/* Search trigger or inline input */}
-          {!searchOpen ? (
-            <button
-              onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-3 px-8 py-3.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/8 transition-all text-base font-semibold tracking-wide"
-            >
-              <Search size={20} className="opacity-60" />
-              <span className="hidden lg:inline">Buscar</span>
-            </button>
-          ) : (
-            <div ref={wrapRef} className="relative flex items-center gap-3 px-5 py-2.5 min-w-[380px]">
-              <Search size={16} className="text-purple-400 shrink-0" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={searchQuery}
-                onChange={handleChange}
-                onKeyDown={handleKeyDown}
-                placeholder="Buscar canais, filmes, séries..."
-                className="flex-1 bg-transparent text-white text-base font-medium placeholder:text-zinc-500 outline-none tracking-wide"
-              />
-              {searching
-                ? <Loader2 size={15} className="text-purple-400 animate-spin shrink-0" />
-                : searchQuery
-                  ? <button onClick={() => { setSearchQuery(''); setResults([]); }} className="text-zinc-500 hover:text-white transition-colors"><X size={15} /></button>
-                  : null
-              }
-
-              {/* Dropdown results */}
-              {results.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-3 bg-[#0c0a12] border border-white/10 rounded-[24px] shadow-2xl overflow-hidden z-[200] animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="p-2 max-h-[420px] overflow-y-auto custom-scrollbar">
-                    {(['live', 'movie', 'series'] as const).map((type) => {
-                      const group = results.filter(r => r.type === type);
-                      if (group.length === 0) return null;
-                      const Icon = TYPE_ICON[type];
-                      return (
-                        <div key={type} className="mb-1">
-                          <div className="flex items-center gap-2 px-3 py-2">
-                            <Icon size={11} className="text-purple-500" />
-                            <span className="text-[9px] font-black text-purple-500 uppercase tracking-[0.2em]">{TYPE_LABEL[type]}s</span>
-                          </div>
-                          {group.map((result) => (
-                            <button
-                              key={result.id}
-                              onClick={() => handleSelectResult(result)}
-                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-white/5 transition-all text-left group"
-                            >
-                              {result.icon
-                                ? <img src={result.icon} alt="" className="w-8 h-8 rounded-xl object-cover shrink-0 opacity-80 group-hover:opacity-100" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
-                                : <div className="w-8 h-8 rounded-xl bg-white/5 shrink-0 flex items-center justify-center"><Icon size={14} className="text-zinc-600" /></div>
-                              }
-                              <span className="text-sm font-medium text-zinc-300 group-hover:text-white transition-colors line-clamp-1">{result.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* No results */}
-              {!searching && searchQuery.length >= 2 && results.length === 0 && (
-                <div className="absolute top-full left-0 right-0 mt-3 bg-[#0c0a12] border border-white/10 rounded-[24px] shadow-2xl p-6 text-center z-[200]">
-                  <p className="text-zinc-600 text-xs font-medium">Nenhum resultado para "<span className="text-zinc-400">{searchQuery}</span>"</p>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Search trigger */}
+          <button
+            onClick={() => onNavigate('search')}
+            className="flex items-center gap-3 px-8 py-3.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/8 transition-all text-base font-semibold tracking-wide group"
+          >
+            <Search size={20} className="opacity-60 group-hover:text-purple-400 transition-colors" />
+            <span className="hidden lg:inline">Buscar</span>
+          </button>
         </div>
       </nav>
 
-      <div className="shrink-0 w-9" />
+      <div className="shrink-0">
+        <button
+          onClick={onLogout}
+          className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-red-500/20 hover:border-red-500/50 transition-all active:scale-90"
+          title="Sair"
+        >
+          <X size={20} />
+        </button>
+      </div>
     </header>
   );
 };
