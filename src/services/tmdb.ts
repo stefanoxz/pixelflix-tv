@@ -29,6 +29,8 @@ export interface TmdbMeta {
   runtime?: string;
   tagline?: string;
   tmdbId: number;
+  cast?: string[];
+  director?: string;
 }
 
 // ─────────────────────────────────────────────
@@ -80,7 +82,7 @@ async function searchEndpoint(
 }
 
 async function fetchDetail(path: string): Promise<any> {
-  try { return await fetchJson(buildUrl(path)); }
+  try { return await fetchJson(buildUrl(path, { append_to_response: 'credits' })); }
   catch { return {}; }
 }
 
@@ -102,6 +104,8 @@ function buildMeta(hit: any, detail: any, isMovie: boolean): TmdbMeta {
       : (detail.episode_run_time?.[0] ? `${detail.episode_run_time[0]} min/ep` : undefined),
     tagline:       detail.tagline || undefined,
     tmdbId:        hit.id,
+    cast:          (detail.credits?.cast || []).slice(0, 5).map((c: any) => c.name),
+    director:      (detail.credits?.crew || []).find((c: any) => c.job === 'Director')?.name,
   };
 }
 

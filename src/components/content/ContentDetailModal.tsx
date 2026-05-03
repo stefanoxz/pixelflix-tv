@@ -38,6 +38,8 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
     genres:   tmdb?.genres     || [],
     runtime:  tmdb?.runtime    || '',
     tagline:  tmdb?.tagline    || '',
+    director: tmdb?.director   || '',
+    cast:     tmdb?.cast       || [],
   };
 
   const seasons = seriesInfo?.seasons
@@ -137,30 +139,24 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
           <div className="p-8 md:p-12 overflow-y-auto custom-scrollbar relative">
             {/* Badges row */}
             <div className="flex flex-wrap items-center gap-3 mb-5">
-              <span className="px-3 py-1 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-black tracking-widest uppercase border border-purple-500/20">
+              <span className="px-3 py-1 rounded-full bg-purple-500 text-white text-[10px] font-black tracking-widest uppercase shadow-lg shadow-purple-500/20">
                 {type === 'live' ? 'AO VIVO' : type === 'movie' ? 'FILME' : 'SÉRIE'}
               </span>
               {display.year && (
-                <span className="text-zinc-500 text-[10px] font-black tracking-widest uppercase">{display.year}</span>
+                <span className="bg-white/5 px-3 py-1 rounded-full text-zinc-300 text-[10px] font-black tracking-widest border border-white/5 uppercase">{display.year}</span>
               )}
               {display.rating && (
-                <div className="flex items-center gap-1.5 text-yellow-500">
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-500">
                   <Star size={12} fill="currentColor" />
                   <span className="text-xs font-black">{display.rating}</span>
                 </div>
               )}
               {display.runtime && (
-                <div className="flex items-center gap-1.5 text-zinc-500 text-[10px] font-bold">
-                  <Clock size={11} />
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/5 text-zinc-300 text-[10px] font-bold">
+                  <Clock size={11} className="text-purple-400" />
                   {display.runtime}
                 </div>
               )}
-              {display.genres.slice(0, 3).map((g) => (
-                <span key={g} className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/8 text-zinc-400 text-[10px] font-bold">
-                  <Tag size={9} />
-                  {g}
-                </span>
-              ))}
             </div>
 
             {/* Title */}
@@ -170,27 +166,54 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
 
             {/* Tagline */}
             {display.tagline && (
-              <p className="text-purple-400 text-sm italic mb-6 opacity-80">{display.tagline}</p>
+              <p className="text-purple-400/80 text-lg font-medium italic mb-6">{display.tagline}</p>
             )}
 
-            <div className="space-y-8 mb-12 mt-6">
+            <div className="flex flex-wrap gap-2 mb-8">
+              {display.genres.map((g) => (
+                <span key={g} className="px-4 py-1.5 rounded-full bg-zinc-900 border border-white/5 text-zinc-400 text-[10px] font-black uppercase tracking-wider">
+                  {g}
+                </span>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-12">
               {/* Synopsis */}
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <h4 className="text-[10px] font-black text-zinc-500 tracking-[0.3em] uppercase flex items-center gap-2">
                   <Film size={11} />
                   Sinopse
-                  {tmdbLoading && <Loader2 size={11} className="animate-spin text-purple-400" />}
                 </h4>
-                <p className="text-zinc-400 text-sm md:text-base leading-relaxed max-w-2xl">{display.synopsis}</p>
+                <p className="text-zinc-400 text-sm md:text-base leading-relaxed">{display.synopsis}</p>
               </div>
 
+              {/* Credits */}
+              <div className="space-y-6">
+                {display.director && (
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-black text-zinc-500 tracking-[0.3em] uppercase">Direção</h4>
+                    <p className="text-white text-sm font-bold">{display.director}</p>
+                  </div>
+                )}
+                {display.cast.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-black text-zinc-500 tracking-[0.3em] uppercase">Elenco Principal</h4>
+                    <p className="text-white text-sm leading-relaxed font-medium">
+                      {display.cast.join(', ')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row items-center gap-4 mb-10">
               {type !== 'series' && (
                 <button
                   onClick={() => onPlay(item)}
-                  className="w-full md:w-auto px-12 bg-white text-black h-16 rounded-2xl flex items-center justify-center gap-3 font-black text-sm uppercase tracking-widest hover:bg-purple-500 hover:text-white transition-all shadow-2xl group"
+                  className="w-full md:w-auto px-12 bg-white text-black h-16 rounded-2xl flex items-center justify-center gap-4 font-black text-sm uppercase tracking-widest hover:bg-purple-500 hover:text-white transition-all shadow-2xl group active:scale-95"
                 >
                   Assistir Agora
-                  <Play size={20} fill="currentColor" className="group-hover:scale-110 transition-transform" />
+                  <Play size={22} fill="currentColor" className="group-hover:translate-x-1 transition-transform" />
                 </button>
               )}
             </div>
