@@ -105,7 +105,9 @@ function buildMeta(hit: any, detail: any, isMovie: boolean): TmdbMeta {
     tagline:       detail.tagline || undefined,
     tmdbId:        hit.id,
     cast:          (detail.credits?.cast || []).slice(0, 5).map((c: any) => c.name),
-    director:      (detail.credits?.crew || []).find((c: any) => c.job === 'Director')?.name,
+    director:      isMovie 
+      ? (detail.credits?.crew || []).find((c: any) => c.job === 'Director')?.name
+      : (detail.created_by?.[0]?.name || (detail.credits?.crew || []).find((c: any) => c.job === 'Executive Producer')?.name),
   };
 }
 

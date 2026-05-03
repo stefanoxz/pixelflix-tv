@@ -191,7 +191,9 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
               <div className="space-y-6">
                 {display.director && (
                   <div className="space-y-2">
-                    <h4 className="text-[10px] font-black text-zinc-500 tracking-[0.3em] uppercase">Direção</h4>
+                    <h4 className="text-[10px] font-black text-zinc-500 tracking-[0.3em] uppercase">
+                      {type === 'movie' ? 'Direção' : 'Criado por'}
+                    </h4>
                     <p className="text-white text-sm font-bold">{display.director}</p>
                   </div>
                 )}
