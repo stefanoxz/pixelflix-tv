@@ -14,28 +14,39 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
   const [loading, setLoading] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
 
-  const seasons = seriesInfo?.seasons 
+  // Normalize field names: handles both raw IPTV stream objects and RowItems
+  const norm = {
+    name:     item.name || item.title || 'Sem título',
+    icon:     item.stream_icon || item.cover || item.icon || item.poster || item.movie_image || '',
+    seriesId: item.series_id || item.stream_id || item.id,
+    year:     item.year || item.added?.substring(0, 4) || '',
+    rating:   item.rating || item.vote_average || '',
+    synopsis: item.synopsis || item.plot || item.description || item.overview || 'Descrição não disponível.',
+  };
+
+  const seasons = seriesInfo?.seasons
     ? (Array.isArray(seriesInfo.seasons) ? seriesInfo.seasons : Object.values(seriesInfo.seasons))
     : [];
 
   const rawEpisodes = seriesInfo?.episodes || {};
-  const episodes = rawEpisodes[selectedSeason || ''] 
+  const episodes = rawEpisodes[selectedSeason || '']
     ? (Array.isArray(rawEpisodes[selectedSeason || '']) ? rawEpisodes[selectedSeason || ''] : Object.values(rawEpisodes[selectedSeason || '']))
     : [];
+
+  // Deduplicate episodes by episode_num to avoid double entries from some servers
+  const uniqueEpisodes = episodes.filter((ep: any, idx: number, arr: any[]) =>
+    arr.findIndex((e: any) => e.episode_num === ep.episode_num) === idx
+  );
 
   useEffect(() => {
     if (type === 'series' && item) {
       const fetchInfo = async () => {
         setLoading(true);
         try {
-          const seriesId = item.series_id || item.id;
-          const data = await xtreamService.fetchAction('get_series_info', { series_id: String(seriesId) });
+          const data = await xtreamService.fetchAction('get_series_info', { series_id: String(norm.seriesId) });
           setSeriesInfo(data);
-          
           const episodeKeys = Object.keys(data?.episodes || {});
-          if (episodeKeys.length > 0) {
-            setSelectedSeason(episodeKeys[0]);
-          }
+          if (episodeKeys.length > 0) setSelectedSeason(episodeKeys[0]);
         } catch (err) {
           console.error('Error fetching series info:', err);
         } finally {
@@ -61,13 +72,13 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
 
         {/* Backdrop Image for Mobile */}
         <div className="absolute inset-0 md:hidden opacity-20 pointer-events-none">
-          <img src={item.icon} className="w-full h-full object-cover blur-sm" alt="" />
+          <img src={norm.icon} className="w-full h-full object-cover blur-sm" alt="" />
         </div>
 
         {/* Poster Section */}
         <div className="hidden md:block w-[350px] flex-shrink-0 relative">
           <img 
-            src={item.icon} 
+            src={norm.icon} 
             className="w-full h-full object-cover opacity-90" 
             onError={(e) => {(e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x900/111111/FFFFFF?text=SEM+CAPA';}} 
           />
@@ -81,19 +92,19 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
               <span className="px-3 py-1 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-black tracking-widest uppercase border border-purple-500/20">
                 {type === 'live' ? 'AO VIVO' : type === 'movie' ? 'FILME' : 'SÉRIE'}
               </span>
-              <span className="text-zinc-500 text-[10px] font-black tracking-widest uppercase">{item.year}</span>
+              <span className="text-zinc-500 text-[10px] font-black tracking-widest uppercase">{norm.year}</span>
               <div className="flex items-center gap-1.5 text-yellow-500">
                 <Star size={12} fill="currentColor" />
-                <span className="text-xs font-black">{item.rating}</span>
+                <span className="text-xs font-black">{norm.rating}</span>
               </div>
             </div>
 
-            <h3 className="text-4xl md:text-6xl font-black mb-8 leading-none uppercase tracking-tight text-white">{item.name}</h3>
+            <h3 className="text-4xl md:text-6xl font-black mb-8 leading-none uppercase tracking-tight text-white">{norm.name}</h3>
             
             <div className="space-y-8 mb-12">
               <div className="space-y-3">
                 <h4 className="text-[10px] font-black text-zinc-500 tracking-[0.3em] uppercase">Sinopse</h4>
-                <p className="text-zinc-400 text-sm md:text-base leading-relaxed max-w-2xl">{item.synopsis || item.plot || "Descrição não disponível."}</p>
+                <p className="text-zinc-400 text-sm md:text-base leading-relaxed max-w-2xl">{norm.synopsis}</p>
               </div>
 
               {type !== 'series' && (
@@ -135,7 +146,7 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
 
                     {/* Episodes List */}
                     <div className="grid grid-cols-1 gap-3">
-                      {episodes.map((episode: any) => (
+                      {uniqueEpisodes.map((episode: any) => (
                         <button
                           key={episode.id}
                           onClick={() => onPlay({

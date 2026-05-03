@@ -7,6 +7,7 @@ export interface RowItem {
   rating?: string;
   year?: string;
   genre?: string;
+  raw?: any; // original IPTV stream object
 }
 
 export interface Profile {

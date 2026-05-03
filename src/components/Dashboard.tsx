@@ -24,6 +24,7 @@ function toRowItem(s: any, type: 'movie' | 'series'): RowItem {
     poster,
     badge: type === 'movie' ? 'FILME' : 'SÉRIE',
     badgeColor: type === 'movie' ? '#7C3AED' : '#9333EA',
+    raw: s, // keep original for ContentDetailModal
   };
 }
 
@@ -91,7 +92,7 @@ export const Dashboard = memo(({ onLogout, onNavigate }: DashboardProps) => {
             title="Novos Filmes"
             icon={Film}
             items={movies}
-            onItemClick={(item) => onNavigate('movie', undefined, item)}
+            onItemClick={(item) => onNavigate('movie', undefined, item.raw || item)}
           />
         )}
 
@@ -100,7 +101,7 @@ export const Dashboard = memo(({ onLogout, onNavigate }: DashboardProps) => {
             title="Séries em Destaque"
             icon={Clapperboard}
             items={series}
-            onItemClick={(item) => onNavigate('series', undefined, item)}
+            onItemClick={(item) => onNavigate('series', undefined, item.raw || item)}
           />
         )}
       </main>
