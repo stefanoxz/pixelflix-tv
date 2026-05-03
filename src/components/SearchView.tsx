@@ -85,7 +85,7 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => runSearch(query), 300);
+    const timer = setTimeout(() => runSearch(query), 150);
     return () => clearTimeout(timer);
   }, [query, runSearch]);
 
@@ -125,19 +125,23 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
         <div className="w-[450px] flex flex-col gap-8 shrink-0 animate-in slide-in-from-left duration-700">
           {/* Search Input Box */}
           <div className="relative group">
-            <div className="absolute inset-0 bg-purple-500/10 blur-xl opacity-0 group-within:opacity-100 transition-opacity" />
-            <div className="relative bg-[#121212] border border-white/10 rounded-2xl p-6 flex items-center gap-4 group-within:border-purple-500/50 transition-all shadow-2xl">
-              <Search className="text-zinc-500 group-within:text-purple-500 transition-colors" size={24} />
+            <div className="absolute inset-0 bg-purple-500/20 blur-2xl opacity-0 group-within:opacity-100 transition-opacity duration-500" />
+            <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 flex items-center gap-5 group-within:border-purple-500 group-within:ring-4 group-within:ring-purple-500/10 transition-all shadow-2xl">
+              <Search className="text-zinc-500 group-within:text-purple-400 transition-colors" size={28} />
               <input 
+                autoFocus
                 type="text"
                 value={query}
-                readOnly
+                onChange={(e) => setQuery(e.target.value)}
                 placeholder="Busque por filmes ou séries..."
-                className="bg-transparent flex-1 outline-none text-xl font-bold placeholder:text-zinc-700"
+                className="bg-transparent flex-1 outline-none text-2xl font-black placeholder:text-zinc-700 tracking-tight"
               />
               {query && (
-                <button onClick={handleClear} className="text-zinc-500 hover:text-white transition-colors">
-                  <X size={20} />
+                <button 
+                  onClick={handleClear} 
+                  className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-white/10 text-zinc-500 hover:text-white transition-all"
+                >
+                  <X size={24} />
                 </button>
               )}
             </div>
