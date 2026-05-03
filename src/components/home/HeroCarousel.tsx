@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Play, Info, Star, Calendar, Tag } from 'lucide-react';
+import { Play, Info, Star, Calendar, Tag, Loader2 } from 'lucide-react';
 
 interface HeroSlide {
   id: string;
@@ -12,58 +12,97 @@ interface HeroSlide {
   backdrop: string;
 }
 
-const SLIDES: HeroSlide[] = [
+// Genre map (TMDB IDs → PT-BR names)
+const GENRE_MAP: Record<number, string> = {
+  28: 'Ação', 12: 'Aventura', 16: 'Animação', 35: 'Comédia',
+  80: 'Crime', 99: 'Documentário', 18: 'Drama', 10751: 'Família',
+  14: 'Fantasia', 36: 'História', 27: 'Terror', 10402: 'Música',
+  9648: 'Mistério', 10749: 'Romance', 878: 'Ficção Científica',
+  10770: 'TV Movie', 53: 'Suspense', 10752: 'Guerra', 37: 'Faroeste',
+  10759: 'Ação & Aventura', 10762: 'Kids', 10763: 'Notícias',
+  10764: 'Reality', 10765: 'Sci-Fi & Fantasy', 10766: 'Soap',
+  10767: 'Talk', 10768: 'War & Politics',
+};
+
+// Static fallback
+const FALLBACK: HeroSlide[] = [
   {
-    id: '1',
-    title: 'MARRIAGETOXIN',
-    type: 'Série',
-    date: '07/04/2026',
-    rating: '4.1',
-    genre: 'Animação',
-    synopsis:
-      'Um assassino de aluguel e uma vigarista de casamentos se lançam na batalha mais difícil do mundo pelo casamento! Gero é um jovem de um clã de assassinos de aluguel que existe há centenas de anos…',
-    backdrop:
-      'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=1600&h=700&fit=crop',
+    id: '1', title: 'SINNERS', type: 'Filme', date: '2025',
+    rating: '7.8', genre: 'Terror',
+    synopsis: 'Dois irmãos gêmeos tentam deixar seu passado violento para trás ao retornar à sua cidade natal no Deep South, mas acabam encontrando um mal ainda maior.',
+    backdrop: 'https://image.tmdb.org/t/p/original/b9EkFmHd9XxF9qDJGlHcPnTQ1y4.jpg',
   },
   {
-    id: '2',
-    title: 'NEON HORIZON',
-    type: 'Filme',
-    date: '12/03/2026',
-    rating: '4.7',
-    genre: 'Ficção',
-    synopsis:
-      'Em um futuro próximo, dois hackers descobrem uma conspiração que ameaça a realidade tal como conhecemos.',
-    backdrop:
-      'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1600&h=700&fit=crop',
+    id: '2', title: 'THUNDERBOLTS*', type: 'Filme', date: '2025',
+    rating: '7.4', genre: 'Ação',
+    synopsis: 'Um grupo de anti-heróis Marvel é recrutado para uma missão que pode salvar ou destruir o mundo.',
+    backdrop: 'https://image.tmdb.org/t/p/original/qlXLQ5Dn8JQIKaEMkRp3VDQxeUb.jpg',
   },
   {
-    id: '3',
-    title: 'CRIMSON CODE',
-    type: 'Série',
-    date: '20/05/2026',
-    rating: '4.5',
-    genre: 'Suspense',
-    synopsis:
-      'Uma equipe de investigadores cibernéticos persegue uma organização secreta por toda a Europa.',
-    backdrop:
-      'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=1600&h=700&fit=crop',
+    id: '3', title: 'THE LAST OF US', type: 'Série', date: '2025',
+    rating: '8.8', genre: 'Drama',
+    synopsis: 'Após uma pandemia devastadora, um sobrevivente endurece viaja pelos EUA com uma adolescente imune ao fungo mutante.',
+    backdrop: 'https://image.tmdb.org/t/p/original/uDgy6hyPd7qToEdBkYo4dUKLqJB.jpg',
   },
 ];
 
+const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY as string | undefined;
+
+async function fetchTrending(): Promise<HeroSlide[]> {
+  if (!TMDB_KEY) return FALLBACK;
+  try {
+    const res = await fetch(
+      `https://api.themoviedb.org/3/trending/all/week?api_key=${TMDB_KEY}&language=pt-BR`
+    );
+    const json = await res.json();
+    return (json.results || [])
+      .filter((item: any) => item.backdrop_path)
+      .slice(0, 6)
+      .map((item: any) => ({
+        id: String(item.id),
+        title: (item.title || item.name || '').toUpperCase(),
+        type: item.media_type === 'movie' ? 'Filme' : 'Série',
+        date: (item.release_date || item.first_air_date || '').substring(0, 4),
+        rating: item.vote_average?.toFixed(1) || 'N/A',
+        genre: GENRE_MAP[item.genre_ids?.[0]] || 'Entretenimento',
+        synopsis: item.overview || 'Sem sinopse disponível.',
+        backdrop: `https://image.tmdb.org/t/p/original${item.backdrop_path}`,
+      }));
+  } catch {
+    return FALLBACK;
+  }
+}
+
 export const HeroCarousel = () => {
+  const [slides, setSlides] = useState<HeroSlide[]>(FALLBACK);
   const [active, setActive] = useState(0);
+  const [loading, setLoading] = useState(!!TMDB_KEY);
 
   useEffect(() => {
-    const id = setInterval(() => setActive((p) => (p + 1) % SLIDES.length), 6000);
-    return () => clearInterval(id);
+    fetchTrending().then((data) => {
+      setSlides(data);
+      setLoading(false);
+    });
   }, []);
 
-  const slide = SLIDES[active];
+  useEffect(() => {
+    const id = setInterval(() => setActive((p) => (p + 1) % slides.length), 7000);
+    return () => clearInterval(id);
+  }, [slides.length]);
+
+  if (loading) {
+    return (
+      <section className="relative w-full h-[420px] md:h-[520px] rounded-[var(--radius)] overflow-hidden border border-white/5 bg-[#08060D] flex items-center justify-center">
+        <Loader2 className="w-10 h-10 text-purple-500 animate-spin" />
+      </section>
+    );
+  }
+
+  const slide = slides[active];
 
   return (
     <section className="relative w-full h-[420px] md:h-[520px] rounded-[var(--radius)] overflow-hidden border border-white/5 shadow-2xl group">
-      {SLIDES.map((s, idx) => (
+      {slides.map((s, idx) => (
         <div
           key={s.id}
           className={`absolute inset-0 transition-opacity duration-1000 ${idx === active ? 'opacity-100' : 'opacity-0'}`}
@@ -77,9 +116,14 @@ export const HeroCarousel = () => {
 
       <div className="relative z-10 h-full flex flex-col justify-end p-8 md:p-16 max-w-3xl">
         <div className="flex items-center gap-2 mb-4 animate-in fade-in slide-in-from-left duration-700">
-           <span className="bg-primary/20 text-primary text-[10px] font-black px-3 py-1 rounded-full border border-primary/20 uppercase tracking-widest">Destaque da Semana</span>
+          <span className="bg-primary/20 text-primary text-[10px] font-black px-3 py-1 rounded-full border border-primary/20 uppercase tracking-widest">
+            {TMDB_KEY ? '🔥 Em Alta Agora' : 'Destaque da Semana'}
+          </span>
+          <span className="bg-white/5 text-zinc-400 text-[10px] font-bold px-3 py-1 rounded-full border border-white/10 uppercase tracking-widest">
+            {slide.type}
+          </span>
         </div>
-        
+
         <h2 className="text-5xl md:text-7xl font-black text-white mb-6 tracking-tighter leading-[0.9] drop-shadow-2xl animate-in fade-in slide-in-from-bottom duration-1000">
           {slide.title}
         </h2>
@@ -104,7 +148,7 @@ export const HeroCarousel = () => {
         </div>
 
         <div className="flex items-center gap-2 mt-12">
-          {SLIDES.map((_, idx) => (
+          {slides.map((_, idx) => (
             <button
               key={idx}
               onClick={() => setActive(idx)}
