@@ -7,109 +7,101 @@ interface HomeNavProps {
   onLogout: () => void;
 }
 
-const navItems = [
-  { id: 'live',     label: 'Canais',        icon: Tv },
-  { id: 'movie',    label: 'Filmes',         icon: Film },
-  { id: 'series',   label: 'Séries',         icon: PlayCircle },
-  { id: 'sync',     label: 'Sincronizar',    icon: RefreshCcw },
-  { id: 'settings', label: 'Configurações',  icon: Settings },
-];
-
-export const HomeNav = ({ onNavigate, onLogout }: HomeNavProps) => {
+export const HomeNav = ({ onNavigate }: HomeNavProps) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (searchOpen) {
-      inputRef.current?.focus();
-    }
+    if (searchOpen) inputRef.current?.focus();
   }, [searchOpen]);
 
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const q = e.target.value;
-    setSearchQuery(q);
-    // Navigate to the content type based on current view — default to 'movie' for global search
-    // The search query will be picked up by ContentExplorer via the searchQuery prop
-    if (q.length >= 2) {
-      onNavigate('search', q);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setSearchOpen(false);
+      setSearchQuery('');
+    }
+    // Only navigate on Enter to avoid leaving the page while typing
+    if (e.key === 'Enter' && searchQuery.trim().length >= 2) {
+      onNavigate('search', searchQuery.trim());
+      setSearchOpen(false);
+      setSearchQuery('');
     }
   };
 
-  const handleCloseSearch = () => {
-    setSearchOpen(false);
-    setSearchQuery('');
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') handleCloseSearch();
-  };
+  const navItems = [
+    { id: 'live',     label: 'Canais',   icon: Tv },
+    { id: 'movie',    label: 'Filmes',    icon: Film },
+    { id: 'series',   label: 'Séries',    icon: PlayCircle },
+    { id: 'sync',     label: 'Sync',      icon: RefreshCcw },
+    { id: 'settings', label: 'Config',    icon: Settings },
+  ];
 
   return (
-    <header className="px-6 md:px-10 py-5 flex items-center justify-between gap-6 bg-black/80 backdrop-blur-xl sticky top-0 z-50 border-b border-white/5">
-      <div className="flex items-center gap-3 shrink-0">
+    <header className="px-6 md:px-10 py-4 flex items-center justify-between gap-4 bg-black/80 backdrop-blur-xl sticky top-0 z-50 border-b border-white/5">
+      {/* Logo */}
+      <div className="shrink-0">
         <img
           src={vibeLogo}
-          alt="Vibe Premium WebPlayer"
-          className="h-9 w-auto object-contain drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]"
+          alt="Vibe"
+          className="h-8 w-auto object-contain drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]"
           loading="eager"
         />
       </div>
 
-      {searchOpen ? (
-        // Search bar expanded
-        <div className="flex-1 flex items-center gap-3 bg-white/5 border border-purple-500/40 rounded-full px-5 py-2.5 backdrop-blur-md shadow-inner transition-all">
-          <Search size={16} className="text-purple-400 shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={searchQuery}
-            onChange={handleSearch}
-            onKeyDown={handleKeyDown}
-            placeholder="Buscar canais, filmes ou séries..."
-            className="flex-1 bg-transparent text-white text-sm font-medium placeholder:text-zinc-500 outline-none"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="text-zinc-500 hover:text-white transition-colors">
-              <X size={14} />
+      {/* Nav buttons + Search - all in one row */}
+      <nav className="flex-1 flex items-center justify-center">
+        <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-full px-2 py-1 backdrop-blur-md shadow-inner">
+          
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => onNavigate(item.id)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/8 transition-all text-[10px] font-bold whitespace-nowrap active:scale-95"
+            >
+              <item.icon size={13} className="opacity-70 shrink-0" />
+              <span className="hidden sm:inline tracking-wide">{item.label}</span>
+            </button>
+          ))}
+
+          {/* Divider */}
+          <div className="w-px h-5 bg-white/10 mx-1 shrink-0" />
+
+          {/* Search - inline expandable */}
+          {searchOpen ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 min-w-[200px] max-w-[280px]">
+              <Search size={12} className="text-purple-400 shrink-0" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Buscar... (Enter)"
+                className="flex-1 bg-transparent text-white text-[11px] font-medium placeholder:text-zinc-600 outline-none w-full"
+              />
+              <button
+                onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
+                className="text-zinc-600 hover:text-white transition-colors shrink-0"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/8 transition-all text-[10px] font-bold whitespace-nowrap active:scale-95"
+            >
+              <Search size={13} className="opacity-70" />
+              <span className="hidden sm:inline tracking-wide">Buscar</span>
             </button>
           )}
-          <button
-            onClick={handleCloseSearch}
-            className="text-zinc-500 hover:text-white text-[10px] font-black uppercase tracking-widest ml-2 transition-colors"
-          >
-            Fechar
-          </button>
         </div>
-      ) : (
-        // Normal nav
-        <nav className="flex-1 flex items-center justify-center">
-          <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-full px-2 py-1.5 backdrop-blur-md overflow-x-auto no-scrollbar shadow-inner">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => onNavigate(item.id)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 transition-all text-[11px] font-bold whitespace-nowrap active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary/50"
-              >
-                <item.icon size={14} className="opacity-70" />
-                <span className="hidden lg:inline tracking-wide">{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </nav>
-      )}
+      </nav>
 
-      <div className="flex items-center gap-3 shrink-0">
-        {!searchOpen && (
-          <button
-            onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-purple-500/20 hover:border-purple-500/30 transition-all text-[11px] font-bold"
-          >
-            <Search size={14} />
-            <span className="hidden lg:inline tracking-wide">Buscar</span>
-          </button>
-        )}
-        <span className="hidden md:block text-[10px] font-bold text-zinc-600 tracking-widest">v1.5.10</span>
+      {/* Version */}
+      <div className="shrink-0 hidden md:block">
+        <span className="text-[9px] font-bold text-zinc-700 tracking-widest">v1.5.10</span>
       </div>
     </header>
   );
