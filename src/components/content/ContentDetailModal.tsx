@@ -14,14 +14,14 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
   const [loading, setLoading] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
 
-  // Normalize field names: handles both raw IPTV stream objects and RowItems
+  // Normalize field names (safe with optional chaining when item is null)
   const norm = {
-    name:     item.name || item.title || 'Sem título',
-    icon:     item.stream_icon || item.cover || item.icon || item.poster || item.movie_image || '',
-    seriesId: item.series_id || item.stream_id || item.id,
-    year:     item.year || item.added?.substring(0, 4) || '',
-    rating:   item.rating || item.vote_average || '',
-    synopsis: item.synopsis || item.plot || item.description || item.overview || 'Descrição não disponível.',
+    name:     item?.name || item?.title || 'Sem título',
+    icon:     item?.stream_icon || item?.cover || item?.icon || item?.poster || item?.movie_image || '',
+    seriesId: item?.series_id || item?.stream_id || item?.id,
+    year:     item?.year || item?.added?.substring(0, 4) || '',
+    rating:   item?.rating || item?.vote_average || '',
+    synopsis: item?.synopsis || item?.plot || item?.description || item?.overview || 'Descrição não disponível.',
   };
 
   const seasons = seriesInfo?.seasons
@@ -56,6 +56,8 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
       fetchInfo();
     }
   }, [item, type]);
+
+  // Guard AFTER all hooks
   if (!item) return null;
 
   return (
