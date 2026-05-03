@@ -116,7 +116,7 @@ export const HeroCarousel = ({ onAction, movies, series }: HeroCarouselProps) =>
       <div className="relative z-10 h-full flex flex-col justify-end p-8 md:p-16 max-w-3xl">
         <div className="flex items-center gap-2 mb-4 animate-in fade-in slide-in-from-left duration-700">
           <span className="bg-primary/20 text-primary text-[10px] font-black px-3 py-1 rounded-full border border-primary/20 uppercase tracking-widest">
-            {HAS_TMDB ? '🔥 Em Alta Agora' : 'Destaque da Semana'}
+            🔥 Adicionado Recentemente
           </span>
           <span className="bg-white/5 text-zinc-400 text-[10px] font-bold px-3 py-1 rounded-full border border-white/10 uppercase tracking-widest">
             {slide.type}
