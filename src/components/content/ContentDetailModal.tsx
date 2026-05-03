@@ -14,15 +14,33 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
   const [loading, setLoading] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
 
+  const seasons = seriesInfo?.seasons 
+    ? (Array.isArray(seriesInfo.seasons) ? seriesInfo.seasons : Object.values(seriesInfo.seasons))
+    : [];
+
+  const rawEpisodes = seriesInfo?.episodes || {};
+  const episodes = rawEpisodes[selectedSeason || ''] 
+    ? (Array.isArray(rawEpisodes[selectedSeason || '']) ? rawEpisodes[selectedSeason || ''] : Object.values(rawEpisodes[selectedSeason || '']))
+    : [];
+
   useEffect(() => {
     if (type === 'series' && item) {
       const fetchInfo = async () => {
         setLoading(true);
         try {
-          const data = await xtreamService.fetchAction('get_series_info', { series_id: item.series_id || item.id });
+          const seriesId = item.series_id || item.id;
+          console.log('[Series] Fetching info for ID:', seriesId);
+          const data = await xtreamService.fetchAction('get_series_info', { series_id: String(seriesId) });
           setSeriesInfo(data);
-          if (data?.seasons?.length > 0) {
-            setSelectedSeason(data.seasons[0].season_number || Object.keys(data.episodes)[0]);
+          
+          // Improved season selection logic
+          const availableSeasons = data?.seasons 
+            ? (Array.isArray(data.seasons) ? data.seasons : Object.values(data.seasons))
+            : [];
+            
+          if (availableSeasons.length > 0) {
+            const firstSeason = availableSeasons[0].season_number || Object.keys(data.episodes || {})[0];
+            setSelectedSeason(String(firstSeason));
           }
         } catch (err) {
           console.error('Error fetching series info:', err);
@@ -33,11 +51,6 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
       fetchInfo();
     }
   }, [item, type]);
-
-  if (!item) return null;
-
-  const seasons = seriesInfo?.seasons || [];
-  const episodes = seriesInfo?.episodes?.[selectedSeason || ''] || [];
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
