@@ -1,16 +1,17 @@
 import { memo } from 'react';
-import { Clapperboard, Film, Tv } from 'lucide-react';
+import { Clapperboard, Film } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { HomeNav } from './home/HomeNav';
 import { HeroCarousel } from './home/HeroCarousel';
 import { StreamingRow } from './home/StreamingRow';
 import { ContentRow } from './home/ContentRow';
+import { RecentChannelsRow } from './home/RecentChannelsRow';
 import { xtreamService } from '@/services/xtream';
 import { Profile, RowItem } from '@/types';
 
 interface DashboardProps {
   onLogout: () => void;
-  onNavigate: (view: any, search?: string) => void;
+  onNavigate: (view: any, search?: string, data?: any) => void;
   profile: Profile | null;
 }
 
@@ -49,7 +50,6 @@ export const Dashboard = memo(({ onLogout, onNavigate }: DashboardProps) => {
         .slice(0, 30)
         .map((s) => toRowItem(s, 'series')),
   });
-
   const { data: channels = [] } = useQuery({
     queryKey: ['streams', 'live', 'all'],
     queryFn: () => xtreamService.getStreams('live'),
@@ -81,16 +81,17 @@ export const Dashboard = memo(({ onLogout, onNavigate }: DashboardProps) => {
         <HeroCarousel />
         <StreamingRow />
 
+        {/* Recently watched channels - click goes directly to that channel */}
+        <RecentChannelsRow
+          onChannelClick={(ch) => onNavigate('live', undefined, ch)}
+        />
+
         {movies.length > 0 && (
           <ContentRow title="Novos Filmes" icon={Film} items={movies} />
         )}
 
         {series.length > 0 && (
           <ContentRow title="Séries em Destaque" icon={Clapperboard} items={series} />
-        )}
-
-        {channels.length > 0 && (
-          <ContentRow title="Canais ao Vivo" icon={Tv} items={channels} />
         )}
       </main>
 

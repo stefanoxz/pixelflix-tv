@@ -28,6 +28,7 @@ interface Profile {
 function App() {
   const [currentView, setCurrentView] = useState<View>('login');
   const [searchQuery, setSearchQuery] = useState('');
+  const [preselectedChannel, setPreselectedChannel] = useState<any>(null);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(() => {
     const saved = localStorage.getItem('selected_profile');
     return saved ? JSON.parse(saved) : null;
@@ -70,12 +71,16 @@ function App() {
     setCurrentView('login');
   };
 
-  const handleNavigate = (view: View, search?: string) => {
+  const handleNavigate = (view: View, search?: string, data?: any) => {
     if (view === 'search' && search) {
       setSearchQuery(search);
-      setCurrentView('movie'); // default search tab
+      setCurrentView('movie');
+    } else if (view === 'live' && data) {
+      setPreselectedChannel(data);
+      setCurrentView('live');
     } else {
       setSearchQuery('');
+      setPreselectedChannel(null);
       setCurrentView(view);
     }
   };
@@ -108,12 +113,15 @@ function App() {
           <Dashboard 
             profile={selectedProfile}
             onLogout={handleLogout} 
-            onNavigate={(view, search) => handleNavigate(view as View, search)} 
+            onNavigate={(view, search, data) => handleNavigate(view as View, search, data)} 
           />
         )}
         
         {currentView === 'live' && (
-          <LiveExplorer onBack={() => setCurrentView('dashboard')} />
+          <LiveExplorer
+            onBack={() => { setPreselectedChannel(null); setCurrentView('dashboard'); }}
+            preselectedChannel={preselectedChannel}
+          />
         )}
 
         {(currentView === 'movie' || currentView === 'series') && (

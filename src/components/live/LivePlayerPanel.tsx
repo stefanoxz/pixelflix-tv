@@ -4,6 +4,7 @@ import { PremiumPlayer } from '../PremiumPlayer';
 import { ErrorBoundary } from '../layout/ErrorBoundary';
 import { xtreamService } from '../../services/xtream';
 import { settingsService } from '../../services/settingsService';
+import { recentChannelsService } from '../../services/recentChannels';
 
 interface LivePlayerPanelProps {
   channel: any | null;
@@ -65,6 +66,8 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
       const timer = setTimeout(() => {
         setIsLoading(false);
         setIsPlaying(true);
+        // Save to recently watched
+        recentChannelsService.add(channel);
       }, 400); 
       return () => clearTimeout(timer);
     }
