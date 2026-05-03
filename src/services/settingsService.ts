@@ -2,14 +2,12 @@ export type PlayerType = 'm3u8' | 'ts';
 
 export interface AppSettings {
   playerType: PlayerType;
-  p2pEnabled: boolean;
   adultLockEnabled: boolean;
   adultPin: string;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
   playerType: 'm3u8',
-  p2pEnabled: true,
   adultLockEnabled: true,
   adultPin: '0000',
 };
@@ -23,7 +21,10 @@ class SettingsService {
 
   private load() {
     try {
-      const stored = localStorage.getItem('pixelflix_settings');
+      let stored = localStorage.getItem('vibe_settings');
+      if (!stored) {
+        stored = localStorage.getItem('pixelflix_settings');
+      }
       if (stored) {
         this.settings = { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
       }
@@ -49,7 +50,7 @@ class SettingsService {
 
   private save() {
     try {
-      localStorage.setItem('pixelflix_settings', JSON.stringify(this.settings));
+      localStorage.setItem('vibe_settings', JSON.stringify(this.settings));
     } catch (err) {
       console.error('Failed to save settings:', err);
     }

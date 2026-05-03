@@ -83,7 +83,7 @@ export const Login = ({ onLogin, onAdminLogin }: LoginProps) => {
           const userInfo = await xtreamService.authenticate();
       
           if (userInfo) {
-            const supaEmail = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@pixelflix.local`;
+            const supaEmail = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@vibe.local`;
             const supaPassword = `Px!${password}#tv`; 
             
             const { error: signInError } = await supabase.auth.signInWithPassword({

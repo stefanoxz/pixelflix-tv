@@ -201,13 +201,6 @@ export const SettingsMenu = ({ onBack, onLogout }: SettingsMenuProps) => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-6 bg-white/5 rounded-2xl border border-white/5">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-12 h-6 rounded-full relative transition-colors cursor-pointer ${settings.p2pEnabled ? 'bg-green-500' : 'bg-zinc-700'}`} onClick={() => handleUpdateSetting({ p2pEnabled: !settings.p2pEnabled })}>
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.p2pEnabled ? 'left-7' : 'left-1'}`} />
-                    </div>
-                    <span className="font-bold tracking-widest uppercase">P2P: {settings.p2pEnabled ? 'Ligado' : 'Desligado'}</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -307,14 +300,14 @@ export const SettingsMenu = ({ onBack, onLogout }: SettingsMenuProps) => {
                   </div>
                   <div className="p-6 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between">
                     <span className="font-bold text-zinc-400">Ambiente</span>
-                    <span className="font-black text-green-500">Produção</span>
+                    <span className="font-black text-green-500 uppercase tracking-widest">SEGURO</span>
                   </div>
                 </div>
                 
                 <div className="p-6 bg-white/5 rounded-2xl border border-white/5 space-y-2">
                   <h3 className="font-black uppercase tracking-widest text-xs text-zinc-500">Sobre o App</h3>
                   <p className="text-sm text-zinc-400 leading-relaxed">
-                    O Pixelflix TV é o webplayer definitivo para streaming de conteúdos IPTV, focado em performance, design premium e facilidade de uso. Desenvolvido com as tecnologias mais modernas do mercado.
+                    O VIBE é o webplayer definitivo para streaming de conteúdos, focado em performance, design premium e facilidade de uso. Desenvolvido com as tecnologias mais modernas do mercado.
                   </p>
                 </div>
               </div>
@@ -360,7 +353,7 @@ export const SettingsMenu = ({ onBack, onLogout }: SettingsMenuProps) => {
                     </button>
                     <button 
                       onClick={() => {
-                        localStorage.removeItem('pixelflix_continue_watching');
+                        localStorage.removeItem('vibe_continue_watching');
                         setStats(prev => ({ ...prev, contMovies: 0, contSeries: 0 }));
                         alert('Histórico de reprodução limpo!');
                       }}
