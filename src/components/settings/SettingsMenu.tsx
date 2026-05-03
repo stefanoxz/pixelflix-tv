@@ -22,11 +22,12 @@ import { contentActions } from '../../services/content';
 interface SettingsMenuProps {
   onBack: () => void;
   onLogout: () => void;
+  onNavigate: (view: string) => void;
 }
 
 type SettingsSection = 'player' | 'adult' | 'app' | 'info' | 'data';
 
-export const SettingsMenu = ({ onBack, onLogout }: SettingsMenuProps) => {
+export const SettingsMenu = ({ onBack, onLogout, onNavigate }: SettingsMenuProps) => {
   const [activeSection, setActiveSection] = useState<SettingsSection>('player');
   const [settings, setSettings] = useState<AppSettings>(settingsService.getSettings());
   const [userInfo, setUserInfo] = useState<any>(null);
@@ -175,7 +176,8 @@ export const SettingsMenu = ({ onBack, onLogout }: SettingsMenuProps) => {
                     <RefreshCw size={18} />
                     <span className="text-sm font-bold uppercase tracking-widest">Tipo de Player</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                     <button 
                       onClick={() => handleUpdateSetting({ playerType: 'm3u8' })}
                       className={`p-5 rounded-2xl border transition-all flex items-center justify-center gap-3 ${
@@ -198,9 +200,8 @@ export const SettingsMenu = ({ onBack, onLogout }: SettingsMenuProps) => {
                       <Zap size={20} />
                       <span className="font-black tracking-widest uppercase">MPEGTS (TS)</span>
                     </button>
-                  </div>
                 </div>
-                </div>
+              </div>
             </div>
           )}
 
