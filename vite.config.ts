@@ -12,33 +12,6 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
-    proxy: {
-      '/api-proxy': {
-        target: 'http://localhost',
-        changeOrigin: true,
-        bypass(req, _res, _options) {
-          // Extract the real target URL from the query string
-          const urlParam = new URL(req.url!, 'http://localhost').searchParams.get('url');
-          if (urlParam) {
-            (req as any).__proxyTarget = urlParam;
-          }
-          return undefined;
-        },
-        router(req) {
-          const urlParam = new URL(req.url!, 'http://localhost').searchParams.get('url');
-          return urlParam || 'http://localhost';
-        },
-        rewrite: (path) => {
-          const urlObj = new URL(path, 'http://localhost');
-          const target = urlObj.searchParams.get('url');
-          if (target) {
-            const t = new URL(target);
-            return t.pathname + t.search;
-          }
-          return path;
-        },
-      },
-    },
   },
   plugins: [
     react(), 
