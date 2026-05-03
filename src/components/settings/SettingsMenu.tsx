@@ -200,9 +200,7 @@ export const SettingsMenu = ({ onBack, onLogout }: SettingsMenuProps) => {
                     </button>
                   </div>
                 </div>
-
                 </div>
-              </div>
             </div>
           )}
 
