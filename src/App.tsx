@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { ProfileSelection } from './components/ProfileSelection';
@@ -27,7 +27,22 @@ interface Profile {
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('login');
-  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(() => {
+    const saved = localStorage.getItem('selected_profile');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  // Auto-recovery of session on load
+  useEffect(() => {
+    const creds = localStorage.getItem('xtream_creds');
+    if (creds) {
+      if (selectedProfile) {
+        setCurrentView('dashboard');
+      } else {
+        setCurrentView('profiles');
+      }
+    }
+  }, [selectedProfile]);
 
   const handleLogin = () => {
     setCurrentView('profiles');
@@ -35,6 +50,7 @@ function App() {
 
   const handleProfileSelect = (profile: Profile) => {
     setSelectedProfile(profile);
+    localStorage.setItem('selected_profile', JSON.stringify(profile));
     setCurrentView('sync');
   };
 
@@ -48,6 +64,8 @@ function App() {
 
   const handleLogout = () => {
     setSelectedProfile(null);
+    localStorage.removeItem('selected_profile');
+    localStorage.removeItem('xtream_creds');
     setCurrentView('login');
   };
 
