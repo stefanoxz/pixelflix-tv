@@ -83,7 +83,7 @@ async function fetchTrending(): Promise<HeroSlide[]> {
 export const HeroCarousel = () => {
   const [slides, setSlides] = useState<HeroSlide[]>(FALLBACK);
   const [active, setActive] = useState(0);
-  const [loading, setLoading] = useState(!!TMDB_KEY);
+  const [loading, setLoading] = useState(HAS_TMDB);
 
   useEffect(() => {
     fetchTrending().then((data) => {
