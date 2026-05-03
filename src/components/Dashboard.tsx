@@ -1,42 +1,71 @@
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 import { Clapperboard, Film, Tv } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { HomeNav } from './home/HomeNav';
 import { HeroCarousel } from './home/HeroCarousel';
 import { StreamingRow } from './home/StreamingRow';
 import { ContentRow } from './home/ContentRow';
+import { xtreamService } from '@/services/xtream';
 import { Profile, RowItem } from '@/types';
 
 interface DashboardProps {
   onLogout: () => void;
-  onNavigate: (view: any) => void;
+  onNavigate: (view: any, search?: string) => void;
   profile: Profile | null;
 }
 
-
-const POSTERS = [
-  'https://image.tmdb.org/t/p/w300/aosm8NMQ3UyoBVpSxyimorCQykC.jpg',
-  'https://image.tmdb.org/t/p/w300/9PFonBhy4cQy7Jz20NpMygczOkv.jpg',
-  'https://image.tmdb.org/t/p/w300/8Y43POKjjKDGI9MH89NW0NAzzp8.jpg',
-  'https://image.tmdb.org/t/p/w300/xDMIl84Qo5Tsu62c9DGWhmPI67A.jpg',
-  'https://image.tmdb.org/t/p/w300/qhb1qOilapbapxWQn9jtRCMwXJF.jpg',
-  'https://image.tmdb.org/t/p/w300/vZloFAK7NmvMGKE7VkF5UHaz0I.jpg',
-  'https://image.tmdb.org/t/p/w300/2cxhvwyEwRlysAmRH4iodkvo0z5.jpg',
-  'https://image.tmdb.org/t/p/w300/k68nPLbIST6NP96JmTxmZijEvCA.jpg',
-];
-
-const buildItems = (prefix: string): RowItem[] =>
-  POSTERS.map((p, i) => ({
-    id: `${prefix}-${i}`,
-    title: `${prefix} ${i + 1}`,
-    poster: p,
-    badge: i % 3 === 0 ? 'LEGENDADO' : i % 3 === 1 ? 'CINEMA' : undefined,
-    badgeColor: i % 3 === 0 ? '#7C3AED' : '#9333EA',
-  }));
+function toRowItem(s: any, type: 'movie' | 'series'): RowItem {
+  const poster =
+    s.stream_icon || s.cover || s.movie_image || s.backdrop_path || '';
+  return {
+    id: String(s.stream_id || s.series_id || s.num || Math.random()),
+    title: s.name || s.title || 'Sem título',
+    poster,
+    badge: type === 'movie' ? 'FILME' : 'SÉRIE',
+    badgeColor: type === 'movie' ? '#7C3AED' : '#9333EA',
+  };
+}
 
 export const Dashboard = memo(({ onLogout, onNavigate }: DashboardProps) => {
-  const seriesUpdated = useMemo(() => buildItems('Série'), []);
-  const newMovies = useMemo(() => buildItems('Filme'), []);
-  const newSeries = useMemo(() => buildItems('Nova'), []);
+  // Pull real data from IPTV cache (loaded during sync – no extra request)
+  const { data: movies = [] } = useQuery({
+    queryKey: ['streams', 'movie', 'all'],
+    queryFn: () => xtreamService.getStreams('movie'),
+    staleTime: Infinity,
+    select: (data: any[]) =>
+      data
+        .filter((s) => s.stream_icon || s.cover)
+        .slice(0, 30)
+        .map((s) => toRowItem(s, 'movie')),
+  });
+
+  const { data: series = [] } = useQuery({
+    queryKey: ['streams', 'series', 'all'],
+    queryFn: () => xtreamService.getStreams('series'),
+    staleTime: Infinity,
+    select: (data: any[]) =>
+      data
+        .filter((s) => s.cover || s.stream_icon)
+        .slice(0, 30)
+        .map((s) => toRowItem(s, 'series')),
+  });
+
+  const { data: channels = [] } = useQuery({
+    queryKey: ['streams', 'live', 'all'],
+    queryFn: () => xtreamService.getStreams('live'),
+    staleTime: Infinity,
+    select: (data: any[]) =>
+      data
+        .filter((s) => s.stream_icon)
+        .slice(0, 30)
+        .map((s) => ({
+          id: String(s.stream_id || s.num),
+          title: s.name || 'Canal',
+          poster: s.stream_icon,
+          badge: 'AO VIVO',
+          badgeColor: '#DC2626',
+        })),
+  });
 
   return (
     <div className="min-h-screen bg-[#08060a] text-white flex flex-col font-sans selection:bg-purple-500/30">
@@ -51,9 +80,18 @@ export const Dashboard = memo(({ onLogout, onNavigate }: DashboardProps) => {
       <main className="flex-1 px-4 md:px-10 py-6 max-w-[1600px] mx-auto w-full relative">
         <HeroCarousel />
         <StreamingRow />
-        <ContentRow title="Últimas Séries Atualizadas" icon={Clapperboard} items={seriesUpdated} />
-        <ContentRow title="Novos Filmes" icon={Film} items={newMovies} />
-        <ContentRow title="Novas Séries" icon={Tv} items={newSeries} />
+
+        {movies.length > 0 && (
+          <ContentRow title="Novos Filmes" icon={Film} items={movies} />
+        )}
+
+        {series.length > 0 && (
+          <ContentRow title="Séries em Destaque" icon={Clapperboard} items={series} />
+        )}
+
+        {channels.length > 0 && (
+          <ContentRow title="Canais ao Vivo" icon={Tv} items={channels} />
+        )}
       </main>
 
       <footer className="p-6 text-center border-t border-white/5 bg-black/40 mt-10">
