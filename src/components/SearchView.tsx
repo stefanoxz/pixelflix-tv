@@ -70,11 +70,20 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
 
       const matched: SearchResult[] = [
         ...live.filter((s: any) => normalize(s.name || '').includes(qn))
-          .slice(0, 10).map((s: any) => ({ id: String(s.stream_id), name: s.name, icon: s.stream_icon, type: 'live' as const, raw: s })),
+          .slice(0, 10).map((s: any) => {
+            const id = String(s.stream_id || s.num || Math.random());
+            return { id, name: s.name, icon: s.stream_icon, type: 'live' as const, raw: { ...s, id } };
+          }),
         ...movies.filter((s: any) => normalize(s.name || '').includes(qn))
-          .slice(0, 10).map((s: any) => ({ id: String(s.stream_id), name: s.name, icon: s.stream_icon || s.cover, type: 'movie' as const, raw: s })),
+          .slice(0, 10).map((s: any) => {
+            const id = String(s.stream_id || s.num || Math.random());
+            return { id, name: s.name, icon: s.stream_icon || s.cover, type: 'movie' as const, raw: { ...s, id } };
+          }),
         ...series.filter((s: any) => normalize(s.name || '').includes(qn))
-          .slice(0, 10).map((s: any) => ({ id: String(s.series_id || s.stream_id), name: s.name, icon: s.cover || s.stream_icon, type: 'series' as const, raw: s })),
+          .slice(0, 10).map((s: any) => {
+            const id = String(s.series_id || s.stream_id || Math.random());
+            return { id, name: s.name, icon: s.cover || s.stream_icon, type: 'series' as const, raw: { ...s, id } };
+          }),
       ];
       setResults(matched);
     } catch {

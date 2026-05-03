@@ -55,7 +55,7 @@ export const LiveExplorer = ({ onBack, preselectedChannel, initialCategoryId }: 
       if (!Array.isArray(data)) return [];
       return data.map(s => ({
         ...s,
-        id: String(s.stream_id),
+        id: String(s.stream_id || s.num || Math.random()),
         name: s.name || 'Sem Nome',
         icon: s.stream_icon
       }));

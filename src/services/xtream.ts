@@ -209,7 +209,9 @@ export class XtreamService {
     const { playerType } = settingsService.getSettings();
     const ext = extension || (type === 'live' ? 'm3u8' : playerType === 'ts' ? 'ts' : 'mp4');
     
-    return `${baseUrl}/${prefix}${this.credentials.username}/${this.credentials.password}/${streamId}.${ext}`;
+    return streamId && streamId !== 'undefined' 
+      ? `${baseUrl}/${prefix}${this.credentials.username}/${this.credentials.password}/${streamId}.${ext}`
+      : '';
   }
 
   async getShortEPG(streamId: string): Promise<any[]> {
