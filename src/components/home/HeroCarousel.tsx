@@ -47,19 +47,20 @@ const FALLBACK: HeroSlide[] = [
 ];
 
 const TMDB_TOKEN = import.meta.env.VITE_TMDB_TOKEN as string | undefined;
+const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY as string | undefined;
+const HAS_TMDB = !!(TMDB_API_KEY || TMDB_TOKEN);
 
 async function fetchTrending(): Promise<HeroSlide[]> {
-  if (!TMDB_TOKEN) return FALLBACK;
+  if (!HAS_TMDB) return FALLBACK;
   try {
-    const res = await fetch(
-      'https://api.themoviedb.org/3/trending/all/week?language=pt-BR',
-      {
-        headers: {
-          Authorization: `Bearer ${TMDB_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const url = TMDB_API_KEY
+      ? `https://api.themoviedb.org/3/trending/all/week?api_key=${TMDB_API_KEY}&language=pt-BR`
+      : 'https://api.themoviedb.org/3/trending/all/week?language=pt-BR';
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (TMDB_TOKEN && !TMDB_API_KEY) headers['Authorization'] = `Bearer ${TMDB_TOKEN}`;
+
+    const res = await fetch(url, { headers });
     const json = await res.json();
     return (json.results || [])
       .filter((item: any) => item.backdrop_path)
@@ -123,7 +124,7 @@ export const HeroCarousel = () => {
       <div className="relative z-10 h-full flex flex-col justify-end p-8 md:p-16 max-w-3xl">
         <div className="flex items-center gap-2 mb-4 animate-in fade-in slide-in-from-left duration-700">
           <span className="bg-primary/20 text-primary text-[10px] font-black px-3 py-1 rounded-full border border-primary/20 uppercase tracking-widest">
-            {TMDB_TOKEN ? '🔥 Em Alta Agora' : 'Destaque da Semana'}
+            {HAS_TMDB ? '🔥 Em Alta Agora' : 'Destaque da Semana'}
           </span>
           <span className="bg-white/5 text-zinc-400 text-[10px] font-bold px-3 py-1 rounded-full border border-white/10 uppercase tracking-widest">
             {slide.type}
