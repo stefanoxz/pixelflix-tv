@@ -12,6 +12,7 @@ interface HeroSlide {
   genre: string;
   synopsis: string;
   backdrop: string;
+  raw: any;
 }
 
 const FALLBACK: HeroSlide[] = [
@@ -30,7 +31,7 @@ const FALLBACK: HeroSlide[] = [
 ];
 
 interface HeroCarouselProps {
-  onAction: (title: string, type: 'movie' | 'series') => void;
+  onAction: (item: any, type: 'movie' | 'series') => void;
   movies: RowItem[];
   series: RowItem[];
 }
@@ -65,6 +66,7 @@ export const HeroCarousel = ({ onAction, movies, series }: HeroCarouselProps) =>
               genre: tmdb?.genres?.[0] || 'Destaque',
               synopsis: tmdb?.synopsis || 'Assista a esta super produção disponível agora no seu webplayer VIBE.',
               backdrop: tmdb?.backdrop || item.poster || '',
+              raw: item.raw || item,
             };
           })
         );
@@ -139,13 +141,13 @@ export const HeroCarousel = ({ onAction, movies, series }: HeroCarouselProps) =>
 
         <div className="flex flex-wrap items-center gap-4 animate-in fade-in slide-in-from-bottom duration-700 delay-500">
           <button 
-            onClick={() => onAction(slide.title, slide.type === 'Filme' ? 'movie' : 'series')}
+            onClick={() => onAction(slide.raw, slide.type === 'Filme' ? 'movie' : 'series')}
             className="flex items-center gap-3 bg-primary text-primary-foreground px-10 py-4 rounded-full font-black text-sm hover:scale-105 active:scale-95 transition-all shadow-xl shadow-primary/30"
           >
             <Play size={20} className="fill-current" /> ASSISTIR AGORA
           </button>
           <button 
-            onClick={() => onAction(slide.title, slide.type === 'Filme' ? 'movie' : 'series')}
+            onClick={() => onAction(slide.raw, slide.type === 'Filme' ? 'movie' : 'series')}
             className="flex items-center gap-3 bg-white/5 backdrop-blur-md text-white px-10 py-4 rounded-full font-black text-sm hover:bg-white/10 transition-all border border-white/10 active:scale-95"
           >
             <Info size={20} /> DETALHES
