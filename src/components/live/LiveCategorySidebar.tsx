@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import React, { memo, useRef, useEffect } from 'react';
 import { Tv, Star, ChevronRight } from 'lucide-react';
 
 interface LiveCategorySidebarProps {
@@ -8,10 +8,10 @@ interface LiveCategorySidebarProps {
 }
 
 export const LiveCategorySidebar = memo(({ categories, selectedCategory, onSelectCategory }: LiveCategorySidebarProps) => {
-  const activeRef = React.useRef<HTMLButtonElement>(null);
+  const activeRef = useRef<HTMLButtonElement>(null);
 
   // Auto-scroll to active category
-  React.useEffect(() => {
+  useEffect(() => {
     if (activeRef.current) {
       activeRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
