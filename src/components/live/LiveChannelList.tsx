@@ -25,9 +25,19 @@ export const LiveChannelList = memo(({
   const virtualizer = useVirtualizer({
     count: channels.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 72, // 64px card + 8px gap approx
+    estimateSize: () => 72,
     overscan: 10,
   });
+
+  // Auto-scroll to selected channel on mount or selection change
+  React.useEffect(() => {
+    if (selectedChannel && channels.length > 0) {
+      const index = channels.findIndex(c => String(c.id) === String(selectedChannel.id));
+      if (index !== -1) {
+        virtualizer.scrollToIndex(index, { align: 'center' });
+      }
+    }
+  }, [selectedChannel?.id, channels.length, virtualizer]);
 
   return (
     <div 
