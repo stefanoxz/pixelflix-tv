@@ -85,8 +85,10 @@ export class XtreamService {
     const isStreamAction = action.includes('streams') || action.includes('series');
     const timeout = isStreamAction ? 25000 : 12000;
 
+    const proxyBase = typeof window !== 'undefined' ? `http://${window.location.hostname}:3001` : 'http://127.0.0.1:3001';
+
     const proxies = [
-      (u: string) => `http://127.0.0.1:3001/?url=${encodeURIComponent(u)}`,
+      (u: string) => `${proxyBase}/?url=${encodeURIComponent(u)}`,
       (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
       (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
       (u: string) => u,
@@ -220,7 +222,8 @@ export class XtreamService {
       : '';
 
     if (useProxy && url) {
-      return `http://127.0.0.1:3001/?url=${encodeURIComponent(url)}`;
+      const proxyBase = typeof window !== 'undefined' ? `http://${window.location.hostname}:3001` : 'http://127.0.0.1:3001';
+      return `${proxyBase}/?url=${encodeURIComponent(url)}`;
     }
 
     return url;

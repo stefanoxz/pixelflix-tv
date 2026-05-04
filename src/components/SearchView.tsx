@@ -111,7 +111,7 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
               <Search size={20} className="text-purple-500" />
               <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white">Explorar Conteúdo</h1>
             </div>
-            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] mt-1 ml-8">Busca inteligente PixelFlix</p>
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] mt-1 ml-8">Busca inteligente Vibe</p>
           </div>
         </div>
 

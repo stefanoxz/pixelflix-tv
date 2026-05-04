@@ -8,7 +8,7 @@ export interface WatchProgress {
 }
 
 class HistoryService {
-  private STORAGE_KEY = 'pixelflix_history';
+  private STORAGE_KEY = 'vibe_history';
 
   getProgress(streamId: string): WatchProgress | null {
     const history = this.getAll();

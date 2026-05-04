@@ -18,9 +18,21 @@ export const LivePlayerPanel = memo(({ channel, epg, isLoadingEPG }: LivePlayerP
   const decodeSafe = (text: string) => {
     if (!text) return '';
     try {
-      return atob(text);
+      // Try Base64 first
+      const decoded = atob(text);
+      try {
+        // Fix potential UTF-8 double encoding after Base64 decode
+        return decodeURIComponent(escape(decoded));
+      } catch {
+        return decoded;
+      }
     } catch {
-      return text;
+      // If not Base64, try to fix UTF-8 double encoding on raw text
+      try {
+        return decodeURIComponent(escape(text));
+      } catch {
+        return text;
+      }
     }
   };
 
@@ -149,14 +161,40 @@ export const LivePlayerPanel = memo(({ channel, epg, isLoadingEPG }: LivePlayerP
                     {isLoadingEPG ? (
                       <div className="h-3 w-20 bg-white/5 animate-pulse rounded" />
                     ) : (
-                      <span>{currentProgram?.start?.split(' ')[1]?.substring(0, 5) || '--:--'} - {currentProgram?.end?.split(' ')[1]?.substring(0, 5) || '--:--'}</span>
+                      <span>
+                        {(() => {
+                          const start = currentProgram?.start || currentProgram?.start_timestamp;
+                          const end = currentProgram?.end || currentProgram?.stop_timestamp;
+                          
+                          const format = (t: any) => {
+                            if (!t) return '--:--';
+                            const s = String(t);
+                            
+                            // MySQL Format: "2024-05-04 23:35:00"
+                            if (s.includes(' ')) return s.split(' ')[1].substring(0, 5);
+                            
+                            // Timestamp Format: 10 digits (seconds) or 13 digits (ms)
+                            if (/^\d{10,}$/.test(s)) {
+                              const ms = s.length > 11 ? parseInt(s) : parseInt(s) * 1000;
+                              return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                            }
+                            
+                            // Fallback: If it's already "HH:MM", keep it
+                            if (/^\d{2}:\d{2}/.test(s)) return s.substring(0, 5);
+                            
+                            return '--:--';
+                          };
+
+                          return `${format(start)} - ${format(end)}`;
+                        })()}
+                      </span>
                     )}
                   </div>
                   <div className="w-1 h-1 rounded-full bg-zinc-800" />
-                  <span>Vibe TV</span>
+                  <img src={vibeLogo} alt="Vibe" className="h-2.5 w-auto opacity-50 grayscale brightness-200" />
                 </div>
               </div>
-
+...
               <div className="text-sm text-zinc-400 leading-relaxed font-medium line-clamp-3">
                 {isLoadingEPG ? (
                   <div className="space-y-2">
@@ -167,15 +205,6 @@ export const LivePlayerPanel = memo(({ channel, epg, isLoadingEPG }: LivePlayerP
                   currentProgram?.description ? decodeSafe(currentProgram.description) : 'Sem descrição disponível para este programa no momento.'
                 )}
               </div>
-            </div>
-
-            <div className="mt-8 flex items-center gap-4">
-              <button className="flex-1 py-4 rounded-2xl bg-white text-black font-black text-[10px] uppercase tracking-[0.2em] hover:bg-purple-500 hover:text-white transition-all duration-500 shadow-xl shadow-white/5 active:scale-95">
-                Ver Detalhes
-              </button>
-              <button className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white hover:bg-white/10 transition-all active:scale-95">
-                <Info size={20} />
-              </button>
             </div>
           </div>
 
@@ -191,10 +220,9 @@ export const LivePlayerPanel = memo(({ channel, epg, isLoadingEPG }: LivePlayerP
                 </div>
                 <span className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.3em]">A Seguir</span>
               </div>
-              <button className="text-[9px] font-black text-purple-400 uppercase tracking-widest hover:text-purple-300 transition-colors">Grade Completa</button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 max-h-[180px] lg:max-h-[220px] overflow-y-auto custom-scrollbar pr-2">
               {isLoadingEPG ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-6 p-4 rounded-3xl bg-white/[0.02] border border-white/5 animate-pulse">

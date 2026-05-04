@@ -23,7 +23,7 @@ class SettingsService {
     try {
       let stored = localStorage.getItem('vibe_settings');
       if (!stored) {
-        stored = localStorage.getItem('pixelflix_settings');
+        stored = localStorage.getItem('vibe_settings');
       }
       if (stored) {
         this.settings = { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
