@@ -25,6 +25,7 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
     year:     item?.year || item?.added?.substring(0, 4) || '',
     rating:   item?.rating || item?.vote_average || '',
     synopsis: item?.synopsis || item?.plot || item?.description || item?.overview || '',
+    extension: item?.container_extension || item?.extension || '',
   };
 
   const display = {
@@ -160,7 +161,7 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
 
             {type !== 'series' && (
               <button
-                onClick={() => onPlay(item)}
+                onClick={() => onPlay({ ...item, extension: norm.extension })}
                 className="w-full md:w-auto px-12 bg-white text-black h-16 rounded-2xl flex items-center justify-center gap-3 font-black text-[11px] uppercase tracking-widest hover:bg-purple-600 hover:text-white transition-all shadow-xl group active:scale-95"
               >
                 Assistir Agora

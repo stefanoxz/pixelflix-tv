@@ -77,7 +77,8 @@ export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem,
         icon: s.stream_icon || s.cover || (s as any).stream_icon,
         rating: s.rating || 'N/A',
         year: s.year || '2024',
-        duration: type === 'live' ? 'AO VIVO' : s.duration || 'N/A'
+        duration: type === 'live' ? 'AO VIVO' : s.duration || 'N/A',
+        extension: s.container_extension || (s as any).extension
       }));
     },
   });
@@ -143,7 +144,7 @@ export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem,
 
     // Determine the best extension based on type (pass undefined for movies/series to use settings)
     const ext = type === 'live' ? 'm3u8' : selectedItem.extension;
-    const streamUrl = xtreamService.getStreamUrl(streamId, ext, type, type !== 'live');
+    const streamUrl = xtreamService.getStreamUrl(streamId, ext, type, false);
 
     return {
       autoplay: true,

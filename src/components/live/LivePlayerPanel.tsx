@@ -3,6 +3,7 @@ import { Loader2, Tv, Clock, Play, Info, AlertTriangle, ChevronRight } from 'luc
 import { ErrorBoundary } from '../layout/ErrorBoundary';
 import { PremiumPlayer } from '../PremiumPlayer';
 import { xtreamService } from '../../services/xtream';
+import vibeLogo from '../../assets/vibe-logo.png';
 
 interface LivePlayerPanelProps {
   channel: any | null;
@@ -13,20 +14,39 @@ export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => 
   const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(false);
   const isPlaying = !!channel;
 
+  const decodeSafe = (text: string) => {
+    if (!text) return '';
+    try {
+      return atob(text);
+    } catch {
+      return text;
+    }
+  };
+
   const currentProgram = useMemo(() => {
     if (!epg || epg.length === 0) return null;
-    const now = Math.floor(Date.now() / 1000);
+    const now = xtreamService.getServerTime();
+    
     return epg.find((prog: any) => {
-      let start = parseInt(prog.start_timestamp);
-      let end = parseInt(prog.stop_timestamp);
+      let start = prog.start_timestamp ? parseInt(prog.start_timestamp) : (prog.start ? new Date(prog.start).getTime() / 1000 : 0);
+      let end = prog.stop_timestamp ? parseInt(prog.stop_timestamp) : (prog.end ? new Date(prog.end).getTime() / 1000 : 0);
+      
+      if (start > 2000000000) start /= 1000;
+      if (end > 2000000000) end /= 1000;
+      
       return now >= start && now < end;
     }) || epg[0];
   }, [epg]);
 
   const futurePrograms = useMemo(() => {
     if (!epg || epg.length === 0) return [];
-    const now = Math.floor(Date.now() / 1000);
-    return epg.filter((prog: any) => parseInt(prog.start_timestamp) > now).slice(0, 5);
+    const now = xtreamService.getServerTime();
+    
+    return epg.filter((prog: any) => {
+      let start = prog.start_timestamp ? parseInt(prog.start_timestamp) : (prog.start ? new Date(prog.start).getTime() / 1000 : 0);
+      if (start > 2000000000) start /= 1000;
+      return start > now;
+    }).slice(0, 5);
   }, [epg]);
 
   const videoOptions = useMemo(() => {
@@ -58,8 +78,8 @@ export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => 
               <Tv size={48} className="text-zinc-800 group-hover:text-purple-500 transition-colors duration-500" />
             </div>
           </div>
-          <div className="text-center space-y-2">
-            <h2 className="text-2xl font-black text-white uppercase tracking-widest italic">PixelFlix Live</h2>
+          <div className="text-center space-y-4">
+            <img src={vibeLogo} alt="Vibe" className="h-12 w-auto object-contain mx-auto drop-shadow-[0_0_15px_rgba(168,85,247,0.6)]" />
             <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.3em]">Selecione um canal para começar</p>
           </div>
         </div>
@@ -116,11 +136,7 @@ export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => 
 
               <div className="space-y-3">
                 <h3 className="text-3xl font-black text-white tracking-tighter uppercase leading-tight italic">
-                  {currentProgram?.title ? (
-                    (() => {
-                      try { return atob(currentProgram.title); } catch { return currentProgram.title; }
-                    })()
-                  ) : 'Programa Atual'}
+                  {currentProgram?.title ? decodeSafe(currentProgram.title) : 'Programa Atual'}
                 </h3>
                 <div className="flex items-center gap-4 text-zinc-500 font-bold text-[11px] uppercase tracking-widest">
                   <div className="flex items-center gap-2">
@@ -133,11 +149,7 @@ export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => 
               </div>
 
               <p className="text-sm text-zinc-400 leading-relaxed font-medium line-clamp-3">
-                {currentProgram?.description ? (
-                  (() => {
-                    try { return atob(currentProgram.description); } catch { return currentProgram.description; }
-                  })()
-                ) : 'Acompanhe a programação ao vivo com a melhor qualidade de imagem e som.'}
+                {currentProgram?.description ? decodeSafe(currentProgram.description) : 'Acompanhe a programação ao vivo com a melhor qualidade de imagem e som.'}
               </p>
             </div>
 
@@ -177,9 +189,7 @@ export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => 
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="text-[13px] font-bold text-white truncate group-hover/item:translate-x-1 transition-transform">
-                      {(() => {
-                        try { return atob(prog.title); } catch { return prog.title; }
-                      })()}
+                      {decodeSafe(prog.title)}
                     </h4>
                   </div>
                   <ChevronRight size={16} className="text-zinc-700 opacity-0 group-hover/item:opacity-100 transition-all -translate-x-2 group-hover/item:translate-x-0" />
