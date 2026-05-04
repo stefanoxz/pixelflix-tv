@@ -1,5 +1,5 @@
 import React, { memo, useRef, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, LucideIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LucideIcon, Play } from 'lucide-react';
 import { RowItem } from '@/types';
 
 interface ContentRowProps {
