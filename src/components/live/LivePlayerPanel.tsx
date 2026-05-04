@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Loader2, Tv, Clock, Play, Info, AlertTriangle, ChevronRight } from 'lucide-react';
 import { ErrorBoundary } from '../layout/ErrorBoundary';
 import { PremiumPlayer } from '../PremiumPlayer';
@@ -10,6 +10,7 @@ interface LivePlayerPanelProps {
 }
 
 export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => {
+  const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(false);
   const isPlaying = !!channel;
 
   const currentProgram = useMemo(() => {
@@ -87,25 +88,16 @@ export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => 
               options={videoOptions}
               title={channel.name}
               subtitle="TV Ao Vivo"
-              onClose={() => {}}
+              onClose={() => isPlayerFullscreen ? setIsPlayerFullscreen(false) : null}
+              onToggleFullscreen={() => setIsPlayerFullscreen(!isPlayerFullscreen)}
               isLive={true}
-              isFullscreen={false}
+              isFullscreen={isPlayerFullscreen}
               streamId={String(channel.stream_id)}
             />
           </ErrorBoundary>
         </div>
-
-
-        <div className="absolute top-6 left-6 z-20 flex items-center gap-3">
-          <div className="px-4 py-1.5 rounded-full bg-red-600 flex items-center gap-2 shadow-lg shadow-red-600/20">
-            <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            <span className="text-[10px] font-black text-white uppercase tracking-widest">AO VIVO</span>
-          </div>
-          <div className="px-4 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-black text-white uppercase tracking-widest">
-            {channel.name}
-          </div>
-        </div>
       </div>
+
 
       {/* Cinematic EPG Panel */}
       <div className="bg-[#080808]/40 backdrop-blur-3xl border border-white/5 rounded-[48px] p-10 relative overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] min-w-0 z-10">

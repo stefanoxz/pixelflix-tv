@@ -17,13 +17,24 @@ interface PremiumPlayerProps {
   title: string;
   subtitle: string;
   onClose: () => void;
+  onToggleFullscreen?: () => void;
   onError?: (error: any) => void;
   isFullscreen?: boolean;
   isLive?: boolean;
   streamId?: string;
 }
 
-export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFullscreen = true, isLive = false, streamId }: PremiumPlayerProps) => {
+export const PremiumPlayer = ({ 
+  options, 
+  title, 
+  subtitle, 
+  onClose, 
+  onToggleFullscreen,
+  onError, 
+  isFullscreen = true, 
+  isLive = false, 
+  streamId 
+}: PremiumPlayerProps) => {
   const [isIdle, setIsIdle] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [volume, setVolume] = useState(80);
@@ -132,6 +143,10 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
       className={`${isFullscreen ? 'fixed inset-0 z-[200]' : 'relative w-full h-full'} bg-black transition-cursor duration-500 overflow-hidden ${isIdle ? 'cursor-none' : 'cursor-default'}`}
       onMouseMove={resetIdleTimer}
       onClick={() => togglePlay()}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onToggleFullscreen?.();
+      }}
     >
       <ErrorBoundary isLocal>
         <VideoPlayer 
@@ -245,7 +260,13 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
                   {formatTime(currentTime)} / {formatTime(duration)}
                 </span>
               )}
-              <button className="text-white hover:text-purple-400 transition-colors">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleFullscreen?.();
+                }}
+                className="text-white hover:text-purple-400 transition-colors"
+              >
                 <Maximize size={18} />
               </button>
             </div>
