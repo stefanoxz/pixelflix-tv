@@ -78,10 +78,10 @@ export const RecentChannelsRow = memo(({ onChannelClick }: RecentChannelsRowProp
           className="flex gap-4 overflow-x-auto pb-6 no-scrollbar scroll-smooth"
         >
           {channels.map((ch) => (
-            <button
+            <div
               key={ch.id}
               onClick={() => onChannelClick(ch)}
-              className="shrink-0 w-[140px] md:w-[160px] group/item relative rounded-xl overflow-hidden bg-zinc-900 border border-white/5 hover:border-red-500/40 hover:scale-105 transition-all duration-300"
+              className="shrink-0 w-[140px] md:w-[160px] cursor-pointer group/item relative rounded-xl overflow-hidden bg-zinc-900 border border-white/5 hover:border-red-500/40 hover:scale-105 transition-all duration-300"
             >
               {/* Channel icon / poster */}
               <div className="aspect-[2/3] w-full overflow-hidden bg-zinc-800 flex items-center justify-center">
@@ -121,7 +121,7 @@ export const RecentChannelsRow = memo(({ onChannelClick }: RecentChannelsRowProp
               >
                 <X size={12} className="text-white" />
               </button>
-            </button>
+            </div>
           ))}
         </div>
 
