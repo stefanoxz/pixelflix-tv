@@ -87,8 +87,8 @@ export class XtreamService {
 
     const proxies = [
       (u: string) => `http://127.0.0.1:3001/?url=${encodeURIComponent(u)}`,
-      (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
       (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+      (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
       (u: string) => u,
     ];
 

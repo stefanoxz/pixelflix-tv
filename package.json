@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite\" \"node proxy-server/index.js\"",
+    "dev": "concurrently \"vite\" \"node proxy-server/index.cjs\"",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",

@@ -22,6 +22,21 @@ export const SyncScreen = ({ onComplete, profileName, avatarUrl }: SyncScreenPro
       try {
         const creds = xtreamService.getCredentials();
         
+        // Smart Sync: Check if we already have data
+        const hasLiveData = !!queryClient.getQueryData(['streams', 'live', 'all']);
+        const hasMovieData = !!queryClient.getQueryData(['streams', 'movie', 'all']);
+        const hasSeriesData = !!queryClient.getQueryData(['streams', 'series', 'all']);
+
+        if (hasLiveData && hasMovieData && hasSeriesData) {
+          setStatus('Validando sessão...');
+          setProgress(50);
+          await xtreamService.authenticate();
+          setProgress(100);
+          setStatus('Pronto!');
+          setTimeout(onComplete, 800);
+          return;
+        }
+
         setStatus('Estabelecendo conexão...');
         setProgress(15);
         try {
@@ -33,42 +48,49 @@ export const SyncScreen = ({ onComplete, profileName, avatarUrl }: SyncScreenPro
           throw new Error('Falha na autenticação. Verifique se sua conta está ativa ou se os dados estão corretos.');
         }
         
-        setStatus('Sincronizando canais...');
-        setProgress(30);
-        await queryClient.fetchQuery({
-          queryKey: ['categories', 'live'],
-          queryFn: () => xtreamService.getCategories('live'),
-        }).catch(err => console.warn('Falha leve ao baixar categorias de TV:', err));
-        await queryClient.fetchQuery({
-          queryKey: ['streams', 'live', 'all'],
-          queryFn: () => xtreamService.getStreams('live'),
-        }).catch(err => console.warn('Falha leve ao baixar canais de TV:', err));
-
-        setStatus('Carregando biblioteca de filmes...');
-        setProgress(50);
-        await queryClient.fetchQuery({
-          queryKey: ['categories', 'movie'],
-          queryFn: () => xtreamService.getCategories('movie'),
-        }).catch(err => console.warn('Falha leve ao baixar categorias de Filmes:', err));
-        await queryClient.fetchQuery({
-          queryKey: ['streams', 'movie', 'all'],
-          queryFn: () => xtreamService.getStreams('movie'),
-        }).catch(err => console.warn('Falha leve ao baixar Filmes:', err));
-
-        setStatus('Mapeando séries...');
-        setProgress(70);
-        await queryClient.fetchQuery({
-          queryKey: ['categories', 'series'],
-          queryFn: () => xtreamService.getCategories('series'),
-        }).catch(err => console.warn('Falha leve ao baixar categorias de Séries:', err));
-        await queryClient.fetchQuery({
-          queryKey: ['streams', 'series', 'all'],
-          queryFn: () => xtreamService.getStreams('series'),
-        }).catch(err => console.warn('Falha leve ao baixar Séries:', err));
+        // Fetch in parallel for better performance
+        setStatus('Sincronizando conteúdo...');
+        setProgress(40);
+        
+        await Promise.all([
+          // Live
+          (async () => {
+            await queryClient.fetchQuery({
+              queryKey: ['categories', 'live'],
+              queryFn: () => xtreamService.getCategories('live'),
+            }).catch(err => console.warn('TV categories sync failed:', err));
+            await queryClient.fetchQuery({
+              queryKey: ['streams', 'live', 'all'],
+              queryFn: () => xtreamService.getStreams('live'),
+            }).catch(err => console.warn('TV channels sync failed:', err));
+          })(),
+          // Movies
+          (async () => {
+            await queryClient.fetchQuery({
+              queryKey: ['categories', 'movie'],
+              queryFn: () => xtreamService.getCategories('movie'),
+            }).catch(err => console.warn('Movie categories sync failed:', err));
+            await queryClient.fetchQuery({
+              queryKey: ['streams', 'movie', 'all'],
+              queryFn: () => xtreamService.getStreams('movie'),
+            }).catch(err => console.warn('Movies sync failed:', err));
+          })(),
+          // Series
+          (async () => {
+            await queryClient.fetchQuery({
+              queryKey: ['categories', 'series'],
+              queryFn: () => xtreamService.getCategories('series'),
+            }).catch(err => console.warn('Series categories sync failed:', err));
+            await queryClient.fetchQuery({
+              queryKey: ['streams', 'series', 'all'],
+              queryFn: () => xtreamService.getStreams('series'),
+            }).catch(err => console.warn('Series sync failed:', err));
+          })()
+        ]);
 
         setStatus('Finalizando...');
         setProgress(90);
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise(r => setTimeout(r, 500));
 
         setProgress(100);
         setStatus('Pronto!');
