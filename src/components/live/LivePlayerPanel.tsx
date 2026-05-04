@@ -89,7 +89,7 @@ export const LivePlayerPanel = memo(({ channel, epg, isLoadingEPG }: LivePlayerP
   }
 
   return (
-    <div className="flex-1 flex flex-col p-8 gap-8 bg-[#050308] overflow-y-auto custom-scrollbar relative">
+    <div className="flex-1 flex flex-col p-4 lg:p-6 gap-4 lg:gap-6 bg-[#050308] overflow-y-auto custom-scrollbar relative">
       {/* Absolute Background Effect (Constrained to this panel) */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
         <div 
@@ -100,7 +100,7 @@ export const LivePlayerPanel = memo(({ channel, epg, isLoadingEPG }: LivePlayerP
       </div>
 
       {/* Video Container */}
-      <div className="w-full aspect-video rounded-[40px] overflow-hidden bg-[#0a0a0a] border border-white/5 relative shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-center group shrink-0 z-10">
+      <div className="w-full aspect-video max-h-[50vh] rounded-[32px] overflow-hidden bg-[#0a0a0a] border border-white/5 relative shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-center group shrink-0 z-10">
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none" />
         
         <div className="w-full h-full relative z-10 bg-black">
@@ -121,22 +121,22 @@ export const LivePlayerPanel = memo(({ channel, epg, isLoadingEPG }: LivePlayerP
 
 
       {/* Cinematic EPG Panel */}
-      <div className="bg-[#080808]/40 backdrop-blur-3xl border border-white/5 rounded-[48px] p-10 relative overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] min-w-0 z-10">
+      <div className="bg-[#080808]/40 backdrop-blur-3xl border border-white/5 rounded-[32px] p-6 lg:p-8 relative overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] min-w-0 z-10">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-600/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
         
-        <div className="flex flex-col lg:flex-row gap-10 relative z-10">
+        <div className="flex flex-col lg:flex-row gap-8 relative z-10">
           {/* Current Program Info */}
           <div className="lg:w-2/5 flex flex-col justify-between">
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400">
-                  <Play size={16} fill="currentColor" />
+                  <Play size={14} fill="currentColor" />
                 </div>
-                <span className="text-[10px] font-black text-purple-400 uppercase tracking-[0.3em]">Passando Agora</span>
+                <span className="text-[9px] font-black text-purple-400 uppercase tracking-[0.3em]">Passando Agora</span>
               </div>
 
-              <div className="space-y-3">
-                <h3 className="text-3xl font-black text-white tracking-tighter uppercase leading-tight italic">
+              <div className="space-y-2">
+                <h3 className="text-xl lg:text-2xl font-black text-white tracking-tighter uppercase leading-tight italic">
                   {isLoadingEPG ? (
                     <div className="h-8 w-64 bg-white/5 animate-pulse rounded-lg" />
                   ) : (
@@ -184,14 +184,14 @@ export const LivePlayerPanel = memo(({ channel, epg, isLoadingEPG }: LivePlayerP
 
           {/* Schedule List */}
           <div className="lg:w-3/5">
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-4 lg:mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-zinc-800 text-zinc-400">
-                  <Clock size={16} />
+                  <Clock size={14} />
                 </div>
-                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em]">A Seguir</span>
+                <span className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.3em]">A Seguir</span>
               </div>
-              <button className="text-[10px] font-black text-purple-400 uppercase tracking-widest hover:text-purple-300 transition-colors">Grade Completa</button>
+              <button className="text-[9px] font-black text-purple-400 uppercase tracking-widest hover:text-purple-300 transition-colors">Grade Completa</button>
             </div>
 
             <div className="space-y-3">
