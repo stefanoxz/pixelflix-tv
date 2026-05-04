@@ -6,8 +6,7 @@ import { SyncScreen } from './components/sync/SyncScreen';
 import { ErrorBoundary } from './components/layout/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
 
-import { ContentExplorer } from './components/content/ContentExplorerNew';
-// const ContentExplorer = lazy(() => import('./components/content/ContentExplorer').then(module => ({ default: module.ContentExplorer })));
+const ContentExplorer = lazy(() => import('./components/content/ContentExplorer').then(module => ({ default: module.ContentExplorer })));
 const LiveExplorer = lazy(() => import('./components/live/LiveExplorer').then(module => ({ default: module.LiveExplorer })));
 const AdminPanel = lazy(() => import('./components/AdminPanel').then(module => ({ default: module.AdminPanel })));
 const SettingsMenu = lazy(() => import('./components/settings/SettingsMenu').then(module => ({ default: module.SettingsMenu })));
