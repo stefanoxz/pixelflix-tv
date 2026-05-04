@@ -272,7 +272,8 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
                       ))}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Episodes List - Horizontal Scroll */}
+                    <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar -mx-2 px-2 scroll-smooth">
                       {uniqueEpisodes.map((episode: any) => {
                         const progress = historyService.getProgress(episode.id || episode.stream_id);
                         const isWatched = progress?.completed;
@@ -287,34 +288,41 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
                               name: `${norm.name} - ${episode.title || `E${episode.episode_num}`}`,
                               type: 'series'
                             })}
-                            className={`flex items-center gap-6 p-6 rounded-3xl bg-[#1A1A1A]/30 border transition-all group text-left relative overflow-hidden ${
+                            className={`flex-shrink-0 w-72 p-5 rounded-3xl bg-[#1A1A1A]/30 border transition-all group text-left relative overflow-hidden flex flex-col gap-4 ${
                               isWatched ? 'border-green-500/20 bg-green-500/5' : 'border-white/5 hover:bg-white/5 hover:border-purple-500/30'
                             }`}
                           >
-                            <div className={`absolute inset-y-0 left-0 w-1 transition-opacity ${
+                            <div className={`absolute inset-x-0 top-0 h-1 transition-opacity ${
                               isWatched ? 'bg-green-500 opacity-100' : 'bg-purple-600 opacity-0 group-hover:opacity-100'
                             }`} />
                             
-                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-inner ${
-                              isWatched ? 'bg-green-500 text-white' : 'bg-white/5 text-zinc-500 group-hover:bg-purple-600 group-hover:text-white'
-                            }`}>
-                              {isWatched ? <CheckCircle2 size={20} /> : <Play size={20} fill="currentColor" />}
-                            </div>
-
-                            <div className="flex-1 min-w-0">
-                              <h5 className={`text-[13px] font-black uppercase tracking-wider transition-colors truncate ${
-                                isWatched ? 'text-green-400' : 'text-white group-hover:text-purple-400'
+                            <div className="flex items-center gap-4">
+                              <div className={`w-12 h-12 rounded-2xl flex-shrink-0 flex items-center justify-center transition-all shadow-inner ${
+                                isWatched ? 'bg-green-500 text-white' : 'bg-white/5 text-zinc-500 group-hover:bg-purple-600 group-hover:text-white'
                               }`}>
-                                Ep. {episode.episode_num}: {episode.title}
-                              </h5>
-                              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1 block">
-                                {episode.info?.duration || 'Duração N/A'}
-                              </span>
+                                {isWatched ? <CheckCircle2 size={18} /> : <Play size={18} fill="currentColor" />}
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <h5 className={`text-[12px] font-black uppercase tracking-wider transition-colors truncate ${
+                                  isWatched ? 'text-green-400' : 'text-white group-hover:text-purple-400'
+                                }`}>
+                                  Ep. {episode.episode_num}
+                                </h5>
+                                <p className="text-[11px] text-zinc-300 font-bold truncate mt-0.5">
+                                  {episode.title || `Episódio ${episode.episode_num}`}
+                                </p>
+                              </div>
                             </div>
                             
-                            <ChevronRight size={18} className="text-zinc-800 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest">
+                                {episode.info?.duration || 'Duração N/A'}
+                              </span>
+                              <ChevronRight size={14} className="text-zinc-800 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                            </div>
 
-                            {/* Progress bar for in-progress episodes */}
+                            {/* Progress bar */}
                             {!isWatched && percent > 0 && (
                               <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/5">
                                 <div className="h-full bg-purple-500 shadow-[0_0_10px_#a855f7]" style={{ width: `${percent}%` }} />
