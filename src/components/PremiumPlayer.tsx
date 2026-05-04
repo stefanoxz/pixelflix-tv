@@ -243,9 +243,6 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
               </div>
             </div>
 
-            {/* Bitrate indicator */}
-            <div className="absolute -bottom-7 right-4">
-              <span className="text-[9px] font-black text-zinc-600 tracking-widest uppercase">3347 KBPS</span>
             </div>
           </div>
         </div>
