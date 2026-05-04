@@ -77,7 +77,7 @@ export const LiveExplorer = ({ onBack, preselectedChannel, initialCategoryId }: 
   });
 
   // Fetch EPG for selected channel
-  const { data: epgData } = useQuery({
+  const { data: epgData, isLoading: isLoadingEPG } = useQuery({
     queryKey: ['epg', selectedChannel?.id],
     queryFn: () => selectedChannel ? xtreamService.getShortEPG(selectedChannel.id) : null,
     enabled: !!selectedChannel,
@@ -156,7 +156,8 @@ export const LiveExplorer = ({ onBack, preselectedChannel, initialCategoryId }: 
         
         <LivePlayerPanel 
           channel={selectedChannel} 
-          epg={epgData} 
+          epg={epgData}
+          isLoadingEPG={isLoadingEPG}
         />
       </div>
     </div>

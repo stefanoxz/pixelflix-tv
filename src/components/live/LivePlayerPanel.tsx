@@ -8,9 +8,10 @@ import vibeLogo from '../../assets/vibe-logo.png';
 interface LivePlayerPanelProps {
   channel: any | null;
   epg: any[] | null;
+  isLoadingEPG?: boolean;
 }
 
-export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => {
+export const LivePlayerPanel = memo(({ channel, epg, isLoadingEPG }: LivePlayerPanelProps) => {
   const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(false);
   const isPlaying = !!channel;
 
@@ -136,21 +137,36 @@ export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => 
 
               <div className="space-y-3">
                 <h3 className="text-3xl font-black text-white tracking-tighter uppercase leading-tight italic">
-                  {currentProgram?.title ? decodeSafe(currentProgram.title) : 'Programa Atual'}
+                  {isLoadingEPG ? (
+                    <div className="h-8 w-64 bg-white/5 animate-pulse rounded-lg" />
+                  ) : (
+                    currentProgram?.title ? decodeSafe(currentProgram.title) : 'Programação indisponível'
+                  )}
                 </h3>
                 <div className="flex items-center gap-4 text-zinc-500 font-bold text-[11px] uppercase tracking-widest">
                   <div className="flex items-center gap-2">
                     <Clock size={12} />
-                    <span>{currentProgram?.start?.split(' ')[1]?.substring(0, 5) || '--:--'} - {currentProgram?.end?.split(' ')[1]?.substring(0, 5) || '--:--'}</span>
+                    {isLoadingEPG ? (
+                      <div className="h-3 w-20 bg-white/5 animate-pulse rounded" />
+                    ) : (
+                      <span>{currentProgram?.start?.split(' ')[1]?.substring(0, 5) || '--:--'} - {currentProgram?.end?.split(' ')[1]?.substring(0, 5) || '--:--'}</span>
+                    )}
                   </div>
                   <div className="w-1 h-1 rounded-full bg-zinc-800" />
-                  <span>Canais PixelFlix</span>
+                  <span>Vibe TV</span>
                 </div>
               </div>
 
-              <p className="text-sm text-zinc-400 leading-relaxed font-medium line-clamp-3">
-                {currentProgram?.description ? decodeSafe(currentProgram.description) : 'Acompanhe a programação ao vivo com a melhor qualidade de imagem e som.'}
-              </p>
+              <div className="text-sm text-zinc-400 leading-relaxed font-medium line-clamp-3">
+                {isLoadingEPG ? (
+                  <div className="space-y-2">
+                    <div className="h-4 w-full bg-white/5 animate-pulse rounded" />
+                    <div className="h-4 w-3/4 bg-white/5 animate-pulse rounded" />
+                  </div>
+                ) : (
+                  currentProgram?.description ? decodeSafe(currentProgram.description) : 'Sem descrição disponível para este programa no momento.'
+                )}
+              </div>
             </div>
 
             <div className="mt-8 flex items-center gap-4">
@@ -179,7 +195,14 @@ export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => 
             </div>
 
             <div className="space-y-3">
-              {futurePrograms.length > 0 ? futurePrograms.map((prog: any, idx: number) => (
+              {isLoadingEPG ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-6 p-4 rounded-3xl bg-white/[0.02] border border-white/5 animate-pulse">
+                    <div className="h-3 w-12 bg-white/5 rounded" />
+                    <div className="h-4 w-full bg-white/5 rounded" />
+                  </div>
+                ))
+              ) : futurePrograms.length > 0 ? futurePrograms.map((prog: any, idx: number) => (
                 <div 
                   key={idx}
                   className="flex items-center gap-6 p-4 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10 transition-all group/item cursor-pointer"
@@ -197,7 +220,7 @@ export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => 
               )) : (
                 <div className="flex flex-col items-center justify-center py-12 text-zinc-600 bg-white/[0.02] rounded-3xl border border-dashed border-white/5">
                   <AlertTriangle size={32} className="mb-4 opacity-20" />
-                  <p className="text-[10px] font-black uppercase tracking-widest opacity-40 text-center">Programação não disponível para este canal</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest opacity-40 text-center">Programação não disponível</p>
                 </div>
               )}
             </div>

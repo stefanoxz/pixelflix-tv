@@ -228,12 +228,19 @@ export class XtreamService {
 
   async getShortEPG(streamId: string): Promise<any[]> {
     try {
+      // Try get_short_epg first
       const data = await this.fetchAction('get_short_epg', { stream_id: streamId, limit: '10' });
+      const listings = data?.epg_listings || data?.epg || (Array.isArray(data) ? data : null);
       
-      if (data && data.epg_listings && Array.isArray(data.epg_listings)) {
-        return data.epg_listings;
+      if (Array.isArray(listings) && listings.length > 0) {
+        return listings;
       }
-      return [];
+
+      // Fallback: Try get_simple_data_table if get_short_epg returns nothing
+      const simpleData = await this.fetchAction('get_simple_data_table', { stream_id: streamId });
+      const simpleListings = simpleData?.epg_listings || simpleData?.epg || (Array.isArray(simpleData) ? simpleData : null);
+      
+      return Array.isArray(simpleListings) ? simpleListings : [];
     } catch (err) {
       console.warn(`Error fetching EPG for stream ${streamId}:`, err);
       return [];
