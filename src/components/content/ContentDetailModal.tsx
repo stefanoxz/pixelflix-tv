@@ -381,8 +381,5 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
     </div>
   );
 });
->
-  );
-});
 
 ContentDetailModal.displayName = 'ContentDetailModal';
