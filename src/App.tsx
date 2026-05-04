@@ -42,12 +42,12 @@ function App() {
     const creds = localStorage.getItem('xtream_creds');
     if (creds) {
       if (selectedProfile) {
-        setCurrentView('dashboard');
+        setCurrentView('sync');
       } else {
         setCurrentView('profiles');
       }
     }
-  }, [selectedProfile]);
+  }, []); // Only on mount to avoid race conditions with manual selection
 
   const handleLogin = () => {
     setCurrentView('profiles');

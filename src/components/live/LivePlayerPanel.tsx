@@ -1,7 +1,8 @@
 import { memo, useMemo } from 'react';
 import { Loader2, Tv, Clock, Play, Info, AlertTriangle, ChevronRight } from 'lucide-react';
 import { ErrorBoundary } from '../layout/ErrorBoundary';
-import { PremiumPlayer } from '../player/PremiumPlayer';
+import { PremiumPlayer } from '../PremiumPlayer';
+import { xtreamService } from '../../services/xtream';
 
 interface LivePlayerPanelProps {
   channel: any | null;
@@ -27,6 +28,24 @@ export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => 
     return epg.filter((prog: any) => parseInt(prog.start_timestamp) > now).slice(0, 5);
   }, [epg]);
 
+  const videoOptions = useMemo(() => {
+    if (!channel) return null;
+    
+    // Get the correct stream URL using xtreamService
+    const streamUrl = xtreamService.getStreamUrl(String(channel.stream_id), 'm3u8', 'live');
+    
+    return {
+      autoplay: true,
+      controls: true,
+      responsive: true,
+      fluid: true,
+      sources: [{
+        src: streamUrl,
+        type: 'application/x-mpegURL'
+      }]
+    };
+  }, [channel]);
+
   if (!channel) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-[#050308] relative overflow-hidden group">
@@ -47,8 +66,6 @@ export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => 
     );
   }
 
-  const streamUrl = `http://supertechprime.top:80/live/${channel.num}/${channel.num}/${channel.stream_id}.ts`;
-
   return (
     <div className="flex-1 flex flex-col p-8 gap-8 bg-[#050308] overflow-y-auto custom-scrollbar relative">
       {/* Absolute Background Effect (Constrained to this panel) */}
@@ -67,14 +84,17 @@ export const LivePlayerPanel = memo(({ channel, epg }: LivePlayerPanelProps) => 
         <div className="w-full h-full relative z-10 bg-black">
           <ErrorBoundary isLocal>
             <PremiumPlayer 
-              url={streamUrl}
+              options={videoOptions}
               title={channel.name}
-              poster={channel.icon}
+              subtitle="TV Ao Vivo"
+              onClose={() => {}}
               isLive={true}
-              autoPlay={true}
+              isFullscreen={false}
+              streamId={String(channel.stream_id)}
             />
           </ErrorBoundary>
         </div>
+
 
         <div className="absolute top-6 left-6 z-20 flex items-center gap-3">
           <div className="px-4 py-1.5 rounded-full bg-red-600 flex items-center gap-2 shadow-lg shadow-red-600/20">
