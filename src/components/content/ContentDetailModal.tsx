@@ -166,31 +166,31 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
             </div>
 
             {/* Title */}
-            <h3 className="text-5xl md:text-8xl font-black mb-4 leading-[0.9] uppercase tracking-tighter text-white italic drop-shadow-2xl">
+            <h3 className="text-4xl md:text-6xl font-black mb-4 leading-[0.95] uppercase tracking-tighter text-white italic drop-shadow-2xl line-clamp-2">
               {display.name}
             </h3>
 
             {/* Tagline */}
             {display.tagline && (
-              <p className="text-purple-400/80 text-xl font-medium italic mb-10 tracking-wide">{display.tagline}</p>
+              <p className="text-purple-400/80 text-lg font-medium italic mb-8 tracking-wide">{display.tagline}</p>
             )}
 
-            <div className="flex flex-wrap gap-3 mb-12">
+            <div className="flex flex-wrap gap-3 mb-10">
               {display.genres.map((g) => (
-                <span key={g} className="px-5 py-2 rounded-xl bg-white/5 border border-white/5 text-zinc-300 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-colors">
+                <span key={g} className="px-4 py-1.5 rounded-xl bg-white/5 border border-white/5 text-zinc-300 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-colors">
                   {g}
                 </span>
               ))}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 mb-16">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 mb-12">
               {/* Synopsis */}
-              <div className="lg:col-span-7 space-y-6">
+              <div className="lg:col-span-7 space-y-4">
                 <h4 className="text-[10px] font-black text-purple-500 tracking-[0.4em] uppercase flex items-center gap-3">
                   <div className="w-8 h-[1px] bg-purple-500/30" />
                   História
                 </h4>
-                <p className="text-zinc-400 text-lg md:text-xl leading-relaxed font-medium italic">{display.synopsis}</p>
+                <p className="text-zinc-400 text-base md:text-lg leading-relaxed font-medium italic line-clamp-6">{display.synopsis}</p>
               </div>
 
               {/* Credits */}

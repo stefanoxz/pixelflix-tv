@@ -26,7 +26,6 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [bitrate, setBitrate] = useState(0);
   const playerRef = useRef<any>(null);
   const idleTimer = useRef<NodeJS.Timeout | null>(null);
   const lastVolume = useRef(80);
@@ -56,15 +55,6 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
     });
     player.on('timeupdate', () => {
       setCurrentTime(player.currentTime());
-      
-      // Update real bitrate if available (VHS/HLS)
-      try {
-        const vhs = player.tech({ IWillNotUseThisInFuture: true })?.vhs;
-        if (vhs?.playlists?.media) {
-          const bw = vhs.playlists.media().attributes.BANDWIDTH;
-          if (bw) setBitrate(Math.round(bw / 1000));
-        }
-      } catch (e) {}
     });
     player.on('loadedmetadata', () => {
       setDuration(player.duration());
@@ -255,9 +245,7 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
 
             {/* Bitrate indicator */}
             <div className="absolute -bottom-7 right-4">
-              <span className="text-[9px] font-black text-zinc-600 tracking-widest uppercase">
-                {bitrate > 0 ? `${bitrate} KBPS` : '3347 KBPS'}
-              </span>
+              <span className="text-[9px] font-black text-zinc-600 tracking-widest uppercase">3347 KBPS</span>
             </div>
           </div>
         </div>
