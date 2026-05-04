@@ -42,19 +42,28 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
     cast:     tmdb?.cast       || [],
   };
 
-  const seasons = seriesInfo?.seasons
+  const seasonsMetadata = seriesInfo?.seasons
     ? (Array.isArray(seriesInfo.seasons) ? seriesInfo.seasons : Object.values(seriesInfo.seasons))
     : [];
 
   const rawEpisodes = seriesInfo?.episodes || {};
+  const episodeKeys = Object.keys(rawEpisodes).sort((a, b) => parseInt(a) - parseInt(b));
+
+  // If seasons metadata is missing but we have episodes, generate seasons from keys
+  const seasons = seasonsMetadata.length > 0 
+    ? seasonsMetadata 
+    : episodeKeys.map(key => ({ season_number: parseInt(key), name: `Temporada ${key}` }));
+
   const episodes = rawEpisodes[selectedSeason || '']
     ? (Array.isArray(rawEpisodes[selectedSeason || '']) ? rawEpisodes[selectedSeason || ''] : Object.values(rawEpisodes[selectedSeason || '']))
     : [];
 
-  // Deduplicate episodes by episode_num
-  const uniqueEpisodes = episodes.filter((ep: any, idx: number, arr: any[]) =>
-    arr.findIndex((e: any) => e.episode_num === ep.episode_num) === idx
-  );
+  // Deduplicate and sort episodes by number
+  const uniqueEpisodes = episodes
+    .filter((ep: any, idx: number, arr: any[]) =>
+      arr.findIndex((e: any) => e.episode_num === ep.episode_num) === idx
+    )
+    .sort((a: any, b: any) => (parseInt(a.episode_num) || 0) - (parseInt(b.episode_num) || 0));
 
   // Fetch TMDB metadata when item changes
   useEffect(() => {
@@ -76,8 +85,13 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
         try {
           const data = await xtreamService.fetchAction('get_series_info', { series_id: String(norm.seriesId) });
           setSeriesInfo(data);
-          const episodeKeys = Object.keys(data?.episodes || {});
-          if (episodeKeys.length > 0) setSelectedSeason(episodeKeys[0]);
+          
+          const keys = Object.keys(data?.episodes || {}).sort((a, b) => parseInt(a) - parseInt(b));
+          if (keys.length > 0) {
+            // Priority: select season 1 if it exists, otherwise the first available
+            const firstSeason = keys.find(k => k === '1') || keys[0];
+            setSelectedSeason(firstSeason);
+          }
         } catch (err) {
           console.error('Error fetching series info:', err);
         } finally {
