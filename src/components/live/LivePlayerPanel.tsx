@@ -1,6 +1,6 @@
 import { memo, useMemo } from 'react';
 import { Loader2, Tv, Clock, Play, Info, AlertTriangle, ChevronRight } from 'lucide-react';
-import { ErrorBoundary } from '../common/ErrorBoundary';
+import { ErrorBoundary } from '../layout/ErrorBoundary';
 import { PremiumPlayer } from '../player/PremiumPlayer';
 
 interface LivePlayerPanelProps {
