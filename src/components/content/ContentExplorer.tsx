@@ -248,8 +248,10 @@ export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem,
       <PremiumPlayer 
         options={videoOptions}
         title={selectedItem.name}
-        subtitle={type === 'movie' ? 'Filme' : 'Série'}
+        subtitle={type === 'series' ? 'Série' : 'Filme'}
+        streamId={String(selectedItem.id || selectedItem.stream_id || selectedItem.series_id)}
         onClose={() => setIsPlaying(false)}
+        isLive={type === 'live'}
       />
     );
   }

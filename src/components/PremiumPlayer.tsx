@@ -20,7 +20,7 @@ interface PremiumPlayerProps {
   onError?: (error: any) => void;
   isFullscreen?: boolean;
   isLive?: boolean;
-  streamId?: string; // Add streamId to track progress
+  streamId?: string;
 }
 
 export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFullscreen = true, isLive = false, streamId }: PremiumPlayerProps) => {
@@ -62,7 +62,6 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
       const dur = player.duration();
       setCurrentTime(time);
       
-      // Save progress periodically
       if (streamId && !isLive && dur > 0) {
         historyService.saveProgress(streamId, time, dur);
       }
@@ -71,7 +70,6 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
       const dur = player.duration();
       setDuration(dur);
       
-      // Resume from previous position if available
       if (streamId && !isLive) {
         const progress = historyService.getProgress(streamId);
         if (progress && progress.currentTime > 10 && (progress.currentTime < dur - 30)) {
@@ -106,15 +104,12 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
   const toggleMute = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (playerRef.current) {
-      const newMutedState = !isMuted;
-      playerRef.current.muted(newMutedState);
-      if (!newMutedState) {
-        // Unmuting: restore last volume
+      const isMutedNow = playerRef.current.muted();
+      if (isMutedNow) {
+        playerRef.current.muted(false);
         playerRef.current.volume(lastVolume.current / 100);
-        setVolume(lastVolume.current);
       } else {
-        // Muting
-        setVolume(0);
+        playerRef.current.muted(true);
       }
     }
   };
@@ -158,28 +153,34 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
       </div>
 
       {/* Top Cinematic Bar */}
-      {isFullscreen && (
-        <div 
-          className={`absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-black/90 via-black/40 to-transparent pointer-events-none transition-all duration-700 flex items-start p-8 md:p-12 z-[210] ${isIdle ? 'opacity-0 -translate-y-full' : 'opacity-100 translate-y-0'}`}
+      <div 
+        className={`absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-black/90 via-black/40 to-transparent pointer-events-none transition-all duration-700 flex items-start p-8 md:p-12 z-[210] ${isIdle ? 'opacity-0 -translate-y-full' : 'opacity-100 translate-y-0'}`}
+      >
+        <button 
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          className="pointer-events-auto flex items-center gap-6 group focus:outline-none"
         >
-          <button 
-            onClick={(e) => { e.stopPropagation(); onClose(); }}
-            className="pointer-events-auto flex items-center gap-6 group focus:outline-none"
-          >
-            <div className="p-4 rounded-full bg-white/5 backdrop-blur-md border border-white/10 group-hover:bg-white/20 group-hover:scale-110 transition-all duration-300">
-              <ChevronLeft size={28} className="text-white" />
-            </div>
-            <div className="flex flex-col items-start">
-              <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight line-clamp-1">
-                {title}
-              </h2>
-              <span className="text-xs md:text-sm font-bold text-zinc-400 tracking-[0.3em] uppercase mt-1">
+          <div className="p-4 rounded-full bg-white/5 backdrop-blur-md border border-white/10 group-hover:bg-white/20 group-hover:scale-110 transition-all duration-300">
+            <ChevronLeft size={28} className="text-white" />
+          </div>
+          <div className="flex flex-col items-start text-left">
+            <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight line-clamp-1 uppercase italic">
+              {title}
+            </h2>
+            <div className="flex items-center gap-4 mt-1">
+              <span className="text-xs md:text-sm font-bold text-zinc-400 tracking-[0.3em] uppercase">
                 {subtitle}
               </span>
+              {isLive && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-red-600 rounded-lg animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.5)]">
+                  <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white italic">AO VIVO</span>
+                </div>
+              )}
             </div>
-          </button>
-        </div>
-      )}
+          </div>
+        </button>
+      </div>
 
       {/* Custom Bottom Bar */}
       <div 
@@ -190,7 +191,7 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
           className="max-w-6xl mx-auto flex flex-col gap-4"
         >
           {/* Progress Bar */}
-          {duration > 0 && duration !== Infinity && (
+          {!isLive && duration > 0 && (
             <div 
               className="w-full h-1.5 bg-white/10 rounded-full relative overflow-hidden cursor-pointer group/progress mb-2"
               onClick={(e) => {
@@ -208,14 +209,6 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
 
           <div className="flex items-center justify-between p-4 bg-black/40 backdrop-blur-3xl border border-white/5 rounded-[28px] shadow-2xl relative">
             <div className="flex items-center gap-6">
-              {/* Live Badge */}
-              {(isLive || duration === Infinity) && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-2xl">
-                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_#ef4444]" />
-                  <span className="text-[10px] font-black text-red-500 tracking-[0.2em] uppercase">AO VIVO</span>
-                </div>
-              )}
-
               {/* Volume Control */}
               <div className="flex items-center gap-4 group/vol">
                 <button 
@@ -242,31 +235,32 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
                 onClick={(e) => togglePlay(e)}
                 className="w-12 h-12 flex items-center justify-center rounded-full bg-white/10 border border-white/10 text-white hover:bg-white/20 transition-all shadow-inner"
               >
-                {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
+                {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-1" />}
               </button>
             </div>
 
             <div className="flex items-center gap-6">
-              <div className="flex items-center gap-4">
-                <span className="hidden sm:inline text-[10px] font-black text-zinc-300 uppercase tracking-widest">Auto</span>
-                <button 
-                  onClick={() => {
-                    if (playerRef.current) {
-                      if (playerRef.current.isFullscreen()) playerRef.current.exitFullscreen();
-                      else playerRef.current.requestFullscreen();
-                    }
-                  }}
-                  className="text-zinc-400 hover:text-white transition-all hover:scale-110"
-                >
-                  <Maximize size={20} />
-                </button>
-              </div>
-            </div>
-
+              {!isLive && (
+                <span className="text-[10px] font-black text-white/50 tracking-widest tabular-nums">
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </span>
+              )}
+              <button className="text-white hover:text-purple-400 transition-colors">
+                <Maximize size={18} />
+              </button>
             </div>
           </div>
         </div>
       </div>
     </div>
   );
+};
+
+const formatTime = (seconds: number) => {
+  if (isNaN(seconds) || seconds === Infinity) return '00:00';
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  if (hrs > 0) return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 };
