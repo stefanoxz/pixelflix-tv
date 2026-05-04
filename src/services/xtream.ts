@@ -200,8 +200,14 @@ export class XtreamService {
     }
   }
 
-  getStreamUrl(streamId: string, extension: string = '', type: 'live' | 'movie' | 'series' = 'live'): string {
+  getStreamUrl(streamId: string, extension: string = '', type: 'live' | 'movie' | 'series' = 'live', useProxy: boolean = false): string {
     if (!this.credentials) return '';
+    
+    // If streamId is already a full URL, just return it (optionally proxied)
+    if (streamId && (streamId.startsWith('http://') || streamId.startsWith('https://'))) {
+      return useProxy ? `http://127.0.0.1:3001/?url=${encodeURIComponent(streamId)}` : streamId;
+    }
+
     const baseUrl = this.credentials.url.replace(/\/$/, '');
     const prefix = type === 'live' ? '' : type === 'movie' ? 'movie/' : 'series/';
     
@@ -209,9 +215,15 @@ export class XtreamService {
     const { playerType } = settingsService.getSettings();
     const ext = extension || (type === 'live' ? 'm3u8' : playerType === 'ts' ? 'ts' : 'mp4');
     
-    return streamId && streamId !== 'undefined' 
+    let url = streamId && streamId !== 'undefined' 
       ? `${baseUrl}/${prefix}${this.credentials.username}/${this.credentials.password}/${streamId}.${ext}`
       : '';
+
+    if (useProxy && url) {
+      return `http://127.0.0.1:3001/?url=${encodeURIComponent(url)}`;
+    }
+
+    return url;
   }
 
   async getShortEPG(streamId: string): Promise<any[]> {

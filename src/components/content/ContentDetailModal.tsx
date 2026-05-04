@@ -208,7 +208,8 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
                             ...item,
                             id: episode.id || episode.stream_id,
                             name: `${norm.name} - ${episode.title || `E${episode.episode_num}`}`,
-                            type: 'series'
+                            type: 'series',
+                            extension: episode.container_extension
                           })}
                           className={`flex-shrink-0 w-[220px] p-4 rounded-3xl bg-white/5 border transition-all duration-300 text-left relative overflow-hidden flex flex-col gap-3 ${
                             isWatched ? 'border-green-500/20 bg-green-500/5' : 'border-white/5 hover:bg-white/10 hover:border-purple-500/40'

@@ -142,8 +142,8 @@ export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem,
     }
 
     // Determine the best extension based on type (pass undefined for movies/series to use settings)
-    const ext = type === 'live' ? 'm3u8' : undefined;
-    const streamUrl = xtreamService.getStreamUrl(streamId, ext, type);
+    const ext = type === 'live' ? 'm3u8' : selectedItem.extension;
+    const streamUrl = xtreamService.getStreamUrl(streamId, ext, type, type !== 'live');
 
     return {
       autoplay: true,
