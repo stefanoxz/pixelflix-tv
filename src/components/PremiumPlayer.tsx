@@ -42,8 +42,37 @@ export const PremiumPlayer = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const playerRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const idleTimer = useRef<NodeJS.Timeout | null>(null);
   const lastVolume = useRef(80);
+
+  const toggleFullscreen = useCallback((e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    
+    if (!containerRef.current) return;
+
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+      });
+      if (!isFullscreen) onToggleFullscreen?.();
+    } else {
+      document.exitFullscreen();
+      if (isFullscreen) onToggleFullscreen?.();
+    }
+  }, [isFullscreen, onToggleFullscreen]);
+
+  // Sync state when browser fullscreen changes (e.g. Esc key)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isActuallyFullscreen = !!document.fullscreenElement;
+      if (isActuallyFullscreen !== isFullscreen) {
+        onToggleFullscreen?.();
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, [isFullscreen, onToggleFullscreen]);
 
   const resetIdleTimer = useCallback(() => {
     setIsIdle(false);
@@ -140,12 +169,13 @@ export const PremiumPlayer = ({
 
   return (
     <div 
+      ref={containerRef}
       className={`${isFullscreen ? 'fixed inset-0 z-[200]' : 'relative w-full h-full'} bg-black transition-cursor duration-500 overflow-hidden ${isIdle ? 'cursor-none' : 'cursor-default'}`}
       onMouseMove={resetIdleTimer}
       onClick={() => togglePlay()}
       onDoubleClick={(e) => {
         e.stopPropagation();
-        onToggleFullscreen?.();
+        toggleFullscreen();
       }}
     >
       <ErrorBoundary isLocal>
@@ -263,7 +293,7 @@ export const PremiumPlayer = ({
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
-                  onToggleFullscreen?.();
+                  toggleFullscreen();
                 }}
                 className="text-white hover:text-purple-400 transition-colors"
               >
