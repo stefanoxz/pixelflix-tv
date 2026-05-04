@@ -26,6 +26,7 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [bitrate, setBitrate] = useState(0);
   const playerRef = useRef<any>(null);
   const idleTimer = useRef<NodeJS.Timeout | null>(null);
   const lastVolume = useRef(80);
@@ -55,17 +56,29 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
     });
     player.on('timeupdate', () => {
       setCurrentTime(player.currentTime());
+      
+      // Update real bitrate if available (VHS/HLS)
+      try {
+        const vhs = player.tech({ IWillNotUseThisInFuture: true })?.vhs;
+        if (vhs?.playlists?.media) {
+          const bw = vhs.playlists.media().attributes.BANDWIDTH;
+          if (bw) setBitrate(Math.round(bw / 1000));
+        }
+      } catch (e) {}
     });
     player.on('loadedmetadata', () => {
       setDuration(player.duration());
     });
   }, []);
 
-  const togglePlay = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const togglePlay = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     if (playerRef.current) {
-      if (isPlaying) playerRef.current.pause();
-      else playerRef.current.play();
+      if (playerRef.current.paused()) {
+        playerRef.current.play();
+      } else {
+        playerRef.current.pause();
+      }
     }
   };
 
@@ -113,6 +126,7 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
     <div 
       className={`${isFullscreen ? 'fixed inset-0 z-[200]' : 'relative w-full h-full'} bg-black transition-cursor duration-500 overflow-hidden ${isIdle ? 'cursor-none' : 'cursor-default'}`}
       onMouseMove={resetIdleTimer}
+      onClick={() => togglePlay()}
     >
       <ErrorBoundary isLocal>
         <VideoPlayer 
@@ -124,10 +138,10 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
 
       {/* Center Play/Pause Overlay */}
       <div 
-        className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-500 ${isIdle ? 'opacity-0' : 'opacity-100'}`}
+        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 pointer-events-none ${isIdle ? 'opacity-0' : 'opacity-100'}`}
       >
         {!isPlaying && (
-          <div className="p-10 rounded-full bg-black/40 backdrop-blur-xl border border-white/10 animate-in zoom-in duration-300">
+          <div className="p-10 rounded-full bg-black/40 backdrop-blur-xl border border-white/10 animate-in zoom-in duration-300 pointer-events-auto cursor-pointer" onClick={(e) => togglePlay(e)}>
             <Play size={48} className="text-white fill-white ml-2" />
           </div>
         )}
@@ -215,7 +229,7 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
 
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-4">
               <button 
-                onClick={togglePlay}
+                onClick={(e) => togglePlay(e)}
                 className="w-12 h-12 flex items-center justify-center rounded-full bg-white/10 border border-white/10 text-white hover:bg-white/20 transition-all shadow-inner"
               >
                 {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
@@ -241,7 +255,9 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
 
             {/* Bitrate indicator */}
             <div className="absolute -bottom-7 right-4">
-              <span className="text-[9px] font-black text-zinc-600 tracking-widest uppercase">3347 kbps</span>
+              <span className="text-[9px] font-black text-zinc-600 tracking-widest uppercase">
+                {bitrate > 0 ? `${bitrate} KBPS` : '3347 KBPS'}
+              </span>
             </div>
           </div>
         </div>
