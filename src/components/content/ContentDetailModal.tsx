@@ -270,76 +270,118 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
                           Temporada {season.season_number}
                         </button>
                       ))}
-                    </div>
+                                       {/* Episodes List - Premium Horizontal Scroll */}
+                    <div className="relative group/episodes">
+                      <div 
+                        className="flex gap-4 overflow-x-auto pb-4 pt-2 px-1 scroll-smooth custom-scrollbar select-none"
+                        onWheel={(e) => {
+                          if (e.deltaY !== 0) {
+                            e.currentTarget.scrollLeft += e.deltaY;
+                            e.preventDefault();
+                          }
+                        }}
+                      >
+                        {uniqueEpisodes.map((episode: any) => {
+                          const progress = historyService.getProgress(episode.id || episode.stream_id);
+                          const isWatched = progress?.completed;
+                          const percent = progress ? (progress.currentTime / progress.duration) * 100 : 0;
 
-                    {/* Episodes List - Horizontal Scroll */}
-                    <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar -mx-2 px-2 scroll-smooth">
-                      {uniqueEpisodes.map((episode: any) => {
-                        const progress = historyService.getProgress(episode.id || episode.stream_id);
-                        const isWatched = progress?.completed;
-                        const percent = progress ? (progress.currentTime / progress.duration) * 100 : 0;
-
-                        return (
-                          <button
-                            key={episode.id}
-                            onClick={() => onPlay({
-                              ...item,
-                              id: episode.id || episode.stream_id,
-                              name: `${norm.name} - ${episode.title || `E${episode.episode_num}`}`,
-                              type: 'series'
-                            })}
-                            className={`flex-shrink-0 w-72 p-5 rounded-3xl bg-[#1A1A1A]/30 border transition-all group text-left relative overflow-hidden flex flex-col gap-4 ${
-                              isWatched ? 'border-green-500/20 bg-green-500/5' : 'border-white/5 hover:bg-white/5 hover:border-purple-500/30'
-                            }`}
-                          >
-                            <div className={`absolute inset-x-0 top-0 h-1 transition-opacity ${
-                              isWatched ? 'bg-green-500 opacity-100' : 'bg-purple-600 opacity-0 group-hover:opacity-100'
-                            }`} />
-                            
-                            <div className="flex items-center gap-4">
-                              <div className={`w-12 h-12 rounded-2xl flex-shrink-0 flex items-center justify-center transition-all shadow-inner ${
-                                isWatched ? 'bg-green-500 text-white' : 'bg-white/5 text-zinc-500 group-hover:bg-purple-600 group-hover:text-white'
-                              }`}>
-                                {isWatched ? <CheckCircle2 size={18} /> : <Play size={18} fill="currentColor" />}
-                              </div>
-
-                              <div className="flex-1 min-w-0">
-                                <h5 className={`text-[12px] font-black uppercase tracking-wider transition-colors truncate ${
-                                  isWatched ? 'text-green-400' : 'text-white group-hover:text-purple-400'
+                          return (
+                            <button
+                              key={episode.id}
+                              onClick={() => onPlay({
+                                ...item,
+                                id: episode.id || episode.stream_id,
+                                name: `${norm.name} - ${episode.title || `E${episode.episode_num}`}`,
+                                type: 'series'
+                              })}
+                              className={`flex-shrink-0 w-[240px] p-4 rounded-[1.5rem] bg-[#1A1A1A]/30 border transition-all duration-300 group/card text-left relative overflow-hidden flex flex-col gap-3 ${
+                                isWatched ? 'border-green-500/20 bg-green-500/5' : 'border-white/5 hover:bg-white/10 hover:border-purple-500/40 hover:-translate-y-1'
+                              }`}
+                            >
+                              <div className={`absolute inset-x-0 top-0 h-1 transition-all duration-500 ${
+                                isWatched ? 'bg-green-500 opacity-100' : 'bg-purple-600 opacity-0 group-hover/card:opacity-100'
+                              }`} />
+                              
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center transition-all duration-300 shadow-inner ${
+                                  isWatched ? 'bg-green-500 text-white' : 'bg-white/5 text-zinc-500 group-hover/card:bg-purple-600 group-hover/card:text-white'
                                 }`}>
-                                  Ep. {episode.episode_num}
-                                </h5>
-                                <p className="text-[11px] text-zinc-300 font-bold truncate mt-0.5">
-                                  {episode.title || `Episódio ${episode.episode_num}`}
-                                </p>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center justify-between mt-2">
-                              <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest">
-                                {episode.info?.duration || 'Duração N/A'}
-                              </span>
-                              <ChevronRight size={14} className="text-zinc-800 group-hover:text-white group-hover:translate-x-1 transition-all" />
-                            </div>
+                                  {isWatched ? <CheckCircle2 size={16} /> : <Play size={16} fill="currentColor" />}
+                                </div>
 
-                            {/* Progress bar */}
-                            {!isWatched && percent > 0 && (
-                              <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/5">
-                                <div className="h-full bg-purple-500 shadow-[0_0_10px_#a855f7]" style={{ width: `${percent}%` }} />
+                                <div className="flex-1 min-w-0">
+                                  <h5 className={`text-[11px] font-black uppercase tracking-[0.1em] transition-colors truncate ${
+                                    isWatched ? 'text-green-400' : 'text-white group-hover/card:text-purple-400'
+                                  }`}>
+                                    Ep. {episode.episode_num}
+                                  </h5>
+                                  <p className="text-[10px] text-zinc-400 font-medium truncate mt-0.5 transition-colors">
+                                    {episode.title || `Episódio ${episode.episode_num}`}
+                                  </p>
+                                </div>
                               </div>
-                            )}
-                          </button>
-                        );
-                      })}
+                              
+                              <div className="flex items-center justify-between mt-1 pt-2 border-t border-white/5">
+                                <div className="flex items-center gap-2">
+                                  <Clock size={8} className="text-zinc-600" />
+                                  <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
+                                    {episode.info?.duration || 'N/A'}
+                                  </span>
+                                </div>
+                                <ChevronRight size={12} className="text-zinc-700 group-hover/card:text-purple-400 group-hover/card:translate-x-1 transition-all" />
+                              </div>
+
+                              {/* Modern Progress Bar */}
+                              {!isWatched && percent > 0 && (
+                                <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/5">
+                                  <div 
+                                    className="h-full bg-gradient-to-r from-purple-600 to-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.4)] transition-all duration-1000" 
+                                    style={{ width: `${percent}%` }} 
+                                  />
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* CSS for Premium Horizontal Scrollbar */}
+                      <style dangerouslySetInnerHTML={{ __html: `
+                        .custom-scrollbar::-webkit-scrollbar {
+                          height: 8px;
+                        }
+                        .custom-scrollbar::-webkit-scrollbar-track {
+                          background: rgba(255, 255, 255, 0.02);
+                          border-radius: 20px;
+                          margin: 0 10px;
+                        }
+                        .custom-scrollbar::-webkit-scrollbar-thumb {
+                          background: rgba(168, 85, 247, 0.4);
+                          border-radius: 20px;
+                          border: 2px solid rgba(0,0,0,0.5);
+                          transition: all 0.3s;
+                        }
+                        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                          background: rgba(168, 85, 247, 0.7);
+                        }
+                        .custom-scrollbar {
+                          scrollbar-width: auto;
+                          scrollbar-color: rgba(168, 85, 247, 0.4) transparent;
+                        }
+                      `}} />
                     </div>
                   </>
                 )}
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
     </div>
+  );
+});
+>
   );
 });
 
