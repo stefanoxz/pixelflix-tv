@@ -238,6 +238,12 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
           </div>
         ) : is404Error ? (
           <div className="relative z-10 flex flex-col items-center gap-6 p-12 text-center animate-in fade-in zoom-in duration-500">
+            <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+              <div 
+                className="absolute inset-0 bg-cover bg-center scale-110 blur-[100px] opacity-30 transition-all duration-1000"
+                style={{ backgroundImage: `url(${channel.icon})` }}
+              />
+            </div>
             <div className="relative">
               <div className="absolute inset-0 bg-orange-500/20 blur-3xl rounded-full animate-pulse" />
               <div className="w-24 h-24 bg-[#08060D] rounded-full flex items-center justify-center border border-orange-500/30 shadow-[0_0_30px_rgba(249,115,22,0.2)] relative z-10 text-5xl">
