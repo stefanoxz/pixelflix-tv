@@ -6,7 +6,7 @@ import { settingsService } from '../../services/settingsService';
 import { LiveCategorySidebar } from './LiveCategorySidebar';
 import { LiveChannelList } from './LiveChannelList';
 import { LivePlayerPanel } from './LivePlayerPanel';
-import { ChevronLeft } from 'lucide-react';
+import { ExplorerHeader } from '../layout/ExplorerHeader';
 
 interface LiveExplorerProps {
   onBack: () => void;
@@ -20,6 +20,7 @@ export const LiveExplorer = ({ onBack, preselectedChannel, initialCategoryId }: 
 
   const [selectedCategory, setSelectedCategory] = useState<string>(initialCategoryId || 'Todos');
   const [selectedChannel, setSelectedChannel] = useState<any | null>(preselectedChannel ?? null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch Categories
   const { data: categories = [] } = useQuery({
@@ -50,7 +51,7 @@ export const LiveExplorer = ({ onBack, preselectedChannel, initialCategoryId }: 
   const { data: allChannels = [] } = useQuery({
     queryKey: ['streams', 'live', 'all'],
     queryFn: () => xtreamService.getStreams('live'),
-    staleTime: Infinity, // keep in cache indefinitely
+    staleTime: Infinity, 
     select: (data) => {
       if (!Array.isArray(data)) return [];
       return data.map(s => ({
@@ -82,33 +83,30 @@ export const LiveExplorer = ({ onBack, preselectedChannel, initialCategoryId }: 
     enabled: !!selectedChannel,
   });
 
-  // Filter channels locally based on selected category (e.g. Favoritos)
+  // Filter channels locally based on selected category and search query
   const filteredChannels = useMemo(() => {
     let list = allChannels;
+    
+    // Category filter
     if (selectedCategory === 'Favoritos') {
       const favIds = favoritesData.map((f: any) => String(f.stream_id));
       list = allChannels.filter(item => favIds.includes(item.id));
     } else if (selectedCategory !== 'Todos') {
       list = allChannels.filter(item => String(item.category_id) === selectedCategory);
     }
-    return list;
-  }, [allChannels, selectedCategory, favoritesData]);
 
-  // Set default category when categories load if not set
-  useEffect(() => {
-    if (categories.length > 0 && selectedCategory === 'Todos') {
-      // Find a category to select, maybe the first actual category
-      // For now, keeping 'Todos' is fine, or default to the first one after Favoritos
-      // Let's keep 'Todos'
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      list = list.filter(item => 
+        item.name.toLowerCase().includes(query)
+      );
     }
-  }, [categories]);
+
+    return list;
+  }, [allChannels, selectedCategory, favoritesData, searchQuery]);
 
   const favoritesList = useMemo(() => favoritesData.map((f: any) => String(f.stream_id)), [favoritesData]);
-
-  // Formatted date and time for header
-  const now = new Date();
-  const timeString = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  const dateString = now.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }).toUpperCase();
 
   const currentProgramTitle = useMemo(() => {
     if (!epgData || epgData.length === 0) return null;
@@ -124,7 +122,6 @@ export const LiveExplorer = ({ onBack, preselectedChannel, initialCategoryId }: 
 
     if (!current || !current.title) return null;
     
-    // Decode if base64
     try {
       const decoded = atob(current.title);
       const bytes = new Uint8Array(decoded.length);
@@ -136,73 +133,39 @@ export const LiveExplorer = ({ onBack, preselectedChannel, initialCategoryId }: 
   }, [epgData]);
 
   return (
-    <div className="h-screen bg-[#050308] text-white flex flex-col font-sans overflow-hidden">
+    <div className="h-screen bg-[#080808] text-white flex flex-col font-sans overflow-hidden selection:bg-purple-500/30">
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-0 w-full h-full bg-purple-600/5 blur-[120px] opacity-50" />
+        <div className="absolute top-0 left-0 w-full h-full bg-purple-600/5 blur-[120px] opacity-30" />
       </div>
-      {/* Header */}
-      <header className="h-20 px-10 flex items-center justify-between border-b border-white/5 bg-[#08060D]/80 backdrop-blur-2xl shrink-0 z-20 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
-        
-        <div className="flex items-center gap-6">
-          <button 
-            onClick={onBack} 
-            className="w-12 h-12 flex items-center justify-center rounded-2xl bg-white/5 border border-white/5 hover:bg-purple-600/20 hover:border-purple-500/30 transition-all text-zinc-400 hover:text-white group"
-          >
-            <ChevronLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
-          </button>
-          
-          <div className="h-10 w-[1px] bg-white/10" />
 
-          <div className="flex items-center gap-6">
-            <div className="relative">
-              <div className="absolute inset-0 bg-purple-600/10 blur-2xl rounded-full" />
-              <img 
-                src="/src/assets/vibe-logo.png" 
-                alt="Logo" 
-                className="h-14 w-auto relative z-10 drop-shadow-[0_0_20px_rgba(168,85,247,0.2)]" 
-              />
-            </div>
-            
-            <div className="flex flex-col">
-              <h2 className="text-2xl font-black tracking-widest uppercase text-white text-glow leading-none">Canais ao Vivo</h2>
-            </div>
+      <ExplorerHeader 
+        title="Canais ao Vivo"
+        itemCount={filteredChannels.length}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onBack={onBack}
+      >
+        {/* Live specific quality badge slot */}
+        <div className="hidden lg:flex items-center gap-3">
+          <div className="px-4 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-purple-400 shadow-[0_0_8px_#a855f7]" />
+            <span className="text-[10px] font-black text-purple-300 uppercase tracking-[0.2em]">
+              {selectedChannel ? (
+                selectedChannel.name.toUpperCase().includes('4K') ? 'ULTRA HD 4K' :
+                selectedChannel.name.toUpperCase().includes('FHD') ? 'FULL HD 1080P' :
+                selectedChannel.name.toUpperCase().includes('HD') ? 'HD 720P' :
+                'QUALIDADE SD'
+              ) : 'AUTO QUALIDADE'}
+            </span>
           </div>
         </div>
+      </ExplorerHeader>
 
-        <div className="flex items-center gap-8">
-           <div className="hidden md:flex flex-col items-end">
-              <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-1">Qualidade</span>
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-600/10 border border-purple-500/20 rounded-lg">
-                 <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_#a855f7]" />
-                 <span className="text-[9px] font-black text-white uppercase tracking-widest">
-                   {selectedChannel ? (
-                     selectedChannel.name.toUpperCase().includes('4K') ? 'Ultra HD 4K' :
-                     selectedChannel.name.toUpperCase().includes('FHD') ? 'Full HD 1080p' :
-                     selectedChannel.name.toUpperCase().includes('HD') ? 'HD 720p' :
-                     'SD Qualidade'
-                   ) : 'Auto'}
-                 </span>
-              </div>
-           </div>
-           
-           <div className="h-8 w-[1px] bg-white/5" />
-
-           <div className="flex flex-col items-end justify-center">
-             <span className="text-xl font-black tracking-tighter text-white leading-none">{timeString}</span>
-             <span className="text-[9px] text-purple-500 font-black uppercase tracking-[0.2em] leading-none mt-1.5">{dateString}</span>
-           </div>
-        </div>
-      </header>
-
-      {/* Main Content: 3 Columns */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative z-10">
         <LiveCategorySidebar 
           categories={categories} 
           selectedCategory={selectedCategory} 
-          onSelectCategory={(id) => {
-            setSelectedCategory(id);
-          }} 
+          onSelectCategory={(id) => setSelectedCategory(id)} 
         />
         
         <LiveChannelList 

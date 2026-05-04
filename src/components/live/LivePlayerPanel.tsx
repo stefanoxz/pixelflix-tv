@@ -208,9 +208,13 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
   }
 
   return (
-    <div className="flex-1 flex flex-col p-6 gap-6 bg-[#050308] overflow-y-auto custom-scrollbar">
-      {/* Video Container - Fixed 16:9 Aspect Ratio to prevent cropping */}
-      <div className="w-full aspect-video rounded-[32px] overflow-hidden bg-[#08060D] border border-white/5 relative shadow-2xl flex items-center justify-center group shrink-0">
+    <div className="flex-1 flex flex-col p-8 gap-8 bg-[#050308] overflow-y-auto custom-scrollbar relative">
+      {/* Cinematic Grain Texture */}
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none mix-blend-overlay z-0" 
+           style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/carbon-fibre.png")' }} />
+
+      {/* Video Container */}
+      <div className="w-full aspect-video rounded-[40px] overflow-hidden bg-[#0a0a0a] border border-white/5 relative shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-center group shrink-0 z-10">
         {channel.icon && (
           <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
             <img src={channel.icon} alt="bg" className="w-[80%] h-[80%] object-contain blur-[100px]" />
@@ -295,7 +299,7 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
                 options={videoOptions} 
                 title={channel.name} 
                 subtitle="Canais ao Vivo"
-                isFullscreen={false}
+                isLive={true}
                 onClose={() => {}} 
                 onError={(err) => setPlayerError(err)}
               />
@@ -305,8 +309,8 @@ export const LivePlayerPanel = ({ channel, epg }: LivePlayerPanelProps) => {
       </div>
 
       {/* Unified Cinematic EPG Panel */}
-      <div className="bg-[#08060D] border border-white/5 rounded-[40px] p-8 relative overflow-hidden shadow-2xl shrink-0">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-600/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+      <div className="bg-[#080808]/40 backdrop-blur-3xl border border-white/5 rounded-[48px] p-10 relative overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] shrink-0 z-10">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-600/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
         
         <div className="flex flex-col lg:flex-row gap-10 relative z-10">
           {/* Current Program - Left Side */}

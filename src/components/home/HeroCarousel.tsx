@@ -115,51 +115,51 @@ export const HeroCarousel = ({ onAction, movies, series }: HeroCarouselProps) =>
         </div>
       ))}
 
-      <div className="relative z-10 h-full flex flex-col justify-end p-8 md:p-16 max-w-3xl">
-        <div className="flex items-center gap-2 mb-4 animate-in fade-in slide-in-from-left duration-700">
-          <span className="bg-primary/20 text-primary text-[10px] font-black px-3 py-1 rounded-full border border-primary/20 uppercase tracking-widest">
+      <div className="relative z-10 h-full flex flex-col justify-center p-8 md:p-20 max-w-4xl">
+        <div className="flex items-center gap-3 mb-6 animate-in fade-in slide-in-from-left duration-700">
+          <span className="bg-purple-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.3)] uppercase tracking-[0.2em]">
             🔥 Adicionado Recentemente
           </span>
-          <span className="bg-white/5 text-zinc-400 text-[10px] font-bold px-3 py-1 rounded-full border border-white/10 uppercase tracking-widest">
+          <span className="bg-white/10 backdrop-blur-md text-zinc-300 text-[10px] font-bold px-4 py-1.5 rounded-full border border-white/10 uppercase tracking-[0.2em]">
             {slide.type}
           </span>
         </div>
 
-        <h2 className="text-4xl md:text-6xl font-black text-white mb-6 tracking-tighter leading-tight drop-shadow-2xl animate-in fade-in slide-in-from-bottom duration-1000 max-w-2xl">
+        <h2 className="text-5xl md:text-7xl font-black text-white mb-8 tracking-tighter leading-[0.9] drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-bottom duration-1000 max-w-3xl uppercase italic">
           {slide.title}
         </h2>
 
-        <div className="flex flex-wrap items-center gap-6 mb-6 text-xs font-bold text-zinc-400 animate-in fade-in slide-in-from-bottom duration-700 delay-200">
-          <span className="flex items-center gap-2"><Calendar size={14} className="text-primary" /> {slide.date}</span>
-          <span className="flex items-center gap-2"><Star size={14} className="text-yellow-500 fill-yellow-500" /> {slide.rating}</span>
-          <span className="flex items-center gap-2"><Tag size={14} className="text-primary" /> {slide.genre}</span>
+        <div className="flex flex-wrap items-center gap-8 mb-8 text-xs font-black text-zinc-400 animate-in fade-in slide-in-from-bottom duration-700 delay-200 uppercase tracking-widest">
+          <span className="flex items-center gap-2.5"><Calendar size={16} className="text-purple-500" /> {slide.date}</span>
+          <span className="flex items-center gap-2.5"><Star size={16} className="text-yellow-500 fill-yellow-500" /> {slide.rating}</span>
+          <span className="flex items-center gap-2.5"><Tag size={16} className="text-purple-500" /> {slide.genre}</span>
         </div>
 
-        <p className="text-base text-zinc-400 mb-8 leading-relaxed line-clamp-2 md:line-clamp-3 max-w-2xl animate-in fade-in slide-in-from-bottom duration-700 delay-300">
+        <p className="text-lg text-zinc-400 mb-10 leading-relaxed line-clamp-2 md:line-clamp-3 max-w-2xl animate-in fade-in slide-in-from-bottom duration-700 delay-300 font-medium">
           {slide.synopsis}
         </p>
 
-        <div className="flex flex-wrap items-center gap-4 animate-in fade-in slide-in-from-bottom duration-700 delay-500">
+        <div className="flex flex-wrap items-center gap-6 animate-in fade-in slide-in-from-bottom duration-700 delay-500">
           <button 
             onClick={() => onAction(slide.raw, slide.type === 'Filme' ? 'movie' : 'series')}
-            className="flex items-center gap-3 bg-primary text-primary-foreground px-10 py-4 rounded-full font-black text-sm hover:scale-105 active:scale-95 transition-all shadow-xl shadow-primary/30"
+            className="flex items-center gap-4 bg-purple-600 text-white px-12 py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-purple-500 hover:scale-105 active:scale-95 transition-all shadow-[0_20px_40px_rgba(168,85,247,0.3)]"
           >
-            <Play size={20} className="fill-current" /> ASSISTIR AGORA
+            <Play size={20} fill="currentColor" /> ASSISTIR AGORA
           </button>
           <button 
             onClick={() => onAction(slide.raw, slide.type === 'Filme' ? 'movie' : 'series')}
-            className="flex items-center gap-3 bg-white/5 backdrop-blur-md text-white px-10 py-4 rounded-full font-black text-sm hover:bg-white/10 transition-all border border-white/10 active:scale-95"
+            className="flex items-center gap-4 bg-white/5 backdrop-blur-xl text-white px-12 py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-white/10 transition-all border border-white/10 hover:scale-105 active:scale-95"
           >
             <Info size={20} /> DETALHES
           </button>
         </div>
 
-        <div className="flex items-center gap-2 mt-12">
+        <div className="flex items-center gap-3 mt-16">
           {slides.map((_, idx) => (
             <button
               key={idx}
               onClick={() => setActive(idx)}
-              className={`h-1 rounded-full transition-all duration-500 ${idx === active ? 'w-12 bg-primary shadow-[0_0_15px_rgba(168,85,247,0.5)]' : 'w-2 bg-white/20'}`}
+              className={`h-1.5 rounded-full transition-all duration-700 ${idx === active ? 'w-16 bg-purple-600 shadow-[0_0_20px_rgba(168,85,247,0.6)]' : 'w-3 bg-white/10 hover:bg-white/20'}`}
               aria-label={`Slide ${idx + 1}`}
             />
           ))}

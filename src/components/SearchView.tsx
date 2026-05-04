@@ -94,50 +94,57 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
   }, [query, runSearch]);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#08060a] text-white flex flex-col font-sans overflow-hidden">
+    <div className="fixed inset-0 z-[100] bg-[#080808] text-white flex flex-col font-sans overflow-hidden selection:bg-purple-500/30">
+      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] pointer-events-none" />
+      
       {/* Header */}
-      <header className="px-10 py-8 flex items-center justify-between relative z-10">
-        <div className="flex items-center gap-6">
+      <header className="px-12 py-10 flex items-center justify-between relative z-10">
+        <div className="flex items-center gap-8">
           <button 
             onClick={onBack}
-            className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all active:scale-95"
+            className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all active:scale-90 group shadow-2xl"
           >
-            <ArrowLeft size={24} />
+            <ArrowLeft size={28} className="group-hover:-translate-x-1 transition-transform" />
           </button>
-          <div className="flex items-center gap-3">
-            <Search size={24} className="text-purple-500" />
-            <h1 className="text-2xl font-black tracking-tighter uppercase italic">Pesquisar Filmes & Séries</h1>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-3">
+              <Search size={20} className="text-purple-500" />
+              <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white">Explorar Conteúdo</h1>
+            </div>
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em] mt-1 ml-8">Busca inteligente PixelFlix</p>
           </div>
         </div>
 
-        <div className="text-right">
-          <div className="text-2xl font-black tracking-tight">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-1">
-            {time.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '')}
+        <div className="flex flex-col items-end">
+          <div className="text-3xl font-black tracking-tighter text-white leading-none">
+            {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </div>
+          <div className="text-[10px] font-bold text-purple-500 uppercase tracking-[0.4em] mt-2">
+            {time.toLocaleDateString('pt-BR', { weekday: 'long' }).toUpperCase()}
           </div>
         </div>
       </header>
 
-      <main className="flex-1 flex px-10 pb-10 gap-16 overflow-hidden">
+      <main className="flex-1 flex px-12 pb-12 gap-20 overflow-hidden relative z-10">
         {/* Keyboard Column */}
-        <div className="w-[450px] flex flex-col gap-8 shrink-0 animate-in slide-in-from-left duration-700">
+        <div className="w-[500px] flex flex-col gap-10 shrink-0 animate-in slide-in-from-left duration-700">
           {/* Search Input Box */}
           <div className="relative group">
-            <div className="absolute inset-0 bg-purple-500/20 blur-2xl opacity-0 group-within:opacity-100 transition-opacity duration-500" />
-            <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 flex items-center gap-5 group-within:border-purple-500 group-within:ring-4 group-within:ring-purple-500/10 transition-all shadow-2xl">
-              <Search className="text-zinc-500 group-within:text-purple-400 transition-colors" size={28} />
+            <div className="absolute -inset-1 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-[32px] blur-xl opacity-0 group-within:opacity-100 transition-opacity duration-700" />
+            <div className="relative bg-[#121212]/50 backdrop-blur-3xl border border-white/5 rounded-[32px] p-8 flex items-center gap-6 group-within:border-purple-500/50 group-within:bg-[#121212]/80 transition-all shadow-2xl">
+              <Search className="text-zinc-600 group-within:text-purple-400 transition-colors" size={32} />
               <input 
                 autoFocus
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Nome do filme ou série..."
-                className="bg-transparent flex-1 outline-none text-2xl font-black placeholder:text-zinc-700 tracking-tight"
+                placeholder="Busque por filmes ou séries..."
+                className="bg-transparent flex-1 outline-none text-3xl font-black placeholder:text-zinc-800 tracking-tight text-white uppercase italic"
               />
               {query && (
                 <button 
                   onClick={handleClear} 
-                  className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-white/10 text-zinc-500 hover:text-white transition-all"
+                  className="w-12 h-12 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-white transition-all active:scale-90"
                 >
                   <X size={24} />
                 </button>
@@ -146,12 +153,12 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
           </div>
 
           {/* Virtual Keyboard */}
-          <div className="grid grid-cols-6 gap-3">
+          <div className="grid grid-cols-6 gap-4">
             {KEYS.map(key => (
               <button
                 key={key}
                 onClick={() => handleKeyClick(key)}
-                className="h-14 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all text-lg font-black active:scale-90 active:bg-purple-600 active:border-purple-500 shadow-lg"
+                className="h-16 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-purple-500/30 transition-all text-xl font-black active:scale-90 active:bg-purple-600 active:text-white text-zinc-400 hover:text-white shadow-lg"
               >
                 {key}
               </button>
@@ -160,24 +167,24 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
             {/* Control Keys */}
             <button
               onClick={handleBackspace}
-              className="col-span-2 h-14 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 flex items-center justify-center active:scale-90 shadow-lg"
+              className="col-span-2 h-16 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 flex items-center justify-center active:scale-90 shadow-lg text-zinc-400 hover:text-white"
               title="Apagar"
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={24} />
             </button>
             <button
               onClick={handleClear}
-              className="col-span-2 h-14 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 flex items-center justify-center active:scale-90 shadow-lg"
+              className="col-span-2 h-16 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 flex items-center justify-center active:scale-90 shadow-lg text-zinc-400 hover:text-white"
               title="Limpar"
             >
-              <X size={20} />
+              <X size={24} />
             </button>
             <button
               onClick={handleSpace}
-              className="col-span-2 h-14 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 flex items-center justify-center active:scale-90 shadow-lg"
+              className="col-span-2 h-16 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 flex items-center justify-center active:scale-90 shadow-lg text-zinc-400 hover:text-white"
               title="Espaço"
             >
-              <div className="w-8 h-1 border-b-2 border-white/30" />
+              <div className="w-10 h-1 border-b-4 border-zinc-700" />
             </button>
           </div>
         </div>
@@ -185,68 +192,83 @@ export const SearchView = ({ onNavigate, onBack }: SearchViewProps) => {
         {/* Results Column */}
         <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-1000">
           {!query ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40">
-              <div className="w-32 h-32 rounded-full border-2 border-white/10 flex items-center justify-center mb-8">
-                <Film size={48} className="text-zinc-500" />
+            <div className="flex-1 flex flex-col items-center justify-center text-center">
+              <div className="w-40 h-40 rounded-[40px] bg-white/[0.02] border border-white/5 flex items-center justify-center mb-10 shadow-inner relative group">
+                <div className="absolute inset-0 bg-purple-500/10 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Film size={64} className="text-zinc-800 relative z-10" />
               </div>
-              <h2 className="text-4xl font-black tracking-tight mb-4 uppercase italic">O que vamos ver hoje?</h2>
-              <p className="text-lg text-zinc-400 max-w-md leading-relaxed">
-                Use o teclado ao lado para buscar seus filmes ou séries favoritos.
+              <h2 className="text-5xl font-black tracking-tighter mb-4 uppercase italic text-white/80">O que vamos ver hoje?</h2>
+              <p className="text-xl text-zinc-600 max-w-md leading-relaxed font-medium">
+                Sua biblioteca completa de filmes e séries está a um clique de distância.
               </p>
             </div>
           ) : searching ? (
             <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="w-12 h-12 text-purple-500 animate-spin" />
+              <Loader2 className="w-16 h-16 text-purple-500 animate-spin" />
             </div>
           ) : results.length > 0 ? (
-            <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar pb-10">
-              <h3 className="text-[10px] font-black text-zinc-500 tracking-[0.3em] uppercase mb-8 px-2">Resultados Encontrados ({results.length})</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            <div className="flex-1 overflow-y-auto pr-6 custom-scrollbar pb-10">
+              <div className="flex items-center justify-between mb-10 px-2">
+                <h3 className="text-[10px] font-black text-purple-500 tracking-[0.5em] uppercase flex items-center gap-3">
+                  <div className="w-8 h-[1px] bg-purple-500/30" />
+                  Resultados Encontrados ({results.length})
+                </h3>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-8">
                 {results.map((result) => (
                   <button
                     key={`${result.type}-${result.id}`}
                     onClick={() => onNavigate(result.type, undefined, result.raw)}
-                    className="flex flex-col group text-left transition-all animate-in fade-in zoom-in duration-500"
+                    className="flex flex-col group text-left transition-all animate-in fade-in zoom-in-95 duration-500"
                   >
-                    <div className="aspect-[2/3] w-full rounded-2xl overflow-hidden bg-zinc-900 shadow-2xl group-hover:scale-105 group-hover:ring-4 group-hover:ring-purple-500/50 transition-all relative">
+                    <div className="aspect-[2/3] w-full rounded-[28px] overflow-hidden bg-[#121212] border border-white/5 shadow-2xl group-hover:scale-105 group-hover:border-purple-500/50 transition-all relative">
                       {result.icon ? (
                         <img src={result.icon} alt={result.name} className="w-full h-full object-cover" loading="lazy" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-zinc-800">
-                          <Film size={48} />
+                        <div className="w-full h-full flex items-center justify-center text-zinc-900">
+                          <Film size={64} />
                         </div>
                       )}
-                      {/* Overlay Type Badge */}
-                      <div className="absolute top-3 right-3">
-                         <span className="px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md text-white text-[8px] font-black tracking-widest uppercase border border-white/10">
+                      
+                      {/* Premium Badge */}
+                      <div className="absolute top-4 right-4">
+                         <div className="px-3 py-1 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-[9px] font-black tracking-widest text-white uppercase">
                             {result.type === 'movie' ? 'FILME' : 'SÉRIE'}
-                         </span>
+                         </div>
                       </div>
+
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
-                    <div className="mt-4">
-                      <h4 className="text-sm font-black text-white group-hover:text-purple-400 transition-colors line-clamp-2 leading-snug">
+                    
+                    <div className="mt-5 px-1">
+                      <h4 className="text-lg font-black text-white group-hover:text-purple-400 transition-colors line-clamp-2 leading-none uppercase italic tracking-tight">
                         {result.name}
                       </h4>
-                      <p className="text-[10px] text-zinc-500 font-bold mt-1.5 uppercase tracking-widest opacity-60">Sincronizado via VIBE</p>
+                      <div className="flex items-center gap-2 mt-2 opacity-40">
+                         <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                         <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-[0.2em]">Sincronizado VIBE</span>
+                      </div>
                     </div>
                   </button>
                 ))}
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40">
-              <X size={64} className="text-zinc-700 mb-6" />
-              <h2 className="text-2xl font-black tracking-tight uppercase italic">Nenhum resultado encontrado</h2>
-              <p className="text-zinc-400 mt-2">Tente buscar por outro termo.</p>
+            <div className="flex-1 flex flex-col items-center justify-center text-center">
+              <div className="w-32 h-32 rounded-full bg-white/[0.01] border border-white/5 flex items-center justify-center mb-8">
+                <X size={48} className="text-zinc-900" />
+              </div>
+              <h2 className="text-3xl font-black tracking-tighter uppercase italic text-white/60">Nenhum resultado encontrado</h2>
+              <p className="text-zinc-600 mt-2 font-bold uppercase tracking-widest text-[10px]">Tente buscar por outro termo</p>
             </div>
           )}
         </div>
       </main>
 
-      {/* Subtle Background Effects */}
+      {/* Cinematic Background Glows */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
-        <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-600/10 blur-[150px] rounded-full" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/5 blur-[150px] rounded-full" />
+        <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] bg-purple-600/10 blur-[180px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[-20%] left-[-10%] w-[60%] h-[60%] bg-blue-600/5 blur-[180px] rounded-full" />
       </div>
     </div>
   );

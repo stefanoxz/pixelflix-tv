@@ -19,7 +19,7 @@ interface PremiumPlayerProps {
   isFullscreen?: boolean;
 }
 
-export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFullscreen = true }: PremiumPlayerProps) => {
+export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFullscreen = true, isLive = false }: PremiumPlayerProps & { isLive?: boolean }) => {
   const [isIdle, setIsIdle] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [volume, setVolume] = useState(80);
@@ -28,6 +28,7 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
   const [duration, setDuration] = useState(0);
   const playerRef = useRef<any>(null);
   const idleTimer = useRef<NodeJS.Timeout | null>(null);
+  const lastVolume = useRef(80);
 
   const resetIdleTimer = useCallback(() => {
     setIsIdle(false);
@@ -42,8 +43,15 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
     player.on('play', () => setIsPlaying(true));
     player.on('pause', () => setIsPlaying(false));
     player.on('volumechange', () => {
-      setVolume(player.volume() * 100);
-      setIsMuted(player.muted());
+      const currentVol = player.volume() * 100;
+      const muted = player.muted();
+      setIsMuted(muted);
+      if (!muted && currentVol > 0) {
+        setVolume(currentVol);
+        lastVolume.current = currentVol;
+      } else if (muted) {
+        setVolume(0);
+      }
     });
     player.on('timeupdate', () => {
       setCurrentTime(player.currentTime());
@@ -65,6 +73,26 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
     if (playerRef.current) {
       playerRef.current.volume(newVol / 100);
       playerRef.current.muted(newVol === 0);
+      if (newVol > 0) {
+        lastVolume.current = newVol;
+        setVolume(newVol);
+      }
+    }
+  };
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (playerRef.current) {
+      const newMutedState = !isMuted;
+      playerRef.current.muted(newMutedState);
+      if (!newMutedState) {
+        // Unmuting: restore last volume
+        playerRef.current.volume(lastVolume.current / 100);
+        setVolume(lastVolume.current);
+      } else {
+        // Muting
+        setVolume(0);
+      }
     }
   };
 
@@ -157,15 +185,17 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
           <div className="flex items-center justify-between p-4 bg-black/40 backdrop-blur-3xl border border-white/5 rounded-[28px] shadow-2xl relative">
             <div className="flex items-center gap-6">
               {/* Live Badge */}
-              <div className="flex items-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-2xl">
-                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_#ef4444]" />
-                <span className="text-[10px] font-black text-red-500 tracking-[0.2em] uppercase">AO VIVO</span>
-              </div>
+              {(isLive || duration === Infinity) && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-2xl">
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_#ef4444]" />
+                  <span className="text-[10px] font-black text-red-500 tracking-[0.2em] uppercase">AO VIVO</span>
+                </div>
+              )}
 
               {/* Volume Control */}
               <div className="flex items-center gap-4 group/vol">
                 <button 
-                  onClick={() => handleVolumeChange(isMuted ? volume : 0)} 
+                  onClick={toggleMute} 
                   className="text-white hover:text-purple-400 transition-colors"
                 >
                   {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}

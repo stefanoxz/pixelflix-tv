@@ -193,9 +193,9 @@ export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem,
 
   if (itemsLoading) {
     return (
-      <div className="h-screen bg-[#08060a] text-white flex flex-col font-sans overflow-hidden">
+      <div className="h-screen bg-[#080808] text-white flex flex-col font-sans overflow-hidden">
         <div className="fixed inset-0 pointer-events-none">
-          <div className="absolute top-0 left-0 w-full h-full bg-purple-600/5 blur-[120px] opacity-50" />
+          <div className="absolute top-0 left-0 w-full h-full bg-purple-600/5 blur-[120px] opacity-30" />
         </div>
         <ExplorerHeader 
           title={title}
@@ -212,25 +212,25 @@ export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem,
             selectedCategory={selectedCategory}
             onSelectCategory={() => {}}
           />
-          <main className="flex-1 overflow-hidden p-6 md:p-12 relative">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-zinc-900/40 via-black to-black pointer-events-none" />
-            <div className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 md:gap-4" : "space-y-6 max-w-6xl mx-auto"}>
+          <main className="flex-1 overflow-hidden p-6 md:p-12 relative bg-[#080808]">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-900/10 via-black to-black pointer-events-none" />
+            <div className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6" : "space-y-6 max-w-6xl mx-auto"}>
               {Array.from({ length: 12 }).map((_, i) => (
                 <div key={i} className="animate-pulse flex flex-col">
                   {viewMode === 'grid' ? (
                     <>
-                      <div className="aspect-[2/3] rounded-[12px] bg-zinc-900 border border-white/5" />
-                      <div className="mt-2 space-y-1.5">
-                        <div className="h-3.5 bg-zinc-900 rounded-md w-3/4" />
-                        <div className="h-2.5 bg-zinc-900 rounded-md w-1/4" />
+                      <div className="aspect-[2/3] rounded-2xl bg-white/5 border border-white/5" />
+                      <div className="mt-4 space-y-2">
+                        <div className="h-4 bg-white/5 rounded-full w-3/4" />
+                        <div className="h-2 bg-white/5 rounded-full w-1/4" />
                       </div>
                     </>
                   ) : (
-                    <div className="flex items-center gap-6 p-5 bg-white/5 rounded-[32px] border border-white/5">
-                      <div className="w-20 h-28 rounded-2xl bg-zinc-900 flex-shrink-0" />
+                    <div className="flex items-center gap-6 p-5 bg-white/5 rounded-3xl border border-white/5">
+                      <div className="w-20 h-28 rounded-2xl bg-white/5 flex-shrink-0" />
                       <div className="flex-1 space-y-3">
-                        <div className="h-5 bg-zinc-900 rounded-md w-1/3" />
-                        <div className="h-3 bg-zinc-900 rounded-md w-1/4" />
+                        <div className="h-5 bg-white/5 rounded-full w-1/3" />
+                        <div className="h-3 bg-white/5 rounded-full w-1/4" />
                       </div>
                     </div>
                   )}
@@ -255,10 +255,12 @@ export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem,
   }
 
   return (
-    <div className="h-screen bg-[#08060a] text-white flex flex-col font-sans selection:bg-white/10 overflow-hidden relative">
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-0 w-full h-full bg-purple-600/5 blur-[120px] opacity-30" />
+    <div className="h-screen bg-[#080808] text-white flex flex-col font-sans selection:bg-purple-500/30 overflow-hidden relative">
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-0 left-0 w-full h-full bg-purple-600/5 blur-[150px] opacity-40" />
+        <div className="absolute bottom-0 right-0 w-full h-full bg-blue-600/5 blur-[150px] opacity-20" />
       </div>
+      
       <ExplorerHeader 
         title={title}
         itemCount={filteredItems.length}
@@ -269,7 +271,7 @@ export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem,
         onBack={onBack}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative z-10">
         <CategorySidebar 
           categories={categories}
           selectedCategory={selectedCategory}
@@ -278,33 +280,39 @@ export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem,
 
         <main 
           ref={parentRef}
-          className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar bg-gradient-to-br from-black to-[#080808] relative scroll-smooth"
+          className="flex-1 overflow-y-auto p-8 md:p-12 custom-scrollbar relative scroll-smooth bg-gradient-to-br from-[#080808] via-black to-[#080808]"
         >
-          <div className="fixed inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-linen.png')] opacity-[0.05] pointer-events-none" />
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-b from-purple-500/[0.02] to-transparent pointer-events-none" />
 
           {error ? (
-            <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-6 w-full col-span-full relative z-10">
-              <div className="p-6 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 mb-4 animate-pulse">
-                <AlertCircle size={48} strokeWidth={1} />
+            <div className="flex flex-col items-center justify-center min-h-[500px] text-center space-y-8 w-full col-span-full relative z-10">
+              <div className="p-8 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 shadow-[0_0_50px_rgba(239,68,68,0.1)]">
+                <AlertCircle size={64} strokeWidth={1} />
               </div>
-              <h3 className="text-xl font-black text-white uppercase tracking-widest">Erro ao carregar conteúdo</h3>
-              <p className="text-zinc-500 text-sm max-w-md mx-auto">Não foi possível conectar ao servidor IPTV.</p>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black text-white uppercase tracking-widest italic">Ops! Falha na conexão</h3>
+                <p className="text-zinc-500 text-sm max-w-sm mx-auto">Não conseguimos sincronizar com o servidor no momento. Verifique sua rede.</p>
+              </div>
               <button 
                 onClick={() => refetch()}
-                className="mt-6 px-10 py-4 bg-white text-black font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-zinc-200 transition-all shadow-xl"
+                className="mt-6 px-12 py-4 bg-purple-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-[0.2em] hover:bg-purple-500 transition-all shadow-2xl hover:scale-105 active:scale-95"
               >
                 Tentar Novamente
               </button>
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4 w-full col-span-full relative z-10">
-              <div className="p-6 rounded-full bg-white/5 border border-white/10 text-zinc-600 mb-4">
-                <Search size={48} strokeWidth={1} />
+            <div className="flex flex-col items-center justify-center min-h-[500px] text-center space-y-8 w-full col-span-full relative z-10">
+              <div className="p-8 rounded-full bg-white/5 border border-white/10 text-zinc-700">
+                <Search size={64} strokeWidth={1} />
               </div>
-              <h3 className="text-xl font-black text-white uppercase tracking-widest">Nenhum conteúdo encontrado</h3>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black text-white uppercase tracking-widest italic">Nada por aqui</h3>
+                <p className="text-zinc-500 text-sm">Não encontramos nenhum resultado para sua busca.</p>
+              </div>
               <button 
                 onClick={() => { setSearchQuery(''); setSelectedCategory('Todos'); }}
-                className="mt-6 px-8 py-3 bg-white text-black font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-zinc-200 transition-all"
+                className="mt-6 px-10 py-3 bg-white/5 border border-white/10 text-white font-black rounded-2xl text-[10px] uppercase tracking-[0.2em] hover:bg-white/10 transition-all"
               >
                 Limpar Filtros
               </button>
@@ -321,6 +329,14 @@ export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem,
                 const startIndex = virtualRow.index * columns;
                 const rowItems = filteredItems.slice(startIndex, startIndex + columns);
 
+                const gridColsClass = 
+                  columns === 1 ? 'grid-cols-1' :
+                  columns === 2 ? 'grid-cols-2' :
+                  columns === 3 ? 'grid-cols-3' :
+                  columns === 4 ? 'grid-cols-4' :
+                  columns === 5 ? 'grid-cols-5' :
+                  'grid-cols-6';
+
                 return (
                   <div
                     key={virtualRow.key}
@@ -332,10 +348,10 @@ export const ContentExplorer = ({ type, onBack, initialSearch = '', initialItem,
                       left: 0,
                       width: '100%',
                       transform: `translateY(${virtualRow.start}px)`,
-                      paddingBottom: viewMode === 'grid' ? '40px' : '24px',
+                      paddingBottom: viewMode === 'grid' ? '60px' : '32px',
                     }}
                   >
-                    <div className={viewMode === 'grid' ? `grid grid-cols-${columns} gap-8 md:gap-10` : "space-y-6 max-w-6xl mx-auto"}>
+                    <div className={viewMode === 'grid' ? `grid ${gridColsClass} gap-8 md:gap-10 justify-items-center` : "space-y-6 max-w-7xl mx-auto"}>
                       {rowItems.map(item => (
                         <ContentItem 
                           key={item.id}

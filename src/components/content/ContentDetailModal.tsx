@@ -92,15 +92,17 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
   if (!item) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
-      <div className="absolute inset-0 bg-black/95 backdrop-blur-xl" onClick={onClose} />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-12 animate-in fade-in zoom-in-95 duration-500 overflow-hidden">
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-3xl" onClick={onClose} />
 
-      <div className="relative w-full max-w-6xl bg-[#0A0A0A] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row animate-in zoom-in-95 duration-500 max-h-[90vh]">
+      <div className="relative w-full max-w-7xl bg-[#080808] border border-white/5 rounded-[40px] overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.8)] flex flex-col lg:flex-row max-h-[90vh] z-10">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] pointer-events-none" />
+        
         <button
           onClick={onClose}
-          className="absolute top-6 right-6 z-20 p-3 rounded-full bg-black/50 hover:bg-white/10 transition-colors border border-white/10 text-white"
+          className="absolute top-8 right-8 z-50 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-all border border-white/10 text-white group active:scale-90"
         >
-          <X size={20} />
+          <X size={24} className="group-hover:rotate-90 transition-transform" />
         </button>
 
         {/* TMDB Backdrop on mobile */}
@@ -108,106 +110,101 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
           <img src={display.backdrop || display.icon} className="w-full h-full object-cover blur-sm" alt="" />
         </div>
 
-        {/* Poster Section */}
-        <div className="hidden md:block w-[380px] flex-shrink-0 relative bg-zinc-900/20">
+        {/* Poster Section with Cinematic Glow */}
+        <div className="hidden lg:block w-[450px] flex-shrink-0 relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#080808] z-20" />
           {tmdbLoading ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+            <div className="w-full h-full flex items-center justify-center bg-zinc-900/20">
+              <Loader2 className="w-10 h-10 text-purple-500 animate-spin" />
             </div>
           ) : (
-            <div className="relative w-full h-full overflow-hidden">
-              {/* Blurred Background */}
+            <div className="relative w-full h-full">
               <img
                 src={display.icon}
-                className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-30 scale-110"
-                alt=""
+                className="w-full h-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x900/080808/333333?text=SEM+IMAGEM'; }}
               />
-              {/* Actual Poster */}
-              <img
-                src={display.icon}
-                className="relative w-full h-full object-contain z-10"
-                onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x900/111111/FFFFFF?text=SEM+CAPA'; }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-[#0A0A0A] z-20" />
+              <div className="absolute inset-0 shadow-[inset_-100px_0_100px_-20px_#080808]" />
             </div>
           )}
         </div>
 
         {/* Content Section */}
-        <div className="flex-1 flex flex-col overflow-hidden relative z-10">
+        <div className="flex-1 flex flex-col overflow-hidden relative">
           {/* TMDB Backdrop behind content */}
           {display.backdrop && (
-            <div className="absolute inset-0 opacity-10 pointer-events-none">
-              <img src={display.backdrop} className="w-full h-full object-cover" alt="" />
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#0A0A0A]" />
+            <div className="absolute inset-0 opacity-20 pointer-events-none">
+              <img src={display.backdrop} className="w-full h-full object-cover blur-sm scale-110" alt="" />
+              <div className="absolute inset-0 bg-gradient-to-b from-[#080808]/50 via-[#080808]/80 to-[#080808]" />
             </div>
           )}
 
-          <div className="p-8 md:p-12 overflow-y-auto custom-scrollbar relative">
+          <div className="p-8 md:p-16 overflow-y-auto custom-scrollbar relative z-10">
             {/* Badges row */}
-            <div className="flex flex-wrap items-center gap-3 mb-5">
-              <span className="px-3 py-1 rounded-full bg-purple-500 text-white text-[10px] font-black tracking-widest uppercase shadow-lg shadow-purple-500/20">
-                {type === 'live' ? 'AO VIVO' : type === 'movie' ? 'FILME' : 'SÉRIE'}
-              </span>
+            <div className="flex flex-wrap items-center gap-4 mb-8">
+              <div className="flex items-center gap-2 bg-purple-600 px-4 py-1.5 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.4)]">
+                <Film size={12} className="text-white" />
+                <span className="text-white text-[10px] font-black tracking-[0.2em] uppercase">
+                  {type === 'live' ? 'AO VIVO' : type === 'movie' ? 'FILME' : 'SÉRIE'}
+                </span>
+              </div>
+              
               {display.year && (
-                <span className="bg-white/5 px-3 py-1 rounded-full text-zinc-300 text-[10px] font-black tracking-widest border border-white/5 uppercase">{display.year}</span>
+                <span className="bg-white/5 px-4 py-1.5 rounded-full text-zinc-400 text-[10px] font-black tracking-[0.2em] border border-white/10 uppercase">{display.year}</span>
               )}
+              
               {display.rating && (
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-500">
-                  <Star size={12} fill="currentColor" />
+                <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.1)]">
+                  <Star size={14} fill="currentColor" />
                   <span className="text-xs font-black">{display.rating}</span>
                 </div>
               )}
-              {display.runtime && (
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/5 text-zinc-300 text-[10px] font-bold">
-                  <Clock size={11} className="text-purple-400" />
-                  {display.runtime}
-                </div>
-              )}
+
+              <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-white shadow-lg">
+                <span className="text-[10px] font-black tracking-widest text-purple-400">ULTRA HD 4K</span>
+              </div>
             </div>
 
             {/* Title */}
-            <h3 className="text-4xl md:text-6xl font-black mb-2 leading-none uppercase tracking-tight text-white">
+            <h3 className="text-5xl md:text-8xl font-black mb-4 leading-[0.9] uppercase tracking-tighter text-white italic drop-shadow-2xl">
               {display.name}
             </h3>
 
             {/* Tagline */}
             {display.tagline && (
-              <p className="text-purple-400/80 text-lg font-medium italic mb-6">{display.tagline}</p>
+              <p className="text-purple-400/80 text-xl font-medium italic mb-10 tracking-wide">{display.tagline}</p>
             )}
 
-            <div className="flex flex-wrap gap-2 mb-8">
+            <div className="flex flex-wrap gap-3 mb-12">
               {display.genres.map((g) => (
-                <span key={g} className="px-4 py-1.5 rounded-full bg-zinc-900 border border-white/5 text-zinc-400 text-[10px] font-black uppercase tracking-wider">
+                <span key={g} className="px-5 py-2 rounded-xl bg-white/5 border border-white/5 text-zinc-300 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-colors">
                   {g}
                 </span>
               ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-12">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 mb-16">
               {/* Synopsis */}
-              <div className="space-y-4">
-                <h4 className="text-[10px] font-black text-zinc-500 tracking-[0.3em] uppercase flex items-center gap-2">
-                  <Film size={11} />
-                  Sinopse
+              <div className="lg:col-span-7 space-y-6">
+                <h4 className="text-[10px] font-black text-purple-500 tracking-[0.4em] uppercase flex items-center gap-3">
+                  <div className="w-8 h-[1px] bg-purple-500/30" />
+                  História
                 </h4>
-                <p className="text-zinc-400 text-sm md:text-base leading-relaxed">{display.synopsis}</p>
+                <p className="text-zinc-400 text-lg md:text-xl leading-relaxed font-medium italic">{display.synopsis}</p>
               </div>
 
               {/* Credits */}
-              <div className="space-y-6">
+              <div className="lg:col-span-5 grid grid-cols-1 gap-10">
                 {display.director && (
-                  <div className="space-y-2">
-                    <h4 className="text-[10px] font-black text-zinc-500 tracking-[0.3em] uppercase">
-                      {type === 'movie' ? 'Direção' : 'Criado por'}
-                    </h4>
-                    <p className="text-white text-sm font-bold">{display.director}</p>
+                  <div className="space-y-3">
+                    <h4 className="text-[10px] font-black text-zinc-500 tracking-[0.4em] uppercase">Direção</h4>
+                    <p className="text-white text-lg font-black uppercase italic tracking-wide">{display.director}</p>
                   </div>
                 )}
                 {display.cast.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-[10px] font-black text-zinc-500 tracking-[0.3em] uppercase">Elenco Principal</h4>
-                    <p className="text-white text-sm leading-relaxed font-medium">
+                  <div className="space-y-3">
+                    <h4 className="text-[10px] font-black text-zinc-500 tracking-[0.4em] uppercase">Elenco</h4>
+                    <p className="text-zinc-300 text-sm leading-relaxed font-bold tracking-wide">
                       {display.cast.join(', ')}
                     </p>
                   </div>
@@ -215,37 +212,44 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
               </div>
             </div>
 
-            <div className="flex flex-col md:flex-row items-center gap-4 mb-10">
+            <div className="flex flex-col md:flex-row items-center gap-6 mb-16">
               {type !== 'series' && (
                 <button
                   onClick={() => onPlay(item)}
-                  className="w-full md:w-auto px-12 bg-white text-black h-16 rounded-2xl flex items-center justify-center gap-4 font-black text-sm uppercase tracking-widest hover:bg-purple-500 hover:text-white transition-all shadow-2xl group active:scale-95"
+                  className="w-full md:w-auto px-16 bg-white text-black h-20 rounded-[28px] flex items-center justify-center gap-4 font-black text-sm uppercase tracking-[0.2em] hover:bg-purple-600 hover:text-white transition-all shadow-[0_20px_50px_rgba(0,0,0,0.5)] group active:scale-95"
                 >
-                  Assistir Agora
-                  <Play size={22} fill="currentColor" className="group-hover:translate-x-1 transition-transform" />
+                  Iniciar Reprodução
+                  <Play size={24} fill="currentColor" className="group-hover:scale-125 transition-transform" />
                 </button>
               )}
             </div>
 
             {/* Series Episode Selection */}
             {type === 'series' && (
-              <div className="space-y-8 border-t border-white/5 pt-10">
+              <div className="space-y-10 border-t border-white/5 pt-16">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[10px] font-black text-purple-500 tracking-[0.4em] uppercase flex items-center gap-3">
+                    <div className="w-8 h-[1px] bg-purple-500/30" />
+                    Temporadas
+                  </h4>
+                </div>
+                
                 {loading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+                  <div className="flex items-center justify-center py-20">
+                    <Loader2 className="w-12 h-12 text-purple-500 animate-spin" />
                   </div>
                 ) : (
                   <>
                     {/* Seasons Tabs */}
-                    <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+                    <div className="flex gap-4 overflow-x-auto pb-6 no-scrollbar">
                       {seasons.map((season: any) => (
                         <button
                           key={season.season_number}
                           onClick={() => setSelectedSeason(String(season.season_number))}
-                          className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+                          className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all whitespace-nowrap border ${
                             selectedSeason === String(season.season_number)
-                              ? 'bg-white text-black'
-                              : 'bg-white/5 text-zinc-500 hover:bg-white/10'
+                              ? 'bg-white text-black border-white shadow-xl scale-105'
+                              : 'bg-white/5 text-zinc-500 border-white/5 hover:bg-white/10 hover:text-white'
                           }`}
                         >
                           Temporada {season.season_number}
@@ -254,7 +258,7 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
                     </div>
 
                     {/* Episodes List */}
-                    <div className="grid grid-cols-1 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {uniqueEpisodes.map((episode: any) => (
                         <button
                           key={episode.id}
@@ -264,20 +268,21 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
                             name: `${norm.name} - ${episode.title || `E${episode.episode_num}`}`,
                             type: 'series'
                           })}
-                          className="flex items-center gap-6 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all group text-left"
+                          className="flex items-center gap-6 p-6 rounded-3xl bg-[#1A1A1A]/30 border border-white/5 hover:bg-white/5 hover:border-purple-500/30 transition-all group text-left relative overflow-hidden"
                         >
-                          <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-500 group-hover:bg-purple-500 group-hover:text-white transition-all">
+                          <div className="absolute inset-y-0 left-0 w-1 bg-purple-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center text-zinc-500 group-hover:bg-purple-600 group-hover:text-white transition-all shadow-inner">
                             <Play size={20} fill="currentColor" />
                           </div>
-                          <div className="flex-1">
-                            <h5 className="text-xs font-black uppercase tracking-wider text-white">
-                              Episódio {episode.episode_num}: {episode.title}
+                          <div className="flex-1 min-w-0">
+                            <h5 className="text-[13px] font-black uppercase tracking-wider text-white group-hover:text-purple-400 transition-colors truncate">
+                              Ep. {episode.episode_num}: {episode.title}
                             </h5>
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest">
+                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1 block">
                               {episode.info?.duration || 'Duração N/A'}
                             </span>
                           </div>
-                          <ChevronRight size={16} className="text-zinc-700 group-hover:text-white transition-colors" />
+                          <ChevronRight size={18} className="text-zinc-800 group-hover:text-white group-hover:translate-x-1 transition-all" />
                         </button>
                       ))}
                     </div>
