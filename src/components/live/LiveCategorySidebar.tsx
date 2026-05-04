@@ -1,4 +1,4 @@
-import React, { memo, useRef, useEffect } from 'react';
+import { memo, useRef, useEffect } from 'react';
 import { Tv, Star, ChevronRight } from 'lucide-react';
 
 interface LiveCategorySidebarProps {
@@ -18,7 +18,7 @@ export const LiveCategorySidebar = memo(({ categories, selectedCategory, onSelec
   }, [selectedCategory]);
 
   return (
-    <aside className="hidden lg:flex w-80 flex-col border-r border-white/5 bg-[#080808] p-6 gap-3 overflow-y-auto custom-scrollbar relative z-20">
+    <aside className="hidden lg:flex w-80 min-w-[320px] flex-col border-r border-white/5 bg-[#080808] p-6 gap-3 overflow-y-auto custom-scrollbar relative z-20">
       <div className="absolute inset-y-0 right-0 w-[1px] bg-gradient-to-b from-transparent via-purple-500/10 to-transparent" />
       
       <div className="mb-6 px-4">

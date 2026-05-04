@@ -41,7 +41,7 @@ export const LiveChannelList = memo(({
   return (
     <div 
       ref={parentRef}
-      className="w-96 flex flex-col border-r border-white/5 bg-[#080808] overflow-y-auto custom-scrollbar flex-shrink-0 relative z-10"
+      className="w-96 min-w-[384px] flex flex-col border-r border-white/5 bg-[#080808] overflow-y-auto custom-scrollbar flex-shrink-0 relative z-10"
     >
       <div className="absolute inset-y-0 right-0 w-[1px] bg-gradient-to-b from-transparent via-purple-500/10 to-transparent" />
       
