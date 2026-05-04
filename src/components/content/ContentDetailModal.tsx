@@ -1,7 +1,8 @@
 import { memo, useState, useEffect } from 'react';
-import { X, Star, Play, ChevronRight, Loader2, Clock, Film, Tag } from 'lucide-react';
+import { X, Star, Play, ChevronRight, Loader2, Clock, Film, Tag, CheckCircle2 } from 'lucide-react';
 import { xtreamService } from '../../services/xtream';
 import { enrichFromTmdb, TmdbMeta } from '../../services/tmdb';
+import { historyService } from '../../services/historyService';
 
 interface ContentDetailModalProps {
   item: any;
@@ -271,34 +272,57 @@ export const ContentDetailModal = memo(({ item, type, onClose, onPlay }: Content
                       ))}
                     </div>
 
-                    {/* Episodes List */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {uniqueEpisodes.map((episode: any) => (
-                        <button
-                          key={episode.id}
-                          onClick={() => onPlay({
-                            ...item,
-                            id: episode.id || episode.stream_id,
-                            name: `${norm.name} - ${episode.title || `E${episode.episode_num}`}`,
-                            type: 'series'
-                          })}
-                          className="flex items-center gap-6 p-6 rounded-3xl bg-[#1A1A1A]/30 border border-white/5 hover:bg-white/5 hover:border-purple-500/30 transition-all group text-left relative overflow-hidden"
-                        >
-                          <div className="absolute inset-y-0 left-0 w-1 bg-purple-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                          <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center text-zinc-500 group-hover:bg-purple-600 group-hover:text-white transition-all shadow-inner">
-                            <Play size={20} fill="currentColor" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h5 className="text-[13px] font-black uppercase tracking-wider text-white group-hover:text-purple-400 transition-colors truncate">
-                              Ep. {episode.episode_num}: {episode.title}
-                            </h5>
-                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1 block">
-                              {episode.info?.duration || 'Duração N/A'}
-                            </span>
-                          </div>
-                          <ChevronRight size={18} className="text-zinc-800 group-hover:text-white group-hover:translate-x-1 transition-all" />
-                        </button>
-                      ))}
+                      {uniqueEpisodes.map((episode: any) => {
+                        const progress = historyService.getProgress(episode.id || episode.stream_id);
+                        const isWatched = progress?.completed;
+                        const percent = progress ? (progress.currentTime / progress.duration) * 100 : 0;
+
+                        return (
+                          <button
+                            key={episode.id}
+                            onClick={() => onPlay({
+                              ...item,
+                              id: episode.id || episode.stream_id,
+                              name: `${norm.name} - ${episode.title || `E${episode.episode_num}`}`,
+                              type: 'series'
+                            })}
+                            className={`flex items-center gap-6 p-6 rounded-3xl bg-[#1A1A1A]/30 border transition-all group text-left relative overflow-hidden ${
+                              isWatched ? 'border-green-500/20 bg-green-500/5' : 'border-white/5 hover:bg-white/5 hover:border-purple-500/30'
+                            }`}
+                          >
+                            <div className={`absolute inset-y-0 left-0 w-1 transition-opacity ${
+                              isWatched ? 'bg-green-500 opacity-100' : 'bg-purple-600 opacity-0 group-hover:opacity-100'
+                            }`} />
+                            
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-inner ${
+                              isWatched ? 'bg-green-500 text-white' : 'bg-white/5 text-zinc-500 group-hover:bg-purple-600 group-hover:text-white'
+                            }`}>
+                              {isWatched ? <CheckCircle2 size={20} /> : <Play size={20} fill="currentColor" />}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <h5 className={`text-[13px] font-black uppercase tracking-wider transition-colors truncate ${
+                                isWatched ? 'text-green-400' : 'text-white group-hover:text-purple-400'
+                              }`}>
+                                Ep. {episode.episode_num}: {episode.title}
+                              </h5>
+                              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1 block">
+                                {episode.info?.duration || 'Duração N/A'}
+                              </span>
+                            </div>
+                            
+                            <ChevronRight size={18} className="text-zinc-800 group-hover:text-white group-hover:translate-x-1 transition-all" />
+
+                            {/* Progress bar for in-progress episodes */}
+                            {!isWatched && percent > 0 && (
+                              <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/5">
+                                <div className="h-full bg-purple-500 shadow-[0_0_10px_#a855f7]" style={{ width: `${percent}%` }} />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </>
                 )}

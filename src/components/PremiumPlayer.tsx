@@ -5,10 +5,12 @@ import {
   VolumeX, 
   Maximize, 
   Play,
-  Pause
+  Pause,
+  CheckCircle2
 } from 'lucide-react';
 import { VideoPlayer } from './VideoPlayer';
 import { ErrorBoundary } from './layout/ErrorBoundary';
+import { historyService } from '../services/historyService';
 
 interface PremiumPlayerProps {
   options: any;
@@ -17,9 +19,11 @@ interface PremiumPlayerProps {
   onClose: () => void;
   onError?: (error: any) => void;
   isFullscreen?: boolean;
+  isLive?: boolean;
+  streamId?: string; // Add streamId to track progress
 }
 
-export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFullscreen = true, isLive = false }: PremiumPlayerProps & { isLive?: boolean }) => {
+export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFullscreen = true, isLive = false, streamId }: PremiumPlayerProps) => {
   const [isIdle, setIsIdle] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [volume, setVolume] = useState(80);
@@ -54,12 +58,28 @@ export const PremiumPlayer = ({ options, title, subtitle, onClose, onError, isFu
       }
     });
     player.on('timeupdate', () => {
-      setCurrentTime(player.currentTime());
+      const time = player.currentTime();
+      const dur = player.duration();
+      setCurrentTime(time);
+      
+      // Save progress periodically
+      if (streamId && !isLive && dur > 0) {
+        historyService.saveProgress(streamId, time, dur);
+      }
     });
     player.on('loadedmetadata', () => {
-      setDuration(player.duration());
+      const dur = player.duration();
+      setDuration(dur);
+      
+      // Resume from previous position if available
+      if (streamId && !isLive) {
+        const progress = historyService.getProgress(streamId);
+        if (progress && progress.currentTime > 10 && (progress.currentTime < dur - 30)) {
+          player.currentTime(progress.currentTime);
+        }
+      }
     });
-  }, []);
+  }, [streamId, isLive]);
 
   const togglePlay = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
